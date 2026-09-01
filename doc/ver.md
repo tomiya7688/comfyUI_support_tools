@@ -382,6 +382,14 @@
         scripts/backend/embedded_random_image.py
         doc/ver.md
 
+# 52. Random Imageのモデル付属VAE
+    Random Imageへモデル付属VAE使用チェックボックスを追加した。有効時のWebUI1111生成ではsd_vaeをAutomaticとして送信し、チェック状態はプリセットにも保存する
+    変更したファイル
+        scripts/tabs/random_image.py
+        scripts/backend/embedded_random_image.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

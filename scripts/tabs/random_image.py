@@ -173,7 +173,9 @@ class RandomImageTab(ttk.Frame):
 
     def save_preset(self):
         try:
-            path = self.preset_store.save(self.var_preset_name.get(), self._preset_values())
+            values = self._preset_values()
+            values["use_model_vae"] = self.var_use_model_vae.get()
+            path = self.preset_store.save(self.var_preset_name.get(), values)
             self.var_preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
@@ -182,7 +184,7 @@ class RandomImageTab(ttk.Frame):
             values = self.preset_store.load(self.var_preset_name.get())
             for key, variable in (("input_file", self.var_input_file), ("negative_input_file", self.var_negative_input_file), ("wildcard_root_dir", self.var_wildcard_root_dir), ("output_dir", self.var_output_dir), ("api_url", self.var_api_url), ("width", self.var_width), ("height", self.var_height), ("steps", self.var_steps), ("enable_hr", self.var_enable_hr), ("hr_scale", self.var_hr_scale), ("hr_upscaler", self.var_hr_upscaler), ("hr_second_pass_steps", self.var_hr_second_pass_steps), ("denoising_strength", self.var_denoising_strength), ("sampler_index", self.var_sampler_index), ("sd_model_checkpoint", self.var_sd_model_checkpoint), ("api_timeout", self.var_api_timeout), ("comfy_flow", self.var_comfy_flow), ("additional_position", self.var_additional_position), ("wildcard_cache_scope", self.var_wildcard_cache_scope), ("enable_nsfw_mosaic", self.var_enable_nsfw_mosaic), ("nsfw_mosaic_factor", self.var_nsfw_mosaic_factor), ("enable_failure_isolation", self.var_enable_failure_isolation), ("image_failure_min_variance", self.var_image_failure_min_variance)):
                 if key in values: variable.set(values[key])
-            self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.logbox.log("プリセットを読み込みました")
+            self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
     def _add_additional_file_row(self, value=None):
@@ -343,6 +345,7 @@ class RandomImageTab(ttk.Frame):
         self.mod.denoising_strength = self.var_denoising_strength.get()
         self.mod.sampler_index = self.var_sampler_index.get()
         self.mod.sd_model_checkpoint = self.var_sd_model_checkpoint.get()
+        self.mod.use_model_vae = self.var_use_model_vae.get()
         self.mod.api_timeout = self.var_api_timeout.get()
         self.mod.comfy_flow = self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else ""
         self.mod.comfy_model_overrides = {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()}

@@ -38,6 +38,7 @@ class EmbeddedRandomImage:
     enable_failure_isolation = False
     image_failure_min_variance = 8.0
     comfy_model_overrides = {}
+    use_model_vae = True
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -224,6 +225,8 @@ class EmbeddedRandomImage:
             )
         else:
             payload = {"prompt": prompt, "negative_prompt": negative, "steps": self.steps, "cfg_scale": 7, "enable_hr": self.enable_hr, "hr_scale": self.hr_scale, "hr_upscaler": self.hr_upscaler, "hr_second_pass_steps": self.hr_second_pass_steps, "denoising_strength": self.denoising_strength, "width": self.width, "height": self.height, "sampler_index": self.sampler_index, "override_settings": {"sd_model_checkpoint": self.sd_model_checkpoint}}
+            if self.use_model_vae:
+                payload["override_settings"]["sd_vae"] = "Automatic"
             response = requests.post(self.api_url, json=payload, timeout=self.api_timeout)
             response.raise_for_status()
             images = response.json().get("images", [])

@@ -1,0 +1,13 @@
+# The GUI uses these packages for the interactive Touka video ROI and
+# Auto-object selectors. Keep them separate from WebUI1111's environment.
+numpy==1.26.4
+Pillow==10.4.0
+opencv-python-headless==4.10.0.84
+
+# Feature backends intentionally run in their own environments:
+# - stable-diffusion-webui\\venv : WebUI1111 API / launcher
+# - ComfyUI's environment         : ComfyUI API / launcher
+# - nuno\\_touka\\.venv           : OpenCV-based Touka processing
+#
+# Keep this file as the reproducible dependency manifest for K:\\sd\\.venv.
+# Add only packages imported directly by tabbed_tools_gui.py or scripts\\.

@@ -1,0 +1,30 @@
+# Local runtimes and third-party backends (managed separately)
+.venv/
+ComfyUI/
+stable-diffusion-webui/
+pixai_tagger/
+taggui/
+waifu2x-caffe/
+wd14-tagger-standalone/
+
+# Large local models, datasets, user inputs, and generated output
+checkpoints/
+CLIP/
+wildcards/
+output/
+user_data/input/models/
+user_data/input/image/
+user_data/input/config/
+user_data/input/preset/
+user_data/output/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.7z
+
+# Python and editor artifacts
+__pycache__/
+*.py[cod]
+.vscode/

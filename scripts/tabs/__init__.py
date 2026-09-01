@@ -1,0 +1,1 @@
+"""One-responsibility tab modules."""

@@ -226,7 +226,7 @@ class EmbeddedRandomImage:
         image_format = str(self.output_format).lower()
         if image_format == "png":
             return image_bytes, "png"
-        if image_format not in {"webp", "jpg"}:
+        if image_format not in {"webp", "jpg", "gif"}:
             self._log(f"⚠️ 未対応の出力形式 {image_format!r} のためPNGで保存します")
             return image_bytes, "png"
         with Image.open(io.BytesIO(image_bytes)) as image:
@@ -234,6 +234,8 @@ class EmbeddedRandomImage:
             buffer = io.BytesIO()
             if image_format == "webp":
                 converted.save(buffer, format="WEBP", quality=95, method=6)
+            elif image_format == "gif":
+                converted.convert("P", palette=Image.Palette.ADAPTIVE, colors=256).save(buffer, format="GIF")
             else:
                 converted.save(buffer, format="JPEG", quality=95, optimize=True)
         return buffer.getvalue(), image_format

@@ -104,7 +104,7 @@ class RandomImageTab(ttk.Frame):
         self.checkpoint_combo.grid(row=3, column=3, columnspan=5, sticky="we")
         ttk.Checkbutton(settings, text="モデル付属VAEを使う", variable=self.var_use_model_vae).grid(row=4, column=0, columnspan=3, sticky="w")
         ttk.Label(settings, text="出力形式").grid(row=4, column=3, sticky="w")
-        ttk.Combobox(settings, textvariable=self.var_output_format, values=["png", "webp", "jpg"], state="readonly", width=10).grid(row=4, column=4, sticky="w")
+        ttk.Combobox(settings, textvariable=self.var_output_format, values=["png", "webp", "jpg", "gif"], state="readonly", width=10).grid(row=4, column=4, sticky="w")
         if RUNTIME_BACKEND == "comfyui":
             ttk.Label(settings, text="Comfyフロー").grid(row=5, column=0, sticky="w")
             self.flow_combo = ttk.Combobox(settings, textvariable=self.var_comfy_flow, width=40)

@@ -39,6 +39,8 @@ class EmbeddedRandomImage:
     image_failure_min_variance = 8.0
     comfy_model_overrides = {}
     use_model_vae = True
+    save_prompts = False
+    prompt_output = ""
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -201,6 +203,20 @@ class EmbeddedRandomImage:
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return report_path
 
+    def _save_prompt(self, image_output, prompt):
+        if not self.save_prompts or not self.prompt_output:
+            return None
+        destination = Path(self.prompt_output)
+        if destination.suffix:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("a", encoding="utf-8") as target:
+                target.write(prompt.strip() + "\n")
+            return destination
+        destination.mkdir(parents=True, exist_ok=True)
+        target = destination / f"{image_output.stem}.txt"
+        target.write_text(prompt.strip() + "\n", encoding="utf-8")
+        return target
+
     def _generate(self, prompt=None, negative=None, wildcard_cache=None):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
@@ -249,11 +265,12 @@ class EmbeddedRandomImage:
             output = output_dir / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.png"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(image_bytes)
+            prompt_path = self._save_prompt(output, prompt)
             if failure:
                 report_path = self._save_failure_report(output, failure, prompt, negative)
                 self._log(f"⚠️ 破綻候補を隔離しました: {output} / 記録: {report_path}")
             else:
-                self._log(f"✅ 生成成功: {output}")
+                self._log(f"✅ 生成成功: {output}" + (f" / prompt: {prompt_path}" if prompt_path else ""))
 
     def _generate_sequential(self):
         source_path = self._select_source(self.input_file, self.root_dir)

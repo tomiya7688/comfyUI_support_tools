@@ -37,6 +37,8 @@ class RandomImageTab(ttk.Frame):
         self.var_sampler_index = tk.StringVar()
         self.var_sd_model_checkpoint = tk.StringVar()
         self.var_use_model_vae = tk.BooleanVar(value=True)
+        self.var_save_prompts = tk.BooleanVar(value=False)
+        self.var_prompt_output = tk.StringVar()
         self.var_api_timeout = tk.IntVar()
         self.var_comfy_flow = tk.StringVar()
         self.var_preset_name = tk.StringVar()
@@ -56,6 +58,8 @@ class RandomImageTab(ttk.Frame):
         LabeledPathRow(top, "wildcard", self.var_input_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
         LabeledPathRow(top, "negative wildcard", self.var_negative_input_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
         LabeledPathRow(top, "出力先", self.var_output_dir, mode="dir").pack(fill="x", pady=3)
+        ttk.Checkbutton(top, text="生成プロンプトを保存", variable=self.var_save_prompts).pack(anchor="w", pady=(4, 0))
+        LabeledPathRow(top, "prompt保存先（txt/フォルダ）", self.var_prompt_output, mode="file", filetypes=[("Text", "*.txt"), ("All", "*.*")]).pack(fill="x", pady=3)
         api_row = ttk.Frame(top)
         api_row.pack(fill="x", pady=3)
         ttk.Label(api_row, text="API URL", width=16).pack(side="left", padx=(0, 6))
@@ -152,6 +156,8 @@ class RandomImageTab(ttk.Frame):
         self.var_sampler_index.set(getattr(self.mod, "sampler_index"))
         self.var_sd_model_checkpoint.set(getattr(self.mod, "sd_model_checkpoint"))
         self.var_use_model_vae.set(getattr(self.mod, "use_model_vae", True))
+        self.var_save_prompts.set(getattr(self.mod, "save_prompts", False))
+        self.var_prompt_output.set(getattr(self.mod, "prompt_output", ""))
         self.var_api_timeout.set(getattr(self.mod, "api_timeout"))
         self.var_comfy_flow.set(getattr(self.mod, "comfy_flow", ""))
         self.var_additional_position.set(getattr(self.mod, "additional_position", "prefix"))
@@ -175,6 +181,8 @@ class RandomImageTab(ttk.Frame):
         try:
             values = self._preset_values()
             values["use_model_vae"] = self.var_use_model_vae.get()
+            values["save_prompts"] = self.var_save_prompts.get()
+            values["prompt_output"] = self.var_prompt_output.get()
             path = self.preset_store.save(self.var_preset_name.get(), values)
             self.var_preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
@@ -185,6 +193,7 @@ class RandomImageTab(ttk.Frame):
             for key, variable in (("input_file", self.var_input_file), ("negative_input_file", self.var_negative_input_file), ("wildcard_root_dir", self.var_wildcard_root_dir), ("output_dir", self.var_output_dir), ("api_url", self.var_api_url), ("width", self.var_width), ("height", self.var_height), ("steps", self.var_steps), ("enable_hr", self.var_enable_hr), ("hr_scale", self.var_hr_scale), ("hr_upscaler", self.var_hr_upscaler), ("hr_second_pass_steps", self.var_hr_second_pass_steps), ("denoising_strength", self.var_denoising_strength), ("sampler_index", self.var_sampler_index), ("sd_model_checkpoint", self.var_sd_model_checkpoint), ("api_timeout", self.var_api_timeout), ("comfy_flow", self.var_comfy_flow), ("additional_position", self.var_additional_position), ("wildcard_cache_scope", self.var_wildcard_cache_scope), ("enable_nsfw_mosaic", self.var_enable_nsfw_mosaic), ("nsfw_mosaic_factor", self.var_nsfw_mosaic_factor), ("enable_failure_isolation", self.var_enable_failure_isolation), ("image_failure_min_variance", self.var_image_failure_min_variance)):
                 if key in values: variable.set(values[key])
             self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.logbox.log("プリセットを読み込みました")
+            self.var_save_prompts.set(values.get("save_prompts", False)); self.var_prompt_output.set(values.get("prompt_output", ""))
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
     def _add_additional_file_row(self, value=None):
@@ -346,6 +355,8 @@ class RandomImageTab(ttk.Frame):
         self.mod.sampler_index = self.var_sampler_index.get()
         self.mod.sd_model_checkpoint = self.var_sd_model_checkpoint.get()
         self.mod.use_model_vae = self.var_use_model_vae.get()
+        self.mod.save_prompts = self.var_save_prompts.get()
+        self.mod.prompt_output = self.var_prompt_output.get().strip()
         self.mod.api_timeout = self.var_api_timeout.get()
         self.mod.comfy_flow = self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else ""
         self.mod.comfy_model_overrides = {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()}

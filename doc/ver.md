@@ -481,6 +481,13 @@
         doc/開発予定.md
         doc/ver.md
 
+# 65. Random img2imgの通常生成モード
+    Random img2imgへTaggerを使うか選ぶチェックボックスと手動プロンプト欄を追加した。Taggerをオフにしても、入力画像・手動プロンプト・追加タグだけでWebUI1111またはComfyUIへimg2imgを送れる
+    変更したファイル
+        scripts/tabs/random_img2img.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

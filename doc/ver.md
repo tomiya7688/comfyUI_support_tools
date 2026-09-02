@@ -398,6 +398,14 @@
         doc/開発予定.md
         doc/ver.md
 
+# 54. Toukaの肌用強調対象
+    Toukaへ「肌（輪郭優先）」を追加した。肌では欠落領域を埋めず、小さなノイズだけを除去して輪郭・分離部分を維持する
+    変更したファイル
+        nuno/_touka/touka_batch.py
+        scripts/tabs/touka_enhancer.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

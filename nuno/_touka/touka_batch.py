@@ -14,7 +14,7 @@ VIDEO_EXTS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
 OBJECT_PRESETS = {
     "generic": (10, 1.2), "clothing": (7, 2.0), "cloth": (5, 2.4),
     "shirt": (7, 2.1), "bra": (8, 1.5), "panties": (8, 1.5), "carpet": (4, 2.8),
-    "ribbon": (14, 0.7), "regular": (12, 0.8), "solid": (9, 1.5),
+    "skin": (6, 1.1), "ribbon": (14, 0.7), "regular": (12, 0.8), "solid": (9, 1.5),
 }
 SURFACE_PRESETS = {
     "auto": 1.00,
@@ -101,6 +101,8 @@ def refine_object_mask(mask, preset):
     elif preset in {"bra", "panties"}:
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+    elif preset == "skin":
         binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
     elif preset == "carpet":
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
@@ -392,7 +394,7 @@ def process_video(source, target, profile="balanced", object_preset="generic", p
     avg_noise = noise_sum / max(1, count); avg_halo = halo_sum / max(1, count); temporal_shape = temporal_shape_sum / max(1, count - 1)
     avg_tracking_confidence = tracking_confidence_sum / max(1, count); avg_camera_motion = camera_motion_sum / max(1, count); avg_target_motion = target_motion_sum / max(1, count)
     shape_score = min(20.0, avg_components * 0.15 + avg_elongated * 0.35 + avg_holes * 0.2 + avg_symmetry * 2.0 + avg_skeleton_endpoints * 0.1 + avg_area / max(1, width * height) * 5.0)
-    preset_bonus = {"clothing": avg_area / max(1, width*height)*6.0, "cloth": temporal_shape*5.0, "shirt": avg_area / max(1, width*height)*6.5 + avg_symmetry*1.5, "bra": avg_area / max(1, width*height)*5.8 + avg_symmetry*2.0, "panties": avg_area / max(1, width*height)*5.8 + avg_symmetry*1.8, "carpet": temporal_shape*5.5 + avg_area / max(1, width*height)*3.0, "ribbon": avg_elongated*0.5, "regular": avg_components*0.1, "solid": avg_tracking_confidence*4.0, "generic": 0.0}[object_preset]
+    preset_bonus = {"clothing": avg_area / max(1, width*height)*6.0, "cloth": temporal_shape*5.0, "shirt": avg_area / max(1, width*height)*6.5 + avg_symmetry*1.5, "bra": avg_area / max(1, width*height)*5.8 + avg_symmetry*2.0, "panties": avg_area / max(1, width*height)*5.8 + avg_symmetry*1.8, "skin": avg_tracking_confidence*3.0 + avg_area / max(1, width*height)*3.0, "carpet": temporal_shape*5.5 + avg_area / max(1, width*height)*3.0, "ribbon": avg_elongated*0.5, "regular": avg_components*0.1, "solid": avg_tracking_confidence*4.0, "generic": 0.0}[object_preset]
     score = avg_gain * 0.28 + avg_edge * 18.0 + shape_score + temporal_shape * 8.0 + preset_bonus + avg_tracking_confidence * 20.0 - avg_flicker * 0.45 - avg_camera_motion * 0.1 - avg_clip * 24.0 - avg_deviation * 0.04 - min(10.0, avg_noise/500.0) - avg_halo*4.0
     print(f"candidate_score={score:.2f} information_gain={avg_gain:.2f} edge_gain={avg_edge:.3f} clipping={avg_clip:.3f} flicker_penalty={avg_flicker:.2f}", flush=True)
     audio_input = ["-ss", f"{preview_start_seconds:.6f}", "-i", str(source)] if preview_start_seconds else ["-i", str(source)]

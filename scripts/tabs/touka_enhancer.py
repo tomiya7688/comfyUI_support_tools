@@ -9,7 +9,7 @@ TOUKA_SETTINGS_FILE = USER_INPUT_DIR / "config" / "touka" / "settings.json"
 
 OBJECT_PRESET_LABELS = {
     "汎用": "generic", "服・衣類": "clothing", "布・タオル": "cloth",
-    "シャツ・ブラウス": "shirt", "ブラジャー": "bra", "ショーツ・パンツ": "panties", "カーペット・ラグ": "carpet",
+    "シャツ・ブラウス": "shirt", "ブラジャー": "bra", "ショーツ・パンツ": "panties", "肌（輪郭優先）": "skin", "カーペット・ラグ": "carpet",
     "リボン・紐": "ribbon", "規則物体": "regular", "塊状物体": "solid",
 }
 TRANSPARENT_TARGET_PRESET_LABELS = {

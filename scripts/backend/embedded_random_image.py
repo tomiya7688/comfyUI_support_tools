@@ -41,6 +41,7 @@ class EmbeddedRandomImage:
     use_model_vae = True
     save_prompts = False
     prompt_output = ""
+    sequential_loop = False
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -279,21 +280,19 @@ class EmbeddedRandomImage:
             self._log("⚠️ 順次生成するプロンプトがありません。")
             return
 
-        shared_wildcard_cache = {}
         total = len(lines)
         completed = 0
-        self._log(f"▶️ 順次生成開始: {total}件（同じワイルドカードは順次生成内で同じ結果を使用）")
-        for index, source_text in enumerate(lines, start=1):
-            if self._stop_event.is_set():
-                break
-            try:
-                wildcard_cache = shared_wildcard_cache
-                prompt = self._expand_text(source_text, self.root_dir, wildcard_cache=wildcard_cache)
-                self._log(f"📝 [{index}/{total}] {prompt}")
-                self._generate(prompt=prompt, wildcard_cache=wildcard_cache)
-                completed += 1
-            except Exception as e:
-                self._log(f"❌ [{index}/{total}] 生成エラー: {e}")
+        self._log(f"▶️ 順次生成開始: {total}件" + "（無限ループ）" if self.sequential_loop else f"▶️ 順次生成開始: {total}件")
+        while not self._stop_event.is_set():
+            shared_wildcard_cache = {}
+            for index, source_text in enumerate(lines, start=1):
+                if self._stop_event.is_set(): break
+                try:
+                    prompt = self._expand_text(source_text, self.root_dir, wildcard_cache=shared_wildcard_cache)
+                    self._log(f"📝 [{index}/{total}] {prompt}")
+                    self._generate(prompt=prompt, wildcard_cache=shared_wildcard_cache); completed += 1
+                except Exception as e: self._log(f"❌ [{index}/{total}] 生成エラー: {e}")
+            if not self.sequential_loop: break
 
         if self._stop_event.is_set():
             self._log(f"⏹️ 順次生成を停止しました: {completed}/{total}件完了")

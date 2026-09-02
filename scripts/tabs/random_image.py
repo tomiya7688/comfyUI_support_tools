@@ -40,6 +40,7 @@ class RandomImageTab(ttk.Frame):
         self.var_save_prompts = tk.BooleanVar(value=False)
         self.var_prompt_output = tk.StringVar()
         self.var_sequential_loop = tk.BooleanVar(value=False)
+        self.var_sequential_reuse_wildcards = tk.BooleanVar(value=True)
         self.var_output_format = tk.StringVar(value="png")
         self.var_api_timeout = tk.IntVar()
         self.var_comfy_flow = tk.StringVar()
@@ -131,6 +132,7 @@ class RandomImageTab(ttk.Frame):
         ttk.Button(buttons, text="無限生成", command=self.infinite).pack(side="left", padx=4)
         ttk.Button(buttons, text="順次生成", command=self.sequential).pack(side="left", padx=4)
         ttk.Checkbutton(buttons, text="順次を無限ループ", variable=self.var_sequential_loop).pack(side="left", padx=4)
+        ttk.Checkbutton(buttons, text="順次中のWildcardを固定", variable=self.var_sequential_reuse_wildcards).pack(side="left", padx=4)
         ttk.Button(buttons, text="実行中へ設定を反映", command=self.update_running_generation).pack(side="left", padx=4)
         ttk.Button(buttons, text="停止", command=self.stop).pack(side="left", padx=4)
         ttk.Button(buttons, text="モデル候補更新", command=self.refresh_backend_choices).pack(side="left", padx=12)
@@ -165,6 +167,7 @@ class RandomImageTab(ttk.Frame):
         self.var_save_prompts.set(getattr(self.mod, "save_prompts", False))
         self.var_prompt_output.set(getattr(self.mod, "prompt_output", ""))
         self.var_sequential_loop.set(getattr(self.mod, "sequential_loop", False))
+        self.var_sequential_reuse_wildcards.set(getattr(self.mod, "sequential_reuse_wildcards", True))
         self.var_output_format.set(getattr(self.mod, "output_format", "png"))
         self.var_api_timeout.set(getattr(self.mod, "api_timeout"))
         self.var_comfy_flow.set(getattr(self.mod, "comfy_flow", ""))
@@ -192,6 +195,7 @@ class RandomImageTab(ttk.Frame):
             values["save_prompts"] = self.var_save_prompts.get()
             values["prompt_output"] = self.var_prompt_output.get()
             values["sequential_loop"] = self.var_sequential_loop.get()
+            values["sequential_reuse_wildcards"] = self.var_sequential_reuse_wildcards.get()
             values["output_format"] = self.var_output_format.get()
             path = self.preset_store.save(self.var_preset_name.get(), values)
             self.var_preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
@@ -205,6 +209,7 @@ class RandomImageTab(ttk.Frame):
             self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.logbox.log("プリセットを読み込みました")
             self.var_save_prompts.set(values.get("save_prompts", False)); self.var_prompt_output.set(values.get("prompt_output", ""))
             self.var_sequential_loop.set(values.get("sequential_loop", False))
+            self.var_sequential_reuse_wildcards.set(values.get("sequential_reuse_wildcards", True))
             self.var_output_format.set(values.get("output_format", "png"))
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
@@ -362,7 +367,7 @@ class RandomImageTab(ttk.Frame):
             "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(),
             "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "use_model_vae": self.var_use_model_vae.get(),
             "save_prompts": self.var_save_prompts.get(), "prompt_output": self.var_prompt_output.get().strip(),
-            "sequential_loop": self.var_sequential_loop.get(), "output_format": self.var_output_format.get(),
+            "sequential_loop": self.var_sequential_loop.get(), "sequential_reuse_wildcards": self.var_sequential_reuse_wildcards.get(), "output_format": self.var_output_format.get(),
             "api_timeout": self.var_api_timeout.get(),
             "comfy_flow": self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else "",
             "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},

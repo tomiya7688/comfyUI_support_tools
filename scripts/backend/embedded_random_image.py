@@ -44,6 +44,7 @@ class EmbeddedRandomImage:
     save_prompts = False
     prompt_output = ""
     sequential_loop = False
+    sequential_reuse_wildcards = True
     output_format = "png"
 
     def __init__(self):
@@ -314,24 +315,40 @@ class EmbeddedRandomImage:
             else:
                 self._log(f"✅ 生成成功: {output}" + (f" / prompt: {prompt_path}" if prompt_path else ""))
 
+    def _sequential_prompt_sources(self):
+        source = Path(self.input_file)
+        if not source.is_absolute():
+            source = Path(self.root_dir) / source
+        if not source.exists() and source.suffix.lower() == ".txt" and source.with_suffix("").is_dir():
+            source = source.with_suffix("")
+        if source.is_file():
+            return [source]
+        if source.is_dir():
+            return sorted((path for path in source.rglob("*.txt") if path.is_file()), key=lambda path: path.as_posix().casefold())
+        return []
+
     def _generate_sequential(self):
-        source_path = self._select_source(self.input_file, self.root_dir)
-        lines = self._read_lines(source_path) if source_path else []
-        if not lines:
+        sources = self._sequential_prompt_sources()
+        prompts = [(path, line) for path in sources for line in self._read_lines(path)]
+        if not prompts:
             self._log("⚠️ 順次生成するプロンプトがありません。")
             return
 
-        total = len(lines)
+        total = len(prompts)
         completed = 0
         self._log(f"▶️ 順次生成開始: {total}件" + "（無限ループ）" if self.sequential_loop else f"▶️ 順次生成開始: {total}件")
         while not self._stop_event.is_set():
-            shared_wildcard_cache = {}
-            for index, source_text in enumerate(lines, start=1):
+            shared_wildcard_cache = {} if self.sequential_reuse_wildcards else None
+            for index, (source_path, source_text) in enumerate(prompts, start=1):
                 if self._stop_event.is_set(): break
                 try:
                     self._apply_pending_settings()
                     prompt = self._expand_text(source_text, self.root_dir, wildcard_cache=shared_wildcard_cache)
-                    self._log(f"📝 [{index}/{total}] {prompt}")
+                    try:
+                        source_label = source_path.relative_to(self.root_dir).as_posix()
+                    except ValueError:
+                        source_label = str(source_path)
+                    self._log(f"📝 [{index}/{total}] {source_label}: {prompt}")
                     self._generate(prompt=prompt, wildcard_cache=shared_wildcard_cache); completed += 1
                 except Exception as e: self._log(f"❌ [{index}/{total}] 生成エラー: {e}")
             if not self.sequential_loop: break

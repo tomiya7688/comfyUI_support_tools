@@ -460,6 +460,14 @@
         doc/開発予定.md
         doc/ver.md
 
+# 62. 順次生成のフォルダ入力と抽選固定
+    順次生成の入力にフォルダを指定した場合、配下のtxtを名前順に読み全行を実行するようにした。順次中のワイルドカードを固定するか、行ごとに引き直すかをチェックボックスで選べ、設定はプリセットへ保存される
+    変更したファイル
+        scripts/backend/embedded_random_image.py
+        scripts/tabs/random_image.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

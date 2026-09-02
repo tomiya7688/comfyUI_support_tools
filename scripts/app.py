@@ -10,6 +10,7 @@ from .context import _safe_thread
 from .services import *
 from .tabs.flat_file_copy import FlatFileCopyTab
 from .tabs.tag_deleter import TagDeleterTab
+from .tabs.tag_splitter import TagSplitterTab
 from .tabs.text_merger import TextMergerTab
 from .tabs.start_webui import StartWebUITab
 from .tabs.random_image import RandomImageTab
@@ -115,6 +116,7 @@ class TabbedToolsApp(tk.Tk):
             ("Random Line Picker", RandomLinePickerTab),
             ("Body Prompt", BodyPromptTab),
             ("Tag Deleter", TagDeleterTab),
+            ("Tag Splitter", TagSplitterTab),
             ("Tag to Prompt", TagToPromptTab),
             ("Flat Copy/Move", FlatFileCopyTab),
             ("Text Merger", TextMergerTab),

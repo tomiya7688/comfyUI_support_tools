@@ -27,6 +27,7 @@ from .tabs.zipper import ZipperTab
 from .tabs.youtube_downloader import YouTubeDownloaderTab
 from .tabs.touka_enhancer import ToukaEnhancerTab
 from .tabs.wildcard_checker import WildcardCheckerTab
+from .tabs.wildcard_move import WildcardMoveTab
 from .tabs.prompt_generate import PromptGenerateTab
 from .tabs.tag_to_prompt import TagToPromptTab
 from .tabs.movie_to_text import MovieToTextTab
@@ -124,6 +125,7 @@ class TabbedToolsApp(tk.Tk):
             ("ffmpeg修復", FfmpegRepairTab),
             ("Brace Check", CheckBracesTab),
             ("Wildcard Check", WildcardCheckerTab),
+            ("Wildcard Move", WildcardMoveTab),
             ("Zipper", ZipperTab),
             ("YouTube Downloader", YouTubeDownloaderTab),
             ("半透明素材強調", ToukaEnhancerTab)

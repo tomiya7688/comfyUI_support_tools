@@ -40,6 +40,7 @@ class RandomImageTab(ttk.Frame):
         self.var_save_prompts = tk.BooleanVar(value=False)
         self.var_prompt_output = tk.StringVar()
         self.var_sequential_loop = tk.BooleanVar(value=False)
+        self.var_output_format = tk.StringVar(value="png")
         self.var_api_timeout = tk.IntVar()
         self.var_comfy_flow = tk.StringVar()
         self.var_preset_name = tk.StringVar()
@@ -102,6 +103,8 @@ class RandomImageTab(ttk.Frame):
         self.checkpoint_combo = ttk.Combobox(settings, textvariable=self.var_sd_model_checkpoint, width=40)
         self.checkpoint_combo.grid(row=3, column=3, columnspan=5, sticky="we")
         ttk.Checkbutton(settings, text="モデル付属VAEを使う", variable=self.var_use_model_vae).grid(row=4, column=0, columnspan=3, sticky="w")
+        ttk.Label(settings, text="出力形式").grid(row=4, column=3, sticky="w")
+        ttk.Combobox(settings, textvariable=self.var_output_format, values=["png", "webp", "jpg"], state="readonly", width=10).grid(row=4, column=4, sticky="w")
         if RUNTIME_BACKEND == "comfyui":
             ttk.Label(settings, text="Comfyフロー").grid(row=5, column=0, sticky="w")
             self.flow_combo = ttk.Combobox(settings, textvariable=self.var_comfy_flow, width=40)
@@ -161,6 +164,7 @@ class RandomImageTab(ttk.Frame):
         self.var_save_prompts.set(getattr(self.mod, "save_prompts", False))
         self.var_prompt_output.set(getattr(self.mod, "prompt_output", ""))
         self.var_sequential_loop.set(getattr(self.mod, "sequential_loop", False))
+        self.var_output_format.set(getattr(self.mod, "output_format", "png"))
         self.var_api_timeout.set(getattr(self.mod, "api_timeout"))
         self.var_comfy_flow.set(getattr(self.mod, "comfy_flow", ""))
         self.var_additional_position.set(getattr(self.mod, "additional_position", "prefix"))
@@ -187,6 +191,7 @@ class RandomImageTab(ttk.Frame):
             values["save_prompts"] = self.var_save_prompts.get()
             values["prompt_output"] = self.var_prompt_output.get()
             values["sequential_loop"] = self.var_sequential_loop.get()
+            values["output_format"] = self.var_output_format.get()
             path = self.preset_store.save(self.var_preset_name.get(), values)
             self.var_preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
@@ -199,6 +204,7 @@ class RandomImageTab(ttk.Frame):
             self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.logbox.log("プリセットを読み込みました")
             self.var_save_prompts.set(values.get("save_prompts", False)); self.var_prompt_output.set(values.get("prompt_output", ""))
             self.var_sequential_loop.set(values.get("sequential_loop", False))
+            self.var_output_format.set(values.get("output_format", "png"))
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
     def _add_additional_file_row(self, value=None):
@@ -363,6 +369,7 @@ class RandomImageTab(ttk.Frame):
         self.mod.save_prompts = self.var_save_prompts.get()
         self.mod.prompt_output = self.var_prompt_output.get().strip()
         self.mod.sequential_loop = self.var_sequential_loop.get()
+        self.mod.output_format = self.var_output_format.get()
         self.mod.api_timeout = self.var_api_timeout.get()
         self.mod.comfy_flow = self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else ""
         self.mod.comfy_model_overrides = {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()}

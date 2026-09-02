@@ -430,6 +430,14 @@
         doc/開発予定.md
         doc/ver.md
 
+# 58. Random Imageの出力形式選択
+    Random ImageでPNGのほかWebP/JPEGを選択して保存できるようにした。変換後の拡張子を保存先とプロンプト同名ファイルへ反映し、プリセットにも選択状態を保存する
+    変更したファイル
+        scripts/backend/embedded_random_image.py
+        scripts/tabs/random_image.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

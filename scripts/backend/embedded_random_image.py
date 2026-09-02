@@ -1,4 +1,6 @@
 from ..context import *
+import io
+from PIL import Image
 from .comfy_ui_client import ComfyUIClient
 from .image_failure_inspector import ImageFailureInspector
 
@@ -42,6 +44,7 @@ class EmbeddedRandomImage:
     save_prompts = False
     prompt_output = ""
     sequential_loop = False
+    output_format = "png"
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -218,6 +221,23 @@ class EmbeddedRandomImage:
         target.write_text(prompt.strip() + "\n", encoding="utf-8")
         return target
 
+    def _encoded_output(self, image_bytes):
+        """Return generated image bytes in the format selected by the user."""
+        image_format = str(self.output_format).lower()
+        if image_format == "png":
+            return image_bytes, "png"
+        if image_format not in {"webp", "jpg"}:
+            self._log(f"⚠️ 未対応の出力形式 {image_format!r} のためPNGで保存します")
+            return image_bytes, "png"
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            converted = image.convert("RGB")
+            buffer = io.BytesIO()
+            if image_format == "webp":
+                converted.save(buffer, format="WEBP", quality=95, method=6)
+            else:
+                converted.save(buffer, format="JPEG", quality=95, optimize=True)
+        return buffer.getvalue(), image_format
+
     def _generate(self, prompt=None, negative=None, wildcard_cache=None):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
@@ -257,13 +277,14 @@ class EmbeddedRandomImage:
                 image_bytes = base64.b64decode(images[0])
         if image_bytes:
             image_bytes = self._apply_nsfw_mosaic(image_bytes)
+            image_bytes, output_extension = self._encoded_output(image_bytes)
             failure = None
             if self.enable_failure_isolation:
                 failure = ImageFailureInspector(self.image_failure_min_variance).inspect(image_bytes)
             output_dir = Path(self.output_dir)
             if failure:
                 output_dir = output_dir / "_image_failure"
-            output = output_dir / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.png"
+            output = output_dir / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.{output_extension}"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(image_bytes)
             prompt_path = self._save_prompt(output, prompt)

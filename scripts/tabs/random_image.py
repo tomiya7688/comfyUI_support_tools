@@ -47,6 +47,7 @@ class RandomImageTab(ttk.Frame):
         self.var_preset_name = tk.StringVar()
         self.var_additional_position = tk.StringVar(value="prefix")
         self.var_wildcard_cache_scope = tk.StringVar(value="each_image")
+        self.var_keep_main_wildcard_until_stop = tk.BooleanVar(value=False)
         self.var_enable_nsfw_mosaic = tk.BooleanVar(value=False)
         self.var_nsfw_mosaic_factor = tk.IntVar(value=5)
         self.var_enable_failure_isolation = tk.BooleanVar(value=False)
@@ -61,6 +62,7 @@ class RandomImageTab(ttk.Frame):
         LabeledPathRow(top, "wildcard", self.var_input_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
         LabeledPathRow(top, "negative wildcard", self.var_negative_input_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
         LabeledPathRow(top, "出力先", self.var_output_dir, mode="dir").pack(fill="x", pady=3)
+        ttk.Checkbutton(top, text="メインWildcardを停止まで固定（無限生成）", variable=self.var_keep_main_wildcard_until_stop).pack(anchor="w", pady=(4, 0))
         ttk.Checkbutton(top, text="生成プロンプトを保存", variable=self.var_save_prompts).pack(anchor="w", pady=(4, 0))
         LabeledPathRow(top, "prompt保存先（txt/フォルダ）", self.var_prompt_output, mode="file", filetypes=[("Text", "*.txt"), ("All", "*.*")]).pack(fill="x", pady=3)
         api_row = ttk.Frame(top)
@@ -173,6 +175,7 @@ class RandomImageTab(ttk.Frame):
         self.var_comfy_flow.set(getattr(self.mod, "comfy_flow", ""))
         self.var_additional_position.set(getattr(self.mod, "additional_position", "prefix"))
         self.var_wildcard_cache_scope.set(getattr(self.mod, "wildcard_cache_scope", "each_image"))
+        self.var_keep_main_wildcard_until_stop.set(getattr(self.mod, "wildcard_cache_scope", "each_image") == "until_stop")
         self.var_enable_nsfw_mosaic.set(getattr(self.mod, "enable_nsfw_mosaic", False))
         self.var_nsfw_mosaic_factor.set(getattr(self.mod, "nsfw_mosaic_factor", 5))
         self.var_enable_failure_isolation.set(getattr(self.mod, "enable_failure_isolation", False))
@@ -196,6 +199,7 @@ class RandomImageTab(ttk.Frame):
             values["prompt_output"] = self.var_prompt_output.get()
             values["sequential_loop"] = self.var_sequential_loop.get()
             values["sequential_reuse_wildcards"] = self.var_sequential_reuse_wildcards.get()
+            values["keep_main_wildcard_until_stop"] = self.var_keep_main_wildcard_until_stop.get()
             values["output_format"] = self.var_output_format.get()
             path = self.preset_store.save(self.var_preset_name.get(), values)
             self.var_preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
@@ -210,6 +214,7 @@ class RandomImageTab(ttk.Frame):
             self.var_save_prompts.set(values.get("save_prompts", False)); self.var_prompt_output.set(values.get("prompt_output", ""))
             self.var_sequential_loop.set(values.get("sequential_loop", False))
             self.var_sequential_reuse_wildcards.set(values.get("sequential_reuse_wildcards", True))
+            self.var_keep_main_wildcard_until_stop.set(values.get("keep_main_wildcard_until_stop", values.get("wildcard_cache_scope") == "until_stop"))
             self.var_output_format.set(values.get("output_format", "png"))
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
@@ -373,7 +378,7 @@ class RandomImageTab(ttk.Frame):
             "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},
             "additional_inputs": additional_inputs, "additional_input_files": [item["path"] for item in additional_inputs],
             "action_wildcards": [{**item, "condition": item["condition"].strip(), "path": item["path"].strip()} for item in self._action_wildcard_specs() if item["condition"].strip() and item["path"].strip()],
-            "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(),
+            "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": "until_stop" if self.var_keep_main_wildcard_until_stop.get() else "each_image",
             "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(),
             "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(),
         }

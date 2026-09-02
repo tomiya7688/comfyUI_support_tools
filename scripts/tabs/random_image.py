@@ -131,6 +131,7 @@ class RandomImageTab(ttk.Frame):
         ttk.Button(buttons, text="無限生成", command=self.infinite).pack(side="left", padx=4)
         ttk.Button(buttons, text="順次生成", command=self.sequential).pack(side="left", padx=4)
         ttk.Checkbutton(buttons, text="順次を無限ループ", variable=self.var_sequential_loop).pack(side="left", padx=4)
+        ttk.Button(buttons, text="実行中へ設定を反映", command=self.update_running_generation).pack(side="left", padx=4)
         ttk.Button(buttons, text="停止", command=self.stop).pack(side="left", padx=4)
         ttk.Button(buttons, text="モデル候補更新", command=self.refresh_backend_choices).pack(side="left", padx=12)
         ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
@@ -342,46 +343,46 @@ class RandomImageTab(ttk.Frame):
         for warning in warnings:
             self.logbox.log(f"⚠️ API候補: {warning}")
 
-    def _sync(self):
-        self.mod.input_file = self.var_input_file.get().strip()
-        self.mod.negative_input_file = self.var_negative_input_file.get().strip()
+    def _settings_from_gui(self):
+        input_file = self.var_input_file.get().strip()
         wildcard_root_dir = self.var_wildcard_root_dir.get().strip()
         if not wildcard_root_dir:
-            wildcard_root_dir = os.path.dirname(os.path.abspath(self.mod.input_file))
+            wildcard_root_dir = os.path.dirname(os.path.abspath(input_file))
             self.var_wildcard_root_dir.set(wildcard_root_dir)
         if not os.path.isdir(wildcard_root_dir):
             raise ValueError(f"wildcard rootディレクトリが存在しません: {wildcard_root_dir}")
-        self.mod.wildcard_root_dir = wildcard_root_dir
-        self.mod.root_dir = wildcard_root_dir
-        self.mod.output_dir = self.var_output_dir.get().strip()
-        self.mod.api_url = self.var_api_url.get().strip().rstrip("/")
-        self.mod.width = self.var_width.get()
-        self.mod.height = self.var_height.get()
-        self.mod.steps = self.var_steps.get()
-        self.mod.enable_hr = self.var_enable_hr.get()
-        self.mod.hr_scale = self.var_hr_scale.get()
-        self.mod.hr_upscaler = self.var_hr_upscaler.get()
-        self.mod.hr_second_pass_steps = self.var_hr_second_pass_steps.get()
-        self.mod.denoising_strength = self.var_denoising_strength.get()
-        self.mod.sampler_index = self.var_sampler_index.get()
-        self.mod.sd_model_checkpoint = self.var_sd_model_checkpoint.get()
-        self.mod.use_model_vae = self.var_use_model_vae.get()
-        self.mod.save_prompts = self.var_save_prompts.get()
-        self.mod.prompt_output = self.var_prompt_output.get().strip()
-        self.mod.sequential_loop = self.var_sequential_loop.get()
-        self.mod.output_format = self.var_output_format.get()
-        self.mod.api_timeout = self.var_api_timeout.get()
-        self.mod.comfy_flow = self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else ""
-        self.mod.comfy_model_overrides = {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()}
-        self.mod.additional_inputs = [{**item, "path": item["path"].strip()} for item in self._additional_specs() if item["path"].strip()]
-        self.mod.additional_input_files = [item["path"] for item in self.mod.additional_inputs]
-        self.mod.action_wildcards = [{**item, "condition": item["condition"].strip(), "path": item["path"].strip()} for item in self._action_wildcard_specs() if item["condition"].strip() and item["path"].strip()]
-        self.mod.additional_position = self.var_additional_position.get()
-        self.mod.wildcard_cache_scope = self.var_wildcard_cache_scope.get()
-        self.mod.enable_nsfw_mosaic = self.var_enable_nsfw_mosaic.get()
-        self.mod.nsfw_mosaic_factor = self.var_nsfw_mosaic_factor.get()
-        self.mod.enable_failure_isolation = self.var_enable_failure_isolation.get()
-        self.mod.image_failure_min_variance = self.var_image_failure_min_variance.get()
+        additional_inputs = [{**item, "path": item["path"].strip()} for item in self._additional_specs() if item["path"].strip()]
+        return {
+            "input_file": input_file, "negative_input_file": self.var_negative_input_file.get().strip(),
+            "wildcard_root_dir": wildcard_root_dir, "root_dir": wildcard_root_dir,
+            "output_dir": self.var_output_dir.get().strip(), "api_url": self.var_api_url.get().strip().rstrip("/"),
+            "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(),
+            "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(),
+            "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(),
+            "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(),
+            "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "use_model_vae": self.var_use_model_vae.get(),
+            "save_prompts": self.var_save_prompts.get(), "prompt_output": self.var_prompt_output.get().strip(),
+            "sequential_loop": self.var_sequential_loop.get(), "output_format": self.var_output_format.get(),
+            "api_timeout": self.var_api_timeout.get(),
+            "comfy_flow": self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else "",
+            "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},
+            "additional_inputs": additional_inputs, "additional_input_files": [item["path"] for item in additional_inputs],
+            "action_wildcards": [{**item, "condition": item["condition"].strip(), "path": item["path"].strip()} for item in self._action_wildcard_specs() if item["condition"].strip() and item["path"].strip()],
+            "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(),
+            "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(),
+            "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(),
+        }
+
+    def _sync(self):
+        for key, value in self._settings_from_gui().items():
+            setattr(self.mod, key, value)
+
+    def update_running_generation(self):
+        try:
+            self.mod.queue_settings_update(self._settings_from_gui())
+            self.logbox.log("🔄 現在の1枚が終わった後、次の生成から設定を反映します")
+        except Exception as e:
+            self.logbox.log(f"設定更新エラー: {e}")
 
     def one(self):
         try:

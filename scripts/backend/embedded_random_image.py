@@ -54,7 +54,25 @@ class EmbeddedRandomImage:
         self.comfy_model_overrides = dict(self.comfy_model_overrides)
         self._stop_event = threading.Event()
         self._worker_thread = None
+        self._settings_lock = threading.Lock()
+        self._pending_settings = None
         self._log = print
+
+    def queue_settings_update(self, settings):
+        """Stage settings so a running worker applies them before its next image."""
+        with self._settings_lock:
+            self._pending_settings = dict(settings)
+
+    def _apply_pending_settings(self):
+        with self._settings_lock:
+            settings = self._pending_settings
+            self._pending_settings = None
+        if settings is None:
+            return False
+        for key, value in settings.items():
+            setattr(self, key, value)
+        self._log("🔄 次の生成へ設定更新を適用しました")
+        return True
 
     def _select_source(self, rel_path, root=None):
         root = root or self.root_dir
@@ -311,6 +329,7 @@ class EmbeddedRandomImage:
             for index, source_text in enumerate(lines, start=1):
                 if self._stop_event.is_set(): break
                 try:
+                    self._apply_pending_settings()
                     prompt = self._expand_text(source_text, self.root_dir, wildcard_cache=shared_wildcard_cache)
                     self._log(f"📝 [{index}/{total}] {prompt}")
                     self._generate(prompt=prompt, wildcard_cache=shared_wildcard_cache); completed += 1
@@ -334,6 +353,7 @@ class EmbeddedRandomImage:
             shared_wildcard_cache = {} if self.wildcard_cache_scope == "until_stop" else None
             while not self._stop_event.is_set():
                 try:
+                    self._apply_pending_settings()
                     self._generate(wildcard_cache=shared_wildcard_cache)
                 except Exception as e:
                     self._log(f"❌ 生成エラー: {e}")

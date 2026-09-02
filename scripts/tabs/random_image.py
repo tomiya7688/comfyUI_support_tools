@@ -231,7 +231,7 @@ class RandomImageTab(ttk.Frame):
         position = tk.StringVar(value=value.get("position", "suffix"))
         cache_scope = tk.StringVar(value=value.get("cache_scope", "each_image"))
         fields = ttk.Frame(row); fields.pack(fill="x")
-        ttk.Label(fields, text="条件タグ").pack(side="left"); ttk.Entry(fields, textvariable=condition, width=18).pack(side="left", padx=(4, 10))
+        ttk.Label(fields, text="条件タグ（,=AND / |=OR）").pack(side="left"); ttk.Entry(fields, textvariable=condition, width=24).pack(side="left", padx=(4, 10))
         ttk.Label(fields, text="位置").pack(side="left"); ttk.Combobox(fields, textvariable=position, values=["prefix", "suffix"], state="readonly", width=8).pack(side="left", padx=4)
         ttk.Label(fields, text="抽選").pack(side="left", padx=(8, 0)); ttk.Combobox(fields, textvariable=cache_scope, values=["each_image", "until_stop"], state="readonly", width=13).pack(side="left", padx=4)
         LabeledPathRow(row, "追加 wildcard", path, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=(3, 0))

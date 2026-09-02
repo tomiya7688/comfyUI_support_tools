@@ -140,13 +140,19 @@ class EmbeddedRandomImage:
         parts.extend(suffix)
         return ", ".join(parts)
 
+    @staticmethod
+    def _action_condition_matches(condition, normalized_prompt):
+        """`,` はAND、`|` はORとして展開済みプロンプトのタグを照合する。"""
+        alternatives = [item.strip() for item in condition.split("|") if item.strip()]
+        return any(all(tag.strip() in normalized_prompt for tag in item.split(",") if tag.strip()) for item in alternatives)
+
     def _with_action_prompt(self, prompt, wildcard_cache=None):
         prefix, suffix = [], []
         normalized_prompt = prompt.casefold().replace("_", " ")
         for action in self.action_wildcards:
             condition = str(action.get("condition", "")).strip().casefold().replace("_", " ")
             path = str(action.get("path", "")).strip()
-            if not condition or not path or condition not in normalized_prompt:
+            if not condition or not path or not self._action_condition_matches(condition, normalized_prompt):
                 continue
             cache = wildcard_cache if action.get("cache_scope") == "until_stop" else None
             part = self.process_file(path, self.root_dir, wildcard_cache=cache)

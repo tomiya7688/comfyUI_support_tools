@@ -57,3 +57,13 @@ class TagCategorySplitter:
             target.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
             outputs[category] = target
         return outputs
+
+    def write_category_lines(self, category_lines: dict[str, list[str]], output_root: Path) -> dict[str, Path]:
+        outputs = {}
+        for category in self.CATEGORIES:
+            target = output_root / f"{category}.txt"
+            lines = category_lines.get(category, [])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+            outputs[category] = target
+        return outputs

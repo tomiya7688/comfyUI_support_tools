@@ -497,6 +497,14 @@
         doc/開発予定.md
         doc/ver.md
 
+# 67. Folder TaggerのTag Splitter連携
+    Folder Taggerへ「タグを12カテゴリにも出力」を追加した。通常の統合TXTを維持したまま、同じ行順の分類TXTを `<出力TXT名>_split` へ出力する
+    変更したファイル
+        scripts/backend/tag_category_splitter.py
+        scripts/tabs/folder_tagger.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

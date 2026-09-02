@@ -3,6 +3,7 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..backend.taggui_controller import TagGUIController
+from ..backend.tag_category_splitter import TagCategorySplitter
 
 class FolderTaggerTab(ttk.Frame):
     TAGGER_PRESETS = {
@@ -43,6 +44,7 @@ class FolderTaggerTab(ttk.Frame):
         self.overwrite = tk.BooleanVar(value=True)
         self.gif_average = tk.BooleanVar(value=True)
         self.character_crop = tk.BooleanVar(value=False)
+        self.split_categories = tk.BooleanVar(value=False)
         self._build()
 
     def _build(self):
@@ -111,6 +113,7 @@ class FolderTaggerTab(ttk.Frame):
         ttk.Checkbutton(options, text="出力TXTを上書き", variable=self.overwrite).pack(side="left", padx=4)
         ttk.Checkbutton(options, text="GIF: 全フレームの信頼度を平均", variable=self.gif_average).pack(side="left", padx=4)
         ttk.Checkbutton(options, text="人物・キャラクター候補だけをタグ付け", variable=self.character_crop).pack(side="left", padx=4)
+        ttk.Checkbutton(options, text="タグを12カテゴリにも出力", variable=self.split_categories).pack(side="left", padx=4)
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", pady=4)
@@ -129,7 +132,7 @@ class FolderTaggerTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        return {"input_dir": self.input_dir.get(), "output_file": self.output_file.get(), "tagger_kind": self.tagger_kind.get(), "api_url": self.api_url.get(), "model": self.model.get(), "threshold": self.threshold.get(), "character_threshold": self.character_threshold.get(), "timeout": self.timeout.get(), "additional": self.additional.get(), "exclude": self.exclude.get(), "recursive": self.recursive.get(), "overwrite": self.overwrite.get(), "gif_average": self.gif_average.get(), "character_crop": self.character_crop.get()}
+        return {"input_dir": self.input_dir.get(), "output_file": self.output_file.get(), "tagger_kind": self.tagger_kind.get(), "api_url": self.api_url.get(), "model": self.model.get(), "threshold": self.threshold.get(), "character_threshold": self.character_threshold.get(), "timeout": self.timeout.get(), "additional": self.additional.get(), "exclude": self.exclude.get(), "recursive": self.recursive.get(), "overwrite": self.overwrite.get(), "gif_average": self.gif_average.get(), "character_crop": self.character_crop.get(), "split_categories": self.split_categories.get()}
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -143,7 +146,7 @@ class FolderTaggerTab(ttk.Frame):
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("input_dir", self.input_dir), ("output_file", self.output_file), ("tagger_kind", self.tagger_kind), ("api_url", self.api_url), ("model", self.model), ("threshold", self.threshold), ("character_threshold", self.character_threshold), ("timeout", self.timeout), ("additional", self.additional), ("exclude", self.exclude), ("recursive", self.recursive), ("overwrite", self.overwrite), ("gif_average", self.gif_average), ("character_crop", self.character_crop)):
+            for key, variable in (("input_dir", self.input_dir), ("output_file", self.output_file), ("tagger_kind", self.tagger_kind), ("api_url", self.api_url), ("model", self.model), ("threshold", self.threshold), ("character_threshold", self.character_threshold), ("timeout", self.timeout), ("additional", self.additional), ("exclude", self.exclude), ("recursive", self.recursive), ("overwrite", self.overwrite), ("gif_average", self.gif_average), ("character_crop", self.character_crop), ("split_categories", self.split_categories)):
                 if key in values: variable.set(values[key])
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
@@ -363,6 +366,8 @@ class FolderTaggerTab(ttk.Frame):
         output.parent.mkdir(parents=True, exist_ok=True)
         completed = 0
         errors = 0
+        splitter = TagCategorySplitter() if self.split_categories.get() else None
+        category_lines = {category: [] for category in splitter.CATEGORIES} if splitter else None
         self.logbox.log(f"▶️ Folder Tagger開始: {len(images)}画像")
 
         with output.open("w", encoding="utf-8", newline="\n") as destination:
@@ -387,16 +392,27 @@ class FolderTaggerTab(ttk.Frame):
                         tag for tag in tags
                         if tag not in excluded and tag.replace(" ", "_") not in excluded
                     ]
-                    destination.write(", ".join(additional + tags) + "\n")
+                    line = ", ".join(additional + tags)
+                    destination.write(line + "\n")
                     destination.flush()
+                    if splitter:
+                        for category, categorized_tags in splitter.classify(splitter.split_tags(line)).items():
+                            category_lines[category].append(", ".join(categorized_tags))
                     completed += 1
                     self.logbox.log(f"  ✅ {len(additional) + len(tags)}タグ")
                 except Exception as e:
                     errors += 1
                     destination.write(f"ERROR: {type(e).__name__}: {e}\n")
                     destination.flush()
+                    if splitter:
+                        for category in splitter.CATEGORIES:
+                            category_lines[category].append("")
                     self.logbox.log(f"  ❌ {type(e).__name__}: {e}")
 
+        if splitter:
+            split_output = output.parent / f"{output.stem}_split"
+            splitter.write_category_lines(category_lines, split_output)
+            self.logbox.log(f"分類出力: {split_output}")
         if self.stop_event.is_set():
             self.logbox.log(f"⏹️ 停止: 成功{completed}／エラー{errors}／全{len(images)}")
         else:

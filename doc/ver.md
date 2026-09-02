@@ -475,6 +475,12 @@
         doc/開発予定.md
         doc/ver.md
 
+# 64. 画像破綻隔離の検証完了
+    画像破綻隔離が単色化した画像を `_image_failure` 側へ振り分け、通常画像は維持することを確認した。原因・生成設定・プロンプトを `user_data/output/image_generate/log/image_failure` のJSONへ記録する
+    変更したファイル
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

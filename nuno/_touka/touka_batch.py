@@ -150,7 +150,17 @@ def recommend_object_preset(mask):
         return "solid"
     return "cloth" if aspect <= 1.8 else "regular"
 
-def reference_shape_summary(reference_dir):
+def denoise_reference_image(image, enabled):
+    if not enabled:
+        return image
+    import cv2
+    if image.ndim == 2:
+        return cv2.medianBlur(image, 3)
+    if image.shape[2] == 4:
+        return __import__("numpy").dstack((cv2.bilateralFilter(image[:, :, :3], 7, 40, 40), image[:, :, 3]))
+    return cv2.bilateralFilter(image, 7, 40, 40)
+
+def reference_shape_summary(reference_dir, denoise=False):
     import collections, cv2, numpy as np
     if reference_dir is None or not Path(reference_dir).is_dir():
         return {"preset": "generic", "image_count": 0, "confidence": 0.0, "distribution": {}}
@@ -159,6 +169,7 @@ def reference_shape_summary(reference_dir):
     for path in paths[:100]:
         image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
         if image is None: continue
+        image = denoise_reference_image(image, denoise)
         if image.ndim == 3 and image.shape[2] == 4:
             mask = (image[:, :, 3] > 10).astype("uint8") * 255
         else:
@@ -174,11 +185,11 @@ def reference_shape_summary(reference_dir):
     preset, winner_count = counts.most_common(1)[0]
     return {"preset": preset, "image_count": len(presets), "confidence": winner_count / len(presets), "distribution": dict(sorted(counts.items()))}
 
-def reference_shape_hint(reference_dir):
-    summary = reference_shape_summary(reference_dir)
+def reference_shape_hint(reference_dir, denoise=False):
+    summary = reference_shape_summary(reference_dir, denoise)
     return summary["preset"], summary["image_count"]
 
-def reference_surface_hint(reference_dir):
+def reference_surface_hint(reference_dir, denoise=False):
     import cv2, numpy as np
     if reference_dir is None or not Path(reference_dir).is_dir(): return None, None, 0
     colors, alphas = [], []
@@ -186,6 +197,7 @@ def reference_surface_hint(reference_dir):
     for path in paths[:100]:
         image = cv2.imread(str(path), cv2.IMREAD_COLOR)
         if image is None: continue
+        image = denoise_reference_image(image, denoise)
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB); colors.extend(estimate_surface_color(rgb)); alphas.append(estimate_surface_alpha(rgb))
     if not colors: return None, None, 0
     samples = np.asarray(colors, dtype=np.float32); count = min(4, len(samples)); criteria=(cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER,20,1.0)
@@ -212,15 +224,15 @@ def correct_surface_image(image, surface_clusters, surface_alpha, profile):
     rgb = enhance_local_contrast(rgb)
     return Image.fromarray(np.dstack((rgb, rgba[..., 3])), "RGBA")
 
-def process_images(source: Path, target: Path, profile="balanced", object_preset="generic", reference_dir=None, surface_reference_dir=None, surface_preset="auto"):
+def process_images(source: Path, target: Path, profile="balanced", object_preset="generic", reference_dir=None, surface_reference_dir=None, surface_preset="auto", denoise_reference=False):
     paths = [source] if source.is_file() and source.suffix.lower() in IMAGE_EXTS else sorted(p for p in source.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS)
     if not paths:
         raise ValueError(f"画像ファイルが見つかりません: {source}")
-    reference_preset, reference_image_count = reference_shape_hint(reference_dir)
+    reference_preset, reference_image_count = reference_shape_hint(reference_dir, denoise_reference)
     if object_preset == "generic" and reference_preset != "generic":
         object_preset = reference_preset
         print(f"reference_shape_preset={object_preset} images={reference_image_count}", flush=True)
-    reference_clusters, reference_alpha, reference_count = reference_surface_hint(surface_reference_dir)
+    reference_clusters, reference_alpha, reference_count = reference_surface_hint(surface_reference_dir, denoise_reference)
     if reference_clusters:
         print(f"reference_surface images={reference_count} alpha={surface_alpha_for(reference_alpha, surface_preset):.3f} preset={surface_preset}", flush=True)
     if source.is_file() and target.suffix:
@@ -240,15 +252,15 @@ def process_images(source: Path, target: Path, profile="balanced", object_preset
         result.save(out)
         print(f"processed: {path}", flush=True)
 
-def process_video(source, target, profile="balanced", object_preset="generic", preview_seconds=0, roi=None, preview_start_seconds=0, reference_dir=None, surface_reference_dir=None, surface_preset="auto"):
+def process_video(source, target, profile="balanced", object_preset="generic", preview_seconds=0, roi=None, preview_start_seconds=0, reference_dir=None, surface_reference_dir=None, surface_preset="auto", denoise_reference=False):
     import subprocess, cv2, numpy as np
     if not source.is_file():
         raise ValueError(f"動画入力はファイルを指定してください: {source}")
-    reference_preset, reference_image_count = reference_shape_hint(reference_dir)
+    reference_preset, reference_image_count = reference_shape_hint(reference_dir, denoise_reference)
     if object_preset == "generic" and reference_preset != "generic":
         object_preset = reference_preset
         print(f"reference_shape_preset={object_preset} images={reference_image_count}", flush=True)
-    reference_clusters, reference_alpha, reference_count = reference_surface_hint(surface_reference_dir)
+    reference_clusters, reference_alpha, reference_count = reference_surface_hint(surface_reference_dir, denoise_reference)
     if reference_clusters: print(f"reference_surface images={reference_count} alpha={surface_alpha_for(reference_alpha, surface_preset):.3f} preset={surface_preset}", flush=True)
     if target.exists() and target.is_dir():
         target = target / f"{source.stem}_enhanced.mp4"
@@ -402,7 +414,7 @@ def process_video(source, target, profile="balanced", object_preset="generic", p
     temp.unlink(missing_ok=True)
     return {"score": score, "mask_preview": str(mask_preview_path), "resolved_object_preset": object_preset, "surface_preset": surface_preset, "reference_preset": reference_preset, "reference_image_count": reference_image_count, "surface_reference_image_count": reference_count, "surface_reference_clusters": reference_clusters or [], "preview_start_seconds": preview_start_seconds, "surface_alpha": surface_alpha, "information_gain": avg_gain, "edge_gain": avg_edge, "shape_score": shape_score, "temporal_shape_consistency": temporal_shape, "temporal_fusion_frames": temporal_fusion_frames, "temporal_fusion_strength": temporal_fusion_weight_sum / max(1, temporal_fusion_frames), "observed_color_frames": observed_color_frames, "noise": avg_noise, "halo": avg_halo, "components": avg_components, "component_area": avg_area, "elongated_components": avg_elongated, "holes": avg_holes, "symmetry": avg_symmetry, "skeleton_length": avg_skeleton_length, "skeleton_endpoints": avg_skeleton_endpoints, "skeleton_sample_count": skeleton_samples, "clipping": avg_clip, "deviation": avg_deviation, "flicker": avg_flicker, "tracking_confidence": avg_tracking_confidence, "target_motion": avg_target_motion, "camera_motion": avg_camera_motion, "scene_change_count": scene_change_count, "mask_reinitialize_count": mask_reinitialize_count, "track_reacquire_count": track_reacquire_count}
 
-def process_videos(source, target, profile="balanced", object_preset="generic", preview_seconds=0, roi=None, preview_start_seconds=0, reference_dir=None, surface_reference_dir=None, surface_preset="auto"):
+def process_videos(source, target, profile="balanced", object_preset="generic", preview_seconds=0, roi=None, preview_start_seconds=0, reference_dir=None, surface_reference_dir=None, surface_preset="auto", denoise_reference=False):
     target.mkdir(parents=True, exist_ok=True)
     videos = [source] if source.is_file() and source.suffix.lower() in VIDEO_EXTS else sorted(p for p in source.rglob("*") if p.is_file() and p.suffix.lower() in VIDEO_EXTS)
     if not videos: raise ValueError(f"動画ファイルが見つかりません: {source}")
@@ -410,7 +422,7 @@ def process_videos(source, target, profile="balanced", object_preset="generic", 
     for path in videos:
         relative = Path(path.name) if source.is_file() else path.relative_to(source)
         out = target / relative.with_name(path.stem + "_enhanced.mp4")
-        metrics = process_video(path, out, profile, object_preset, preview_seconds, roi, preview_start_seconds, reference_dir, surface_reference_dir, surface_preset)
+        metrics = process_video(path, out, profile, object_preset, preview_seconds, roi, preview_start_seconds, reference_dir, surface_reference_dir, surface_preset, denoise_reference)
         scores.append({"input": str(path), "output": str(out), "object_preset": metrics.get("resolved_object_preset", object_preset), "requested_object_preset": object_preset, "surface_preset": surface_preset, "roi": roi, "preview_seconds": preview_seconds, "preview_start_seconds": preview_start_seconds, "reference_dir": str(reference_dir or ""), "surface_reference_dir": str(surface_reference_dir or ""), **metrics})
         print(f"processed: {path}", flush=True)
     scores.sort(key=lambda item: item.get("score", float("-inf")), reverse=True)
@@ -461,6 +473,7 @@ def main():
     parser.add_argument("--surface-preset", choices=tuple(SURFACE_PRESETS), default="auto")
     parser.add_argument("--roi", default="", help="対象範囲を正規化座標 x,y,width,height で指定")
     parser.add_argument("--analyze-reference", action="store_true", help="対象参考画像の形状からプリセット候補だけをJSONで出力する")
+    parser.add_argument("--denoise-reference", action="store_true", help="参考画像の形状・表面色推定前にノイズを抑える")
     args = parser.parse_args()
     roi = tuple(float(value) for value in args.roi.split(",")) if args.roi else None
     reference_dir = Path(args.reference_dir) if args.reference_dir else None
@@ -472,7 +485,7 @@ def main():
     if args.analyze_reference:
         if reference_dir is None:
             raise ValueError("--analyze-reference には --reference-dir が必要です")
-        print(json.dumps(reference_shape_summary(reference_dir), ensure_ascii=False), flush=True)
+        print(json.dumps(reference_shape_summary(reference_dir, args.denoise_reference), ensure_ascii=False), flush=True)
         return
     if not args.mode or not args.input or not args.output:
         raise ValueError("通常処理には --mode、--input、--output が必要です")
@@ -482,9 +495,9 @@ def main():
         combined = []
         for profile in ("color", "color_strong", "shape", "shape_strong", "balanced", "balanced_strong", "conservative", "observed_color", "observed_conservative"):
             target = Path(args.output) / profile
-            if args.mode == "image": process_images(Path(args.input), target, profile, args.object_preset, reference_dir, surface_reference_dir, args.surface_preset)
+            if args.mode == "image": process_images(Path(args.input), target, profile, args.object_preset, reference_dir, surface_reference_dir, args.surface_preset, args.denoise_reference)
             else:
-                for item in process_videos(Path(args.input), target, profile, args.object_preset, args.preview_seconds, roi, args.preview_start_seconds, reference_dir, surface_reference_dir, args.surface_preset):
+                for item in process_videos(Path(args.input), target, profile, args.object_preset, args.preview_seconds, roi, args.preview_start_seconds, reference_dir, surface_reference_dir, args.surface_preset, args.denoise_reference):
                     combined.append({"profile": profile, **item})
         if combined:
             combined.sort(key=lambda item: item["score"], reverse=True)
@@ -496,9 +509,9 @@ def main():
             comparison = write_candidate_comparison(combined, root)
             if comparison: print(f"candidate_comparison={comparison}", flush=True)
             print(f"best_candidate={combined[0]['profile']} score={combined[0]['score']:.2f}", flush=True)
-    elif args.mode == "image": process_images(Path(args.input), Path(args.output), args.profile, args.object_preset, reference_dir, surface_reference_dir, args.surface_preset)
+    elif args.mode == "image": process_images(Path(args.input), Path(args.output), args.profile, args.object_preset, reference_dir, surface_reference_dir, args.surface_preset, args.denoise_reference)
     else:
         source, target = Path(args.input), Path(args.output)
-        process_videos(source, target, args.profile, args.object_preset, args.preview_seconds, roi, args.preview_start_seconds, reference_dir, surface_reference_dir, args.surface_preset) if source.is_dir() else process_video(source, target, args.profile, args.object_preset, args.preview_seconds, roi, args.preview_start_seconds, reference_dir, surface_reference_dir, args.surface_preset)
+        process_videos(source, target, args.profile, args.object_preset, args.preview_seconds, roi, args.preview_start_seconds, reference_dir, surface_reference_dir, args.surface_preset, args.denoise_reference) if source.is_dir() else process_video(source, target, args.profile, args.object_preset, args.preview_seconds, roi, args.preview_start_seconds, reference_dir, surface_reference_dir, args.surface_preset, args.denoise_reference)
 
 if __name__ == "__main__": main()

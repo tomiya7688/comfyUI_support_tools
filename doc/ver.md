@@ -613,6 +613,14 @@
         doc/開発予定.md
         doc/ver.md
 
+# 81. Touka参考画像ノイズ除去
+    Toukaに参考画像のノイズ抑制チェックを追加した。形状ヒントの輪郭抽出と透過対象参考画像の色クラスタ推定前だけにバイラテラル・メディアン処理を適用し、入力画像と生成出力は変更しない
+    変更したファイル
+        nuno/_touka/touka_batch.py
+        scripts/tabs/touka_enhancer.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

@@ -572,6 +572,15 @@
         doc/開発予定.md
         doc/ver.md
 
+# 76. Ollama Prompt校正タブ
+    OllamaのローカルAPIを使い、日本語・自由文を画像生成向けのカンマ区切りタグへ校正するタブを追加した。モデル一覧取得、非ストリーム生成、プリセットに対応し、Ollama未起動時はこのタブだけがエラー表示する
+    変更したファイル
+        scripts/backend/ollama_prompt_corrector.py
+        scripts/tabs/ollama_prompt.py
+        scripts/app.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

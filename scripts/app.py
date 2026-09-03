@@ -31,6 +31,7 @@ from .tabs.video_reencoder import VideoReencoderTab
 from .tabs.static_spec import StaticSpecTab
 from .tabs.docstring_audit import DocstringAuditTab
 from .tabs.dependency_status import DependencyStatusTab
+from .tabs.ollama_prompt import OllamaPromptTab
 from .tabs.touka_enhancer import ToukaEnhancerTab
 from .tabs.wildcard_checker import WildcardCheckerTab
 from .tabs.wildcard_move import WildcardMoveTab
@@ -140,6 +141,7 @@ class TabbedToolsApp(tk.Tk):
             ("静的仕様書", StaticSpecTab),
             ("Docstring検査", DocstringAuditTab),
             ("依存状態", DependencyStatusTab),
+            ("Ollama Prompt", OllamaPromptTab),
             ("半透明素材強調", ToukaEnhancerTab)
         ]
 

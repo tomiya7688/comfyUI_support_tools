@@ -22,6 +22,7 @@ class MovieToTextTab(ttk.Frame):
         self.frame_count = tk.IntVar(value=12)
         self.threshold = tk.DoubleVar(value=0.35)
         self.minimum_coverage = tk.DoubleVar(value=0.5)
+        self.output_mode = tk.StringVar(value="common")
         self.preset_store = PresetStore("movie_to_text")
         self.preset_name = tk.StringVar()
         self._build()
@@ -38,6 +39,8 @@ class MovieToTextTab(ttk.Frame):
         for label, variable, width in (("モデル", self.model, 32), ("フレーム数", self.frame_count, 6), ("閾値", self.threshold, 6), ("出現率", self.minimum_coverage, 6)):
             ttk.Label(options, text=label).pack(side="left", padx=(0, 4))
             ttk.Entry(options, textvariable=variable, width=width).pack(side="left", padx=(0, 10))
+        ttk.Label(options, text="出力").pack(side="left", padx=(0, 4))
+        ttk.Combobox(options, textvariable=self.output_mode, values=["common", "wildcard_frames"], state="readonly", width=18).pack(side="left")
         buttons = ttk.Frame(self); buttons.pack(fill="x", pady=6)
         ttk.Button(buttons, text="動画をタグ化", command=self.start).pack(side="left")
         ttk.Button(buttons, text="停止", command=self.stop).pack(side="left", padx=4)
@@ -58,7 +61,7 @@ class MovieToTextTab(ttk.Frame):
         self.preset_combo.configure(values=self.preset_store.names())
 
     def _preset_values(self):
-        return {"input_file": self.input_file.get(), "output_file": self.output_file.get(), "api_url": self.api_url.get(), "model": self.model.get(), "frame_count": self.frame_count.get(), "threshold": self.threshold.get(), "minimum_coverage": self.minimum_coverage.get()}
+        return {"input_file": self.input_file.get(), "output_file": self.output_file.get(), "api_url": self.api_url.get(), "model": self.model.get(), "frame_count": self.frame_count.get(), "threshold": self.threshold.get(), "minimum_coverage": self.minimum_coverage.get(), "output_mode": self.output_mode.get()}
 
     def save_preset(self):
         try:
@@ -70,6 +73,7 @@ class MovieToTextTab(ttk.Frame):
             values = self.preset_store.load(self.preset_name.get())
             for key, variable in (("input_file", self.input_file), ("output_file", self.output_file), ("api_url", self.api_url), ("model", self.model), ("frame_count", self.frame_count), ("threshold", self.threshold), ("minimum_coverage", self.minimum_coverage)):
                 if key in values: variable.set(values[key])
+            self.output_mode.set(values.get("output_mode", "common"))
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
@@ -89,6 +93,10 @@ class MovieToTextTab(ttk.Frame):
                 appearances[tag] = appearances.get(tag, 0) + 1
         count = max(1, len(frame_scores))
         return [tag for tag in sorted(totals, key=lambda tag: (-appearances[tag], -totals[tag], tag.casefold())) if appearances[tag] / count >= minimum_coverage and totals[tag] / appearances[tag] >= threshold]
+
+    @staticmethod
+    def frame_tags(scores, threshold):
+        return [tag for tag, score in sorted(scores.items(), key=lambda item: (-item[1], item[0].casefold())) if score >= threshold]
 
     def start(self):
         self.stop_event.clear()
@@ -129,8 +137,13 @@ class MovieToTextTab(ttk.Frame):
             scores.append(self._scores(response.json()))
             self.logbox.log(f"タグ取得: {order}/{len(indices)} frame={index}")
         capture.release()
-        tags = self.aggregate(scores, coverage, threshold)
         output = Path(self.output_file.get().strip())
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(", ".join(tags) + "\n", encoding="utf-8")
-        self.logbox.log(f"完了: {len(scores)}フレーム / {len(tags)}タグ / {output}")
+        if self.output_mode.get() == "wildcard_frames":
+            lines = [", ".join(self.frame_tags(frame_score, threshold)) for frame_score in scores]
+            output.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+            self.logbox.log(f"完了: {len(scores)}フレーム / Wildcard {len(lines)}行 / {output}")
+        else:
+            tags = self.aggregate(scores, coverage, threshold)
+            output.write_text(", ".join(tags) + "\n", encoding="utf-8")
+            self.logbox.log(f"完了: {len(scores)}フレーム / {len(tags)}タグ / {output}")

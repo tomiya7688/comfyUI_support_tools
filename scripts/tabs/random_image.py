@@ -63,7 +63,7 @@ class RandomImageTab(ttk.Frame):
         top = ttk.LabelFrame(self, text="ファイル", padding=8)
         top.pack(fill="x")
         LabeledPathRow(top, "wildcard root", self.var_wildcard_root_dir, mode="dir").pack(fill="x", pady=3)
-        LabeledPathRow(top, "wildcard", self.var_input_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
+        LabeledPathRow(top, "wildcard", self.var_input_file, mode="file_or_dir", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
         LabeledPathRow(top, "negative wildcard", self.var_negative_input_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
         LabeledPathRow(top, "出力先", self.var_output_dir, mode="dir").pack(fill="x", pady=3)
         ttk.Checkbutton(top, text="メインWildcardを停止まで固定（無限生成）", variable=self.var_keep_main_wildcard_until_stop).pack(anchor="w", pady=(4, 0))

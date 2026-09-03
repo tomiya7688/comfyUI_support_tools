@@ -1,6 +1,7 @@
 from ..context import *
 from ..context import _safe_thread
 from ..services import *
+from ..backend.tag_text_merger import TagTextMerger
 from ..widgets.preset_store import PresetStore
 
 class TextMergerTab(ttk.Frame):
@@ -11,6 +12,7 @@ class TextMergerTab(ttk.Frame):
         super().__init__(master, padding=10)
         self.folder = tk.StringVar(value=self.DEFAULT_FOLDER)
         self.output = tk.StringVar(value=self.DEFAULT_OUTPUT)
+        self.deduplicate = tk.BooleanVar(value=True)
         self.preset_store = PresetStore("text_merger")
         self.preset_name = tk.StringVar()
         self._build()
@@ -18,6 +20,7 @@ class TextMergerTab(ttk.Frame):
     def _build(self):
         LabeledPathRow(self, "フォルダ", self.folder, mode="dir").pack(fill="x", pady=4)
         LabeledPathRow(self, "出力ファイル", self.output, mode="save", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=4)
+        ttk.Checkbutton(self, text="重複タグを追加しない（既存の出力ファイルも照合）", variable=self.deduplicate).pack(anchor="w", pady=2)
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", pady=8)
         ttk.Button(buttons, text="マージ実行", command=self.run_thread).pack(side="left")
@@ -35,7 +38,7 @@ class TextMergerTab(ttk.Frame):
 
     def save_preset(self):
         try:
-            path = self.preset_store.save(self.preset_name.get(), {"folder": self.folder.get(), "output": self.output.get()})
+            path = self.preset_store.save(self.preset_name.get(), {"folder": self.folder.get(), "output": self.output.get(), "deduplicate": self.deduplicate.get()})
             self.preset_name.set(path.stem)
             self._refresh_preset_choices()
             self.logbox.log(f"プリセットを保存しました: {path}")
@@ -47,6 +50,7 @@ class TextMergerTab(ttk.Frame):
             values = self.preset_store.load(self.preset_name.get())
             self.folder.set(values.get("folder", self.folder.get()))
             self.output.set(values.get("output", self.output.get()))
+            self.deduplicate.set(values.get("deduplicate", True))
             self.logbox.log("プリセットを読み込みました")
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
@@ -61,7 +65,6 @@ class TextMergerTab(ttk.Frame):
             self.logbox.log("エラー: フォルダと出力ファイルを指定してください")
             return
 
-        all_texts: list[str] = []
         if not os.path.isdir(folder_path):
             self.logbox.log(f"警告: フォルダが存在しません: {folder_path}")
             out_dir = os.path.dirname(output_file)
@@ -72,31 +75,8 @@ class TextMergerTab(ttk.Frame):
             self.logbox.log(f"空の出力ファイルを作成しました: {output_file}")
             return
 
-        for filename in sorted(os.listdir(folder_path)):
-            if filename.endswith(".txt"):
-                file_path = os.path.join(folder_path, filename)
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read().strip()
-                        all_texts.append(content)
-                    self.logbox.log(f"読み込み成功: {file_path}")
-                except Exception as e:
-                    self.logbox.log(f"エラー: {file_path} を読み込めませんでした。{e}")
-
-        out_dir = os.path.dirname(output_file)
-        if out_dir:
-            os.makedirs(out_dir, exist_ok=True)
         try:
-            mode = "a+" if os.path.exists(output_file) else "w"
-            with open(output_file, mode, encoding="utf-8") as f:
-                if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-                    f.seek(0, 2)
-                    f.seek(max(f.tell() - 1, 0), 0)
-                    last_char = f.read(1)
-                    if last_char != '\n':
-                        f.seek(0, 2)
-                        f.write('\n')
-                f.write("\n".join(all_texts))
-            self.logbox.log(f"結合完了: {output_file}")
+            result = TagTextMerger().merge(folder_path, output_file, self.deduplicate.get())
+            self.logbox.log(f"結合完了: {output_file} / ファイル {result['files']} / 追加タグ {result['added']} / 重複スキップ {result['skipped']}")
         except Exception as e:
             self.logbox.log(f"エラー: {output_file} に書き込めませんでした。{e}")

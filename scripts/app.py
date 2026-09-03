@@ -29,6 +29,7 @@ from .tabs.zipper import ZipperTab
 from .tabs.youtube_downloader import YouTubeDownloaderTab
 from .tabs.video_reencoder import VideoReencoderTab
 from .tabs.static_spec import StaticSpecTab
+from .tabs.docstring_audit import DocstringAuditTab
 from .tabs.touka_enhancer import ToukaEnhancerTab
 from .tabs.wildcard_checker import WildcardCheckerTab
 from .tabs.wildcard_move import WildcardMoveTab
@@ -136,6 +137,7 @@ class TabbedToolsApp(tk.Tk):
             ("YouTube Downloader", YouTubeDownloaderTab),
             ("Video Reencoder", VideoReencoderTab),
             ("静的仕様書", StaticSpecTab),
+            ("Docstring検査", DocstringAuditTab),
             ("半透明素材強調", ToukaEnhancerTab)
         ]
 

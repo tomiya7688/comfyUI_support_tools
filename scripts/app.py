@@ -27,6 +27,7 @@ from .tabs.duplicate_line_delete import DuplicateLineDeleteTab
 from .tabs.ffmpeg_repair import FfmpegRepairTab
 from .tabs.zipper import ZipperTab
 from .tabs.youtube_downloader import YouTubeDownloaderTab
+from .tabs.video_reencoder import VideoReencoderTab
 from .tabs.touka_enhancer import ToukaEnhancerTab
 from .tabs.wildcard_checker import WildcardCheckerTab
 from .tabs.wildcard_move import WildcardMoveTab
@@ -132,6 +133,7 @@ class TabbedToolsApp(tk.Tk):
             ("Wildcard Move", WildcardMoveTab),
             ("Zipper", ZipperTab),
             ("YouTube Downloader", YouTubeDownloaderTab),
+            ("Video Reencoder", VideoReencoderTab),
             ("半透明素材強調", ToukaEnhancerTab)
         ]
 

@@ -514,6 +514,15 @@
         doc/開発予定.md
         doc/ver.md
 
+# 69. Video Reencoderタブ
+    動画フォルダをH.264/H.265で再エンコードするタブを追加した。最大高さ、音声ビットレート、CRFまたは目標サイズから算出する動画ビットレート、CPU制限を設定でき、元動画とは別の出力先へMP4を書き出す
+    変更したファイル
+        scripts/backend/video_reencoder.py
+        scripts/tabs/video_reencoder.py
+        scripts/app.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

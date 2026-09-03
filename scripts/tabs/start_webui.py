@@ -61,6 +61,8 @@ class StartWebUITab(ttk.Frame):
         ttk.Button(buttons, text="� 強制停止", command=self.force_kill).pack(side="left", padx=4)
         ttk.Button(buttons, text="🔄 再起動", command=self.restart).pack(side="left", padx=4)
         ttk.Button(buttons, text="🏥 ヘルスチェック", command=self.health_check).pack(side="left", padx=4)
+        ttk.Button(buttons, text="WebUI1111画面を開く", command=lambda: self.open_backend_gui("a1111")).pack(side="left", padx=(16, 4))
+        ttk.Button(buttons, text="ComfyUI画面を開く", command=lambda: self.open_backend_gui("comfyui")).pack(side="left", padx=4)
         ttk.Label(buttons, text="preset").pack(side="left", padx=(16,4)); self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18); self.preset_combo.pack(side="left"); ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4); ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
 
         self.logbox = LogBox(self)
@@ -207,6 +209,18 @@ class StartWebUITab(ttk.Frame):
             self.logbox.log(f"❌ 入力エラー: {e}")
             return
         threading.Thread(target=self.mod._restart_webui, args=args, daemon=True).start()
+
+    def open_backend_gui(self, backend):
+        runtime_dir = COMFYUI_DIR if backend == "comfyui" else A1111_DIR
+        python_path = runtime_dir / "venv" / "Scripts" / "python.exe"
+        if not python_path.is_file():
+            python_path = Path(sys.executable)
+        environment = os.environ.copy(); environment["KADOKA_TOOLS_BACKEND"] = backend
+        try:
+            subprocess.Popen([str(python_path), str(SD_ROOT / "tabbed_tools_gui.py"), "--backend", backend], cwd=str(SD_ROOT), env=environment, creationflags=0x00000200 if os.name == "nt" else 0)
+            self.logbox.log(f"✅ {backend} 用GUIを開きました")
+        except OSError as error:
+            self.logbox.log(f"GUI起動エラー: {error}")
 
     def _poll_status(self):
         if not isinstance(self.mod, Exception) and hasattr(self, "status_label"):

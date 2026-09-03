@@ -195,11 +195,8 @@ class TabbedToolsApp(tk.Tk):
 
 
 def main():
-    if BACKEND_SELECTION_REQUIRED:
-        show_backend_selector()
-    else:
-        app = TabbedToolsApp()
-        app.mainloop()
+    app = TabbedToolsApp()
+    app.mainloop()
 
 
 if __name__ == "__main__":

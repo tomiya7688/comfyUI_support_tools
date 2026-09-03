@@ -539,6 +539,13 @@
         doc/開発予定.md
         doc/ver.md
 
+# 72. Folder Taggerの動画タグ付け
+    Folder Taggerへ動画処理のチェックボックスと抽出フレーム数を追加した。動画は均等に抽出したフレームを同じTaggerへ送り、信頼度を平均して既存の統合TXTと任意の12分類TXTへ出力する
+    変更したファイル
+        scripts/tabs/folder_tagger.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

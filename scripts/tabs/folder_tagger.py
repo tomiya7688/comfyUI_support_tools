@@ -20,6 +20,7 @@ class FolderTaggerTab(ttk.Frame):
         "watermark, username, artist name, animal ears, furry, censored, sfw"
     )
     IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+    VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
 
     def __init__(self, master):
         super().__init__(master, padding=10)
@@ -45,6 +46,8 @@ class FolderTaggerTab(ttk.Frame):
         self.gif_average = tk.BooleanVar(value=True)
         self.character_crop = tk.BooleanVar(value=False)
         self.split_categories = tk.BooleanVar(value=False)
+        self.tag_videos = tk.BooleanVar(value=False)
+        self.video_frames = tk.IntVar(value=8)
         self._build()
 
     def _build(self):
@@ -114,6 +117,9 @@ class FolderTaggerTab(ttk.Frame):
         ttk.Checkbutton(options, text="GIF: 全フレームの信頼度を平均", variable=self.gif_average).pack(side="left", padx=4)
         ttk.Checkbutton(options, text="人物・キャラクター候補だけをタグ付け", variable=self.character_crop).pack(side="left", padx=4)
         ttk.Checkbutton(options, text="タグを12カテゴリにも出力", variable=self.split_categories).pack(side="left", padx=4)
+        ttk.Checkbutton(options, text="動画もタグ付け", variable=self.tag_videos).pack(side="left", padx=4)
+        ttk.Label(options, text="動画フレーム数").pack(side="left", padx=(8, 3))
+        ttk.Entry(options, textvariable=self.video_frames, width=4).pack(side="left")
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", pady=4)
@@ -132,7 +138,7 @@ class FolderTaggerTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        return {"input_dir": self.input_dir.get(), "output_file": self.output_file.get(), "tagger_kind": self.tagger_kind.get(), "api_url": self.api_url.get(), "model": self.model.get(), "threshold": self.threshold.get(), "character_threshold": self.character_threshold.get(), "timeout": self.timeout.get(), "additional": self.additional.get(), "exclude": self.exclude.get(), "recursive": self.recursive.get(), "overwrite": self.overwrite.get(), "gif_average": self.gif_average.get(), "character_crop": self.character_crop.get(), "split_categories": self.split_categories.get()}
+        return {"input_dir": self.input_dir.get(), "output_file": self.output_file.get(), "tagger_kind": self.tagger_kind.get(), "api_url": self.api_url.get(), "model": self.model.get(), "threshold": self.threshold.get(), "character_threshold": self.character_threshold.get(), "timeout": self.timeout.get(), "additional": self.additional.get(), "exclude": self.exclude.get(), "recursive": self.recursive.get(), "overwrite": self.overwrite.get(), "gif_average": self.gif_average.get(), "character_crop": self.character_crop.get(), "split_categories": self.split_categories.get(), "tag_videos": self.tag_videos.get(), "video_frames": self.video_frames.get()}
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -146,7 +152,7 @@ class FolderTaggerTab(ttk.Frame):
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("input_dir", self.input_dir), ("output_file", self.output_file), ("tagger_kind", self.tagger_kind), ("api_url", self.api_url), ("model", self.model), ("threshold", self.threshold), ("character_threshold", self.character_threshold), ("timeout", self.timeout), ("additional", self.additional), ("exclude", self.exclude), ("recursive", self.recursive), ("overwrite", self.overwrite), ("gif_average", self.gif_average), ("character_crop", self.character_crop), ("split_categories", self.split_categories)):
+            for key, variable in (("input_dir", self.input_dir), ("output_file", self.output_file), ("tagger_kind", self.tagger_kind), ("api_url", self.api_url), ("model", self.model), ("threshold", self.threshold), ("character_threshold", self.character_threshold), ("timeout", self.timeout), ("additional", self.additional), ("exclude", self.exclude), ("recursive", self.recursive), ("overwrite", self.overwrite), ("gif_average", self.gif_average), ("character_crop", self.character_crop), ("split_categories", self.split_categories), ("tag_videos", self.tag_videos), ("video_frames", self.video_frames)):
                 if key in values: variable.set(values[key])
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
@@ -322,6 +328,24 @@ class FolderTaggerTab(ttk.Frame):
         if not frame_scores: raise RuntimeError("GIFから処理可能なフレームを取得できませんでした")
         return self._average_gif_scores(frame_scores), len(frame_scores)
 
+    def _interrogate_video(self, video_path, api_url, model, threshold, character_threshold, timeout, frame_count):
+        import cv2
+        capture = cv2.VideoCapture(str(video_path))
+        total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        if total < 1:
+            capture.release(); raise RuntimeError("動画を読めません")
+        indices = sorted({round((total - 1) * index / max(1, frame_count - 1)) for index in range(max(1, frame_count))})
+        scores = []
+        for index in indices:
+            if self.stop_event.is_set(): break
+            capture.set(cv2.CAP_PROP_POS_FRAMES, index); ok, frame = capture.read()
+            if not ok: continue
+            ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+            if ok: scores.append(self._interrogate_bytes(encoded.tobytes(), api_url, model, threshold, character_threshold, timeout))
+        capture.release()
+        if not scores: raise RuntimeError("動画から処理可能なフレームを取得できませんでした")
+        return self._average_gif_scores(scores), len(scores)
+
     def run(self):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
@@ -354,7 +378,7 @@ class FolderTaggerTab(ttk.Frame):
         iterator = root.rglob("*") if self.recursive.get() else root.iterdir()
         images = sorted(
             path for path in iterator
-            if path.is_file() and path.suffix.lower() in self.IMAGE_EXTENSIONS
+            if path.is_file() and (path.suffix.lower() in self.IMAGE_EXTENSIONS or (self.tag_videos.get() and path.suffix.lower() in self.VIDEO_EXTENSIONS))
         )
         if not images:
             raise FileNotFoundError(f"画像が見つかりません: {root}")
@@ -376,7 +400,10 @@ class FolderTaggerTab(ttk.Frame):
                     break
                 self.logbox.log(f"[{index}/{len(images)}] {image_path}")
                 try:
-                    if image_path.suffix.lower() == ".gif" and self.gif_average.get():
+                    if image_path.suffix.lower() in self.VIDEO_EXTENSIONS:
+                        scores, frame_count = self._interrogate_video(image_path, api_url, model, threshold, character_threshold, timeout, self.video_frames.get())
+                        self.logbox.log(f"  動画 {frame_count}フレームを平均")
+                    elif image_path.suffix.lower() == ".gif" and self.gif_average.get():
                         scores, frame_count = self._interrogate_gif(image_path, api_url, model, threshold, character_threshold, timeout, self.character_crop.get())
                         self.logbox.log(f"  GIF {frame_count}フレームを平均")
                     elif self.character_crop.get():

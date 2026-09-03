@@ -1,6 +1,7 @@
 from ..context import *
 from ..context import _safe_thread
 from ..context import _unique_choices
+from ..backend.ollama_prompt_corrector import OllamaPromptCorrector
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
@@ -42,6 +43,9 @@ class RandomImageTab(ttk.Frame):
         self.var_sequential_loop = tk.BooleanVar(value=False)
         self.var_sequential_reuse_wildcards = tk.BooleanVar(value=True)
         self.var_output_format = tk.StringVar(value="png")
+        self.var_enable_prompt_correction = tk.BooleanVar(value=False)
+        self.var_ollama_api_url = tk.StringVar(value="http://127.0.0.1:11434")
+        self.var_ollama_model = tk.StringVar()
         self.var_api_timeout = tk.IntVar()
         self.var_comfy_flow = tk.StringVar()
         self.var_preset_name = tk.StringVar()
@@ -65,6 +69,13 @@ class RandomImageTab(ttk.Frame):
         ttk.Checkbutton(top, text="メインWildcardを停止まで固定（無限生成）", variable=self.var_keep_main_wildcard_until_stop).pack(anchor="w", pady=(4, 0))
         ttk.Checkbutton(top, text="生成プロンプトを保存", variable=self.var_save_prompts).pack(anchor="w", pady=(4, 0))
         LabeledPathRow(top, "prompt保存先（txt/フォルダ）", self.var_prompt_output, mode="file", filetypes=[("Text", "*.txt"), ("All", "*.*")]).pack(fill="x", pady=3)
+        prompt_correct_row = ttk.Frame(top); prompt_correct_row.pack(fill="x", pady=3)
+        ttk.Checkbutton(prompt_correct_row, text="Ollamaでプロンプトを補正", variable=self.var_enable_prompt_correction).pack(side="left")
+        ttk.Label(prompt_correct_row, text=" API").pack(side="left")
+        ttk.Entry(prompt_correct_row, textvariable=self.var_ollama_api_url, width=28).pack(side="left", padx=3)
+        ttk.Label(prompt_correct_row, text=" モデル").pack(side="left")
+        self.ollama_model_combo = ttk.Combobox(prompt_correct_row, textvariable=self.var_ollama_model, width=24); self.ollama_model_combo.pack(side="left", padx=3, fill="x", expand=True)
+        ttk.Button(prompt_correct_row, text="Ollamaモデル更新", command=self.refresh_ollama_models).pack(side="left")
         api_row = ttk.Frame(top)
         api_row.pack(fill="x", pady=3)
         ttk.Label(api_row, text="API URL", width=16).pack(side="left", padx=(0, 6))
@@ -186,7 +197,7 @@ class RandomImageTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
+        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -201,6 +212,7 @@ class RandomImageTab(ttk.Frame):
             values["sequential_reuse_wildcards"] = self.var_sequential_reuse_wildcards.get()
             values["keep_main_wildcard_until_stop"] = self.var_keep_main_wildcard_until_stop.get()
             values["output_format"] = self.var_output_format.get()
+            values["enable_prompt_correction"] = self.var_enable_prompt_correction.get(); values["ollama_api_url"] = self.var_ollama_api_url.get(); values["ollama_model"] = self.var_ollama_model.get()
             path = self.preset_store.save(self.var_preset_name.get(), values)
             self.var_preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
@@ -215,6 +227,7 @@ class RandomImageTab(ttk.Frame):
             self.var_sequential_loop.set(values.get("sequential_loop", False))
             self.var_sequential_reuse_wildcards.set(values.get("sequential_reuse_wildcards", True))
             self.var_keep_main_wildcard_until_stop.set(values.get("keep_main_wildcard_until_stop", values.get("wildcard_cache_scope") == "until_stop"))
+            self.var_enable_prompt_correction.set(values.get("enable_prompt_correction", False)); self.var_ollama_api_url.set(values.get("ollama_api_url", "http://127.0.0.1:11434")); self.var_ollama_model.set(values.get("ollama_model", ""))
             self.var_output_format.set(values.get("output_format", "png"))
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
@@ -344,6 +357,21 @@ class RandomImageTab(ttk.Frame):
         threading.Thread(target=worker, daemon=True).start()
         self.logbox.log("🔄 モデル候補をフォルダとAPIから更新中...")
 
+    def refresh_ollama_models(self):
+        def worker():
+            try:
+                if requests is None: raise RuntimeError("requests がありません")
+                models = OllamaPromptCorrector().models(self.var_ollama_api_url.get(), requests)
+                self.after(0, lambda: self._finish_ollama_models(models, None))
+            except Exception as error: self.after(0, lambda: self._finish_ollama_models([], error))
+        threading.Thread(target=worker, daemon=True).start(); self.logbox.log("🔄 Ollamaモデルを更新中...")
+
+    def _finish_ollama_models(self, models, error):
+        if error is not None: self.logbox.log(f"Ollamaモデル取得エラー: {error}"); return
+        self.ollama_model_combo.configure(values=models)
+        if not self.var_ollama_model.get() and models: self.var_ollama_model.set(models[0])
+        self.logbox.log(f"✅ Ollamaモデル候補: {len(models)}")
+
     def _finish_backend_refresh(self, choices, warnings):
         self._apply_backend_choices(choices)
         self.logbox.log(
@@ -372,6 +400,7 @@ class RandomImageTab(ttk.Frame):
             "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(),
             "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "use_model_vae": self.var_use_model_vae.get(),
             "save_prompts": self.var_save_prompts.get(), "prompt_output": self.var_prompt_output.get().strip(),
+            "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get().strip(), "ollama_model": self.var_ollama_model.get().strip(),
             "sequential_loop": self.var_sequential_loop.get(), "sequential_reuse_wildcards": self.var_sequential_reuse_wildcards.get(), "output_format": self.var_output_format.get(),
             "api_timeout": self.var_api_timeout.get(),
             "comfy_flow": self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else "",

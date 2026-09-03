@@ -3,6 +3,7 @@ import io
 from PIL import Image
 from .comfy_ui_client import ComfyUIClient
 from .image_failure_inspector import ImageFailureInspector
+from .ollama_prompt_corrector import OllamaPromptCorrector
 
 class EmbeddedRandomImage:
     input_file = str(WILDCARDS_DIR / "random_batch_nsfw_hub.txt")
@@ -46,6 +47,9 @@ class EmbeddedRandomImage:
     sequential_loop = False
     sequential_reuse_wildcards = True
     output_format = "png"
+    enable_prompt_correction = False
+    ollama_api_url = "http://127.0.0.1:11434"
+    ollama_model = ""
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -259,6 +263,14 @@ class EmbeddedRandomImage:
                 converted.save(buffer, format="JPEG", quality=95, optimize=True)
         return buffer.getvalue(), image_format
 
+    def _correct_prompt(self, prompt):
+        """Correct the fully expanded prompt only when the user enabled Ollama."""
+        if not self.enable_prompt_correction:
+            return prompt
+        corrected = OllamaPromptCorrector().correct(self.ollama_api_url, self.ollama_model, prompt, requests)
+        self._log(f"🪄 Ollamaでプロンプトを補正しました: {corrected}")
+        return corrected
+
     def _generate(self, prompt=None, negative=None, wildcard_cache=None):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
@@ -267,6 +279,7 @@ class EmbeddedRandomImage:
         if prompt is None:
             prompt = self.process_file(self.input_file, self.root_dir, wildcard_cache=wildcard_cache)
         prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
+        prompt = self._correct_prompt(prompt)
         image_bytes = None
         if RUNTIME_BACKEND == "comfyui":
             image_bytes = ComfyUIClient(self.api_url, self.api_timeout).txt2img(

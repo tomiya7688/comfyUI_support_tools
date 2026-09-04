@@ -173,6 +173,9 @@ class ToukaEnhancerTab(ttk.Frame):
             preset = suggestion["preset"]
             image_count = int(suggestion["image_count"])
             confidence = float(suggestion.get("confidence", 0.0))
+            common_count = int(suggestion.get("common_object_count", image_count))
+            shape_consistency = float(suggestion.get("common_shape_consistency", 0.0))
+            outlier_count = int(suggestion.get("outlier_count", 0))
             distribution = suggestion.get("distribution", {})
             if not isinstance(distribution, dict):
                 raise TypeError("形状内訳が不正です")
@@ -180,12 +183,12 @@ class ToukaEnhancerTab(ttk.Frame):
         except (KeyError, StopIteration, TypeError, ValueError, json.JSONDecodeError) as error:
             self.after(0, lambda: self.logbox.log(f"強調対象の提案解析エラー: {error}"))
             return
-        self.after(0, lambda: self._apply_reference_suggestion(label, image_count, confidence, distribution))
+        self.after(0, lambda: self._apply_reference_suggestion(label, image_count, confidence, distribution, common_count, shape_consistency, outlier_count))
 
-    def _apply_reference_suggestion(self, label, image_count, confidence, distribution):
+    def _apply_reference_suggestion(self, label, image_count, confidence, distribution, common_count=0, shape_consistency=0.0, outlier_count=0):
         self.object_preset.set(label)
         details = ", ".join(f"{key}: {value}" for key, value in distribution.items()) or "有効な形状なし"
-        self.logbox.log(f"強調対象参考画像から提案: {label}（解析画像 {image_count} 件、確信度 {confidence:.0%}、内訳 {details}）")
+        self.logbox.log(f"強調対象参考画像から提案: {label}（解析画像 {image_count} 件、共通候補 {common_count} 件、形状一致 {shape_consistency:.0%}、除外候補 {outlier_count} 件、確信度 {confidence:.0%}、内訳 {details}）")
 
     def select_video_roi(self):
         try:

@@ -160,11 +160,27 @@ def denoise_reference_image(image, enabled):
         return __import__("numpy").dstack((cv2.bilateralFilter(image[:, :, :3], 7, 40, 40), image[:, :, 3]))
     return cv2.bilateralFilter(image, 7, 40, 40)
 
+def reference_shape_distance(first, second):
+    import math
+    area_distance = abs(math.log(max(first["area"], 1e-6) / max(second["area"], 1e-6)))
+    aspect_distance = abs(math.log(max(first["aspect"], 1e-6) / max(second["aspect"], 1e-6)))
+    return area_distance + aspect_distance * 0.5
+
+def reference_shape_consistency(descriptors):
+    import math
+    if len(descriptors) < 2:
+        return 1.0
+    distances = []
+    for index, first in enumerate(descriptors):
+        for second in descriptors[index + 1:]:
+            distances.append(reference_shape_distance(first, second))
+    return 1.0 / (1.0 + sum(distances) / max(1, len(distances)))
+
 def reference_shape_summary(reference_dir, denoise=False):
     import collections, cv2, numpy as np
     if reference_dir is None or not Path(reference_dir).is_dir():
         return {"preset": "generic", "image_count": 0, "confidence": 0.0, "distribution": {}}
-    presets = []
+    descriptors = []
     paths = sorted(path for path in Path(reference_dir).rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_EXTS)
     for path in paths[:100]:
         image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
@@ -178,12 +194,24 @@ def reference_shape_summary(reference_dir, denoise=False):
             if not contours: continue
             mask = np.zeros_like(gray); cv2.drawContours(mask, [max(contours, key=cv2.contourArea)], -1, 255, thickness=cv2.FILLED)
         if cv2.countNonZero(mask) >= mask.size * 0.01:
-            presets.append(recommend_object_preset(mask))
-    if not presets:
-        return {"preset": "generic", "image_count": 0, "confidence": 0.0, "distribution": {}}
-    counts = collections.Counter(presets)
-    preset, winner_count = counts.most_common(1)[0]
-    return {"preset": preset, "image_count": len(presets), "confidence": winner_count / len(presets), "distribution": dict(sorted(counts.items()))}
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not contours: continue
+            contour = max(contours, key=cv2.contourArea)
+            _, _, width, height = cv2.boundingRect(contour)
+            descriptors.append({"preset": recommend_object_preset(mask), "area": cv2.contourArea(contour) / max(1, mask.size), "aspect": width / max(1, height)})
+    if not descriptors:
+        return {"preset": "generic", "image_count": 0, "confidence": 0.0, "distribution": {}, "common_object_count": 0, "common_shape_consistency": 0.0, "outlier_count": 0}
+    groups = {}
+    for descriptor in descriptors:
+        groups.setdefault(descriptor["preset"], []).append(descriptor)
+    ranked = []
+    for preset, values in groups.items():
+        clusters = [[candidate for candidate in values if reference_shape_distance(anchor, candidate) <= 0.55] for anchor in values]
+        common = max(clusters, key=lambda cluster: (len(cluster), reference_shape_consistency(cluster)))
+        ranked.append((preset, common, reference_shape_consistency(common)))
+    preset, common, consistency = max(ranked, key=lambda item: (len(item[1]) * item[2], len(item[1]), item[2], item[0]))
+    counts = collections.Counter(item["preset"] for item in descriptors)
+    return {"preset": preset, "image_count": len(descriptors), "confidence": len(common) / len(descriptors), "distribution": dict(sorted(counts.items())), "common_object_count": len(common), "common_shape_consistency": consistency, "outlier_count": len(descriptors) - len(common)}
 
 def reference_shape_hint(reference_dir, denoise=False):
     summary = reference_shape_summary(reference_dir, denoise)

@@ -41,6 +41,7 @@ from .tabs.movie_to_text import MovieToTextTab
 from .widgets.scrollable_tab_container import ScrollableTabContainer
 from .widgets.last_settings_store import LastSettingsStore
 from .widgets.tab_navigation import TabNavigation
+from .widgets.dark_theme import DarkTheme
 
 def _launch_backend_gui(backend):
     if backend not in {"a1111", "comfyui"}:
@@ -67,6 +68,7 @@ def _launch_backend_gui(backend):
 
 def show_backend_selector():
     selector = tk.Tk()
+    DarkTheme().apply(selector)
     selector.title("Kadoka Tools - 生成バックエンド選択")
     selector.geometry("520x250")
     selector.resizable(False, False)
@@ -108,6 +110,7 @@ def show_backend_selector():
 class TabbedToolsApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        DarkTheme().apply(self)
         self.title(f"Kadoka Tools - {BACKEND_DISPLAY_NAME} Tabbed GUI")
         self.geometry("1080x760")
         self.minsize(900, 600)

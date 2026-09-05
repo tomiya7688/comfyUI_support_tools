@@ -4,6 +4,7 @@ from ..services import LogBox, LabeledPathRow
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
 from ..backend.touka_dataset_preset_builder import ToukaDatasetPresetBuilder
 from ..widgets.preset_store import PresetStore
+from ..widgets.responsive_button_row import ResponsiveButtonRow
 import json
 
 TOUKA_SETTINGS_FILE = USER_INPUT_DIR / "config" / "touka" / "settings.json"
@@ -75,26 +76,16 @@ class ToukaEnhancerTab(ttk.Frame):
         dataset_preset_row = ttk.Frame(self); dataset_preset_row.pack(fill="x", pady=3); ttk.Label(dataset_preset_row, text="データセットプリセット名", width=16).pack(side="left"); ttk.Entry(dataset_preset_row, textvariable=self.dataset_preset_name, width=32).pack(side="left"); ttk.Button(dataset_preset_row, text="参考画像から作成", command=self.create_dataset_preset).pack(side="left", padx=4)
         surface_row = ttk.Frame(self); surface_row.pack(fill="x", pady=3); ttk.Label(surface_row, text="透過対象参考画像", width=16).pack(side="left"); ttk.Entry(surface_row, textvariable=self.surface_reference_path).pack(side="left", fill="x", expand=True); ttk.Button(surface_row, text="フォルダ", command=lambda: self._choose_directory(self.surface_reference_path, False)).pack(side="left", padx=4)
         cpu_row = ttk.Frame(self); cpu_row.pack(fill="x", pady=3); ttk.Label(cpu_row, text="使用CPU論理数", width=16).pack(side="left"); ttk.Entry(cpu_row, textvariable=self.cpu_cores, width=8).pack(side="left"); ttk.Label(cpu_row, text="空欄なら制限なし").pack(side="left", padx=6)
-        action_row = ttk.Frame(self); action_row.pack(fill="x", pady=(8, 3))
-        ttk.Button(action_row, text="処理開始", command=self.start).pack(side="left", padx=4); ttk.Button(action_row, text="停止", command=self.stop).pack(side="left", padx=4)
-        ttk.Button(action_row, text="環境診断", command=self.diagnose_environment).pack(side="left", padx=4)
-        ttk.Button(action_row, text="Fashionpediaプリセットを作成", command=self.create_fashionpedia_presets).pack(side="left", padx=4)
-        ttk.Button(action_row, text="設定を保存", command=self.save_settings).pack(side="left", padx=4)
-        ttk.Label(action_row, text="preset").pack(side="left", padx=(16,4)); self.preset_combo = ttk.Combobox(action_row, textvariable=self.preset_name, width=16); self.preset_combo.pack(side="left"); ttk.Button(action_row, text="保存", command=self.save_preset).pack(side="left", padx=4); ttk.Button(action_row, text="読込", command=self.load_preset).pack(side="left", padx=4)
-        selection_row = ttk.Frame(self); selection_row.pack(fill="x", pady=3)
-        ttk.Button(selection_row, text="画像を開いて範囲/Auto object選択", command=self.open_editor).pack(side="left", padx=4)
-        ttk.Button(selection_row, text="動画対象を選択", command=self.select_video_roi).pack(side="left", padx=4)
-        ttk.Button(selection_row, text="動画: Auto object", command=self.auto_select_video_object).pack(side="left", padx=4)
-        ttk.Button(selection_row, text="プレビュー範囲を選択", command=self.select_preview_range).pack(side="left", padx=4)
-        ttk.Button(selection_row, text="代表区間を自動選択", command=self.auto_select_preview_range).pack(side="left", padx=4)
-        result_row = ttk.Frame(self); result_row.pack(fill="x", pady=(3, 8))
-        ttk.Button(result_row, text="ランキングJSONを開く", command=self.open_scores).pack(side="left", padx=4)
-        ttk.Button(result_row, text="候補比較画像を開く", command=self.open_comparison).pack(side="left", padx=4)
-        ttk.Button(result_row, text="ランキング読込", command=self.load_ranking).pack(side="left", padx=4)
-        ttk.Button(result_row, text="選択候補を開く", command=self.open_selected_candidate).pack(side="left", padx=4)
-        ttk.Button(result_row, text="選択候補のマスクを開く", command=self.open_selected_mask).pack(side="left", padx=4)
-        ttk.Button(result_row, text="選択候補の診断", command=self.show_selected_diagnostics).pack(side="left", padx=4)
-        ttk.Button(result_row, text="選択候補を全尺レンダリング", command=self.render_selected_candidate).pack(side="left", padx=4)
+        action_row = ResponsiveButtonRow(self); action_row.pack(fill="x", pady=(8, 3))
+        for text, command in (("処理開始", self.start), ("停止", self.stop), ("環境診断", self.diagnose_environment), ("Fashionpediaプリセットを作成", self.create_fashionpedia_presets), ("設定を保存", self.save_settings)):
+            action_row.add(ttk.Button(action_row, text=text, command=command))
+        action_row.add(ttk.Label(action_row, text="preset")); self.preset_combo = ttk.Combobox(action_row, textvariable=self.preset_name, width=16); action_row.add(self.preset_combo); action_row.add(ttk.Button(action_row, text="保存", command=self.save_preset)); action_row.add(ttk.Button(action_row, text="読込", command=self.load_preset))
+        selection_row = ResponsiveButtonRow(self); selection_row.pack(fill="x", pady=3)
+        for text, command in (("画像を開いて範囲/Auto object選択", self.open_editor), ("動画対象を選択", self.select_video_roi), ("動画: Auto object", self.auto_select_video_object), ("プレビュー範囲を選択", self.select_preview_range), ("代表区間を自動選択", self.auto_select_preview_range)):
+            selection_row.add(ttk.Button(selection_row, text=text, command=command))
+        result_row = ResponsiveButtonRow(self); result_row.pack(fill="x", pady=(3, 8))
+        for text, command in (("ランキングJSONを開く", self.open_scores), ("候補比較画像を開く", self.open_comparison), ("ランキング読込", self.load_ranking), ("選択候補を開く", self.open_selected_candidate), ("選択候補のマスクを開く", self.open_selected_mask), ("選択候補の診断", self.show_selected_diagnostics), ("選択候補を全尺レンダリング", self.render_selected_candidate)):
+            result_row.add(ttk.Button(result_row, text=text, command=command))
         self.ranking = ttk.Treeview(self, columns=("rank", "profile", "score", "stability", "tracking", "file", "mask"), show="headings", height=6)
         for key, title, width in (("rank", "順位", 50), ("profile", "候補", 100), ("score", "score", 80), ("stability", "時間安定", 80), ("tracking", "追跡", 60), ("file", "出力", 400), ("mask", "マスク", 320)):
             self.ranking.heading(key, text=title); self.ranking.column(key, width=width, anchor="w")

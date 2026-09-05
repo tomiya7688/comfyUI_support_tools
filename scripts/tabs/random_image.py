@@ -4,6 +4,7 @@ from ..context import _unique_choices
 from ..backend.ollama_prompt_corrector import OllamaPromptCorrector
 from ..services import *
 from ..widgets.preset_store import PresetStore
+from ..widgets.responsive_button_row import ResponsiveButtonRow
 
 class RandomImageTab(ttk.Frame):
     def __init__(self, master):
@@ -139,21 +140,17 @@ class RandomImageTab(ttk.Frame):
         ttk.Label(isolation, text="最小分散").pack(side="left", padx=(18, 4))
         ttk.Entry(isolation, textvariable=self.var_image_failure_min_variance, width=7).pack(side="left")
 
-        buttons = ttk.Frame(self)
+        buttons = ResponsiveButtonRow(self)
         buttons.pack(fill="x", pady=6)
-        ttk.Button(buttons, text="1枚生成", command=self.one).pack(side="left", padx=4)
-        ttk.Button(buttons, text="無限生成", command=self.infinite).pack(side="left", padx=4)
-        ttk.Button(buttons, text="順次生成", command=self.sequential).pack(side="left", padx=4)
-        ttk.Checkbutton(buttons, text="順次を無限ループ", variable=self.var_sequential_loop).pack(side="left", padx=4)
-        ttk.Checkbutton(buttons, text="順次中のWildcardを固定", variable=self.var_sequential_reuse_wildcards).pack(side="left", padx=4)
-        ttk.Button(buttons, text="実行中へ設定を反映", command=self.update_running_generation).pack(side="left", padx=4)
-        ttk.Button(buttons, text="停止", command=self.stop).pack(side="left", padx=4)
-        ttk.Button(buttons, text="モデル候補更新", command=self.refresh_backend_choices).pack(side="left", padx=12)
-        ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
+        for text, command in (("1枚生成", self.one), ("無限生成", self.infinite), ("順次生成", self.sequential), ("実行中へ設定を反映", self.update_running_generation), ("停止", self.stop), ("モデル候補更新", self.refresh_backend_choices)):
+            buttons.add(ttk.Button(buttons, text=text, command=command))
+        buttons.add(ttk.Checkbutton(buttons, text="順次を無限ループ", variable=self.var_sequential_loop))
+        buttons.add(ttk.Checkbutton(buttons, text="順次中のWildcardを固定", variable=self.var_sequential_reuse_wildcards))
+        buttons.add(ttk.Label(buttons, text="preset"))
         self.preset_combo = ttk.Combobox(buttons, textvariable=self.var_preset_name, width=18)
-        self.preset_combo.pack(side="left")
-        ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
-        ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
+        buttons.add(self.preset_combo)
+        buttons.add(ttk.Button(buttons, text="保存", command=self.save_preset))
+        buttons.add(ttk.Button(buttons, text="読込", command=self.load_preset))
 
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)

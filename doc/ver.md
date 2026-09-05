@@ -645,6 +645,13 @@
         doc/開発予定.md
         doc/ver.md
 
+# 85. Random Image操作列の折り返し
+    Random Imageの生成・停止・候補更新・順次設定・プリセット欄をResponsiveButtonRowへ移行し、狭いウィンドウでも操作要素を次の行へ折り返すようにした
+    変更したファイル
+        scripts/tabs/random_image.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

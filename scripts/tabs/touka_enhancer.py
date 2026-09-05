@@ -3,6 +3,7 @@ from ..context import _safe_thread
 from ..services import LogBox, LabeledPathRow
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
 from ..backend.touka_dataset_preset_builder import ToukaDatasetPresetBuilder
+from ..backend.touka_evaluator import ToukaEvaluator
 from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
 import json
@@ -23,7 +24,7 @@ class ToukaEnhancerTab(ttk.Frame):
     def __init__(self, master):
         super().__init__(master, padding=10); self.process = None; self.ranking_data = {}
         self.preset_store = PresetStore("touka"); self.preset_name = tk.StringVar()
-        self.mode = tk.StringVar(value="image"); self.profile = tk.StringVar(value="balanced"); self.object_preset = tk.StringVar(value="汎用"); self.surface_preset = tk.StringVar(value="自動推定"); self.cpu_cores = tk.StringVar(); self.preview_seconds = tk.StringVar(value="5"); self.preview_start_seconds = tk.StringVar(value="0"); self.roi = tk.StringVar(); self.input_path = tk.StringVar(); self.output_path = tk.StringVar(); self.reference_path = tk.StringVar(); self.surface_reference_path = tk.StringVar(); self.dataset_preset_name = tk.StringVar(); self.denoise_references = tk.BooleanVar(value=False); self._restore_settings(); self._build()
+        self.mode = tk.StringVar(value="image"); self.profile = tk.StringVar(value="balanced"); self.object_preset = tk.StringVar(value="汎用"); self.surface_preset = tk.StringVar(value="自動推定"); self.cpu_cores = tk.StringVar(); self.preview_seconds = tk.StringVar(value="5"); self.preview_start_seconds = tk.StringVar(value="0"); self.roi = tk.StringVar(); self.input_path = tk.StringVar(); self.output_path = tk.StringVar(); self.reference_path = tk.StringVar(); self.surface_reference_path = tk.StringVar(); self.evaluation_path = tk.StringVar(); self.dataset_preset_name = tk.StringVar(); self.denoise_references = tk.BooleanVar(value=False); self._restore_settings(); self._build()
 
     def _restore_settings(self):
         try:
@@ -31,12 +32,12 @@ class ToukaEnhancerTab(ttk.Frame):
             if not isinstance(values, dict): return
         except (OSError, ValueError):
             return
-        for key, variable in (("mode", self.mode), ("profile", self.profile), ("object_preset", self.object_preset), ("surface_preset", self.surface_preset), ("cpu_cores", self.cpu_cores), ("preview_seconds", self.preview_seconds), ("preview_start_seconds", self.preview_start_seconds), ("roi", self.roi), ("input_path", self.input_path), ("output_path", self.output_path), ("reference_path", self.reference_path), ("surface_reference_path", self.surface_reference_path), ("dataset_preset_name", self.dataset_preset_name), ("denoise_references", self.denoise_references)):
+        for key, variable in (("mode", self.mode), ("profile", self.profile), ("object_preset", self.object_preset), ("surface_preset", self.surface_preset), ("cpu_cores", self.cpu_cores), ("preview_seconds", self.preview_seconds), ("preview_start_seconds", self.preview_start_seconds), ("roi", self.roi), ("input_path", self.input_path), ("output_path", self.output_path), ("reference_path", self.reference_path), ("surface_reference_path", self.surface_reference_path), ("evaluation_path", self.evaluation_path), ("dataset_preset_name", self.dataset_preset_name), ("denoise_references", self.denoise_references)):
             value = values.get(key)
             if isinstance(value, (str, bool)): variable.set(value)
 
     def save_settings(self):
-        values = {"mode": self.mode.get(), "profile": self.profile.get(), "object_preset": self.object_preset.get(), "surface_preset": self.surface_preset.get(), "cpu_cores": self.cpu_cores.get(), "preview_seconds": self.preview_seconds.get(), "preview_start_seconds": self.preview_start_seconds.get(), "roi": self.roi.get(), "input_path": self.input_path.get(), "output_path": self.output_path.get(), "reference_path": self.reference_path.get(), "surface_reference_path": self.surface_reference_path.get(), "dataset_preset_name": self.dataset_preset_name.get(), "denoise_references": self.denoise_references.get()}
+        values = {"mode": self.mode.get(), "profile": self.profile.get(), "object_preset": self.object_preset.get(), "surface_preset": self.surface_preset.get(), "cpu_cores": self.cpu_cores.get(), "preview_seconds": self.preview_seconds.get(), "preview_start_seconds": self.preview_start_seconds.get(), "roi": self.roi.get(), "input_path": self.input_path.get(), "output_path": self.output_path.get(), "reference_path": self.reference_path.get(), "surface_reference_path": self.surface_reference_path.get(), "evaluation_path": self.evaluation_path.get(), "dataset_preset_name": self.dataset_preset_name.get(), "denoise_references": self.denoise_references.get()}
         try:
             TOUKA_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
             TOUKA_SETTINGS_FILE.write_text(json.dumps(values, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -45,7 +46,7 @@ class ToukaEnhancerTab(ttk.Frame):
             self.logbox.log(f"設定保存エラー: {exc}")
 
     def _preset_values(self):
-        return {"mode": self.mode.get(), "profile": self.profile.get(), "object_preset": self.object_preset.get(), "surface_preset": self.surface_preset.get(), "cpu_cores": self.cpu_cores.get(), "preview_seconds": self.preview_seconds.get(), "preview_start_seconds": self.preview_start_seconds.get(), "roi": self.roi.get(), "input_path": self.input_path.get(), "output_path": self.output_path.get(), "reference_path": self.reference_path.get(), "surface_reference_path": self.surface_reference_path.get(), "dataset_preset_name": self.dataset_preset_name.get(), "denoise_references": self.denoise_references.get()}
+        return {"mode": self.mode.get(), "profile": self.profile.get(), "object_preset": self.object_preset.get(), "surface_preset": self.surface_preset.get(), "cpu_cores": self.cpu_cores.get(), "preview_seconds": self.preview_seconds.get(), "preview_start_seconds": self.preview_start_seconds.get(), "roi": self.roi.get(), "input_path": self.input_path.get(), "output_path": self.output_path.get(), "reference_path": self.reference_path.get(), "surface_reference_path": self.surface_reference_path.get(), "evaluation_path": self.evaluation_path.get(), "dataset_preset_name": self.dataset_preset_name.get(), "denoise_references": self.denoise_references.get()}
 
     def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
 
@@ -57,7 +58,7 @@ class ToukaEnhancerTab(ttk.Frame):
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("mode", self.mode), ("profile", self.profile), ("object_preset", self.object_preset), ("surface_preset", self.surface_preset), ("cpu_cores", self.cpu_cores), ("preview_seconds", self.preview_seconds), ("preview_start_seconds", self.preview_start_seconds), ("roi", self.roi), ("input_path", self.input_path), ("output_path", self.output_path), ("reference_path", self.reference_path), ("surface_reference_path", self.surface_reference_path), ("dataset_preset_name", self.dataset_preset_name), ("denoise_references", self.denoise_references)):
+            for key, variable in (("mode", self.mode), ("profile", self.profile), ("object_preset", self.object_preset), ("surface_preset", self.surface_preset), ("cpu_cores", self.cpu_cores), ("preview_seconds", self.preview_seconds), ("preview_start_seconds", self.preview_start_seconds), ("roi", self.roi), ("input_path", self.input_path), ("output_path", self.output_path), ("reference_path", self.reference_path), ("surface_reference_path", self.surface_reference_path), ("evaluation_path", self.evaluation_path), ("dataset_preset_name", self.dataset_preset_name), ("denoise_references", self.denoise_references)):
                 if key in values: variable.set(values[key])
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
@@ -71,6 +72,7 @@ class ToukaEnhancerTab(ttk.Frame):
         target_row = ttk.Frame(self); target_row.pack(fill="x", pady=3); ttk.Label(target_row, text="強調対象", width=16).pack(side="left"); ttk.Combobox(target_row, textvariable=self.object_preset, values=tuple(OBJECT_PRESET_LABELS), state="readonly", width=16).pack(side="left"); ttk.Label(target_row, text="透過対象").pack(side="left", padx=(20,4)); ttk.Combobox(target_row, textvariable=self.surface_preset, values=tuple(TRANSPARENT_TARGET_PRESET_LABELS), state="readonly", width=16).pack(side="left")
         self._path_row("入力フォルダ/動画", self.input_path, False)
         self._path_row("出力フォルダ/動画", self.output_path, True)
+        self._path_row("評価履歴フォルダ", self.evaluation_path, False)
         reference_row = ttk.Frame(self); reference_row.pack(fill="x", pady=3); ttk.Label(reference_row, text="強調対象参考画像", width=16).pack(side="left"); ttk.Entry(reference_row, textvariable=self.reference_path).pack(side="left", fill="x", expand=True); ttk.Button(reference_row, text="フォルダ", command=lambda: self._choose_directory(self.reference_path, False)).pack(side="left", padx=4); ttk.Button(reference_row, text="強調対象を提案", command=self.suggest_reference_preset).pack(side="left", padx=4)
         ttk.Checkbutton(self, text="参考画像のノイズを抑えてから形状・表面色を推定", variable=self.denoise_references).pack(anchor="w", pady=2)
         dataset_preset_row = ttk.Frame(self); dataset_preset_row.pack(fill="x", pady=3); ttk.Label(dataset_preset_row, text="データセットプリセット名", width=16).pack(side="left"); ttk.Entry(dataset_preset_row, textvariable=self.dataset_preset_name, width=32).pack(side="left"); ttk.Button(dataset_preset_row, text="参考画像から作成", command=self.create_dataset_preset).pack(side="left", padx=4)
@@ -423,7 +425,12 @@ class ToukaEnhancerTab(ttk.Frame):
                 self.process = subprocess.Popen(command, cwd=str(NUNO_TOUKA_DIR), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
                 self.logbox.log(ProcessCpuLimiter.apply(self.process.pid, cpu_cores))
                 for line in self.process.stdout or []: self.logbox.log(line.rstrip())
-                self.logbox.log(f"完了 (code={self.process.wait()})")
+                code = self.process.wait(); self.logbox.log(f"完了 (code={code})")
+                if code == 0:
+                    history_dir = self.evaluation_path.get().strip() or str(Path(self.output_path.get()) / "evaluation_history")
+                    evaluator = ToukaEvaluator(); record = evaluator.evaluate(str(source), str(target), self.profile.get(), self.object_preset.get())
+                    history = evaluator.write_history(history_dir, record)
+                    self.logbox.log(f"評価履歴を保存しました: {history}")
             except Exception as exc: self.logbox.log(f"エラー: {exc}")
         _safe_thread(self.logbox, worker)
 

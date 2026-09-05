@@ -652,6 +652,14 @@
         doc/開発予定.md
         doc/ver.md
 
+# 86. Touka自動評価履歴
+    Touka処理完了後に元画像と出力画像の平均変化量・輝度分散・輪郭変化を計算し、動画候補のスコアと時間安定性を含めてprofile・強調対象プリセット別のJSONL履歴へ保存するようにした。評価履歴フォルダはGUIから指定でき、未指定時は出力先配下へ保存する
+    追加・変更したファイル
+        scripts/backend/touka_evaluator.py
+        scripts/tabs/touka_enhancer.py
+        doc/開発予定.md
+        doc/ver.md
+
 # 49. ToukaのFashionpedia学習基盤開始
     半透明素材越し対象推定の実装段階をdoc/実装予定.mdへ記録した。Touka専用venvにCUDA対応PyTorchを導入してGTX 1080 8GBを確認し、Fashionpedia画像とポリゴン注釈から46カテゴリ+背景の意味マスクを返すDatasetを追加した
     変更したファイル

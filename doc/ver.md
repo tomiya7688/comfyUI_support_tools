@@ -683,3 +683,12 @@
         scripts/tabs/video_reencoder.py
         doc/開発予定.md
         doc/ver.md
+
+# 89. Touka評価履歴レポート
+    Touka評価履歴タブを追加し、JSONL履歴をprofile・強調対象プリセット別に集計して画面表示し、Markdownへ出力できるようにした。不正行は件数を表示して他の履歴を継続処理する
+    追加・変更したファイル
+        scripts/backend/touka_evaluation_report.py
+        scripts/tabs/touka_evaluation_report.py
+        scripts/app.py
+        doc/開発予定.md
+        doc/ver.md

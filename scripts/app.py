@@ -33,6 +33,7 @@ from .tabs.docstring_audit import DocstringAuditTab
 from .tabs.dependency_status import DependencyStatusTab
 from .tabs.ollama_prompt import OllamaPromptTab
 from .tabs.touka_enhancer import ToukaEnhancerTab
+from .tabs.touka_evaluation_report import ToukaEvaluationReportTab
 from .tabs.wildcard_checker import WildcardCheckerTab
 from .tabs.wildcard_move import WildcardMoveTab
 from .tabs.prompt_generate import PromptGenerateTab
@@ -146,6 +147,7 @@ class TabbedToolsApp(tk.Tk):
             ("依存状態", DependencyStatusTab),
             ("Ollama Prompt", OllamaPromptTab),
             ("半透明素材強調", ToukaEnhancerTab)
+            ,("Touka評価履歴", ToukaEvaluationReportTab)
         ]
 
         self.tab_frames = []

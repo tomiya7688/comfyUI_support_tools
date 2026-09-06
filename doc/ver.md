@@ -667,3 +667,11 @@
         doc/Agent.md
         nuno/_touka/fashionpedia_segmentation_dataset.py
         doc/ver.md
+
+# 87. Reencoderシーン分割
+    Video Reencoderへシーン検出で分割出力するチェックボックスと閾値入力を追加した。FFmpegのshowinfoから検出時刻を読み、各区間をscene001形式のMP4として同じ再エンコード設定で出力する
+    追加・変更したファイル
+        scripts/backend/video_reencoder.py
+        scripts/tabs/video_reencoder.py
+        doc/開発予定.md
+        doc/ver.md

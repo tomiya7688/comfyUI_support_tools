@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import re
 from pathlib import Path
 
 from .process_cpu_limiter import ProcessCpuLimiter
@@ -32,6 +33,17 @@ class VideoReencoder:
         else:
             command.extend(["-crf", str(settings["crf"])])
         return [*command, "-c:a", "aac", "-b:a", f"{settings['audio_kbps']}k", "-movflags", "+faststart", str(target)]
+
+    def scene_timestamps(self, source: Path, threshold: float) -> list[float]:
+        """Return scene-change timestamps reported by ffmpeg showinfo."""
+        threshold = min(0.99, max(0.01, float(threshold)))
+        result = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(source), "-vf", f"select=gt(scene\\,{threshold}),showinfo", "-an", "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        return sorted(set(float(value) for value in re.findall(r"pts_time:([0-9]+(?:\.[0-9]+)?)", result.stderr) if float(value) > 0.1))
+
+    def build_segment_command(self, source: Path, target: Path, settings: dict, start: float, end: float) -> list[str]:
+        """Build an encode command for one scene interval."""
+        full = self.build_command(source, target, settings, max(0.1, end - start)); input_index = full.index("-i")
+        return [*full[:1], "-y", "-ss", f"{start:.3f}", "-t", f"{max(0.1, end - start):.3f}", *full[input_index:]]
 
     def run(self, command: list[str], cpu_cores: int | None, log) -> bool:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")

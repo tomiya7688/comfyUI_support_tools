@@ -675,3 +675,11 @@
         scripts/tabs/video_reencoder.py
         doc/開発予定.md
         doc/ver.md
+
+# 88. Reencoder自動設定提案
+    Video Reencoderへ動画内容（解像度）からコーデック・速度・最大高さ・CRFを提案するチェックボックスを追加した。未チェック時は手動設定を変更せず、4K以上はH.265/1080p、低解像度はH.264高速設定を選択する
+    追加・変更したファイル
+        scripts/backend/video_reencoder.py
+        scripts/tabs/video_reencoder.py
+        doc/開発予定.md
+        doc/ver.md

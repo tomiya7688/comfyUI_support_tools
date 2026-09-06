@@ -19,6 +19,22 @@ class VideoReencoder:
         return float(json.loads(result.stdout)["format"]["duration"])
 
     @staticmethod
+    def probe_video(source: Path) -> dict[str, float | int]:
+        """Read duration and first video-stream dimensions with ffprobe."""
+        result = subprocess.run(["ffprobe", "-v", "error", "-show_streams", "-show_format", "-print_format", "json", str(source)], capture_output=True, text=True, encoding="utf-8", check=True)
+        data = json.loads(result.stdout); stream = next(item for item in data.get("streams", []) if item.get("codec_type") == "video")
+        return {"width": int(stream.get("width", 0)), "height": int(stream.get("height", 0)), "duration": float(data.get("format", {}).get("duration", 0.0))}
+
+    @staticmethod
+    def recommend_settings(metadata: dict[str, float | int]) -> dict[str, str | int]:
+        """Recommend conservative encoder settings from source resolution."""
+        height = int(metadata.get("height", 0))
+        if height >= 2160: return {"codec": "h265", "preset": "slow", "max_height": 1080, "crf": 27}
+        if height >= 1440: return {"codec": "h265", "preset": "medium", "max_height": 1080, "crf": 25}
+        if height >= 1080: return {"codec": "h264", "preset": "medium", "max_height": 1080, "crf": 23}
+        return {"codec": "h264", "preset": "fast", "max_height": 0, "crf": 22}
+
+    @staticmethod
     def target_video_kbps(target_mb: float, duration_seconds: float, audio_kbps: int) -> int:
         return max(250, int(target_mb * 8000 / duration_seconds - audio_kbps))
 

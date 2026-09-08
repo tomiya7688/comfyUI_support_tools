@@ -3,6 +3,16 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+# ``from ..context import *`` intentionally omits private names such as
+# ``_HAS_PSUTIL``.  Import the optional dependency explicitly so the worker
+# thread can evaluate the CPU-affinity branch without a NameError.
+try:
+    import psutil  # type: ignore[import-not-found]
+    _HAS_PSUTIL = True
+except Exception:
+    psutil = None
+    _HAS_PSUTIL = False
+
 class ZipperTab(ttk.Frame):
     DEFAULT_INPUT_DIR = USER_PATHS["zipper_input_dir"]
     DEFAULT_OUTPUT_DIR = USER_PATHS["zipper_output_dir"]

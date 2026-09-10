@@ -28,3 +28,6 @@ user_data/output/
 __pycache__/
 *.py[cod]
 .vscode/
+
+# Generated Codex work packets
+.codex/tasks/

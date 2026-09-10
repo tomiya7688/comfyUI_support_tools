@@ -14,6 +14,7 @@ AIがこのプロジェクトの概要や構成などを理解するためのフ
 5. 変更履歴: `doc/ver.md`（必要な版だけ検索して読む）
 
 通常の作業では `doc/ver.md` 全体や完了済みの `doc/開発予定.md` 項目を読み込まず、Issueと対象機能の資料を先に確認する。
+作業パケットは `python scripts/context_packet.py <issue番号>` で `.codex/tasks/<issue>/` に生成する。
 
 # 1.機能
 

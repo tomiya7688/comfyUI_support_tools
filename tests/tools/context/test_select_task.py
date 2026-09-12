@@ -1,12 +1,6 @@
-import importlib.util
-from pathlib import Path
 import unittest
 
-MODULE_PATH = Path(__file__).parents[3] / "tools" / "context" / "select_task.py"
-spec = importlib.util.spec_from_file_location("select_task", MODULE_PATH)
-assert spec and spec.loader
-select_task = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(select_task)
+from tools.context import select_task
 
 
 class SelectTaskTests(unittest.TestCase):

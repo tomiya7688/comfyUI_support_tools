@@ -1,0 +1,12 @@
+{
+  "source_roots": [
+    "scripts",
+    "nuno"
+  ],
+  "outputs": {
+    "class_diagram": "doc/generated/class_diagram.mmd"
+  },
+  "docs": {
+    "class_diagram": true
+  }
+}

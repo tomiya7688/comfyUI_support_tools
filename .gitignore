@@ -29,5 +29,6 @@ __pycache__/
 *.py[cod]
 .vscode/
 
-# Generated Codex work packets
+# Generated Codex working data
 .codex/tasks/
+.codex/repo_map.json

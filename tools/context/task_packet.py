@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from diff_context import DiffContext, collect_diff_context
 from select_task import DEFAULT_REPOSITORY, Issue, _request_json, compact_packet
 
 
@@ -25,6 +25,8 @@ class TaskPacket:
     dependencies: list[str]
     validation: list[str]
     changed_files: list[str]
+    changed_symbols: list[str]
+    compact_patch: list[str]
 
 
 SECTION_MAP = {
@@ -63,23 +65,16 @@ def parse_sections(body: str) -> dict[str, list[str]]:
     return result
 
 
-def git_changed_files(base: str = "main") -> list[str]:
-    try:
-        proc = subprocess.run(["git", "diff", "--name-only", f"{base}...HEAD"], check=True, capture_output=True, text=True)
-    except (OSError, subprocess.CalledProcessError):
-        return []
-    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-
-
-def build_packet(issue: Issue, changed_files: list[str] | None = None) -> TaskPacket:
+def build_packet(issue: Issue, diff: DiffContext | None = None) -> TaskPacket:
     sections = parse_sections(issue.body)
     compact = compact_packet(issue)
+    diff = diff or DiffContext([], [], [])
     return TaskPacket(
         issue.number, issue.title, issue.priority, issue.html_url,
         sections["goal"][:4], sections["scope"][:8], sections["out_of_scope"][:6],
         sections["required"][:10], (sections["acceptance"] or list(compact["acceptance"]))[:10],
         sections["dependencies"][:8], sections["validation"][:8],
-        (changed_files if changed_files is not None else git_changed_files())[:30],
+        diff.changed_files[:30], diff.changed_symbols[:30], diff.patch_lines[:80],
     )
 
 
@@ -96,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("issue", type=int)
     parser.add_argument("--repo", default=DEFAULT_REPOSITORY)
     parser.add_argument("--base", default="main")
+    parser.add_argument("--max-patch-lines", type=int, default=80)
     parser.add_argument("--output-root", default=".codex/tasks")
     parser.add_argument("--stdout", action="store_true")
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -104,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    packet = build_packet(issue, git_changed_files(args.base))
+    packet = build_packet(issue, collect_diff_context(args.base, max(0, args.max_patch_lines)))
     if args.stdout:
         print(json.dumps(asdict(packet), ensure_ascii=False, indent=2))
     else:

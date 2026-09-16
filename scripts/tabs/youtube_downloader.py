@@ -1,4 +1,5 @@
 from ..context import *
+from ..runtime_python import venv_python
 from ..context import _safe_thread
 from ..services import LogBox, LabeledPathRow
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
@@ -64,7 +65,7 @@ class YouTubeDownloaderTab(ttk.Frame):
             cpu_count = ProcessCpuLimiter.core_count(cpu_cores)
         except ValueError:
             self.logbox.log(f"使用CPU論理数には数値を指定してください: {cpu_cores}"); return
-        python_path = YOUTUBE_DOWNLOADER_DIR / "venv" / "Scripts" / "python.exe"
+        python_path = venv_python(YOUTUBE_DOWNLOADER_DIR / "venv")
         if not python_path.is_file(): python_path = Path(sys.executable)
         command = [str(python_path), str(YOUTUBE_DOWNLOADER_DIR / "youtube_dl.py"), "-i", str(url_path), "-o", str(out_path)]
         if self.max_height.get().strip(): command += ["--max-height", self.max_height.get().strip()]

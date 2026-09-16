@@ -1,4 +1,5 @@
 from ..context import *
+from ..runtime_python import venv_python
 from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
@@ -234,7 +235,7 @@ class StartWebUITab(ttk.Frame):
             self.logbox.log("API専用モードではバックエンドGUIを起動できません")
             return
         runtime_dir = COMFYUI_DIR if backend == "comfyui" else A1111_DIR
-        python_path = runtime_dir / "venv" / "Scripts" / "python.exe"
+        python_path = venv_python(runtime_dir / "venv")
         if not python_path.is_file():
             python_path = Path(sys.executable)
         environment = os.environ.copy(); environment["KADOKA_TOOLS_BACKEND"] = backend

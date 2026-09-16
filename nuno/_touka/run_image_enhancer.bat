@@ -6,10 +6,12 @@ set "VENV_DIR=%~dp0.venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 set "REQ_FILE=%~dp0requirements.txt"
 set "INSTALL_REQUIRED=0"
+set "PYTHON310=%KADOKA_PYTHON310%"
+if "%PYTHON310%"=="" set "PYTHON310=E:\program_files\soft\IDE\compiler\python\python3.10\python.exe"
 
 if not exist "%VENV_PY%" (
   echo Creating the local Python environment in .venv ...
-  py -3.10 -m venv "%VENV_DIR%" >nul 2>&1
+  if exist "%PYTHON310%" ("%PYTHON310%" -m venv "%VENV_DIR%" >nul 2>&1) else (py -3.10 -m venv "%VENV_DIR%" >nul 2>&1)
   if errorlevel 1 python -m venv "%VENV_DIR%" >nul 2>&1
   if not exist "%VENV_PY%" (
     echo Could not create the local .venv.

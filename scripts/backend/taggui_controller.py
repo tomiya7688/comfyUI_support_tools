@@ -1,4 +1,5 @@
 from ..context import *
+from ..runtime_python import venv_python
 
 class TagGUIController:
     """指定フォルダを読み込んだ状態でTagGUIを起動する。"""
@@ -29,8 +30,8 @@ class TagGUIController:
                 return
 
             run_gui = TAGGUI_DIR / "taggui" / "run_gui.py"
-            pythonw = TAGGUI_DIR / "venv" / "Scripts" / "pythonw.exe"
-            python = TAGGUI_DIR / "venv" / "Scripts" / "python.exe"
+            pythonw = venv_python(TAGGUI_DIR / "venv", windowed=True)
+            python = venv_python(TAGGUI_DIR / "venv")
             if run_gui.is_file() and (pythonw.is_file() or python.is_file()):
                 executable = pythonw if pythonw.is_file() else python
                 command = [str(executable), str(run_gui), str(image_directory)]

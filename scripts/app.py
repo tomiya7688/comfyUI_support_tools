@@ -43,16 +43,13 @@ from .widgets.scrollable_tab_container import ScrollableTabContainer
 from .widgets.last_settings_store import LastSettingsStore
 from .widgets.tab_navigation import TabNavigation
 from .widgets.dark_theme import DarkTheme
+from .runtime_python import venv_python
 
 def _launch_backend_gui(backend):
     if backend not in {"a1111", "comfyui"}:
         raise ValueError(f"未対応のバックエンドです: {backend}")
     runtime_directory = COMFYUI_DIR if backend == "comfyui" else A1111_DIR
-    python_candidates = (
-        runtime_directory / "venv" / "Scripts" / "python.exe",
-        Path(sys.executable),
-    )
-    python_path = next((path for path in python_candidates if path.is_file()), None)
+    python_path = venv_python(runtime_directory / "venv")
     if python_path is None:
         raise FileNotFoundError(f"GUI起動用Pythonがありません: {runtime_directory}")
 

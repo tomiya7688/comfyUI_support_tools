@@ -702,3 +702,18 @@
         tools/build/build_one_dir.py
         tools/build/README.md
         doc/ver.md
+
+# 91. Python実行環境のCドライブ依存解消
+    起動モジュールが個別に仮想環境のPython実行ファイルを組み立てていたため、Eドライブ等へ移設したPythonを設定可能な共通解決器へ統一した。KADOKA_PYTHON_ROOT（既定値: E:\\program_files\\soft\\IDE\\compiler\\python）とKADOKA_PYTHON310で環境を切り替えられる。既存のKドライブ仮想環境もPython 3.10.11へ更新した。
+    追加・変更したファイル
+        scripts/runtime_python.py
+        scripts/app.py
+        scripts/backend/embedded_start_webui.py
+        scripts/backend/pixai_tagger_server.py
+        scripts/backend/taggui_controller.py
+        scripts/tabs/start_webui.py
+        scripts/tabs/touka_enhancer.py
+        scripts/tabs/youtube_downloader.py
+        setup_kadoka_tools.bat
+        nuno/_touka/run_image_enhancer.bat
+        doc/ver.md

@@ -1,5 +1,6 @@
 from ..context import *
 from ..context import _safe_thread
+from ..runtime_python import venv_python
 from ..services import LogBox, LabeledPathRow
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
 from ..backend.touka_dataset_preset_builder import ToukaDatasetPresetBuilder
@@ -96,7 +97,7 @@ class ToukaEnhancerTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def open_editor(self):
-        python = NUNO_TOUKA_DIR / ".venv" / "Scripts" / "python.exe"
+        python = venv_python(NUNO_TOUKA_DIR / ".venv")
         if not python.is_file(): python = Path(sys.executable)
         try:
             subprocess.Popen([str(python), str(NUNO_TOUKA_DIR / "image_enhancer.py")], cwd=str(NUNO_TOUKA_DIR))
@@ -104,7 +105,7 @@ class ToukaEnhancerTab(ttk.Frame):
         except Exception as exc: self.logbox.log(f"起動エラー: {exc}")
 
     def diagnose_environment(self):
-        interpreters = [("Tabbed GUI", Path(sys.executable)), ("Touka専用", NUNO_TOUKA_DIR / ".venv" / "Scripts" / "python.exe")]
+        interpreters = [("Tabbed GUI", Path(sys.executable)), ("Touka専用", venv_python(NUNO_TOUKA_DIR / ".venv"))]
         for label, python in interpreters:
             if not python.is_file():
                 self.logbox.log(f"{label}: Pythonが見つかりません: {python}")
@@ -116,7 +117,7 @@ class ToukaEnhancerTab(ttk.Frame):
                 self.logbox.log(f"{label}: 依存不足 / {result.stderr.strip() or result.stdout.strip()}")
 
     def create_fashionpedia_presets(self):
-        python = NUNO_TOUKA_DIR / ".venv" / "Scripts" / "python.exe"
+        python = venv_python(NUNO_TOUKA_DIR / ".venv")
         if not python.is_file(): python = Path(sys.executable)
         command = [str(python), str(NUNO_TOUKA_DIR / "fashionpedia_preset_builder.py")]
         self.logbox.log("FashionpediaからToukaプリセットを作成します")
@@ -149,7 +150,7 @@ class ToukaEnhancerTab(ttk.Frame):
         if not reference_dir.is_dir():
             self.logbox.log(f"強調対象参考画像フォルダが見つかりません: {reference_dir}")
             return
-        python = NUNO_TOUKA_DIR / ".venv" / "Scripts" / "python.exe"
+        python = venv_python(NUNO_TOUKA_DIR / ".venv")
         if not python.is_file():
             python = Path(sys.executable)
         command = [str(python), str(NUNO_TOUKA_DIR / "touka_batch.py"), "--analyze-reference", "--reference-dir", str(reference_dir)]
@@ -409,7 +410,7 @@ class ToukaEnhancerTab(ttk.Frame):
         if self.surface_reference_path.get().strip() and not Path(self.surface_reference_path.get()).is_dir():
             self.logbox.log(f"透過対象参考画像フォルダが見つかりません: {self.surface_reference_path.get()}"); return
         self.save_settings()
-        python = NUNO_TOUKA_DIR / ".venv" / "Scripts" / "python.exe"
+        python = venv_python(NUNO_TOUKA_DIR / ".venv")
         if not python.is_file(): python = Path(sys.executable)
         script = NUNO_TOUKA_DIR / "touka_batch.py"
         preset = OBJECT_PRESET_LABELS.get(self.object_preset.get(), "generic")

@@ -1,4 +1,5 @@
 from ..context import *
+from ..runtime_python import venv_python
 
 class PixAITaggerServer:
     def __init__(self):
@@ -45,7 +46,7 @@ class PixAITaggerServer:
             if self._process is not None and self._process.poll() is None:
                 self._write_log(log, "PixAI Tagger APIは起動処理中です")
                 return
-            python_path = PIXAI_TAGGER_DIR / ".venv" / "Scripts" / "python.exe"
+            python_path = venv_python(PIXAI_TAGGER_DIR / ".venv")
             script_path = PIXAI_TAGGER_DIR / "api_server.py"
             if not python_path.is_file():
                 raise FileNotFoundError(f"PixAI TaggerのPythonがありません: {python_path}")

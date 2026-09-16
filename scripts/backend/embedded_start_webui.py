@@ -1,4 +1,5 @@
 from ..context import *
+from ..runtime_python import venv_python
 
 class EmbeddedStartWebUI:
     DEFAULT_FLAGS = (
@@ -76,9 +77,7 @@ class EmbeddedStartWebUI:
         return False
 
     def _start_webui_thread(self, flags, logical_cpu, ram_gb, low_prio, soft_stop_sec, hard_kill_sec):
-        python_path = RUNTIME_DIR / "venv" / "Scripts" / "python.exe"
-        if not python_path.exists():
-            python_path = Path(sys.executable)
+        python_path = venv_python(RUNTIME_DIR / "venv")
         launch_py = RUNTIME_DIR / ("main.py" if RUNTIME_BACKEND == "comfyui" else "launch.py")
         if not launch_py.exists():
             self._log_msg(f"❌ 起動スクリプトが見つかりません: {launch_py}")

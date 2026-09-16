@@ -12,6 +12,7 @@ Keep initial context small.
 8. Keep unrelated refactors out of the task.
 9. Apply coding rules to new/modified code only; do not mass-refactor unrelated legacy code.
 10. Before commit/PR, run `python tools/completion/completion_gate.py`; do not proceed if it fails.
+11. Before automated PR handling/merge, run `python tools/completion/pr_safety.py <pr-number>` and stop on conflict, unknown mergeability, failed checks, default-branch work, or unexpected diff.
 
 Sources of truth:
 - Requirements / priority: GitHub Issues

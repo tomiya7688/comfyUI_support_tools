@@ -119,8 +119,13 @@ def _backend_from_command_line():
     return ""
 
 
+def _api_only_from_command_line():
+    return any(value == "--api-only" for value in sys.argv)
+
+
 _backend_environment = os.environ.get("KADOKA_TOOLS_BACKEND", "").strip().lower()
 _backend_argument = _backend_from_command_line()
+API_ONLY_MODE = _api_only_from_command_line() or os.environ.get("KADOKA_TOOLS_API_ONLY", "").strip() == "1"
 BACKEND_SELECTION_REQUIRED = not (_backend_environment or _backend_argument)
 RUNTIME_BACKEND = _backend_argument or _backend_environment or "a1111"
 if RUNTIME_BACKEND not in {"a1111", "comfyui"}:

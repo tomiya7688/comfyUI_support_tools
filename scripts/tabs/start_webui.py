@@ -26,6 +26,13 @@ class StartWebUITab(ttk.Frame):
             ttk.Label(self, text=f"start_webui.py を読み込めませんでした: {self.mod}").pack(anchor="w")
             return
 
+        if API_ONLY_MODE:
+            ttk.Label(
+                self,
+                text="API専用モード: ローカルのWebUI/ComfyUIは起動せず、設定済みAPIへ接続します。",
+                wraplength=760,
+            ).pack(anchor="w", pady=(0, 8))
+
         grid = ttk.LabelFrame(self, text="設定", padding=8)
         grid.pack(fill="x")
         ttk.Label(grid, text="使用CPU論理数").grid(row=0, column=0, sticky="w", padx=4, pady=4)
@@ -125,6 +132,9 @@ class StartWebUITab(ttk.Frame):
         )
 
     def start(self):
+        if API_ONLY_MODE:
+            self.logbox.log("API専用モードではローカルバックエンドを起動できません")
+            return
         if isinstance(self.mod, Exception):
             return
         if getattr(self.mod, "_current_proc", None):
@@ -138,6 +148,9 @@ class StartWebUITab(ttk.Frame):
         threading.Thread(target=self.mod._start_webui_thread, args=args, daemon=True).start()
 
     def stop(self):
+        if API_ONLY_MODE:
+            self.logbox.log("API専用モードではローカルバックエンドを停止しません")
+            return
         if isinstance(self.mod, Exception):
             return
         if not getattr(self.mod, "_current_proc", None):
@@ -147,6 +160,9 @@ class StartWebUITab(ttk.Frame):
 
     def force_kill(self):
         """既に起動しているプロセスを強制終了する"""
+        if API_ONLY_MODE:
+            self.logbox.log("API専用モードではローカルプロセスを終了しません")
+            return
         if isinstance(self.mod, Exception):
             self.logbox.log("❌ start_webui.py を読み込めません")
             return
@@ -201,6 +217,9 @@ class StartWebUITab(ttk.Frame):
             self.logbox.log(f"❌ ヘルスチェックエラー: {e}")
 
     def restart(self):
+        if API_ONLY_MODE:
+            self.logbox.log("API専用モードではローカルバックエンドを再起動できません")
+            return
         if isinstance(self.mod, Exception):
             return
         try:
@@ -211,6 +230,9 @@ class StartWebUITab(ttk.Frame):
         threading.Thread(target=self.mod._restart_webui, args=args, daemon=True).start()
 
     def open_backend_gui(self, backend):
+        if API_ONLY_MODE:
+            self.logbox.log("API専用モードではバックエンドGUIを起動できません")
+            return
         runtime_dir = COMFYUI_DIR if backend == "comfyui" else A1111_DIR
         python_path = runtime_dir / "venv" / "Scripts" / "python.exe"
         if not python_path.is_file():

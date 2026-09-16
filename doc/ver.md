@@ -692,3 +692,13 @@
         scripts/app.py
         doc/開発予定.md
         doc/ver.md
+
+# 90. API専用モードとPyInstaller one-dir基盤
+    API専用モード（--api-only / KADOKA_TOOLS_API_ONLY=1）を追加し、ローカルWebUI・ComfyUI・PixAI Taggerの起動、停止、GUI起動を抑止するようにした。HTTP API接続は維持し、PyInstaller one-dirビルド用CLIと手順書を追加した。
+    追加・変更したファイル
+        scripts/context.py
+        scripts/tabs/start_webui.py
+        scripts/backend/pixai_tagger_server.py
+        tools/build/build_one_dir.py
+        tools/build/README.md
+        doc/ver.md

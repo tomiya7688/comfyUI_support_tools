@@ -48,6 +48,10 @@ def generated_docs_check() -> CheckResult:
     return run([sys.executable, "tools/docs/generate_docs.py", "--check"])
 
 
+def architecture_check() -> CheckResult:
+    return run([sys.executable, "tools/architecture/app_boundary_check.py"])
+
+
 def diff_check() -> CheckResult:
     return run(["git", "diff", "--check"])
 
@@ -60,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     checks = [compile_check]
     if not args.skip_tests:
         checks.append(test_check)
-    checks.extend([generated_docs_check, diff_check])
+    checks.extend([generated_docs_check, architecture_check, diff_check])
 
     for check in checks:
         try:

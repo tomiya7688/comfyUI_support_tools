@@ -5,15 +5,23 @@ on:
     paths:
       - "tabbed_tools_gui.py"
       - "scripts/**"
+      - "tests/**"
       - "requirements-kadoka-tools.txt"
       - "tools/build/**"
+      - "tools/completion/**"
+      - "tools/context/**"
+      - "tools/docs/**"
       - ".github/workflows/pyinstaller-onedir.yml"
   push:
     paths:
       - "tabbed_tools_gui.py"
       - "scripts/**"
+      - "tests/**"
       - "requirements-kadoka-tools.txt"
       - "tools/build/**"
+      - "tools/completion/**"
+      - "tools/context/**"
+      - "tools/docs/**"
       - ".github/workflows/pyinstaller-onedir.yml"
   workflow_dispatch:
 

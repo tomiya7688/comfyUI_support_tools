@@ -1,0 +1,687 @@
+classDiagram
+    class TabbedToolsApp {
+        +__init__()
+        +_close()
+        +show_tab()
+    }
+    tk.Tk <|-- TabbedToolsApp
+    class ComfyUIClient {
+        +__init__()
+        +sampler_name()
+        +scheduler_name()
+        +_queue_and_fetch()
+        +_workflow()
+        +_load_workflow()
+        +_expand_single_subgraph()
+        +_editor_workflow_to_api()
+        +model_inputs()
+        +_apply_parameters()
+        +txt2img()
+        +img2img()
+    }
+    class DependencyChecker {
+        +check_paths()
+        +check_commands()
+        +check_api()
+    }
+    class DocstringAuditor {
+        +audit_file()
+        +audit()
+        +write_report()
+    }
+    class EmbeddedRandomImage {
+        +__init__()
+        +queue_settings_update()
+        +_apply_pending_settings()
+        +_select_source()
+        +_read_lines()
+        +_expand_text()
+        +process_file()
+        +_additional_entries()
+        +_additional_prompts()
+        +_with_additional_prompt()
+        +_action_condition_matches()
+        +_with_action_prompt()
+        +_apply_nsfw_mosaic()
+        +_save_failure_report()
+        +_save_prompt()
+        +_encoded_output()
+        +_correct_prompt()
+        +_generate()
+        +_sequential_prompt_sources()
+        +_generate_sequential()
+        +_start_thread()
+        +_stop()
+    }
+    class EmbeddedStartWebUI {
+        +__init__()
+        +_health_check_now()
+        +_health_check_thread()
+        +_find_and_kill_webui_process()
+        +_start_webui_thread()
+        +_stop_webui()
+        +_restart_webui()
+    }
+    class ImageFailureInspector {
+        +__init__()
+        +inspect()
+        +_variance()
+    }
+    class OllamaPromptCorrector {
+        +models()
+        +payload()
+        +correct()
+    }
+    class PixAITaggerServer {
+        +__init__()
+        +_write_log()
+        +_is_online()
+        +_forward_output()
+        +start()
+        +stop()
+    }
+    class ProcessCpuLimiter {
+        +core_count()
+        +apply()
+    }
+    class StaticSpecGenerator {
+        +generate()
+        +_function_line()
+        +generate_files()
+    }
+    class TagCategorySplitter {
+        +split_tags()
+        +classify()
+        +_category_for()
+        +process_file()
+        +write_category_lines()
+    }
+    class TagReplacementEngine {
+        +normalize()
+        +split_tags()
+        +resolve_replacement()
+        +replace_line()
+        +process_file()
+    }
+    class TagTextMerger {
+        +_key()
+        +_tags()
+        +merge()
+    }
+    class TagGUIController {
+        +__init__()
+        +_write_log()
+        +start()
+        +stop()
+    }
+    class ToukaDatasetPresetBuilder {
+        +image_count()
+        +values()
+    }
+    class ToukaEvaluationReport {
+        +read()
+        +summarize()
+        +write_markdown()
+    }
+    class ToukaEvaluator {
+        +_metrics()
+        +evaluate_images()
+        +evaluate_candidates()
+        +evaluate()
+        +write_history()
+    }
+    class VideoReencoder {
+        +duration_seconds()
+        +probe_video()
+        +recommend_settings()
+        +target_video_kbps()
+        +build_command()
+        +scene_timestamps()
+        +build_segment_command()
+        +run()
+    }
+    class BodyPromptTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_write_output()
+        +_parse_float()
+        +_parse_int()
+        +get_input_data()
+        +estimate_underbust()
+        +estimate_cup()
+        +calculate_bmi()
+        +generate_body_tags()
+        +generate_prompt()
+        +process_safe()
+    }
+    ttk.Frame <|-- BodyPromptTab
+    class CheckBracesTab {
+        +__init__()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +check_file()
+        +run()
+    }
+    ttk.Frame <|-- CheckBracesTab
+    class DependencyStatusTab {
+        +__init__()
+        +_build()
+        +start()
+        +run()
+    }
+    ttk.Frame <|-- DependencyStatusTab
+    class DocstringAuditTab {
+        +__init__()
+        +_build()
+        +_choose()
+        +start()
+        +run()
+    }
+    ttk.Frame <|-- DocstringAuditTab
+    class DuplicateLineDeleteTab {
+        +__init__()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +run()
+    }
+    ttk.Frame <|-- DuplicateLineDeleteTab
+    class FfmpegRepairTab {
+        +__init__()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_cmd()
+        +run()
+    }
+    ttk.Frame <|-- FfmpegRepairTab
+    class FlatFileCopyTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +run_thread()
+        +run()
+    }
+    ttk.Frame <|-- FlatFileCopyTab
+    class FolderTaggerTab {
+        +__init__()
+        +_build()
+        +_preset_values()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_split_tags()
+        +_apply_tagger_preset()
+        +start_pixai_api()
+        +start_taggui()
+        +stop_taggui()
+        +stop_pixai_api()
+        +refresh_models()
+        +_refresh_models()
+        +start()
+        +stop()
+        +run_safe()
+        +_tag_scores()
+        +_average_gif_scores()
+        +_interrogate_bytes()
+        +_interrogate()
+        +_crop_character_image()
+        +_interrogate_pil_image()
+        +_interrogate_gif()
+        +_interrogate_video()
+        +run()
+    }
+    ttk.Frame <|-- FolderTaggerTab
+    class GenericSubprocessTab {
+        +__init__()
+        +run()
+    }
+    ttk.Frame <|-- GenericSubprocessTab
+    class ImagesToWebpTab {
+        +__init__()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +clear_log()
+        +start()
+        +run_safe()
+        +_save_webp()
+        +run()
+    }
+    ttk.Frame <|-- ImagesToWebpTab
+    class MovieToTextTab {
+        +__init__()
+        +_build()
+        +start_api()
+        +stop_api()
+        +_refresh_preset_choices()
+        +_preset_values()
+        +save_preset()
+        +load_preset()
+        +_scores()
+        +aggregate()
+        +frame_tags()
+        +start()
+        +stop()
+        +run()
+    }
+    ttk.Frame <|-- MovieToTextTab
+    class OllamaPromptTab {
+        +__init__()
+        +_build()
+        +_refresh()
+        +refresh_models()
+        +_refresh_models()
+        +start()
+        +run()
+        +save_preset()
+        +load_preset()
+    }
+    ttk.Frame <|-- OllamaPromptTab
+    class PromptGenerateTab {
+        +__init__()
+        +_build()
+        +_log_from_worker()
+        +_prompt_text()
+        +_negative_text()
+        +_set_text()
+        +_preset_values()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_load_backend_choices()
+        +_apply_backend_choices()
+        +_apply_flow_checkpoint_choices()
+        +refresh_backend_choices()
+        +_finish_backend_refresh()
+        +start()
+        +run()
+    }
+    ttk.Frame <|-- PromptGenerateTab
+    class RandomImageTab {
+        +__init__()
+        +_build()
+        +_load_defaults()
+        +_preset_values()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_add_additional_file_row()
+        +_remove_additional_file_row()
+        +_additional_specs()
+        +_set_additional_file_rows()
+        +_add_action_wildcard_row()
+        +_remove_action_wildcard_row()
+        +_action_wildcard_specs()
+        +_set_action_wildcard_rows()
+        +_apply_flow_model_choices()
+        +_attach_backend_logger()
+        +_apply_backend_choices()
+        +_load_local_backend_choices()
+        +refresh_backend_choices()
+        +refresh_ollama_models()
+        +_finish_ollama_models()
+        +_finish_backend_refresh()
+        +_settings_from_gui()
+        +_sync()
+        +update_running_generation()
+        +one()
+        +infinite()
+        +sequential()
+        +stop()
+        +_poll()
+    }
+    ttk.Frame <|-- RandomImageTab
+    class RandomImg2ImgTab {
+        +__init__()
+        +_preset_values()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_apply_tagger_preset()
+        +start_pixai_api()
+        +stop_pixai_api()
+        +_apply_backend_choices()
+        +_load_local_backend_choices()
+        +refresh_backend_choices()
+        +_finish_backend_refresh()
+        +_split()
+        +_compose_prompt()
+        +start()
+        +stop()
+        +run()
+    }
+    ttk.Frame <|-- RandomImg2ImgTab
+    class RandomLinePickerTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +select_root_dir()
+        +clear_log()
+        +start()
+        +stop()
+        +run_safe()
+        +_resolve_output_path()
+        +_expand_choices()
+        +process_file()
+        +run()
+    }
+    ttk.Frame <|-- RandomLinePickerTab
+    class ScreenshotFromMovieTab {
+        +__init__()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_duration()
+        +_low_kwargs()
+        +_extract()
+        +run()
+    }
+    ttk.Frame <|-- ScreenshotFromMovieTab
+    class StartWebUITab {
+        +__init__()
+        +_build()
+        +_load_defaults()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_values()
+        +start()
+        +stop()
+        +force_kill()
+        +_force_kill_thread()
+        +health_check()
+        +_health_check_thread()
+        +restart()
+        +open_backend_gui()
+        +_poll_status()
+    }
+    ttk.Frame <|-- StartWebUITab
+    class StaticSpecTab {
+        +__init__()
+        +_build()
+        +_choose()
+        +_refresh()
+        +save_preset()
+        +load_preset()
+        +start()
+        +run()
+    }
+    ttk.Frame <|-- StaticSpecTab
+    class TagDeleterTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +select_prompt_file()
+        +select_prompt_dir()
+        +run_thread()
+        +normalize_tag()
+        +is_protected_prompt_token()
+        +load_delete_tags()
+        +clean_prompt_line()
+        +get_target_txt_files()
+        +process_files()
+    }
+    ttk.Frame <|-- TagDeleterTab
+    class TagReplacerTab {
+        +__init__()
+        +_build()
+        +_add_rule()
+        +_remove_rule()
+        +_rules()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +start()
+        +run()
+    }
+    ttk.Frame <|-- TagReplacerTab
+    class TagSplitterTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +start()
+        +run()
+    }
+    ttk.Frame <|-- TagSplitterTab
+    class TagToPromptTab {
+        +__init__()
+        +_build()
+        +_text()
+        +_set_text()
+        +normalize_tags()
+        +read_file()
+        +process()
+        +copy_result()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+    }
+    ttk.Frame <|-- TagToPromptTab
+    class TextMergerTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +run_thread()
+        +merge()
+    }
+    ttk.Frame <|-- TextMergerTab
+    class ToukaEnhancerTab {
+        +__init__()
+        +_restore_settings()
+        +save_settings()
+        +_preset_values()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +_build()
+        +open_editor()
+        +diagnose_environment()
+        +create_fashionpedia_presets()
+        +_run_fashionpedia_preset_builder()
+        +_finish_fashionpedia_preset_builder()
+        +create_dataset_preset()
+        +suggest_reference_preset()
+        +_read_reference_suggestion()
+        +_apply_reference_suggestion()
+        +select_video_roi()
+        +auto_select_video_object()
+        +select_preview_range()
+        +auto_select_preview_range()
+        +open_scores()
+        +open_comparison()
+        +load_ranking()
+        +open_selected_candidate()
+        +open_selected_mask()
+        +show_selected_diagnostics()
+        +render_selected_candidate()
+        +_path_row()
+        +_choose_directory()
+        +_choose_file()
+        +start()
+        +stop()
+    }
+    ttk.Frame <|-- ToukaEnhancerTab
+    class ToukaEvaluationReportTab {
+        +__init__()
+        +_build()
+        +start()
+        +run()
+    }
+    ttk.Frame <|-- ToukaEvaluationReportTab
+    class VideoReencoderTab {
+        +__init__()
+        +_build()
+        +start()
+        +run()
+    }
+    ttk.Frame <|-- VideoReencoderTab
+    class WildcardCheckerTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +start()
+        +_reference_key()
+        +_index()
+        +run()
+    }
+    ttk.Frame <|-- WildcardCheckerTab
+    class WildcardMoveTab {
+        +__init__()
+        +_build()
+        +_relative()
+        +move()
+    }
+    ttk.Frame <|-- WildcardMoveTab
+    class YouTubeDownloaderTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +start()
+        +stop()
+    }
+    ttk.Frame <|-- YouTubeDownloaderTab
+    class ZipperTab {
+        +__init__()
+        +_build()
+        +_refresh_preset_choices()
+        +save_preset()
+        +load_preset()
+        +choose_seven_zip()
+        +run_thread()
+        +start()
+        +compress_files()
+        +compute_threads_from_percent()
+        +sanitize_filename()
+        +set_affinity_for_pid()
+    }
+    ttk.Frame <|-- ZipperTab
+    class DarkTheme {
+        +apply()
+    }
+    class LabeledPathRow {
+        +__init__()
+        +browse()
+        +browse_file()
+        +browse_directory()
+    }
+    ttk.Frame <|-- LabeledPathRow
+    class LastSettingsStore {
+        +__init__()
+        +restore()
+        +save()
+        +_load()
+        +_variables()
+    }
+    class LogBox {
+        +__init__()
+        +log()
+        +_flush_logs()
+    }
+    ScrolledText <|-- LogBox
+    class PresetStore {
+        +__init__()
+        +names()
+        +save()
+        +load()
+    }
+    class ResponsiveButtonRow {
+        +__init__()
+        +add()
+        +_layout()
+    }
+    ttk.Frame <|-- ResponsiveButtonRow
+    class ScrollableTabContainer {
+        +__init__()
+        +_update_scroll_region()
+        +_fit_content_width()
+        +_enable_mousewheel()
+        +_disable_mousewheel()
+        +_on_mousewheel()
+    }
+    ttk.Frame <|-- ScrollableTabContainer
+    class TabNavigation {
+        +__init__()
+        +_update_scroll_region()
+        +_scroll_horizontal()
+    }
+    ttk.Frame <|-- TabNavigation
+    class FashionpediaSegmentationDataset {
+        +__init__()
+        +__len__()
+        +__getitem__()
+        +_read_annotation()
+        +_build_records()
+        +_semantic_mask()
+    }
+    Dataset <|-- FashionpediaSegmentationDataset
+    class FashionpediaTrainingDataset {
+        +__init__()
+        +_read_annotations()
+        +_image_files()
+        +_samples()
+        +_mask()
+        +_tensor_image()
+        +_tensor_mask()
+        +__len__()
+        +__getitem__()
+    }
+    Dataset <|-- FashionpediaTrainingDataset
+    class EnhanceSettings {
+    }
+    class CurveEditor {
+        +__init__()
+        +reset()
+        +get_points()
+        +_xy()
+        +_point_at()
+        +_click()
+        +_drag()
+        +_draw()
+    }
+    tk.Canvas <|-- CurveEditor
+    class App {
+        +__init__()
+        +_build()
+        +_settings()
+        +_set_status()
+        +reset_all()
+        +schedule_preview()
+        +open_image()
+        +_roi_press()
+        +_roi_drag()
+        +_roi_release()
+        +_click_object()
+        +auto_object()
+        +_grabcut()
+        +clear_selection()
+        +update_preview()
+        +save_image()
+    }
+    tk.Tk <|-- App
+    class ProcessingTests {
+        +setUp()
+        +test_identity_normal_blend_preserves_image()
+        +test_curves_and_adjustments_keep_shape_alpha()
+        +test_all_blend_modes_and_repeated_passes()
+        +test_curve_lut_endpoints()
+    }
+    unittest.TestCase <|-- ProcessingTests

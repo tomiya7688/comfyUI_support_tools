@@ -1,0 +1,34 @@
+{
+  "allow": [
+    {
+      "path": "scripts/tabs/generic_subprocess.py",
+      "rule": "ARCH002",
+      "max_count": 1,
+      "reason": "Legacy external script launcher; migrate to packaged exe/API under follow-up issue."
+    },
+    {
+      "path": "scripts/tabs/start_webui.py",
+      "rule": "ARCH002",
+      "max_count": 1,
+      "reason": "Legacy backend GUI relaunch path; replace with packaged exe/API launcher."
+    },
+    {
+      "path": "scripts/tabs/touka_enhancer.py",
+      "rule": "ARCH002",
+      "max_count": 5,
+      "reason": "Legacy Touka venv fallback/diagnostics; migrate Touka to isolated service API."
+    },
+    {
+      "path": "scripts/tabs/youtube_downloader.py",
+      "rule": "ARCH002",
+      "max_count": 1,
+      "reason": "Legacy downloader venv fallback; replace with packaged sub-app/service."
+    },
+    {
+      "path": "scripts/tabs/generic_subprocess.py",
+      "rule": "ARCH004",
+      "max_count": 1,
+      "reason": "Legacy sys.executable script launch; migrate to packaged exe/API."
+    }
+  ]
+}

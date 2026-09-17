@@ -30,7 +30,22 @@ def compile_check() -> CheckResult:
 
 
 def test_check() -> CheckResult:
-    return run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"])
+    return run([
+        sys.executable,
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-t",
+        ".",
+        "-p",
+        "test_*.py",
+    ])
+
+
+def generated_docs_check() -> CheckResult:
+    return run([sys.executable, "tools/docs/generate_docs.py", "--check"])
 
 
 def diff_check() -> CheckResult:
@@ -45,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     checks = [compile_check]
     if not args.skip_tests:
         checks.append(test_check)
-    checks.append(diff_check)
+    checks.extend([generated_docs_check, diff_check])
 
     for check in checks:
         try:

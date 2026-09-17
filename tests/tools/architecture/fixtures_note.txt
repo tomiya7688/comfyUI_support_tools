@@ -1,0 +1,1 @@
+Fixtures for architecture boundary rules are created in-memory or in temporary directories by test_app_boundary_check.py.

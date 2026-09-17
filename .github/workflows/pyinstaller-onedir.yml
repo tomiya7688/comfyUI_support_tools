@@ -50,6 +50,14 @@ jobs:
           python -m pip install -r requirements-kadoka-tools.txt
           python -m pip install -r tools/build/requirements.txt
 
+      - name: Generate class diagram for recovery
+        shell: pwsh
+        run: |
+          python tools/docs/generate_docs.py
+          Write-Output "__GENERATED_CLASS_DIAGRAM_BEGIN__"
+          Get-Content doc/generated/class_diagram.mmd
+          Write-Output "__GENERATED_CLASS_DIAGRAM_END__"
+
       - name: Run completion gate
         run: python tools/completion/completion_gate.py
 

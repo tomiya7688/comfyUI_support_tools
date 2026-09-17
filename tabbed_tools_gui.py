@@ -16,5 +16,12 @@ if str(SD_ROOT) not in sys.path:
 from scripts.app import main
 
 
-if __name__ == "__main__":
+def _run() -> None:
+    if "--smoke-test" in sys.argv:
+        print("KadokaTools import smoke test: OK")
+        return
     main()
+
+
+if __name__ == "__main__":
+    _run()

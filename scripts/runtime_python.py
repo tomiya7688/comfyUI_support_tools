@@ -21,10 +21,17 @@ def python_root() -> Path:
     return Path(configured).expanduser() if configured else DEFAULT_PYTHON_ROOT
 
 
+def is_frozen() -> bool:
+    """Return whether the current process is a PyInstaller-frozen executable."""
+    return bool(getattr(sys, "frozen", False))
+
+
 def preferred_python(version: str = "3.10") -> Path:
-    """Return the preferred base interpreter, falling back to this process."""
+    """Return the preferred base interpreter without treating a frozen exe as Python."""
     candidate = python_root() / f"python{version}" / "python.exe"
-    return candidate if candidate.is_file() else Path(sys.executable)
+    if candidate.is_file() or is_frozen():
+        return candidate
+    return Path(sys.executable)
 
 
 def venv_python(venv_dir: Path, *, windowed: bool = False) -> Path:

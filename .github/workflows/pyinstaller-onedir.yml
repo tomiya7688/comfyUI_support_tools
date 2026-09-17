@@ -9,8 +9,6 @@ on:
       - "tools/build/**"
       - ".github/workflows/pyinstaller-onedir.yml"
   push:
-    branches:
-      - main
     paths:
       - "tabbed_tools_gui.py"
       - "scripts/**"
@@ -43,6 +41,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-kadoka-tools.txt
           python -m pip install -r tools/build/requirements.txt
+
+      - name: Run completion gate
+        run: python tools/completion/completion_gate.py
 
       - name: Build and smoke test one-dir distribution
         run: python tools/build/build_one_dir.py --smoke-test

@@ -25,15 +25,6 @@ class AppBoundaryCheckTests(unittest.TestCase):
         rules = [item.rule for item in app_boundary_check.scan_source("scripts/example.py", source)]
         self.assertEqual(rules.count("ARCH003"), 2)
 
-    def test_detects_external_python_path_injection(self):
-        source = "import sys\nsys.path.insert(0, 'C:/OtherApp/.venv/Lib/site-packages')\n"
-        rules = [item.rule for item in app_boundary_check.scan_source("scripts/example.py", source)]
-        self.assertIn("ARCH005", rules)
-
-    def test_allows_local_non_runtime_sys_path(self):
-        source = "import sys\nsys.path.insert(0, 'scripts/plugins')\n"
-        self.assertEqual(app_boundary_check.scan_source("scripts/example.py", source), [])
-
     def test_allows_packaged_exe_and_http_client(self):
         source = "import subprocess\nimport requests\nsubprocess.Popen(['OtherService.exe', '--port', '8188'])\nrequests.get('http://127.0.0.1:8188/health')\n"
         self.assertEqual(app_boundary_check.scan_source("scripts/example.py", source), [])

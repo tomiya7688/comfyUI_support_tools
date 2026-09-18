@@ -43,22 +43,24 @@ from .widgets.scrollable_tab_container import ScrollableTabContainer
 from .widgets.last_settings_store import LastSettingsStore
 from .widgets.tab_navigation import TabNavigation
 from .widgets.dark_theme import DarkTheme
-from .subapp_runtime import launch_packaged_executable, packaged_executable
+from .runtime_python import venv_python
 
 def _launch_backend_gui(backend):
     if backend not in {"a1111", "comfyui"}:
         raise ValueError(f"未対応のバックエンドです: {backend}")
-    executable = packaged_executable("KadokaTools")
-    if not executable.is_file():
-        raise FileNotFoundError(f"同梱GUIが見つかりません: {executable}")
+    runtime_directory = COMFYUI_DIR if backend == "comfyui" else A1111_DIR
+    python_path = venv_python(runtime_directory / "venv")
+    if python_path is None:
+        raise FileNotFoundError(f"GUI起動用Pythonがありません: {runtime_directory}")
 
     environment = os.environ.copy()
     environment["KADOKA_TOOLS_BACKEND"] = backend
-    return launch_packaged_executable(
-        executable,
-        "--backend",
-        backend,
+    creationflags = 0x00000200 if os.name == "nt" else 0
+    return subprocess.Popen(
+        [str(python_path), str(Path(__file__).resolve()), "--backend", backend],
+        cwd=str(SD_ROOT),
         env=environment,
+        creationflags=creationflags,
     )
 
 

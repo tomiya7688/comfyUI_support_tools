@@ -10,6 +10,7 @@ from pathlib import Path
 
 FORBIDDEN_IMPORT_PREFIXES = ("nuno", "modules", "webui")
 PYTHON_COMMANDS = {"python", "python3", "py", "python.exe", "pythonw.exe"}
+FORBIDDEN_RUNTIME_PATH_MARKERS = ("site-packages", "/venv/", "\\venv\\", "/.venv/", "\\.venv\\", "/scripts/python", "\\scripts\\python")
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,25 @@ def _name(node: ast.AST) -> str:
     if isinstance(node, ast.Name):
         parts.append(node.id)
     return ".".join(reversed(parts))
+
+
+def _literal_text(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, (str, bytes)):
+        return str(node.value)
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            if isinstance(value, ast.Constant):
+                parts.append(str(value.value))
+            else:
+                parts.append("{expr}")
+        return "".join(parts)
+    return None
+
+
+def _looks_like_external_python_path(text: str) -> bool:
+    normalized = text.lower().replace("\\\\", "/")
+    return any(marker.replace("\\\\", "/") in normalized for marker in FORBIDDEN_RUNTIME_PATH_MARKERS)
 
 
 def scan_source(path: str, source: str) -> list[Violation]:
@@ -52,8 +72,22 @@ def scan_source(path: str, source: str) -> list[Violation]:
         if tab_scope and isinstance(node, ast.Attribute) and _name(node) == "sys.executable":
             violations.append(Violation(path, node.lineno, "ARCH002", "runtime tab depends on sys.executable; launch a packaged exe or use an API instead"))
 
+        if runtime_scope and isinstance(node, ast.Assign):
+            if any(_name(target) == "sys.path" for target in node.targets):
+                values = node.value.elts if isinstance(node.value, (ast.List, ast.Tuple)) else [node.value]
+                if any((text := _literal_text(value)) is not None and _looks_like_external_python_path(text) for value in values):
+                    violations.append(Violation(path, node.lineno, "ARCH005", "external venv/site-packages must not be assigned to sys.path"))
+
         if isinstance(node, ast.Call):
             called = _name(node.func)
+            if runtime_scope and called in {"sys.path.append", "sys.path.insert", "sys.path.extend"}:
+                path_args = list(node.args)
+                if called == "sys.path.insert" and path_args:
+                    path_args = path_args[1:]
+                if called == "sys.path.extend" and path_args and isinstance(path_args[0], (ast.List, ast.Tuple)):
+                    path_args = list(path_args[0].elts)
+                if any((text := _literal_text(value)) is not None and _looks_like_external_python_path(text) for value in path_args):
+                    violations.append(Violation(path, node.lineno, "ARCH005", "external venv/site-packages must not be added to sys.path"))
             if called == "shutil.which" and node.args and isinstance(node.args[0], ast.Constant):
                 value = str(node.args[0].value).lower()
                 if value in PYTHON_COMMANDS:

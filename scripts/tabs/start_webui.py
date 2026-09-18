@@ -1,8 +1,8 @@
 from ..context import *
-from ..runtime_python import venv_python
 from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
+from ..subapp_runtime import launch_packaged_executable, packaged_executable
 
 class StartWebUITab(ttk.Frame):
     def __init__(self, master):
@@ -234,13 +234,14 @@ class StartWebUITab(ttk.Frame):
         if API_ONLY_MODE:
             self.logbox.log("API専用モードではバックエンドGUIを起動できません")
             return
-        runtime_dir = COMFYUI_DIR if backend == "comfyui" else A1111_DIR
-        python_path = venv_python(runtime_dir / "venv")
-        if not python_path.is_file():
-            python_path = Path(sys.executable)
-        environment = os.environ.copy(); environment["KADOKA_TOOLS_BACKEND"] = backend
+        executable = packaged_executable("KadokaTools")
+        if not executable.is_file():
+            self.logbox.log(f"配布済みGUIが見つかりません: {executable}")
+            return
+        environment = os.environ.copy()
+        environment["KADOKA_TOOLS_BACKEND"] = backend
         try:
-            subprocess.Popen([str(python_path), str(SD_ROOT / "tabbed_tools_gui.py"), "--backend", backend], cwd=str(SD_ROOT), env=environment, creationflags=0x00000200 if os.name == "nt" else 0)
+            launch_packaged_executable(executable, "--backend", backend, env=environment)
             self.logbox.log(f"✅ {backend} 用GUIを開きました")
         except OSError as error:
             self.logbox.log(f"GUI起動エラー: {error}")

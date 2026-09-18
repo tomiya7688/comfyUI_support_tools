@@ -1,21 +1,11 @@
 from ..context import *
-from ..runtime_python import venv_python
+from ..subapp_runtime import launch_packaged_executable, packaged_executable
 
 class EmbeddedStartWebUI:
     DEFAULT_FLAGS = (
         ["--listen", "127.0.0.1", "--port", "8188", "--lowvram", "--disable-auto-launch"]
         if RUNTIME_BACKEND == "comfyui"
-        else [
-            "--lowvram", "--disable-safe-unpickle", "--api",
-            "--ckpt-dir", str(CHECKPOINTS_DIR),
-            "--lora-dir", str(MODELS_DIR / "Lora"),
-            "--vae-dir", str(MODELS_DIR / "VAE"),
-            "--embeddings-dir", str(MODELS_DIR / "embeddings"),
-            "--hypernetwork-dir", str(MODELS_DIR / "hypernetworks"),
-            "--esrgan-models-path", str(MODELS_DIR / "RealESRGAN"),
-            "--gfpgan-models-path", str(MODELS_DIR / "GFPGAN"),
-            "--codeformer-models-path", str(MODELS_DIR / "Codeformer"),
-        ]
+        else ["--lowvram", "--disable-safe-unpickle", "--api"]
     )
     LOGICAL_TOTAL = 8
     LOGICAL_TO_USE = 4
@@ -77,16 +67,15 @@ class EmbeddedStartWebUI:
         return False
 
     def _start_webui_thread(self, flags, logical_cpu, ram_gb, low_prio, soft_stop_sec, hard_kill_sec):
-        python_path = venv_python(RUNTIME_DIR / "venv")
-        launch_py = RUNTIME_DIR / ("main.py" if RUNTIME_BACKEND == "comfyui" else "launch.py")
-        if not launch_py.exists():
-            self._log_msg(f"❌ 起動スクリプトが見つかりません: {launch_py}")
+        app_name = "ComfyUI" if RUNTIME_BACKEND == "comfyui" else "A1111"
+        executable = packaged_executable(app_name)
+        if not executable.is_file():
+            self._log_msg(f"❌ 同梱バックエンドが未導入です: {executable}")
             return
-        creationflags = 0x00000200 if os.name == "nt" else 0
         self._stop_event.clear()
-        cmd = [str(python_path), str(launch_py)] + flags
+        cmd = [str(executable), *flags]
         self._log_msg(f"🚀 起動中: {' '.join(cmd)}")
-        self._current_proc = subprocess.Popen(cmd, cwd=str(RUNTIME_DIR), creationflags=creationflags)
+        self._current_proc = launch_packaged_executable(executable, *flags)
         self._health_check_stop.clear()
         threading.Thread(target=self._health_check_thread, daemon=True).start()
         while self._current_proc and self._current_proc.poll() is None and not self._stop_event.is_set():

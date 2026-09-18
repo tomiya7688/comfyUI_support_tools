@@ -1,5 +1,5 @@
 from ..context import *
-from ..runtime_python import venv_python
+from ..subapp_runtime import packaged_executable
 
 class PixAITaggerServer:
     def __init__(self):
@@ -46,16 +46,13 @@ class PixAITaggerServer:
             if self._process is not None and self._process.poll() is None:
                 self._write_log(log, "PixAI Tagger APIは起動処理中です")
                 return
-            python_path = venv_python(PIXAI_TAGGER_DIR / ".venv")
-            script_path = PIXAI_TAGGER_DIR / "api_server.py"
-            if not python_path.is_file():
-                raise FileNotFoundError(f"PixAI TaggerのPythonがありません: {python_path}")
-            if not script_path.is_file():
-                raise FileNotFoundError(f"PixAI Tagger APIがありません: {script_path}")
+            executable = packaged_executable("pixai_tagger_server")
+            if not executable.is_file():
+                raise FileNotFoundError(f"同梱PixAI Tagger APIが未導入です: {executable}")
             creationflags = 0x00000200 if os.name == "nt" else 0
             process = subprocess.Popen(
-                [str(python_path), str(script_path), "--host", "127.0.0.1", "--port", "7861"],
-                cwd=str(PIXAI_TAGGER_DIR),
+                [str(executable), "--host", "127.0.0.1", "--port", "7861"],
+                cwd=str(executable.parent),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,

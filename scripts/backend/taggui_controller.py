@@ -1,5 +1,5 @@
 from ..context import *
-from ..runtime_python import venv_python
+from ..subapp_runtime import packaged_executable
 
 class TagGUIController:
     """指定フォルダを読み込んだ状態でTagGUIを起動する。"""
@@ -29,20 +29,11 @@ class TagGUIController:
                 )
                 return
 
-            run_gui = TAGGUI_DIR / "taggui" / "run_gui.py"
-            pythonw = venv_python(TAGGUI_DIR / "venv", windowed=True)
-            python = venv_python(TAGGUI_DIR / "venv")
-            if run_gui.is_file() and (pythonw.is_file() or python.is_file()):
-                executable = pythonw if pythonw.is_file() else python
-                command = [str(executable), str(run_gui), str(image_directory)]
-                working_directory = TAGGUI_DIR
-            elif TAGGUI_PACKAGED_EXE.is_file():
-                command = [str(TAGGUI_PACKAGED_EXE), str(image_directory)]
-                working_directory = TAGGUI_PACKAGED_EXE.parent
-            else:
-                raise FileNotFoundError(
-                    f"TagGUIがありません: {run_gui} / {TAGGUI_PACKAGED_EXE}"
-                )
+            executable = TAGGUI_PACKAGED_EXE if TAGGUI_PACKAGED_EXE.is_file() else packaged_executable("taggui")
+            if not executable.is_file():
+                raise FileNotFoundError(f"同梱TagGUIが未導入です: {executable}")
+            command = [str(executable), str(image_directory)]
+            working_directory = executable.parent
 
             creationflags = 0x00000200 if os.name == "nt" else 0
             self._process = subprocess.Popen(

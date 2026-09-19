@@ -1,9 +1,9 @@
 from ..context import *
-from ..runtime_python import venv_python
 from ..context import _safe_thread
 from ..services import LogBox, LabeledPathRow
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
 from ..widgets.preset_store import PresetStore
+from ..subapp_runtime import packaged_executable
 
 
 class YouTubeDownloaderTab(ttk.Frame):
@@ -65,15 +65,16 @@ class YouTubeDownloaderTab(ttk.Frame):
             cpu_count = ProcessCpuLimiter.core_count(cpu_cores)
         except ValueError:
             self.logbox.log(f"使用CPU論理数には数値を指定してください: {cpu_cores}"); return
-        python_path = venv_python(YOUTUBE_DOWNLOADER_DIR / "venv")
-        if not python_path.is_file(): python_path = Path(sys.executable)
-        command = [str(python_path), str(YOUTUBE_DOWNLOADER_DIR / "youtube_dl.py"), "-i", str(url_path), "-o", str(out_path)]
+        executable = packaged_executable("YouTubeDownloader")
+        if not executable.is_file():
+            self.logbox.log(f"YouTube Downloader が未導入です: {executable}"); return
+        command = [str(executable), "-i", str(url_path), "-o", str(out_path)]
         if self.max_height.get().strip(): command += ["--max-height", self.max_height.get().strip()]
         if self.remove_downloaded.get(): command += ["--remove-downloaded"]
         self.logbox.log("CPU制限: なし" if cpu_count is None else f"CPU制限: 論理CPU 0-{cpu_count - 1}")
         def worker():
             try:
-                self.process = subprocess.Popen(command, cwd=str(YOUTUBE_DOWNLOADER_DIR), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+                self.process = subprocess.Popen(command, cwd=str(executable.parent), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
                 self.logbox.log(ProcessCpuLimiter.apply(self.process.pid, cpu_cores))
                 for line in self.process.stdout or []: self.logbox.log(line.rstrip())
                 code = self.process.wait(); self.logbox.log(f"終了しました (code={code})")

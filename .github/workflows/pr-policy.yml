@@ -1,0 +1,40 @@
+name: PR policy
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pr:
+    name: validate-pr
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate repository and branch policy
+        shell: bash
+        env:
+          EXPECTED_REPOSITORY: tomiya7688/comfyUI_support_tools
+          ACTUAL_REPOSITORY: ${{ github.repository }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          test "$ACTUAL_REPOSITORY" = "$EXPECTED_REPOSITORY" || {
+            echo "Unexpected repository: $ACTUAL_REPOSITORY"
+            exit 1
+          }
+          test "$BASE_REF" = "main" || {
+            echo "PR base must be main, got: $BASE_REF"
+            exit 1
+          }
+          test "$HEAD_REF" != "main" && test "$HEAD_REF" != "master" || {
+            echo "PR head must be a task branch, got: $HEAD_REF"
+            exit 1
+          }
+          test "$HEAD_REPOSITORY" = "$EXPECTED_REPOSITORY" || {
+            echo "PR head repository must be $EXPECTED_REPOSITORY, got: $HEAD_REPOSITORY"
+            exit 1
+          }
+          echo "PR policy: OK"

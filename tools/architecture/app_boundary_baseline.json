@@ -1,16 +1,3 @@
 {
-  "allow": [
-    {
-      "path": "scripts/tabs/touka_enhancer.py",
-      "rule": "ARCH002",
-      "max_count": 5,
-      "reason": "Legacy Touka venv fallback/diagnostics; migrate Touka to isolated service API."
-    },
-    {
-      "path": "scripts/tabs/youtube_downloader.py",
-      "rule": "ARCH002",
-      "max_count": 1,
-      "reason": "Legacy downloader venv fallback; replace with packaged sub-app/service."
-    }
-  ]
+  "allow": []
 }

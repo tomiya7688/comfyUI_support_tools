@@ -1,12 +1,12 @@
 from ..context import *
 from ..context import _safe_thread
-from ..runtime_python import venv_python
 from ..services import LogBox, LabeledPathRow
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
 from ..backend.touka_dataset_preset_builder import ToukaDatasetPresetBuilder
 from ..backend.touka_evaluator import ToukaEvaluator
 from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
+from ..subapp_runtime import launch_packaged_executable, packaged_executable
 import json
 
 TOUKA_SETTINGS_FILE = USER_INPUT_DIR / "config" / "touka" / "settings.json"
@@ -97,34 +97,38 @@ class ToukaEnhancerTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def open_editor(self):
-        python = venv_python(NUNO_TOUKA_DIR / ".venv")
-        if not python.is_file(): python = Path(sys.executable)
+        executable = packaged_executable("ToukaEditor")
+        if not executable.is_file():
+            self.logbox.log(f"Touka Editor が未導入です: {executable}")
+            return
         try:
-            subprocess.Popen([str(python), str(NUNO_TOUKA_DIR / "image_enhancer.py")], cwd=str(NUNO_TOUKA_DIR))
+            launch_packaged_executable(executable)
             self.logbox.log("画像編集画面を起動しました。Auto objectはその画面上部にあります。")
-        except Exception as exc: self.logbox.log(f"起動エラー: {exc}")
+        except Exception as exc:
+            self.logbox.log(f"起動エラー: {exc}")
 
     def diagnose_environment(self):
-        interpreters = [("Tabbed GUI", Path(sys.executable)), ("Touka専用", venv_python(NUNO_TOUKA_DIR / ".venv"))]
-        for label, python in interpreters:
-            if not python.is_file():
-                self.logbox.log(f"{label}: Pythonが見つかりません: {python}")
-                continue
-            result = subprocess.run([str(python), "-c", "import cv2, numpy, PIL; print('cv2=' + cv2.__version__ + ' numpy=' + numpy.__version__ + ' Pillow=' + PIL.__version__)"], capture_output=True, text=True, encoding="utf-8", errors="replace")
-            if result.returncode == 0:
-                self.logbox.log(f"{label}: OK / {result.stdout.strip()}")
+        executables = (
+            ("Touka", packaged_executable("Touka")),
+            ("Touka Editor", packaged_executable("ToukaEditor")),
+            ("Touka Fashionpedia Presets", packaged_executable("ToukaFashionpediaPresets")),
+        )
+        for label, executable in executables:
+            if executable.is_file():
+                self.logbox.log(f"{label}: OK / {executable}")
             else:
-                self.logbox.log(f"{label}: 依存不足 / {result.stderr.strip() or result.stdout.strip()}")
+                self.logbox.log(f"{label}: 未導入 / {executable}")
 
     def create_fashionpedia_presets(self):
-        python = venv_python(NUNO_TOUKA_DIR / ".venv")
-        if not python.is_file(): python = Path(sys.executable)
-        command = [str(python), str(NUNO_TOUKA_DIR / "fashionpedia_preset_builder.py")]
+        executable = packaged_executable("ToukaFashionpediaPresets")
+        if not executable.is_file():
+            self.logbox.log(f"Touka Fashionpedia Presets が未導入です: {executable}")
+            return
         self.logbox.log("FashionpediaからToukaプリセットを作成します")
-        _safe_thread(self.logbox, self._run_fashionpedia_preset_builder, command)
+        _safe_thread(self.logbox, self._run_fashionpedia_preset_builder, executable)
 
-    def _run_fashionpedia_preset_builder(self, command):
-        result = subprocess.run(command, cwd=str(NUNO_TOUKA_DIR), capture_output=True, text=True, encoding="utf-8", errors="replace")
+    def _run_fashionpedia_preset_builder(self, executable):
+        result = subprocess.run([str(executable)], cwd=str(executable.parent), capture_output=True, text=True, encoding="utf-8", errors="replace")
         message = result.stdout.strip() or result.stderr.strip()
         if result.returncode != 0:
             self.after(0, lambda: self.logbox.log(f"Fashionpediaプリセット作成エラー: {message}"))
@@ -150,15 +154,16 @@ class ToukaEnhancerTab(ttk.Frame):
         if not reference_dir.is_dir():
             self.logbox.log(f"強調対象参考画像フォルダが見つかりません: {reference_dir}")
             return
-        python = venv_python(NUNO_TOUKA_DIR / ".venv")
-        if not python.is_file():
-            python = Path(sys.executable)
-        command = [str(python), str(NUNO_TOUKA_DIR / "touka_batch.py"), "--analyze-reference", "--reference-dir", str(reference_dir)]
+        executable = packaged_executable("Touka")
+        if not executable.is_file():
+            self.logbox.log(f"Touka が未導入です: {executable}")
+            return
+        command = [str(executable), "--analyze-reference", "--reference-dir", str(reference_dir)]
         if self.denoise_references.get(): command.append("--denoise-reference")
         _safe_thread(self.logbox, self._read_reference_suggestion, command)
 
     def _read_reference_suggestion(self, command):
-        result = subprocess.run(command, cwd=str(NUNO_TOUKA_DIR), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        result = subprocess.run(command, cwd=str(Path(command[0]).parent), capture_output=True, text=True, encoding="utf-8", errors="replace")
         if result.returncode != 0:
             self.after(0, lambda: self.logbox.log(f"強調対象の提案エラー: {result.stderr.strip() or result.stdout.strip()}"))
             return
@@ -410,20 +415,21 @@ class ToukaEnhancerTab(ttk.Frame):
         if self.surface_reference_path.get().strip() and not Path(self.surface_reference_path.get()).is_dir():
             self.logbox.log(f"透過対象参考画像フォルダが見つかりません: {self.surface_reference_path.get()}"); return
         self.save_settings()
-        python = venv_python(NUNO_TOUKA_DIR / ".venv")
-        if not python.is_file(): python = Path(sys.executable)
-        script = NUNO_TOUKA_DIR / "touka_batch.py"
+        executable = packaged_executable("Touka")
+        if not executable.is_file():
+            self.logbox.log(f"Touka が未導入です: {executable}")
+            return
         preset = OBJECT_PRESET_LABELS.get(self.object_preset.get(), "generic")
         surface_preset = TRANSPARENT_TARGET_PRESET_LABELS.get(self.surface_preset.get(), "auto")
         cpu_cores = self.cpu_cores.get().strip()
-        command = [str(python), str(script), "--mode", self.mode.get(), "--profile", self.profile.get(), "--object-preset", preset, "--surface-preset", surface_preset, "--preview-start-seconds", str(preview_start), "--preview-seconds", str(preview_seconds), "--input", str(source), "--output", str(target)]
+        command = [str(executable), "--mode", self.mode.get(), "--profile", self.profile.get(), "--object-preset", preset, "--surface-preset", surface_preset, "--preview-start-seconds", str(preview_start), "--preview-seconds", str(preview_seconds), "--input", str(source), "--output", str(target)]
         if self.roi.get().strip(): command.extend(["--roi", self.roi.get().strip()])
         if self.reference_path.get().strip(): command.extend(["--reference-dir", self.reference_path.get().strip()])
         if self.surface_reference_path.get().strip(): command.extend(["--surface-reference-dir", self.surface_reference_path.get().strip()])
         if self.denoise_references.get(): command.append("--denoise-reference")
         def worker():
             try:
-                self.process = subprocess.Popen(command, cwd=str(NUNO_TOUKA_DIR), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+                self.process = subprocess.Popen(command, cwd=str(executable.parent), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
                 self.logbox.log(ProcessCpuLimiter.apply(self.process.pid, cpu_cores))
                 for line in self.process.stdout or []: self.logbox.log(line.rstrip())
                 code = self.process.wait(); self.logbox.log(f"完了 (code={code})")

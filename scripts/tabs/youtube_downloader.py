@@ -14,7 +14,7 @@ class YouTubeDownloaderTab(ttk.Frame):
         self.process = None
         self.preset_store = PresetStore("youtube_downloader")
         self.preset_name = tk.StringVar()
-        self.url_file = tk.StringVar(value=str(YOUTUBE_DOWNLOADER_DIR / "url_list.txt"))
+        self.url_file = tk.StringVar(value=str(USER_INPUT_DIR / "youtube_downloader" / "url_list.txt"))
         self.output_dir = tk.StringVar(value=r"J:\videos\ぷりんちゃん")
         self.max_height = tk.StringVar(value="")
         self.cpu_cores = tk.StringVar()

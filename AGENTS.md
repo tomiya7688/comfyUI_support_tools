@@ -22,6 +22,7 @@ Sources of truth:
 - Requirements / priority: GitHub Issues
 - Implementation: source code
 - Coding rules: `doc/コーディング規約.md`
+- New Application architecture: `doc/architecture/upd_standard.md`
 - AI entry/routing: this file and `doc/`
 - Code-derived structure: generated docs when available
 

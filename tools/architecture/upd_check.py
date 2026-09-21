@@ -154,7 +154,7 @@ def scan_source(path: str, source: str) -> list[Finding]:
                 findings.append(
                     Finding("UPD201", path, node.lineno, "Commander contains a loop; move work to Processing")
                 )
-            elif isinstance(node, ast.BinOp):
+            elif isinstance(node, ast.BinOp) and not isinstance(node.op, ast.BitOr):
                 findings.append(
                     Finding("UPD202", path, node.lineno, "Commander contains a calculation; move work to Processing")
                 )

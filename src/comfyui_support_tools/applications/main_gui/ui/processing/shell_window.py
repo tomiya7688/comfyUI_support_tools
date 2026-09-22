@@ -24,6 +24,8 @@ class ShellWindow(tk.Tk):
         self._build_toolbar()
         self.vertical = ttk.Panedwindow(self, orient="vertical")
         self.vertical.pack(fill="both", expand=True, padx=8, pady=8)
+        self._initial_layout_pending = True
+        self.vertical.bind("<Configure>", self._initialize_layout)
         self.horizontal = ttk.Panedwindow(self.vertical, orient="horizontal")
         self.library = LibraryPanel(self.horizontal, self.select_section)
         self.workspace = WorkspacePanel(self.horizontal, self.open_tool, self.inspect_tool)
@@ -115,6 +117,13 @@ class ShellWindow(tk.Tk):
         elif not present and visible:
             parent.insert(0 if name == "library" else "end", pane, weight=0)
         self.after_idle(self._reset_sashes)
+
+    def _initialize_layout(self, event: tk.Event) -> None:
+        # On Windows geometry is negotiated after construction. Never freeze the
+        # initial sash positions while a Panedwindow still measures 1 x 1.
+        if self._initial_layout_pending and event.width > 700 and event.height > 400:
+            self._initial_layout_pending = False
+            self.after_idle(self._reset_sashes)
 
     def _reset_sashes(self) -> None:
         # Size the outer pane first; the horizontal pane may still be unmapped.

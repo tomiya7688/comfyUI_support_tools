@@ -67,7 +67,7 @@ def run_smoke_test(executable: Path) -> None:
         environment.pop(key, None)
     environment["PYTHONNOUSERSITE"] = "1"
     if os.name == "nt":
-        system_root = Path(environment["SystemRoot"])
+        system_root = Path(os.environ["SystemRoot"])
         environment["PATH"] = os.pathsep.join((str(system_root / "System32"), str(system_root)))
     with tempfile.TemporaryDirectory(prefix="Kadoka smoke 日本語 ") as cwd:
         for flags in (("--smoke-test",), ("--new-ui", "--smoke-test"), ("--shell-smoke-test",)):

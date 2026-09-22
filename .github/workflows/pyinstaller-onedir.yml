@@ -1,29 +1,14 @@
 name: PyInstaller onedir
 
 on:
+  # This is a required check: never leave a docs-only or src-only PR pending.
   pull_request:
-    paths:
-      - "tabbed_tools_gui.py"
-      - "scripts/**"
-      - "tests/**"
-      - "requirements-kadoka-tools.txt"
-      - "tools/build/**"
-      - "tools/completion/**"
-      - "tools/context/**"
-      - "tools/docs/**"
-      - ".github/workflows/pyinstaller-onedir.yml"
   push:
-    paths:
-      - "tabbed_tools_gui.py"
-      - "scripts/**"
-      - "tests/**"
-      - "requirements-kadoka-tools.txt"
-      - "tools/build/**"
-      - "tools/completion/**"
-      - "tools/context/**"
-      - "tools/docs/**"
-      - ".github/workflows/pyinstaller-onedir.yml"
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-windows:

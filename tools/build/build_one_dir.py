@@ -5,6 +5,7 @@ import argparse
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 APP_NAME = "KadokaTools"
@@ -38,6 +39,8 @@ def build(root: Path, output: Path) -> Path:
         str(work_dir),
         "--specpath",
         str(work_dir),
+        "--paths",
+        str(root / "src"),
     ]
     for module_name in EXCLUDED_MODULES:
         command.extend(("--exclude-module", module_name))
@@ -57,7 +60,21 @@ def build(root: Path, output: Path) -> Path:
 
 
 def run_smoke_test(executable: Path) -> None:
-    subprocess.run([str(executable), "--smoke-test"], cwd=executable.parent, check=True)
+    # Do not accidentally import from the checkout or a user's Python setup.
+    executable = executable.resolve()
+    environment = os.environ.copy()
+    for key in ("PYTHONHOME", "PYTHONPATH"):
+        environment.pop(key, None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    if os.name == "nt":
+        system_root = Path(os.environ["SystemRoot"])
+        environment["PATH"] = os.pathsep.join((str(system_root / "System32"), str(system_root)))
+    with tempfile.TemporaryDirectory(prefix="Kadoka smoke 日本語 ") as cwd:
+        for flags in (("--smoke-test",), ("--new-ui", "--smoke-test"), ("--shell-smoke-test",)):
+            subprocess.run(
+                [str(executable), *flags], cwd=cwd, env=environment,
+                check=True, timeout=60,
+            )
 
 
 def main() -> None:
@@ -67,7 +84,7 @@ def main() -> None:
     parser.add_argument(
         "--smoke-test",
         action="store_true",
-        help="Run the frozen executable in import-only smoke-test mode after building.",
+        help="Test both frozen UIs, including real Tk creation for the workspace.",
     )
     args = parser.parse_args()
     root = args.root.resolve()

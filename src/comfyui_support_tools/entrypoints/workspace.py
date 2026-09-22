@@ -4,9 +4,10 @@ from comfyui_support_tools.applications.main_gui.process.messenger.navigation_me
 from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import NavigationProcessing
 from comfyui_support_tools.applications.main_gui.ui.commander.navigation_commander import NavigationUiCommander
 from comfyui_support_tools.applications.main_gui.ui.messenger.navigation_messenger import UiNavigationMessenger
-from comfyui_support_tools.applications.main_gui.ui.processing.shell_window import ShellWindow
+from comfyui_support_tools.applications.main_gui.ui.processing.inspector_shell import InspectorShellWindow as ShellWindow
 from comfyui_support_tools.shared.contracts.tool_entry import ToolEntry
 from comfyui_support_tools.entrypoints.media_browser import create_media_browser
+from comfyui_support_tools.entrypoints.inspector import create_inspector
 
 
 def create_navigation(tools: tuple[ToolEntry, ...]) -> NavigationUiCommander:
@@ -27,14 +28,14 @@ def run_shell(commander: NavigationUiCommander) -> str | None:
     # Reset filters on reopening; the same Process instance retains recent tools.
     commander.filter_tools("", "")
     commander.select_section("all")
-    window = ShellWindow(commander, open_legacy, create_media_browser())
+    window = ShellWindow(commander, open_legacy, create_media_browser(), create_inspector())
     window.mainloop()
     return requested[0] if requested else None
 
 
 def smoke_test(tools: tuple[ToolEntry, ...]) -> None:
     requested: list[str] = []
-    window = ShellWindow(create_navigation(tools), requested.append, create_media_browser())
+    window = ShellWindow(create_navigation(tools), requested.append, create_media_browser(), create_inspector())
     errors: list[str] = []
     window.report_callback_exception = lambda *args: errors.append(str(args))
     try:
@@ -52,6 +53,8 @@ def smoke_test(tools: tuple[ToolEntry, ...]) -> None:
             window.update()
         window.geometry("900x600")
         window.update()
+        from comfyui_support_tools.entrypoints.inspector_smoke import exercise_inspector
+        exercise_inspector(window)
         from comfyui_support_tools.entrypoints.media_smoke import exercise_media
         exercise_media(window)
         if errors:

@@ -1,19 +1,31 @@
-"""Browser placeholder and migration palette, not a pretend media browser."""
+"""Fixed media/tools views; feature migration never adds more top-level tabs."""
 from collections.abc import Callable
 import tkinter as tk
 from tkinter import ttk
 
 from comfyui_support_tools.shared.contracts.tool_entry import ToolEntry
+from comfyui_support_tools.applications.main_gui.ui.processing.media_browser_panel import MediaBrowserPanel
 
 
 class WorkspacePanel(ttk.Frame):
-    def __init__(self, master: tk.Misc, on_open: Callable[[str], None], on_select: Callable[[str], None]):
+    def __init__(self, master: tk.Misc, on_open: Callable[[str], None], on_select: Callable[[str], None],
+                 media=None, on_media_select=None, on_media_preview=None):
         super().__init__(master, padding=16)
         self.title = ttk.Label(self, text="All / すべて", font=("TkDefaultFont", 18, "bold"))
         self.title.pack(anchor="w")
-        ttk.Label(self, text="Media Browser / 準備中 (#219)\n画像・動画の一覧表示と選択は、次フェーズで追加します。", wraplength=380).pack(anchor="w", pady=(10, 24))
-        ttk.Label(self, text="移行中のツール — 旧UIで開きます", font=("TkDefaultFont", 11, "bold")).pack(anchor="w", pady=(0, 8))
-        table = ttk.Frame(self)
+        self.mode = "tools"
+        self._on_tool_select = on_select
+        self._on_media_select = on_media_select
+        switches = ttk.Frame(self)
+        switches.pack(fill="x", pady=6)
+        self.tools_frame = ttk.Frame(self)
+        self.media = None
+        if media is not None:
+            self.media = MediaBrowserPanel(self, media, on_media_select, on_media_preview)
+            ttk.Button(switches, text="メディア", command=self.show_media).pack(side="left")
+        ttk.Button(switches, text="旧ツール一覧", command=self.show_tools).pack(side="left", padx=4)
+        ttk.Label(self.tools_frame, text="移行中のツール — 旧UIで開きます", font=("TkDefaultFont", 11, "bold")).pack(anchor="w", pady=(0, 8))
+        table = ttk.Frame(self.tools_frame)
         table.pack(fill="both", expand=True)
         table.rowconfigure(0, weight=1)
         table.columnconfigure(0, weight=1)
@@ -28,13 +40,34 @@ class WorkspacePanel(ttk.Frame):
         horizontal = ttk.Scrollbar(table, orient="horizontal", command=self.tree.xview)
         horizontal.grid(row=1, column=0, sticky="ew")
         self.tree.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
-        self.empty = ttk.Label(self, text="")
+        self.empty = ttk.Label(self.tools_frame, text="")
         self.empty.pack(anchor="w", pady=6)
-        self.open_button = ttk.Button(self, text="選択した機能を旧UIで開く", command=lambda: self._open(on_open), state="disabled")
+        self.open_button = ttk.Button(self.tools_frame, text="選択した機能を旧UIで開く", command=lambda: self._open(on_open), state="disabled")
         self.open_button.pack(anchor="w")
         self.tree.bind("<Double-1>", lambda _event: self._open(on_open))
         self.tree.bind("<Return>", lambda _event: self._open(on_open))
         self.tree.bind("<<TreeviewSelect>>", lambda _event: self._selected(on_select))
+        if self.media is not None:
+            self.mode = "media"
+            self.media.pack(fill="both", expand=True)
+        else:
+            self.tools_frame.pack(fill="both", expand=True)
+
+    def show_media(self):
+        if self.media is not None:
+            self.mode = "media"
+            self.tools_frame.pack_forget()
+            self.media.pack(fill="both", expand=True)
+            self.media.restore_selection()
+
+    def show_tools(self):
+        self.mode = "tools"
+        if self.media is not None:
+            self.media.pack_forget()
+            self._on_media_select(())
+        self.tools_frame.pack(fill="both", expand=True)
+        selection = self.tree.selection()
+        self._on_tool_select(selection[0] if selection else "")
 
     def render(self, tools: tuple[ToolEntry, ...]) -> None:
         selection = self.tree.selection()

@@ -7,13 +7,15 @@ from tkinter.scrolledtext import ScrolledText
 from comfyui_support_tools.applications.main_gui.ui.commander.navigation_commander import NavigationUiCommander
 from comfyui_support_tools.applications.main_gui.ui.processing.library_panel import LABELS, LibraryPanel
 from comfyui_support_tools.applications.main_gui.ui.processing.workspace_panel import WorkspacePanel
+from comfyui_support_tools.applications.main_gui.ui.processing.media_preview_panel import MediaPreviewPanel
 
 
 class ShellWindow(tk.Tk):
-    def __init__(self, commander: NavigationUiCommander, on_open: Callable[[str], None]):
+    def __init__(self, commander: NavigationUiCommander, on_open: Callable[[str], None], media=None):
         super().__init__()
         self.commander = commander
         self.on_open = on_open
+        self.media_selection = ()
         self.title("Kadoka Tools — Workspace Preview")
         self.geometry("1280x800")
         self.minsize(900, 600)
@@ -28,14 +30,28 @@ class ShellWindow(tk.Tk):
         self.vertical.bind("<Configure>", self._initialize_layout)
         self.horizontal = ttk.Panedwindow(self.vertical, orient="horizontal")
         self.library = LibraryPanel(self.horizontal, self.select_section)
-        self.workspace = WorkspacePanel(self.horizontal, self.open_tool, self.inspect_tool)
+        self.workspace = WorkspacePanel(self.horizontal, self.open_tool, self.inspect_tool,
+                                        media, self.inspect_media, self.render_media_preview)
         self.inspector = ttk.Frame(self.horizontal, padding=12, width=245)
-        ttk.Label(self.inspector, text="INSPECTOR", font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
-        self.inspector_text = ttk.Label(self.inspector, text="メディアInspectorは準備中 (#220)\n旧ツールを選ぶと移行先を表示します。", wraplength=205, justify="left")
+        inspector_canvas = tk.Canvas(self.inspector, highlightthickness=0, width=215)
+        inspector_scroll = ttk.Scrollbar(self.inspector, orient="vertical", command=inspector_canvas.yview)
+        inspector_scroll.pack(side="right", fill="y")
+        inspector_canvas.pack(side="left", fill="both", expand=True)
+        inspector_canvas.configure(yscrollcommand=inspector_scroll.set)
+        inspector_body = ttk.Frame(inspector_canvas)
+        inspector_window = inspector_canvas.create_window(0, 0, window=inspector_body, anchor="nw")
+        inspector_body.bind("<Configure>", lambda _event: inspector_canvas.configure(scrollregion=inspector_canvas.bbox("all")))
+        inspector_canvas.bind("<Configure>", lambda event: inspector_canvas.itemconfigure(inspector_window, width=event.width))
+        ttk.Label(inspector_body, text="INSPECTOR", font=("TkDefaultFont", 11, "bold")).pack(anchor="w")
+        self.inspector_text = ttk.Label(inspector_body, text="メディアInspectorは準備中 (#220)\n旧ツールを選ぶと移行先を表示します。", wraplength=205, justify="left")
         self.inspector_text.pack(anchor="w", pady=12)
-        self.jobs = ttk.Frame(self.vertical, padding=8, height=150)
+        self.media_preview = MediaPreviewPanel(inspector_body, self.seek_media)
+        if media is not None:
+            self.inspector_text.configure(text="メディアを選択すると情報を表示します。")
+            self.media_preview.pack(fill="x")
+        self.jobs = ttk.Frame(self.vertical, padding=8, height=100)
         ttk.Label(self.jobs, text="JOBS / LOG — Job Queueは準備中 (#221)、下は画面操作ログです。").pack(anchor="w")
-        self.log = ScrolledText(self.jobs, height=5, wrap="word", state="disabled")
+        self.log = ScrolledText(self.jobs, height=3, wrap="word", state="disabled")
         self.log.pack(fill="both", expand=True, pady=(6, 0))
         self.horizontal.add(self.library, weight=0)
         self.horizontal.add(self.workspace, weight=1)
@@ -83,17 +99,47 @@ class ShellWindow(tk.Tk):
         self.workspace.title.configure(text=LABELS[section])
         self.workspace.render(tools)
         self.inspect_tool("")
+        if self.workspace.media is not None:
+            self.workspace.show_media()
+            self.workspace.media.set_section(section)
         self.append_log(f"Library: {LABELS[section]}")
 
     def filter_tools(self) -> None:
+        self.workspace.show_tools()
         category = "" if self.category.get() == "すべて" else self.category.get()
         self.workspace.render(self.commander.filter_tools(self.query.get(), category))
         self.inspect_tool("")
 
     def inspect_tool(self, tool_id: str) -> None:
+        if self.workspace.mode != "tools":
+            return
+        self.media_preview.pack_forget()
+        self.media_preview.select(())
         tool = next((item for item in self.commander.visible_tools() if item.id == tool_id), None)
         text = (f"{tool.label}\n\nカテゴリ: {tool.category}\n旧UIで開きます。\nここから処理は実行しません。" if tool else "メディアInspectorは準備中 (#220)\n旧ツールを選ぶと移行先を表示します。")
         self.inspector_text.configure(text=text)
+
+    def inspect_media(self, items) -> None:
+        # Stable MediaItem tuple is also the contract for the upcoming Action UI.
+        self.media_selection = tuple(items) if self.workspace.mode == "media" else ()
+        self.media_preview.select(self.media_selection)
+        if self.workspace.mode == "media":
+            self.media_preview.pack(fill="x")
+            text = "メディア未選択"
+            if items:
+                item = items[0]
+                text = (f"{len(items)} 件選択\n{item.name}\n{item.kind} / {item.size:,} B\n"
+                        f"{item.path}\n\n表示のみ。編集Actionは準備中 (#220)。")
+            self.inspector_text.configure(text=text)
+        self.event_generate("<<MediaSelectionChanged>>", when="tail")
+
+    def render_media_preview(self, preview) -> None:
+        if self.workspace.mode == "media":
+            self.media_preview.render(preview)
+
+    def seek_media(self, fraction: float) -> None:
+        if self.workspace.media is not None:
+            self.workspace.media.request_preview(fraction)
 
     def open_tool(self, tool_id: str) -> None:
         try:
@@ -128,7 +174,7 @@ class ShellWindow(tk.Tk):
     def _reset_sashes(self) -> None:
         # Size the outer pane first; the horizontal pane may still be unmapped.
         if self.visible["jobs"].get():
-            self.vertical.sashpos(0, max(300, self.vertical.winfo_height() - 160))
+            self.vertical.sashpos(0, max(300, self.vertical.winfo_height() - 100))
         self.update_idletasks()
         if self.visible["library"].get():
             self.horizontal.sashpos(0, 210)

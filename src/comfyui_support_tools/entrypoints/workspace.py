@@ -6,6 +6,7 @@ from comfyui_support_tools.applications.main_gui.ui.commander.navigation_command
 from comfyui_support_tools.applications.main_gui.ui.messenger.navigation_messenger import UiNavigationMessenger
 from comfyui_support_tools.applications.main_gui.ui.processing.shell_window import ShellWindow
 from comfyui_support_tools.shared.contracts.tool_entry import ToolEntry
+from comfyui_support_tools.entrypoints.media_browser import create_media_browser
 
 
 def create_navigation(tools: tuple[ToolEntry, ...]) -> NavigationUiCommander:
@@ -26,14 +27,14 @@ def run_shell(commander: NavigationUiCommander) -> str | None:
     # Reset filters on reopening; the same Process instance retains recent tools.
     commander.filter_tools("", "")
     commander.select_section("all")
-    window = ShellWindow(commander, open_legacy)
+    window = ShellWindow(commander, open_legacy, create_media_browser())
     window.mainloop()
     return requested[0] if requested else None
 
 
 def smoke_test(tools: tuple[ToolEntry, ...]) -> None:
     requested: list[str] = []
-    window = ShellWindow(create_navigation(tools), requested.append)
+    window = ShellWindow(create_navigation(tools), requested.append, create_media_browser())
     errors: list[str] = []
     window.report_callback_exception = lambda *args: errors.append(str(args))
     try:
@@ -51,6 +52,8 @@ def smoke_test(tools: tuple[ToolEntry, ...]) -> None:
             window.update()
         window.geometry("900x600")
         window.update()
+        from comfyui_support_tools.entrypoints.media_smoke import exercise_media
+        exercise_media(window)
         if errors:
             raise RuntimeError("Tk callback failed: " + "; ".join(errors))
     finally:

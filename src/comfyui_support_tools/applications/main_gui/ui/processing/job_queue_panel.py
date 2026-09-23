@@ -50,8 +50,16 @@ class JobQueuePanel(ttk.Frame):
         self.retry_button.pack(side="left", padx=4)
         self.detail = ScrolledText(self, height=3, wrap="word", state="disabled")
         self.detail.pack(fill="x", pady=(4, 0))
-        self._after = self.after(180, self.refresh)
+        self._after = self.after(180, self._tick)
         self.bind("<Destroy>", self._destroyed, add=True)
+
+    def _tick(self):
+        self._after = None
+        if self._closed:
+            return
+        self.refresh()
+        if not self._closed:
+            self._after = self.after(180, self._tick)
 
     def refresh(self):
         if self._closed:
@@ -79,8 +87,6 @@ class JobQueuePanel(ttk.Frame):
                 self.tree.selection_set(selected_id)
             self._last = signature
             self._show_details()
-        self._after = self.after(180, self.refresh)
-
     def _values(self, job):
         if job.progress is None:
             progress = "—" if job.state != "running" else "不定"
@@ -125,7 +131,7 @@ class JobQueuePanel(ttk.Frame):
             self.cancel_button.configure(
                 state="normal" if job.cancellable and job.state in ACTIVE_JOB_STATES else "disabled"
             )
-            self.retry_button.configure(state="normal" if job.retryable else "disabled")
+            self.retry_button.configure(state="disabled")
         else:
             self.cancel_button.configure(state="disabled")
             self.retry_button.configure(state="disabled")
@@ -139,7 +145,9 @@ class JobQueuePanel(ttk.Frame):
     def close(self):
         if not self._closed:
             self._closed = True
-            self.after_cancel(self._after)
+            if self._after is not None:
+                self.after_cancel(self._after)
+                self._after = None
 
     def _destroyed(self, event):
         if event.widget is self:

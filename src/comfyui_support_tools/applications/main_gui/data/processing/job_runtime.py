@@ -23,6 +23,7 @@ MAX_SOURCES = 100
 @dataclass
 class _JobRecord:
     id: str
+    sequence: int
     kind: str
     action: str
     state: str
@@ -55,6 +56,7 @@ class JobRuntime:
         self._running: set[str] = set()
         self._cancel: dict[str, Event] = {}
         self._closed = False
+        self._sequence = 0
 
     def create(
         self,
@@ -70,44 +72,45 @@ class JobRuntime:
     ) -> str:
         ids, names = tuple(source_ids), tuple(source_names)
         if (
-            self._closed
-            or not kind.strip()
+            not kind.strip()
             or not action.strip()
             or len(ids) > MAX_SOURCES
             or len(names) > MAX_SOURCES
             or len(backend_job_id) > 256
         ):
-            raise ValueError("Invalid or closed job request")
-        now = time.time()
-        job_id = "job-" + uuid.uuid4().hex[:12]
-        record = _JobRecord(
-            job_id,
-            kind[:80],
-            action[:160],
-            "queued",
-            None,
-            now,
-            None,
-            None,
-            tuple(str(value)[:256] for value in ids),
-            tuple(str(value)[:256] for value in names),
-            backend_job_id,
-            "待機中",
-            "",
-            True,
-            bool(retryable),
-            str(retry_of)[:80],
-        )
-        record.logs.append("queued")
+            raise ValueError("Invalid job request")
         with self._condition:
             if self._closed:
                 raise ValueError("Job runtime is closed")
+            self._sequence += 1
+            now = time.time()
+            job_id = "job-" + uuid.uuid4().hex[:12]
+            record = _JobRecord(
+                job_id,
+                self._sequence,
+                kind[:80],
+                action[:160],
+                "queued",
+                None,
+                now,
+                None,
+                None,
+                tuple(str(value)[:256] for value in ids),
+                tuple(str(value)[:256] for value in names),
+                backend_job_id,
+                "待機中",
+                "",
+                True,
+                bool(retryable),
+                str(retry_of)[:80],
+            )
+            record.logs.append("queued")
             self._records[job_id] = record
             self._cancel[job_id] = cancel_event or Event()
             self._queue.append(job_id)
             self._trim_locked()
             self._condition.notify_all()
-        return job_id
+            return job_id
 
     def wait_start(self, job_id: str) -> bool:
         with self._condition:
@@ -188,7 +191,11 @@ class JobRuntime:
 
     def snapshots(self) -> tuple[JobSnapshot, ...]:
         with self._condition:
-            records = sorted(self._records.values(), key=lambda item: item.created_at, reverse=True)
+            records = sorted(
+                self._records.values(),
+                key=lambda item: (item.created_at, item.sequence),
+                reverse=True,
+            )
             return tuple(
                 JobSnapshot(
                     record.id,
@@ -247,7 +254,7 @@ class JobRuntime:
             return
         terminal = sorted(
             (record for record in self._records.values() if record.state in TERMINAL_JOB_STATES),
-            key=lambda item: item.created_at,
+            key=lambda item: (item.created_at, item.sequence),
         )
         for record in terminal:
             if len(self._records) <= self.history_limit:

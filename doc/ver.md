@@ -717,3 +717,10 @@
         setup_kadoka_tools.bat
         nuno/_touka/run_image_enhancer.bat
         doc/ver.md
+
+# 92. PixAI TaggerのGPU自動選択
+    GUIからPixAI Tagger APIを起動するとき、ONNX_MODEが未設定ならgpuを既定にする。明示的なcpu設定は尊重する。
+    追加・変更したファイル
+        scripts/backend/pixai_tagger_server.py
+        doc/ver.md
+    GTX 1080用GPU推論ではcuDNN 9.1.0.70を使用し、NVIDIA DLLディレクトリをPixAI子プロセスのPATHへ渡す。

@@ -717,3 +717,9 @@
         setup_kadoka_tools.bat
         nuno/_touka/run_image_enhancer.bat
         doc/ver.md
+
+# 93. 本体MITライセンスの明記
+    ルートに本体コード向けMIT Licenseを追加し、READMEで第三者ライブラリ・バイナリ・モデルのライセンスが別途適用されることを明記した。配布物の依存ライセンス棚卸しは別工程。
+    追加・変更したファイル
+        LICENSE
+        README.md

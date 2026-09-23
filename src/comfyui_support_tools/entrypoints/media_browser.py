@@ -10,7 +10,7 @@ from comfyui_support_tools.applications.main_gui.ui.messenger.media_messenger im
 from comfyui_support_tools.applications.main_gui.ui.commander.media_commander import MediaUiCommander
 
 
-def create_media_browser() -> MediaUiCommander:
-    data = MediaDataRequests(MediaDataMessenger(MediaDataCommander(MediaIO())))
+def create_media_browser(jobs=None) -> MediaUiCommander:
+    data = MediaDataRequests(MediaDataMessenger(MediaDataCommander(MediaIO(jobs))))
     process = MediaProcessMessenger(MediaCommander(MediaSession(), data))
     return MediaUiCommander(MediaUiMessenger(process))

@@ -8,13 +8,15 @@ from comfyui_support_tools.applications.main_gui.ui.commander.navigation_command
 from comfyui_support_tools.applications.main_gui.ui.processing.library_panel import LABELS, LibraryPanel
 from comfyui_support_tools.applications.main_gui.ui.processing.workspace_panel import WorkspacePanel
 from comfyui_support_tools.applications.main_gui.ui.processing.media_preview_panel import MediaPreviewPanel
+from comfyui_support_tools.applications.main_gui.ui.processing.job_queue_panel import JobQueuePanel
 
 
 class ShellWindow(tk.Tk):
-    def __init__(self, commander: NavigationUiCommander, on_open: Callable[[str], None], media=None):
+    def __init__(self, commander: NavigationUiCommander, on_open: Callable[[str], None], media=None, jobs=None):
         super().__init__()
         self.commander = commander
         self.on_open = on_open
+        self.jobs_commander = jobs
         self.media_selection = ()
         self.title("Kadoka Tools — Workspace Preview")
         self.geometry("1280x800")
@@ -49,10 +51,21 @@ class ShellWindow(tk.Tk):
         if media is not None:
             self.inspector_text.configure(text="メディアを選択すると情報を表示します。")
             self.media_preview.pack(fill="x")
-        self.jobs = ttk.Frame(self.vertical, padding=8, height=100)
-        ttk.Label(self.jobs, text="JOBS / LOG — Job Queueは準備中 (#221)、下は画面操作ログです。").pack(anchor="w")
-        self.log = ScrolledText(self.jobs, height=3, wrap="word", state="disabled")
-        self.log.pack(fill="both", expand=True, pady=(6, 0))
+        self.jobs = ttk.Frame(self.vertical, padding=8, height=210)
+        self.job_tabs = ttk.Notebook(self.jobs)
+        self.job_tabs.pack(fill="both", expand=True)
+        job_page = ttk.Frame(self.job_tabs, padding=4)
+        log_page = ttk.Frame(self.job_tabs, padding=4)
+        self.job_tabs.add(job_page, text="Jobs")
+        self.job_tabs.add(log_page, text="UI Log")
+        self.log = ScrolledText(log_page, height=5, wrap="word", state="disabled")
+        self.log.pack(fill="both", expand=True)
+        self.job_panel = None
+        if jobs is not None:
+            self.job_panel = JobQueuePanel(job_page, jobs, self.append_log)
+            self.job_panel.pack(fill="both", expand=True)
+        else:
+            ttk.Label(job_page, text="Job Queue controller未接続").pack(anchor="w")
         self.horizontal.add(self.library, weight=0)
         self.horizontal.add(self.workspace, weight=1)
         self.horizontal.add(self.inspector, weight=0)
@@ -174,7 +187,7 @@ class ShellWindow(tk.Tk):
     def _reset_sashes(self) -> None:
         # Size the outer pane first; the horizontal pane may still be unmapped.
         if self.visible["jobs"].get():
-            self.vertical.sashpos(0, max(300, self.vertical.winfo_height() - 100))
+            self.vertical.sashpos(0, max(300, self.vertical.winfo_height() - 210))
         self.update_idletasks()
         if self.visible["library"].get():
             self.horizontal.sashpos(0, 210)
@@ -188,3 +201,10 @@ class ShellWindow(tk.Tk):
             self.log.delete("1.0", "2.0")
         self.log.see("end")
         self.log.configure(state="disabled")
+
+    def destroy(self) -> None:
+        if getattr(self, "job_panel", None) is not None:
+            self.job_panel.close()
+        if getattr(self, "jobs_commander", None) is not None:
+            self.jobs_commander.close()
+        super().destroy()

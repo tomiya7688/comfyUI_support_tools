@@ -49,6 +49,8 @@ def resolve_backend(backend_id: str, url: str) -> TaggerBackendDefinition:
 
 
 def backend_label(backend_id: str, url: str = "") -> str:
+    if backend_id in BACKEND_BY_ID and not url:
+        return BACKEND_BY_ID[backend_id].label
     try:
         return resolve_backend(backend_id, url).label
     except ValueError:

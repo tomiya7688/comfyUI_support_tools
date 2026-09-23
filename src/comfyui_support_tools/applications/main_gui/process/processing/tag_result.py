@@ -18,17 +18,29 @@ def _validate_label(name, score):
     return ScoredLabel(name.strip(), float(score))
 
 
+def _dedupe(entries):
+    best = {}
+    order = []
+    for entry in entries:
+        if entry.name not in best:
+            order.append(entry.name)
+            best[entry.name] = entry
+        elif entry.score > best[entry.name].score:
+            best[entry.name] = entry
+    return tuple(best[name] for name in order)
+
+
 def _entries(value):
     if value is None:
         return ()
     if isinstance(value, str):
         labels = [part.strip() for part in value.split(",") if part.strip()]
-        return tuple(_validate_label(label, 1.0) for label in labels)
+        return _dedupe(tuple(_validate_label(label, 1.0) for label in labels))
     if isinstance(value, dict):
         if len(value) > MAX_LABELS:
             raise ValueError("Too many tags")
         if all(isinstance(score, (int, float)) and not isinstance(score, bool) for score in value.values()):
-            return tuple(_validate_label(name, score) for name, score in value.items())
+            return _dedupe(tuple(_validate_label(name, score) for name, score in value.items()))
         raise ValueError("Unsupported tag mapping")
     if isinstance(value, list):
         if len(value) > MAX_LABELS:
@@ -43,7 +55,7 @@ def _entries(value):
                 results.append(_validate_label(name, score))
             else:
                 raise ValueError("Unsupported tag entry")
-        return tuple(results)
+        return _dedupe(tuple(results))
     raise ValueError("Unsupported tag response")
 
 

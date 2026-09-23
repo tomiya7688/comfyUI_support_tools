@@ -3,10 +3,16 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+_BUILD_TOOL_DIR = str(Path(__file__).resolve().parent)
+if _BUILD_TOOL_DIR not in sys.path:
+    sys.path.insert(0, _BUILD_TOOL_DIR)
+from license_inventory import collect_license_inventory
 
 APP_NAME = "KadokaTools"
 EXCLUDED_MODULES = ("torch", "torchvision", "torchaudio")
@@ -56,6 +62,12 @@ def build(root: Path, output: Path) -> Path:
     executable = executable_path(output)
     if not executable.is_file():
         raise FileNotFoundError(f"PyInstaller output executable was not created: {executable}")
+    for filename in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+        source = root / filename
+        if not source.is_file():
+            raise FileNotFoundError(f"Required license notice was not found: {source}")
+        shutil.copy2(source, distribution_dir / filename)
+    collect_license_inventory(root, distribution_dir)
     return executable
 
 

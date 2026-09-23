@@ -7,8 +7,8 @@ from comfyui_support_tools.applications.main_gui.ui.processing.inspector_panel i
 
 
 class InspectorShellWindow(ShellWindow):
-    def __init__(self, commander, on_open, media, inspector):
-        super().__init__(commander, on_open, media)
+    def __init__(self, commander, on_open, media, inspector, jobs=None):
+        super().__init__(commander, on_open, media, jobs)
         self.action_panel = InspectorPanel(self.inspector_text.master, inspector, self.append_log)
         self.action_panel.pack(fill="x", before=self.media_preview)
         self.action_panel.select(self.media_selection)

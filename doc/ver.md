@@ -724,3 +724,30 @@
         scripts/backend/pixai_tagger_server.py
         doc/ver.md
     GTX 1080用GPU推論ではcuDNN 9.1.0.70を使用し、NVIDIA DLLディレクトリをPixAI子プロセスのPATHへ渡す。
+
+# 93. 本体MITライセンスの明記
+    ルートに本体コード向けMIT Licenseを追加し、READMEで第三者ライブラリ・バイナリ・モデルのライセンスが別途適用されることを明記した。配布物の依存ライセンス棚卸しは別工程。
+    追加・変更したファイル
+        LICENSE
+        README.md
+
+# 94. onedir成果物へ本体ライセンスとNoticeを同梱
+    PyInstaller onedirの成果物へLICENSEとTHIRD_PARTY_NOTICES.mdをコピーし、配布依存全体の監査が終わっていないことを明示する回帰テストを追加した。
+    追加・変更したファイル
+        tools/build/build_one_dir.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        README.md
+        doc/ver.md
+# 95. onedirへ実行時依存のライセンス資料を同梱
+    実行時依存パッケージのライセンス・Noticeを依存閉包から収集し、Python/Tcl-Tkのライセンス資料と解決済みコンポーネント一覧を成果物へ含める。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/build_one_dir.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        licenses/TclTk/license.terms
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md

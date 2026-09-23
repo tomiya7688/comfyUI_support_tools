@@ -723,3 +723,13 @@
     追加・変更したファイル
         LICENSE
         README.md
+
+# 94. onedir成果物へ本体ライセンスとNoticeを同梱
+    PyInstaller onedirの成果物へLICENSEとTHIRD_PARTY_NOTICES.mdをコピーし、配布依存全体の監査が終わっていないことを明示する回帰テストを追加した。
+    追加・変更したファイル
+        tools/build/build_one_dir.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        README.md
+        doc/ver.md

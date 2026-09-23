@@ -17,11 +17,15 @@ class WorkspaceBuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             output = root / "dist"
+            (root / "LICENSE").write_text("MIT test license", encoding="utf-8")
+            (root / "THIRD_PARTY_NOTICES.md").write_text("Test notices", encoding="utf-8")
             exe = builder.executable_path(output)
             exe.parent.mkdir(parents=True)
             exe.touch()
             with mock.patch.object(builder.subprocess, "run") as run:
                 self.assertEqual(builder.build(root, output), exe)
+            self.assertEqual((exe.parent / "LICENSE").read_text(encoding="utf-8"), "MIT test license")
+            self.assertEqual((exe.parent / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"), "Test notices")
             command = run.call_args.args[0]
             self.assertEqual(command[command.index("--paths") + 1], str(root / "src"))
             self.assertIn("--onedir", command)

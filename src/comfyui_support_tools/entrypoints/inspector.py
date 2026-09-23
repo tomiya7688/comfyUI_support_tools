@@ -10,7 +10,7 @@ from comfyui_support_tools.applications.main_gui.ui.messenger.inspector_messenge
 from comfyui_support_tools.applications.main_gui.ui.commander.inspector_commander import InspectorUiCommander
 
 
-def create_inspector():
-    data = ActionDataRequests(ActionDataMessenger(ActionDataCommander(ActionIO())))
+def create_inspector(jobs=None):
+    data = ActionDataRequests(ActionDataMessenger(ActionDataCommander(ActionIO(jobs=jobs))))
     process = InspectorProcessMessenger(InspectorCommander(InspectorState(), data))
     return InspectorUiCommander(InspectorUiMessenger(process))

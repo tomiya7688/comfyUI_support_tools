@@ -733,3 +733,14 @@
         licenses/README.md
         README.md
         doc/ver.md
+# 95. onedirへ実行時依存のライセンス資料を同梱
+    実行時依存パッケージのライセンス・Noticeを依存閉包から収集し、Python/Tcl-Tkのライセンス資料と解決済みコンポーネント一覧を成果物へ含める。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/build_one_dir.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        licenses/TclTk/license.terms
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md

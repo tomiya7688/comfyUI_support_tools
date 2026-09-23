@@ -1,11 +1,10 @@
 # License file layout
 
-Store third-party license texts here only after verifying the exact component
-and version used by a distribution. Preserve the original license text and
-record its component, version, source, and whether it is bundled, downloaded,
-or user-provided in `THIRD_PARTY_NOTICES.md` and the machine-readable manifest.
+The build collector stores the Tcl/Tk terms here as source input. Runtime
+Python wheel license and notice files are copied unmodified into the onedir
+artifact under `licenses/python_packages/<normalized-name>/`.
 
-Do not infer a complete artifact inventory from top-level Python package names:
-wheels may contain separately licensed native libraries. Until the PyInstaller
-inventory is implemented and verified, this directory is intentionally not a
-claim that every distribution dependency is covered.
+Do not infer a complete system inventory from Python package metadata alone.
+The collector covers the active Python dependency closure and Python/Tcl/Tk
+runtime, but OS-provided libraries and separately installed backends remain
+outside this inventory.

@@ -4,6 +4,7 @@ from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
 
 from comfyui_support_tools.applications.main_gui.data.processing.job_runtime import JobRuntime
+from comfyui_support_tools.applications.main_gui.data.processing.result_exporter import export_records
 from comfyui_support_tools.applications.main_gui.data.processing.tagger_transport import TaggerTransport
 from comfyui_support_tools.shared.contracts.inspector_contracts import ActionEvent
 
@@ -24,12 +25,22 @@ class ActionIO:
         with self._lock:
             if self._closed or (self._thread and self._thread.is_alive()):
                 raise ValueError("Action実行中または終了済みです")
-            if request.kind not in ("probe", "tag") or len(request.items) > 60:
+            if request.kind not in ("probe", "tag", "export") or len(request.items) > 60:
                 raise ValueError("Unsupported action request")
+            if request.kind == "export" and (
+                request.export_settings is None
+                or len(request.export_records) != len(request.items)
+            ):
+                raise ValueError("Invalid export request")
             self._cancel = Event()
-            action = "Tagger API 接続確認" if request.kind == "probe" else f"Tag / 内容タグ付け ({len(request.items)}件)"
+            if request.kind == "probe":
+                job_kind, action = "tagger_probe", "Tagger API 接続確認"
+            elif request.kind == "tag":
+                job_kind, action = "tagger_tag", f"Tag / 内容タグ付け ({len(request.items)}件)"
+            else:
+                job_kind, action = "analysis_export", f"Analysis Export ({len(request.items)}件)"
             self.last_job_id = self._jobs.create(
-                "tagger_probe" if request.kind == "probe" else "tagger_tag",
+                job_kind,
                 action,
                 source_ids=tuple(item.id for item in request.items),
                 source_names=tuple(item.name for item in request.items),
@@ -63,7 +74,7 @@ class ActionIO:
                 if not self._cancel.is_set():
                     self._emit(ActionEvent(request.token, "models", models=models))
                     self._jobs.update(job_id, 0.9, f"モデル {len(models)}件を確認", "model list received")
-            else:
+            elif request.kind == "tag":
                 total = len(request.items)
                 for index, item in enumerate(request.items, 1):
                     if self._cancel.is_set():
@@ -86,17 +97,46 @@ class ActionIO:
                         f"{index}/{total} 処理済み",
                         log,
                     )
+            else:
+                def progress(index, total, name):
+                    if self._cancel.is_set():
+                        raise ValueError("Export停止要求を受信しました")
+                    self._jobs.update(
+                        job_id,
+                        index / max(1, total),
+                        f"{index}/{total} ファイル出力",
+                        name,
+                    )
+
+                written = export_records(
+                    request.export_records,
+                    request.export_settings,
+                    progress,
+                )
+                if not self._cancel.is_set():
+                    self._emit(ActionEvent(
+                        request.token,
+                        "exported",
+                        message=f"Export完了: {len(written)}ファイル",
+                    ))
         except Exception as exc:
-            failed = True
-            message = f"{type(exc).__name__}: {exc}"[:300]
-            self._emit(ActionEvent(request.token, "error", message=message, failed=True))
-            self._jobs.finish(job_id, "error", "Tagger APIエラー", message)
+            if self._cancel.is_set():
+                self._emit(ActionEvent(request.token, "done", message="停止しました"))
+            else:
+                failed = True
+                message = f"{type(exc).__name__}: {exc}"[:300]
+                self._emit(ActionEvent(request.token, "error", message=message, failed=True))
+                self._jobs.finish(job_id, "error", f"{request.kind} エラー", message)
         finally:
             if self._cancel.is_set():
                 self._jobs.finish(job_id, "cancelled", "停止しました")
             elif not failed:
                 self._jobs.finish(job_id, "done", "完了")
-            self._emit(ActionEvent(request.token, "done", message="停止しました" if self._cancel.is_set() else "完了"))
+            self._emit(ActionEvent(
+                request.token,
+                "done",
+                message="停止しました" if self._cancel.is_set() else "完了",
+            ))
 
     def poll(self):
         events = []

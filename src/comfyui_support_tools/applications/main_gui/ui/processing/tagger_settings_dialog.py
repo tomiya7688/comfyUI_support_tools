@@ -1,36 +1,71 @@
-"""Explicit URL/model controls; opening this dialog makes no network request."""
+"""Explicit backend/URL/model controls; opening this dialog makes no network request."""
 import tkinter as tk
 from tkinter import ttk
+
 from comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
+from comfyui_support_tools.shared.contracts.tagger_backend import (
+    BACKENDS,
+    BACKEND_ID_BY_LABEL,
+    backend_label,
+)
 
 
 class TaggerSettingsDialog(tk.Toplevel):
     def __init__(self, parent, commander, log):
         super().__init__(parent)
         self.commander, self.log = commander, log
-        self.title("Tagger HTTP API設定")
+        self.title("Tagger Backend / HTTP API設定")
         self.transient(parent.winfo_toplevel())
-        self.geometry("640x360")
-        self.minsize(500, 360)
+        self.geometry("680x430")
+        self.minsize(540, 430)
         self._seen_models = ()
         self._last_status = None
         settings = commander.status().settings
         self.values = {}
         body = ttk.Frame(self, padding=12)
         body.pack(fill="both", expand=True)
-        for key, label in (("url", "API URL"), ("model", "モデル"), ("threshold", "Tag閾値"),
-                           ("character_threshold", "Character閾値"), ("timeout", "Timeout秒")):
+
+        row = ttk.Frame(body)
+        row.pack(fill="x", pady=4)
+        ttk.Label(row, text="Backend", width=18).pack(side="left")
+        initial_label = backend_label(settings.backend, settings.url)
+        if initial_label not in BACKEND_ID_BY_LABEL:
+            initial_label = BACKENDS[0].label
+        self.backend = tk.StringVar(self, value=initial_label)
+        ttk.Combobox(
+            row,
+            textvariable=self.backend,
+            values=tuple(value.label for value in BACKENDS),
+            state="readonly",
+        ).pack(side="left", fill="x", expand=True)
+
+        for key, label in (
+            ("url", "API URL"),
+            ("model", "モデル"),
+            ("threshold", "General閾値"),
+            ("character_threshold", "Character閾値"),
+            ("timeout", "Timeout秒"),
+        ):
             row = ttk.Frame(body)
             row.pack(fill="x", pady=4)
-            ttk.Label(row, text=label, width=16).pack(side="left")
+            ttk.Label(row, text=label, width=18).pack(side="left")
             variable = tk.StringVar(self, value=str(getattr(settings, key)))
             self.values[key] = variable
             entry = ttk.Combobox(row, textvariable=variable) if key == "model" else ttk.Entry(row, textvariable=variable)
             entry.pack(side="left", fill="x", expand=True)
             if key == "model":
                 self.models = entry
-        ttk.Label(body, text="例: http://127.0.0.1:7861/pixai/v1/interrogate\n接続確認はモデル一覧GETのみ。画像送信は実行時に確認します。\n設定とメモはWorkspace内のみ保持。サービスの自動起動・依存の導入はしません。",
-                  wraplength=580).pack(anchor="w", pady=8)
+
+        ttk.Label(
+            body,
+            text=(
+                "PixAI: http://127.0.0.1:7861/pixai/v1/interrogate\n"
+                "共通Tagger Service: .../tagger/v1/interrogate（AnimeTimm等は#229/#231実装後、同じモデル選択へ追加可能）\n"
+                "接続確認はinterrogators GETのみ。Style Analyzer (#64)は別Actionで、まだ実行不可です。\n"
+                "サービスの自動起動・Python/venv共有は行いません。"
+            ),
+            wraplength=630,
+        ).pack(anchor="w", pady=8)
         buttons = ttk.Frame(body)
         buttons.pack(fill="x")
         self.apply_button = ttk.Button(buttons, text="設定を反映", command=self.apply)
@@ -39,7 +74,7 @@ class TaggerSettingsDialog(tk.Toplevel):
         self.probe_button.pack(side="left", padx=8)
         ttk.Button(buttons, text="閉じる", command=self.destroy).pack(side="right")
         self.message = tk.StringVar(self)
-        ttk.Label(body, textvariable=self.message, wraplength=580).pack(anchor="w", pady=8)
+        ttk.Label(body, textvariable=self.message, wraplength=630).pack(anchor="w", pady=8)
         self.refresh(commander.status())
 
     def apply(self):
@@ -47,10 +82,11 @@ class TaggerSettingsDialog(tk.Toplevel):
             values = {key: value.get().strip() for key, value in self.values.items()}
             for key in ("threshold", "character_threshold", "timeout"):
                 values[key] = float(values[key])
+            values["backend"] = BACKEND_ID_BY_LABEL[self.backend.get()]
             self.commander.configure(TaggerSettings(**values))
             self.refresh(self.commander.status())
             return True
-        except (ValueError, TypeError) as exc:
+        except (KeyError, ValueError, TypeError) as exc:
             self.message.set(str(exc))
             self.log(str(exc))
             return False

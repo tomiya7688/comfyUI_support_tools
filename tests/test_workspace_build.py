@@ -19,6 +19,12 @@ class WorkspaceBuildTests(unittest.TestCase):
             output = root / "dist"
             (root / "LICENSE").write_text("MIT test license", encoding="utf-8")
             (root / "THIRD_PARTY_NOTICES.md").write_text("Test notices", encoding="utf-8")
+            (root / "requirements-kadoka-tools.txt").write_text(
+                (ROOT / "requirements-kadoka-tools.txt").read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            tcl_license = root / "licenses" / "TclTk" / "license.terms"
+            tcl_license.parent.mkdir(parents=True)
+            tcl_license.write_text("Test Tcl/Tk terms", encoding="utf-8")
             exe = builder.executable_path(output)
             exe.parent.mkdir(parents=True)
             exe.touch()
@@ -26,6 +32,8 @@ class WorkspaceBuildTests(unittest.TestCase):
                 self.assertEqual(builder.build(root, output), exe)
             self.assertEqual((exe.parent / "LICENSE").read_text(encoding="utf-8"), "MIT test license")
             self.assertEqual((exe.parent / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"), "Test notices")
+            self.assertTrue((exe.parent / "third_party_components.resolved.json").is_file())
+            self.assertTrue((exe.parent / "licenses" / "TclTk" / "license.terms").is_file())
             command = run.call_args.args[0]
             self.assertEqual(command[command.index("--paths") + 1], str(root / "src"))
             self.assertIn("--onedir", command)

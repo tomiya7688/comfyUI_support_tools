@@ -9,6 +9,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+_BUILD_TOOL_DIR = str(Path(__file__).resolve().parent)
+if _BUILD_TOOL_DIR not in sys.path:
+    sys.path.insert(0, _BUILD_TOOL_DIR)
+from license_inventory import collect_license_inventory
+
 APP_NAME = "KadokaTools"
 EXCLUDED_MODULES = ("torch", "torchvision", "torchaudio")
 
@@ -62,6 +67,7 @@ def build(root: Path, output: Path) -> Path:
         if not source.is_file():
             raise FileNotFoundError(f"Required license notice was not found: {source}")
         shutil.copy2(source, distribution_dir / filename)
+    collect_license_inventory(root, distribution_dir)
     return executable
 
 

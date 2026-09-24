@@ -34,7 +34,7 @@ class LicenseInventoryTests(unittest.TestCase):
             self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])
             native = {item["path"]: item for item in manifest["native_artifacts"]}
             self.assertEqual(native["KadokaTools.exe"]["size_bytes"], len(b"test executable"))
-            self.assertEqual(native["cv2/native.pyd"]["audit_status"], "origin-and-license-unmapped")
+            self.assertEqual(native["cv2/native.pyd"]["audit_status"], "build-source-unavailable")
             self.assertEqual(len(native["KadokaTools.exe"]["sha256"]), 64)
             self.assertEqual(manifest["schema_version"], 2)
             external = {item["name"]: item for item in manifest["external_components"]}

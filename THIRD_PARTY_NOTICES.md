@@ -14,7 +14,13 @@ The frozen executable also contains the PyInstaller bootloader (GPL-2.0-or-later
 with Bootloader exception) and PyInstaller runtime hooks (Apache-2.0). Their
 resolved versions and license text are included in the onedir manifest and
 license directory.
-The generated manifest also fingerprints every native executable, DLL, and
+The generated manifest fingerprints every native executable, DLL, and Python
+extension and uses PyInstaller's COLLECT table to link source paths to package,
+Python-runtime, Windows-system, or external-build origins when possible. Local
+absolute source paths are never written into the artifact; unresolved origins
+remain explicitly marked for review. A fingerprint or origin label is not by
+itself a license-compliance determination.
+
 Python extension file present in the onedir output. These paths are an audit
 inventory only: entries whose origin/license is not mapped remain explicitly
 unresolved and are not represented as license-cleared.

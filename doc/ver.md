@@ -778,3 +778,15 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 99. native artifactをPyInstaller出所へ紐付け
+    COLLECT-00.tocから各nativeファイルのbuild sourceを取得し、Python package・Python runtime・Windows system・外部build環境へ分類。既知packageのmanifest license文書へ紐付け、未解決項目は絶対パスを出さずreview対象として示す。
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tools/build/license_inventory.py
+        tools/build/build_one_dir.py
+        tests/test_native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md

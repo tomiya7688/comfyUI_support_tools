@@ -67,7 +67,7 @@ def build(root: Path, output: Path) -> Path:
         if not source.is_file():
             raise FileNotFoundError(f"Required license notice was not found: {source}")
         shutil.copy2(source, distribution_dir / filename)
-    collect_license_inventory(root, distribution_dir)
+    collect_license_inventory(root, distribution_dir, work_dir / APP_NAME / "COLLECT-00.toc")
     return executable
 
 

@@ -13,3 +13,5 @@ The resolved manifest marks artifact contents as `bundled` and separately lists
 external-only applications, services, binaries, and model weights. External
 items have no asserted version or license metadata: those depend on the user's
 separate installation and require an exact-version audit before redistribution.
+
+The onedir also embeds PyInstaller bootloader and runtime-hook code. Their separately identified license grants (GPL with the bootloader exception, and Apache-2.0 for runtime hooks) and source version are listed in the resolved manifest; the PyInstaller COPYING.txt is copied into the artifact.

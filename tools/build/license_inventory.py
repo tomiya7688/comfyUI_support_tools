@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import shutil
 import sys
-from importlib.metadata import Distribution, distributions
+from importlib.metadata import Distribution, PackageNotFoundError, distribution, distributions
 from pathlib import Path, PurePosixPath
 
 from packaging.requirements import Requirement
@@ -114,6 +114,35 @@ def _project_urls(item: Distribution) -> list[str]:
     return item.metadata.get_all("Project-URL", [])
 
 
+def _pyinstaller_components(site_packages: Path, distribution_dir: Path) -> list[dict]:
+    """Record PyInstaller code that is incorporated into the frozen executable."""
+    try:
+        pyinstaller = distribution("pyinstaller")
+    except PackageNotFoundError as error:
+        raise RuntimeError("PyInstaller is required to audit the onedir bootloader license") from error
+    license_files = _copy_python_package_licenses(pyinstaller, site_packages, distribution_dir)
+    project_urls = _project_urls(pyinstaller)
+    common = {
+        "distribution_status": "bundled-component",
+        "version": pyinstaller.version,
+        "source_urls": project_urls,
+        "license_files": license_files,
+    }
+    return [
+        {
+            "name": "PyInstaller bootloader",
+            "component_type": "executable-bootloader",
+            "license_metadata": "GPL-2.0-or-later WITH Bootloader-exception",
+            **common,
+        },
+        {
+            "name": "PyInstaller runtime hooks",
+            "component_type": "runtime-hooks",
+            "license_metadata": "Apache-2.0",
+            **common,
+        },
+    ]
+
 def collect_license_inventory(root: Path, distribution_dir: Path) -> dict:
     """Copy Python/Tcl and runtime package licenses and emit resolved metadata."""
     root = root.resolve()
@@ -151,6 +180,8 @@ def collect_license_inventory(root: Path, distribution_dir: Path) -> dict:
         "source_urls": ["https://www.tcl-lang.org/"],
         "license_files": [tcl_target.relative_to(distribution_dir).as_posix()],
     })
+
+    components.extend(_pyinstaller_components(site_packages, distribution_dir))
 
     for item in _runtime_dependency_names(root):
         components.append({

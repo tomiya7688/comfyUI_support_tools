@@ -761,3 +761,11 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 97. PyInstaller組込みコードのライセンスを収録
+    onedir実行ファイルに組み込まれるPyInstallerブートローダーとruntime hooksを、各々のライセンス区分・使用版・COPYING文書とともにresolved manifestへ記録。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tests/test_license_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md

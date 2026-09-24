@@ -1,5 +1,6 @@
 """Frozen workspace discovery and isolated launch command regression tests."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -34,7 +35,9 @@ class WorkspaceBuildTests(unittest.TestCase):
             self.assertEqual((exe.parent / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"), "Test notices")
             resolved_manifest = exe.parent / "third_party_components.resolved.json"
             self.assertTrue(resolved_manifest.is_file())
-            self.assertIn("external_components", resolved_manifest.read_text(encoding="utf-8"))
+            resolved_json = json.loads(resolved_manifest.read_text(encoding="utf-8"))
+            self.assertIn("external_components", resolved_json)
+            self.assertIn(str(exe.name), {item["path"] for item in resolved_json["native_artifacts"]})
             self.assertTrue((exe.parent / "licenses" / "TclTk" / "license.terms").is_file())
             command = run.call_args.args[0]
             self.assertEqual(command[command.index("--paths") + 1], str(root / "src"))

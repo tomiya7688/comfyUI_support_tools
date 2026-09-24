@@ -14,6 +14,10 @@ The frozen executable also contains the PyInstaller bootloader (GPL-2.0-or-later
 with Bootloader exception) and PyInstaller runtime hooks (Apache-2.0). Their
 resolved versions and license text are included in the onedir manifest and
 license directory.
+The generated manifest also fingerprints every native executable, DLL, and
+Python extension file present in the onedir output. These paths are an audit
+inventory only: entries whose origin/license is not mapped remain explicitly
+unresolved and are not represented as license-cleared.
 
 The build configuration excludes PyTorch, torchvision, and torchaudio.
 ComfyUI, WebUI1111, PixAI Tagger, TagGUI, Ollama, FFmpeg, 7-Zip, and AI model weights

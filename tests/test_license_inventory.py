@@ -14,6 +14,12 @@ class LicenseInventoryTests(unittest.TestCase):
     def test_copies_runtime_license_files_and_records_resolved_versions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory)
+            executable = target / "KadokaTools.exe"
+            executable.parent.mkdir(parents=True, exist_ok=True)
+            executable.write_bytes(b"test executable")
+            extension = target / "cv2" / "native.pyd"
+            extension.parent.mkdir(parents=True)
+            extension.write_bytes(b"test native extension")
             manifest = collect_license_inventory(ROOT, target)
 
             names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
@@ -26,6 +32,10 @@ class LicenseInventoryTests(unittest.TestCase):
             self.assertEqual(runtime_hooks["license_metadata"], "Apache-2.0")
             self.assertEqual(bootloader["version"], runtime_hooks["version"])
             self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])
+            native = {item["path"]: item for item in manifest["native_artifacts"]}
+            self.assertEqual(native["KadokaTools.exe"]["size_bytes"], len(b"test executable"))
+            self.assertEqual(native["cv2/native.pyd"]["audit_status"], "origin-and-license-unmapped")
+            self.assertEqual(len(native["KadokaTools.exe"]["sha256"]), 64)
             self.assertEqual(manifest["schema_version"], 2)
             external = {item["name"]: item for item in manifest["external_components"]}
             expected_external = {"ComfyUI", "WebUI1111", "PixAI Tagger", "TagGUI", "Ollama", "FFmpeg", "7-Zip", "AI model weights"}

@@ -751,6 +751,12 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 100. PyInstallerビルドPATHを隔離
+    ビルド子プロセスへPython環境とWindows標準ディレクトリだけを含むPATHを渡し、呼び出し元のPATHに入った外部ツールのDLLが成果物へ偶発的に収録されないようにする。確認時、Codex管理下libheifから混入していたAPI-set/UCRT DLL 44件が収録されなくなり、onedirのnative inventoryは94件から50件へ変化。
+    追加・変更したファイル
+        tools/build/build_one_dir.py
+        tests/test_workspace_build.py
+        doc/ver.md
 
 # 96. 配布ライセンスmanifestへ同梱範囲を記録
     onedirに含まれる実行時依存と、ユーザー別に導入する外部アプリ・サービス・バイナリ・モデル重みをmachine-readable manifest上で区別する。外部物のバージョンやライセンスは推測で埋めず、個別監査が必要であることを記録する。

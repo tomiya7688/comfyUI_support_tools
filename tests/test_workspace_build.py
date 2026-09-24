@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import platform
 from pathlib import Path
 import tempfile
 import unittest
@@ -29,7 +30,8 @@ class WorkspaceBuildTests(unittest.TestCase):
             exe = builder.executable_path(output)
             exe.parent.mkdir(parents=True)
             exe.touch()
-            with mock.patch.object(builder.subprocess, "run") as run:
+            injected_path = os.pathsep.join(("foreign-native-bin", os.environ.get("PATH", "")))
+            with mock.patch.object(platform, "machine", return_value="AMD64"), mock.patch.object(platform, "win32_ver", return_value=("10", "10.0.19045", "", "Multiprocessor Free")), mock.patch.dict(os.environ, {"PATH": injected_path, "PYTHONPATH": "foreign", "PYTHONHOME": "foreign"}), mock.patch.object(builder.subprocess, "run") as run:
                 self.assertEqual(builder.build(root, output), exe)
             self.assertEqual((exe.parent / "LICENSE").read_text(encoding="utf-8"), "MIT test license")
             self.assertEqual((exe.parent / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"), "Test notices")
@@ -40,8 +42,13 @@ class WorkspaceBuildTests(unittest.TestCase):
             self.assertIn(str(exe.name), {item["path"] for item in resolved_json["native_artifacts"]})
             self.assertTrue((exe.parent / "licenses" / "TclTk" / "license.terms").is_file())
             command = run.call_args.args[0]
+            build_environment = run.call_args.kwargs["env"]
             self.assertEqual(command[command.index("--paths") + 1], str(root / "src"))
             self.assertIn("--onedir", command)
+            self.assertNotIn("foreign-native-bin", build_environment["PATH"])
+            self.assertNotIn("PYTHONPATH", build_environment)
+            self.assertNotIn("PYTHONHOME", build_environment)
+            self.assertEqual(build_environment["PYTHONNOUSERSITE"], "1")
 
     def test_smoke_checks_both_uis_outside_distribution_without_python_paths(self):
         with tempfile.TemporaryDirectory() as tmp:

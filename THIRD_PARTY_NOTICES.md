@@ -12,6 +12,9 @@ Wheel-provided notices are retained verbatim, including nested native
 components reported by upstream distributions.
 
 The build configuration excludes PyTorch, torchvision, and torchaudio.
-ComfyUI, WebUI1111, PixAI Tagger, TagGUI, FFmpeg, 7-Zip, and AI model weights
+ComfyUI, WebUI1111, PixAI Tagger, TagGUI, Ollama, FFmpeg, 7-Zip, and AI model weights
 are external/user-provided and are not bundled in the standard onedir artifact.
-Their licenses and redistribution conditions remain those of the separately
+The generated `external_components` section records these items as not bundled.
+Their installed versions and licenses vary by user, so this project does not make
+license or redistribution claims for them here. Audit each exact upstream
+component before adding it to a distributable artifact.

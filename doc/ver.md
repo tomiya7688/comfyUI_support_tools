@@ -751,3 +751,13 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+
+# 96. 配布ライセンスmanifestへ同梱範囲を記録
+    onedirに含まれる実行時依存と、ユーザー別に導入する外部アプリ・サービス・バイナリ・モデル重みをmachine-readable manifest上で区別する。外部物のバージョンやライセンスは推測で埋めず、個別監査が必要であることを記録する。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md

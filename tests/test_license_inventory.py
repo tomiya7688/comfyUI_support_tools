@@ -18,6 +18,14 @@ class LicenseInventoryTests(unittest.TestCase):
 
             names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
             self.assertTrue({"python", "tcl/tk", "numpy", "pillow", "opencv-python-headless", "requests", "psutil"}.issubset(names))
+            self.assertTrue(all(item["distribution_status"] == "bundled" for item in manifest["components"]))
+            self.assertEqual(manifest["schema_version"], 2)
+            external = {item["name"]: item for item in manifest["external_components"]}
+            expected_external = {"ComfyUI", "WebUI1111", "PixAI Tagger", "TagGUI", "Ollama", "FFmpeg", "7-Zip", "AI model weights"}
+            self.assertTrue(expected_external.issubset(external))
+            self.assertTrue(all(item["distribution_status"] == "external-only" for item in external.values()))
+            self.assertTrue(all(item["version"] is None and item["license_metadata"] is None for item in external.values()))
+            self.assertTrue(all(item["audit_status"] == "not-audited-by-this-artifact" for item in external.values()))
             for component in manifest["components"]:
                 self.assertTrue(component["version"])
                 self.assertTrue(component["license_files"])

@@ -10,6 +10,10 @@ plus license/notice files from the active dependency closure resolved from
 versions, upstream license metadata, source URLs, and copied notice paths.
 Wheel-provided notices are retained verbatim, including nested native
 components reported by upstream distributions.
+The frozen executable also contains the PyInstaller bootloader (GPL-2.0-or-later
+with Bootloader exception) and PyInstaller runtime hooks (Apache-2.0). Their
+resolved versions and license text are included in the onedir manifest and
+license directory.
 
 The build configuration excludes PyTorch, torchvision, and torchaudio.
 ComfyUI, WebUI1111, PixAI Tagger, TagGUI, Ollama, FFmpeg, 7-Zip, and AI model weights

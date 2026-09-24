@@ -18,7 +18,14 @@ class LicenseInventoryTests(unittest.TestCase):
 
             names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
             self.assertTrue({"python", "tcl/tk", "numpy", "pillow", "opencv-python-headless", "requests", "psutil"}.issubset(names))
-            self.assertTrue(all(item["distribution_status"] == "bundled" for item in manifest["components"]))
+            self.assertTrue(all(item["distribution_status"] in {"bundled", "bundled-component"} for item in manifest["components"]))
+            by_name = {item["name"]: item for item in manifest["components"]}
+            bootloader = by_name["PyInstaller bootloader"]
+            runtime_hooks = by_name["PyInstaller runtime hooks"]
+            self.assertEqual(bootloader["license_metadata"], "GPL-2.0-or-later WITH Bootloader-exception")
+            self.assertEqual(runtime_hooks["license_metadata"], "Apache-2.0")
+            self.assertEqual(bootloader["version"], runtime_hooks["version"])
+            self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])
             self.assertEqual(manifest["schema_version"], 2)
             external = {item["name"]: item for item in manifest["external_components"]}
             expected_external = {"ComfyUI", "WebUI1111", "PixAI Tagger", "TagGUI", "Ollama", "FFmpeg", "7-Zip", "AI model weights"}

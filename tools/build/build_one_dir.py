@@ -23,6 +23,25 @@ def executable_path(output: Path) -> Path:
     return output / APP_NAME / f"{APP_NAME}{suffix}"
 
 
+def _build_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    for key in ("PYTHONHOME", "PYTHONPATH"):
+        environment.pop(key, None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    if os.name == "nt":
+        system_root = Path(
+            environment.get("SystemRoot") or environment.get("WINDIR") or r"C:\Windows"
+        )
+        allowed_paths = (
+            Path(sys.prefix) / "Scripts",
+            Path(sys.base_prefix),
+            system_root / "System32",
+            system_root,
+        )
+        environment["PATH"] = os.pathsep.join(str(path) for path in allowed_paths)
+    return environment
+
+
 def build(root: Path, output: Path) -> Path:
     work_dir = root / "build" / "pyinstaller"
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -52,7 +71,7 @@ def build(root: Path, output: Path) -> Path:
         command.extend(("--exclude-module", module_name))
     command.append(str(root / "tabbed_tools_gui.py"))
 
-    subprocess.run(command, cwd=root, check=True)
+    subprocess.run(command, cwd=root, env=_build_environment(), check=True)
 
     distribution_dir = output / APP_NAME
     (distribution_dir / "user_data" / "input" / "config" / "common").mkdir(

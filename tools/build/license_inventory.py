@@ -12,6 +12,33 @@ from packaging.utils import canonicalize_name
 
 
 _LICENSE_PREFIXES = ("LICENSE", "NOTICE", "COPYING", "COPYRIGHT")
+_EXTERNAL_COMPONENTS = (
+    ("ComfyUI", "application"),
+    ("WebUI1111", "application"),
+    ("PixAI Tagger", "backend"),
+    ("TagGUI", "application"),
+    ("Ollama", "service"),
+    ("FFmpeg", "binary"),
+    ("7-Zip", "binary"),
+    ("AI model weights", "model-weights"),
+)
+
+
+def _external_components() -> list[dict]:
+    return [
+        {
+            "name": name,
+            "component_type": component_type,
+            "distribution_status": "external-only",
+            "version": None,
+            "license_metadata": None,
+            "source_urls": [],
+            "license_files": [],
+            "audit_status": "not-audited-by-this-artifact",
+            "note": "Version and license depend on the separately installed or user-provided copy; this artifact does not redistribute it.",
+        }
+        for name, component_type in _EXTERNAL_COMPONENTS
+    ]
 
 
 def _runtime_dependency_names(root: Path) -> list[str]:
@@ -102,6 +129,7 @@ def collect_license_inventory(root: Path, distribution_dir: Path) -> dict:
     shutil.copy2(python_license, python_target)
     components.append({
         "name": "Python",
+        "distribution_status": "bundled",
         "version": sys.version.split()[0],
         "license_metadata": "Python Software Foundation License Agreement",
         "source_urls": ["https://www.python.org/"],
@@ -117,6 +145,7 @@ def collect_license_inventory(root: Path, distribution_dir: Path) -> dict:
     import tkinter
     components.append({
         "name": "Tcl/Tk",
+        "distribution_status": "bundled",
         "version": f"Tcl {tkinter.TclVersion} / Tk {tkinter.TkVersion}",
         "license_metadata": "TCL",
         "source_urls": ["https://www.tcl-lang.org/"],
@@ -126,6 +155,7 @@ def collect_license_inventory(root: Path, distribution_dir: Path) -> dict:
     for item in _runtime_dependency_names(root):
         components.append({
             "name": item.metadata["Name"],
+            "distribution_status": "bundled",
             "version": item.version,
             "license_metadata": _license_metadata(item),
             "source_urls": _project_urls(item),
@@ -133,10 +163,11 @@ def collect_license_inventory(root: Path, distribution_dir: Path) -> dict:
         })
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "distribution": "KadokaTools Windows onedir",
         "python_version": sys.version.split()[0],
         "components": components,
+        "external_components": _external_components(),
     }
     manifest_path = distribution_dir / "third_party_components.resolved.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

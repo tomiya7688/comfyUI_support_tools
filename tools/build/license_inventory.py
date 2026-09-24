@@ -1,6 +1,7 @@
 """Collect the license texts for the exact runtime dependency closure in a build."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import sys
@@ -12,6 +13,27 @@ from packaging.utils import canonicalize_name
 
 
 _LICENSE_PREFIXES = ("LICENSE", "NOTICE", "COPYING", "COPYRIGHT")
+_NATIVE_SUFFIXES = {".dll", ".pyd", ".exe", ".so", ".dylib"}
+
+
+def _native_artifact_inventory(distribution_dir: Path) -> list[dict]:
+    """List and fingerprint native files actually present in the onedir output."""
+    artifacts = []
+    for path in sorted(distribution_dir.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in _NATIVE_SUFFIXES:
+            continue
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        artifacts.append({
+            "path": path.relative_to(distribution_dir).as_posix(),
+            "size_bytes": path.stat().st_size,
+            "sha256": digest.hexdigest(),
+            "audit_status": "origin-and-license-unmapped",
+        })
+    return artifacts
+
 _EXTERNAL_COMPONENTS = (
     ("ComfyUI", "application"),
     ("WebUI1111", "application"),
@@ -199,6 +221,7 @@ def collect_license_inventory(root: Path, distribution_dir: Path) -> dict:
         "python_version": sys.version.split()[0],
         "components": components,
         "external_components": _external_components(),
+        "native_artifacts": _native_artifact_inventory(distribution_dir),
     }
     manifest_path = distribution_dir / "third_party_components.resolved.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

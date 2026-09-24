@@ -769,3 +769,12 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 98. onedir nativeファイルをハッシュ付きで棚卸し
+    実配布フォルダに存在するDLL・Python拡張・実行ファイルを相対パス、サイズ、SHA-256付きでmanifestへ記録。由来・ライセンス未確認のファイルは未監査と明示する。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md

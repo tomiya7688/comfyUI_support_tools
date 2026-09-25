@@ -148,6 +148,58 @@ def _pyinstaller_components(site_packages: Path, distribution_dir: Path) -> list
         },
     ]
 
+
+def _python_native_components(distribution_dir: Path, python_license: str) -> list[dict]:
+    """Describe separately identifiable native libraries shipped by Python."""
+    names = {path.name.casefold() for path in distribution_dir.rglob("*") if path.is_file()}
+    license_files = [python_license]
+    components = []
+
+    if any(name.startswith(("libcrypto-", "libssl-")) for name in names):
+        import ssl
+
+        fields = ssl.OPENSSL_VERSION.split()
+        version = fields[1] if len(fields) > 1 and fields[0] == "OpenSSL" else None
+        components.append({
+            "name": "OpenSSL",
+            "component_type": "native-runtime-library",
+            "distribution_status": "bundled",
+            "version": version,
+            "license_metadata": "OpenSSL License AND Original SSLeay License",
+            "source_urls": ["https://www.openssl.org/"],
+            "license_files": license_files,
+            **({"audit_status": "upstream-version-unresolved"} if version is None else {}),
+        })
+
+    if any(name.startswith("libffi-") and name.endswith(".dll") for name in names):
+        components.append({
+            "name": "libffi",
+            "component_type": "native-runtime-library",
+            "distribution_status": "bundled",
+            "version": None,
+            "license_metadata": "libffi license (included in Python LICENSE.txt)",
+            "source_urls": ["https://github.com/libffi/libffi"],
+            "license_files": license_files,
+            "audit_status": "upstream-version-unresolved",
+        })
+
+    if any(name.startswith(("vcruntime", "msvcp")) and name.endswith(".dll") for name in names):
+        components.append({
+            "name": "Microsoft Visual C++ Runtime",
+            "component_type": "native-runtime-library",
+            "distribution_status": "bundled",
+            "version": None,
+            "license_metadata": None,
+            "source_urls": [
+                "https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files"
+            ],
+            "license_files": [],
+            "audit_status": "redistribution-terms-review-required",
+        })
+
+    return components
+
+
 def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Path | None = None) -> dict:
     """Copy Python/Tcl and runtime package licenses and emit resolved metadata."""
     root = root.resolve()
@@ -186,6 +238,12 @@ def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Pat
         "license_files": [tcl_target.relative_to(distribution_dir).as_posix()],
     })
 
+    components.extend(
+        _python_native_components(
+            distribution_dir,
+            python_target.relative_to(distribution_dir).as_posix(),
+        )
+    )
     components.extend(_pyinstaller_components(site_packages, distribution_dir))
 
     for item in _runtime_dependency_names(root):

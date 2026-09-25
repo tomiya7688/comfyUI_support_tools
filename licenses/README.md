@@ -17,3 +17,8 @@ separate installation and require an exact-version audit before redistribution.
 The onedir also embeds PyInstaller bootloader and runtime-hook code. Their separately identified license grants (GPL with the bootloader exception, and Apache-2.0 for runtime hooks) and source version are listed in the resolved manifest; the PyInstaller COPYING.txt is copied into the artifact.
 
 The `native_artifacts` manifest section fingerprints each `.dll`, `.pyd`, `.exe`, `.so`, and `.dylib` found in the onedir output. A fingerprint is an exact-file identity. The manifest attempts to associate each file with its PyInstaller build source and package license documents, while sanitizing absolute builder paths. Unresolved and operating-system-supplied items still require license review.
+
+OpenSSL and libffi DLLs shipped with Python are attributed to their own
+components, not treated as Python-owned code. The Microsoft Visual C++ Runtime
+is also attributed separately and remains pending review of the applicable
+redistribution terms.

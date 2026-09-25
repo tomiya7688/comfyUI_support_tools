@@ -751,6 +751,16 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 100. Python同梱native runtimeを個別にライセンス台帳化
+    OpenSSL・libffi・Microsoft Visual C++ RuntimeをPython本体から分離してresolved manifestへ記録。Python LICENSE.txtに含まれるライセンス文書へリンクし、libffi版の未確定とMicrosoft再配布条件の要確認を監査状態として明示する。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
 # 100. PyInstallerビルドPATHを隔離
     ビルド子プロセスへPython環境とWindows標準ディレクトリだけを含むPATHを渡し、呼び出し元のPATHに入った外部ツールのDLLが成果物へ偶発的に収録されないようにする。確認時、Codex管理下libheifから混入していたAPI-set/UCRT DLL 44件が収録されなくなり、onedirのnative inventoryは94件から50件へ変化。
     追加・変更したファイル

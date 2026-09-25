@@ -9,6 +9,39 @@ from tools.build import native_artifact_inventory as inventory
 
 
 class NativeArtifactInventoryTests(unittest.TestCase):
+    def test_attributes_python_native_runtime_libraries_separately(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            distribution = root / "dist"
+            python_root = root / "python"
+            source_root = python_root / "DLLs"
+            source_root.mkdir(parents=True)
+            artifact_names = ["libcrypto-1_1.dll", "libffi-7.dll", "VCRUNTIME140.dll"]
+            entries = []
+            for filename in artifact_names:
+                source = source_root / filename
+                source.write_bytes(b"runtime")
+                target = distribution / filename
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(b"runtime")
+                entries.append((filename, str(source), "BINARY"))
+            toc = root / "COLLECT-00.toc"
+            toc.write_text(repr((entries,)), encoding="utf-8")
+            license_file = "licenses/Python/LICENSE.txt"
+            components = [
+                {"name": "OpenSSL", "version": "1.1.1t", "license_files": [license_file]},
+                {"name": "libffi", "version": None, "license_files": [license_file], "audit_status": "upstream-version-unresolved"},
+                {"name": "Microsoft Visual C++ Runtime", "version": None, "license_files": [], "audit_status": "redistribution-terms-review-required"},
+            ]
+            with patch.object(inventory, "_package_owners", return_value={}):
+                artifacts = inventory.collect_native_artifact_inventory(distribution, toc, components, root / "site-packages", python_root, None)
+
+        by_path = {item["path"]: item for item in artifacts}
+        self.assertEqual(by_path["libcrypto-1_1.dll"]["origin_component"], "OpenSSL")
+        self.assertEqual(by_path["libcrypto-1_1.dll"]["origin_version"], "1.1.1t")
+        self.assertEqual(by_path["libffi-7.dll"]["audit_status"], "upstream-version-unresolved")
+        self.assertEqual(by_path["VCRUNTIME140.dll"]["audit_status"], "redistribution-terms-review-required")
+
     def test_links_distribution_owned_artifact_to_component_license(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

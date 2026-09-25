@@ -3,14 +3,34 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from tools.build.license_inventory import collect_license_inventory
+from tools.build.license_inventory import _python_native_components, collect_license_inventory
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class LicenseInventoryTests(unittest.TestCase):
+    def test_classifies_python_bundled_native_libraries_separately(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            distribution = Path(temporary_directory)
+            for filename in ("libcrypto-1_1.dll", "libssl-1_1.dll", "libffi-7.dll", "VCRUNTIME140.dll"):
+                (distribution / filename).touch()
+
+            with patch("ssl.OPENSSL_VERSION", "OpenSSL 1.1.1t 7 Feb 2023"):
+                components = _python_native_components(distribution, "licenses/Python/LICENSE.txt")
+
+        by_name = {item["name"]: item for item in components}
+        self.assertEqual(set(by_name), {"OpenSSL", "libffi", "Microsoft Visual C++ Runtime"})
+        self.assertEqual(by_name["OpenSSL"]["version"], "1.1.1t")
+        self.assertEqual(by_name["OpenSSL"]["license_files"], ["licenses/Python/LICENSE.txt"])
+        self.assertIsNone(by_name["libffi"]["version"])
+        self.assertEqual(by_name["libffi"]["audit_status"], "upstream-version-unresolved")
+        self.assertEqual(by_name["libffi"]["license_files"], ["licenses/Python/LICENSE.txt"])
+        self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["audit_status"], "redistribution-terms-review-required")
+        self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["license_files"], [])
+
     def test_copies_runtime_license_files_and_records_resolved_versions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory)

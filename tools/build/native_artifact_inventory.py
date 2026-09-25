@@ -111,6 +111,25 @@ def _attribute(
             "audit_status": "origin-and-license-document-linked" if licenses else "license-document-not-linked",
         }
 
+    filename = source.name.casefold()
+    runtime_component_name = None
+    if filename.startswith(("libcrypto-", "libssl-")):
+        runtime_component_name = "OpenSSL"
+    elif filename.startswith("libffi-") and filename.endswith(".dll"):
+        runtime_component_name = "libffi"
+    elif filename.startswith(("vcruntime", "msvcp")) and filename.endswith(".dll"):
+        runtime_component_name = "Microsoft Visual C++ Runtime"
+    if runtime_component_name:
+        item = _license_component(runtime_component_name, components)
+        if item:
+            return {
+                "origin_type": "native-runtime-library",
+                "origin_component": runtime_component_name,
+                "origin_version": item.get("version"),
+                "license_files": item.get("license_files", []),
+                "audit_status": item.get("audit_status", "origin-and-license-document-linked"),
+            }
+
     if _within(source, site_packages):
         return {
             "origin_type": "python-site-packages",

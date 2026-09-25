@@ -751,11 +751,20 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
-# 100. Python同梱native runtimeを個別にライセンス台帳化
+# 101. Python同梱native runtimeを個別にライセンス台帳化
     OpenSSL・libffi・Microsoft Visual C++ RuntimeをPython本体から分離してresolved manifestへ記録。Python LICENSE.txtに含まれるライセンス文書へリンクし、libffi版の未確定とMicrosoft再配布条件の要確認を監査状態として明示する。
     追加・変更したファイル
         tools/build/license_inventory.py
         tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 102. CPython 3.10.11のlibffi版根拠を記録
+    CPython v3.10.11のWindowsビルド設定に明記されたlibffi 3.3.0をmanifestへ記録し、根拠となるpython.props/get_externals.batのURLを保持する。未対応のCPython版では版を推測せず未解決のままにする。
+    追加・変更したファイル
+        tools/build/license_inventory.py
         tests/test_license_inventory.py
         tests/test_native_artifact_inventory.py
         THIRD_PARTY_NOTICES.md

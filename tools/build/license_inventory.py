@@ -17,6 +17,13 @@ except ImportError:  # Support direct script execution from tools/build.
 
 
 _LICENSE_PREFIXES = ("LICENSE", "NOTICE", "COPYING", "COPYRIGHT")
+_CPYTHON_LIBFFI_PINS = {
+    "3.10.11": {
+        "version": "3.3.0",
+        "source_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+        "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
+    },
+}
 _EXTERNAL_COMPONENTS = (
     ("ComfyUI", "application"),
     ("WebUI1111", "application"),
@@ -149,7 +156,11 @@ def _pyinstaller_components(site_packages: Path, distribution_dir: Path) -> list
     ]
 
 
-def _python_native_components(distribution_dir: Path, python_license: str) -> list[dict]:
+def _python_native_components(
+    distribution_dir: Path,
+    python_license: str,
+    python_version: str | None = None,
+) -> list[dict]:
     """Describe separately identifiable native libraries shipped by Python."""
     names = {path.name.casefold() for path in distribution_dir.rglob("*") if path.is_file()}
     license_files = [python_license]
@@ -172,16 +183,21 @@ def _python_native_components(distribution_dir: Path, python_license: str) -> li
         })
 
     if any(name.startswith("libffi-") and name.endswith(".dll") for name in names):
-        components.append({
+        pinned_build = _CPYTHON_LIBFFI_PINS.get(python_version or sys.version.split()[0])
+        libffi = {
             "name": "libffi",
             "component_type": "native-runtime-library",
             "distribution_status": "bundled",
-            "version": None,
+            "version": pinned_build["version"] if pinned_build else None,
             "license_metadata": "libffi license (included in Python LICENSE.txt)",
             "source_urls": ["https://github.com/libffi/libffi"],
             "license_files": license_files,
-            "audit_status": "upstream-version-unresolved",
-        })
+        }
+        if pinned_build:
+            libffi["version_source_urls"] = [pinned_build["source_url"], pinned_build["source_script_url"]]
+        else:
+            libffi["audit_status"] = "upstream-version-unresolved"
+        components.append(libffi)
 
     if any(name.startswith(("vcruntime", "msvcp")) and name.endswith(".dll") for name in names):
         components.append({

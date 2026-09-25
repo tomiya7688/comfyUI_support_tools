@@ -23,6 +23,8 @@ itself a license-compliance determination.
 
 Python-bundled OpenSSL and libffi are listed as separate native components and
 linked to the corresponding notices included in Python's `LICENSE.txt`. The
+libffi 3.3.0 version is evidenced by the CPython 3.10.11 Windows build files;
+other CPython builds without an explicit pin remain version-unresolved. The
 Microsoft Visual C++ Runtime is separately identified, but its redistribution
 terms remain marked for review; the inventory does not assert that redistribution
 rights have been established.

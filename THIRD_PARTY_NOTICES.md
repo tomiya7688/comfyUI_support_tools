@@ -21,6 +21,12 @@ absolute source paths are never written into the artifact; unresolved origins
 remain explicitly marked for review. A fingerprint or origin label is not by
 itself a license-compliance determination.
 
+Python-bundled OpenSSL and libffi are listed as separate native components and
+linked to the corresponding notices included in Python's `LICENSE.txt`. The
+Microsoft Visual C++ Runtime is separately identified, but its redistribution
+terms remain marked for review; the inventory does not assert that redistribution
+rights have been established.
+
 Python extension file present in the onedir output. These paths are an audit
 inventory only: entries whose origin/license is not mapped remain explicitly
 unresolved and are not represented as license-cleared.

@@ -8,20 +8,30 @@ class TaggerFixture:
     def __init__(self):
         self.requests = []
         self.code = 200
-        self.payload = {"tag": {"landscape": 0.95, "sky": 0.7, "low_score": 0.1}}
+        self.payload = {
+            "general": {"landscape": 0.95, "sky": 0.7, "low_score": 0.1},
+            "character": {"fixture_character": 0.9},
+            "rating": {"safe": 0.9, "questionable": 0.1},
+            "caption": "fixture caption",
+            "style": {"must_not_be_content": 0.99},
+        }
         self.models = {"models": ["fixture-model"]}
         self.redirect = None
         fixture = self
+
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass
+
             def do_GET(self):
                 fixture.requests.append(("GET", self.path, None))
                 self.respond(fixture.models)
+
             def do_POST(self):
                 data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 fixture.requests.append(("POST", self.path, data))
                 self.respond(fixture.payload)
+
             def respond(self, payload):
                 self.send_response(fixture.code)
                 if fixture.redirect:
@@ -31,6 +41,7 @@ class TaggerFixture:
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
+
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.thread = Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

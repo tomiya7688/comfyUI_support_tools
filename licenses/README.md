@@ -35,3 +35,9 @@ BSD-2-Clause notice is stored in `licenses/libmpdec/LICENSE.txt` and copied
 into the onedir artifact. The inventory links both the Python and libmpdec
 license documents; other Python builds remain unresolved until individually
 verified.
+
+The bundled `pyexpat.pyd` contains CPython's extension wrapper and Expat.
+For the audited CPython 3.10.11 runtime, Expat is version 2.5.0 and its MIT
+notice is stored in `licenses/expat/LICENSE.txt` and copied into the onedir
+artifact. The inventory links both the Python and Expat license documents;
+other Python builds remain unresolved until individually verified.

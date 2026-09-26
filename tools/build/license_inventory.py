@@ -46,6 +46,13 @@ _CPYTHON_LIBMPDEC_PINS = {
         "license_url": "https://raw.githubusercontent.com/python/cpython/v3.10.11/Doc/license.rst",
     },
 }
+_CPYTHON_EXPAT_PINS = {
+    "3.10.11": {
+        "version": "2.5.0",
+        "source_url": "https://raw.githubusercontent.com/python/cpython/v3.10.11/Modules/expat/expat.h",
+        "license_url": "https://raw.githubusercontent.com/python/cpython/v3.10.11/Doc/license.rst",
+    },
+}
 _EXTERNAL_COMPONENTS = (
     ("ComfyUI", "application"),
     ("WebUI1111", "application"),
@@ -277,6 +284,25 @@ def _python_native_components(
             libmpdec["audit_status"] = "upstream-version-unresolved"
         components.append(libmpdec)
 
+    if "pyexpat.pyd" in names:
+        pinned_build = _CPYTHON_EXPAT_PINS.get(python_version or sys.version.split()[0])
+        expat = {
+            "name": "Expat",
+            "component_type": "native-runtime-library",
+            "distribution_status": "bundled",
+            "version": pinned_build["version"] if pinned_build else None,
+            "license_metadata": "Python Software Foundation License Agreement AND MIT (Expat)",
+            "source_urls": ["https://libexpat.github.io/"],
+            "license_files": ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"] if pinned_build else [],
+        }
+        if pinned_build:
+            expat["version_source_urls"] = [pinned_build["source_url"]]
+            expat["license_reference_urls"] = [pinned_build["license_url"]]
+        else:
+            expat["license_metadata"] = None
+            expat["audit_status"] = "upstream-version-unresolved"
+        components.append(expat)
+
     if any(name.startswith(("vcruntime", "msvcp")) and name.endswith(".dll") for name in names):
         components.append({
             "name": "Microsoft Visual C++ Runtime",
@@ -324,6 +350,14 @@ def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Pat
         libmpdec_target = distribution_dir / "licenses" / "libmpdec" / "LICENSE.txt"
         libmpdec_target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(libmpdec_license, libmpdec_target)
+
+    if (distribution_dir / "pyexpat.pyd").is_file() and python_version in _CPYTHON_EXPAT_PINS:
+        expat_license = root / "licenses" / "expat" / "LICENSE.txt"
+        if not expat_license.is_file():
+            raise RuntimeError(f"Expat license text is missing: {expat_license}")
+        expat_target = distribution_dir / "licenses" / "expat" / "LICENSE.txt"
+        expat_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(expat_license, expat_target)
 
     tcl_license = root / "licenses" / "TclTk" / "license.terms"
     if not tcl_license.is_file():

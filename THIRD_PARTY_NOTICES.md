@@ -33,6 +33,11 @@ C++ Runtime is separately identified, but its redistribution terms remain
 marked for review; the inventory does not assert that redistribution
 rights have been established.
 
+CPython 3.10.11 bundles Expat 2.5.0 in `pyexpat.pyd`. Its MIT notice is copied
+separately because the installed Python `LICENSE.txt` does not contain that
+notice. The artifact links both the CPython wrapper and Expat license files;
+other Python builds remain version-unresolved until individually verified.
+
 CPython 3.10.11 bundles libmpdec 2.5.1. Its BSD-2-Clause notice is copied
 separately because the installed Python `LICENSE.txt` does not contain that
 notice. The `_decimal.pyd` inventory entry links both the CPython wrapper

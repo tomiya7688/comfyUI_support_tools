@@ -15,14 +15,14 @@ class LicenseInventoryTests(unittest.TestCase):
     def test_classifies_python_bundled_native_libraries_separately(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
-            for filename in ("libcrypto-1_1.dll", "libssl-1_1.dll", "libffi-7.dll", "_bz2.pyd", "_lzma.pyd", "_decimal.pyd", "VCRUNTIME140.dll"):
+            for filename in ("libcrypto-1_1.dll", "libssl-1_1.dll", "libffi-7.dll", "_bz2.pyd", "_lzma.pyd", "_decimal.pyd", "pyexpat.pyd", "VCRUNTIME140.dll"):
                 (distribution / filename).touch()
 
             with patch("ssl.OPENSSL_VERSION", "OpenSSL 1.1.1t 7 Feb 2023"):
                 components = _python_native_components(distribution, "licenses/Python/LICENSE.txt", "3.10.11")
 
         by_name = {item["name"]: item for item in components}
-        self.assertEqual(set(by_name), {"OpenSSL", "libffi", "bzip2", "XZ Utils liblzma", "libmpdec", "Microsoft Visual C++ Runtime"})
+        self.assertEqual(set(by_name), {"OpenSSL", "libffi", "bzip2", "XZ Utils liblzma", "libmpdec", "Expat", "Microsoft Visual C++ Runtime"})
         self.assertEqual(by_name["OpenSSL"]["version"], "1.1.1t")
         self.assertEqual(by_name["OpenSSL"]["license_files"], ["licenses/Python/LICENSE.txt"])
         self.assertEqual(by_name["libffi"]["version"], "3.3.0")
@@ -48,6 +48,11 @@ class LicenseInventoryTests(unittest.TestCase):
         self.assertEqual(by_name["libmpdec"]["version_source_urls"], [
             "https://github.com/python/cpython/issues/85541",
             "https://github.com/python/cpython/tree/v3.10.11/Modules/_decimal/libmpdec",
+        ])
+        self.assertEqual(by_name["Expat"]["version"], "2.5.0")
+        self.assertEqual(by_name["Expat"]["license_files"], ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"])
+        self.assertEqual(by_name["Expat"]["version_source_urls"], [
+            "https://raw.githubusercontent.com/python/cpython/v3.10.11/Modules/expat/expat.h",
         ])
         self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["audit_status"], "redistribution-terms-review-required")
         self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["license_files"], [])
@@ -82,6 +87,17 @@ class LicenseInventoryTests(unittest.TestCase):
         self.assertEqual(components[0]["license_files"], [])
         self.assertEqual(components[0]["audit_status"], "upstream-version-unresolved")
 
+    def test_keeps_expat_version_unresolved_for_unverified_python_builds(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            distribution = Path(temporary_directory)
+            (distribution / "pyexpat.pyd").touch()
+            components = _python_native_components(distribution, "licenses/Python/LICENSE.txt", "3.14.0")
+
+        self.assertIsNone(components[0]["version"])
+        self.assertIsNone(components[0]["license_metadata"])
+        self.assertEqual(components[0]["license_files"], [])
+        self.assertEqual(components[0]["audit_status"], "upstream-version-unresolved")
+
     def test_copies_runtime_license_files_and_records_resolved_versions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory)
@@ -92,6 +108,7 @@ class LicenseInventoryTests(unittest.TestCase):
             extension.parent.mkdir(parents=True)
             extension.write_bytes(b"test native extension")
             (target / "_decimal.pyd").write_bytes(b"test decimal extension")
+            (target / "pyexpat.pyd").write_bytes(b"test expat extension")
             manifest = collect_license_inventory(ROOT, target)
 
             names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
@@ -107,6 +124,10 @@ class LicenseInventoryTests(unittest.TestCase):
             self.assertEqual(libmpdec["version"], "2.5.1")
             self.assertEqual(libmpdec["license_files"], ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"])
             self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
+            expat = by_name["Expat"]
+            self.assertEqual(expat["version"], "2.5.0")
+            self.assertEqual(expat["license_files"], ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"])
+            self.assertTrue((target / "licenses" / "expat" / "LICENSE.txt").is_file())
             self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])
             native = {item["path"]: item for item in manifest["native_artifacts"]}
             self.assertEqual(native["KadokaTools.exe"]["size_bytes"], len(b"test executable"))

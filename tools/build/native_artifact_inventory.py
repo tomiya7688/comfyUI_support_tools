@@ -121,6 +121,8 @@ def _attribute(
         runtime_component_name = "XZ Utils liblzma"
     elif filename == "_decimal.pyd":
         runtime_component_name = "libmpdec"
+    elif filename == "pyexpat.pyd":
+        runtime_component_name = "Expat"
     elif filename.startswith("libffi-") and filename.endswith(".dll"):
         runtime_component_name = "libffi"
     elif filename.startswith(("vcruntime", "msvcp")) and filename.endswith(".dll"):

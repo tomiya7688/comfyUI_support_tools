@@ -790,6 +790,17 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 106. CPython同梱Expatの版とライセンスを分離記録
+    pyexpat.pydに含まれるExpat 2.5.0をPython本体から分けてmanifestへ記録し、Pythonライセンス文書に含まれていないMIT notice本文をonedirへ同梱。未検証のPythonビルドは版とライセンスを未解決のままにする。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        licenses/expat/LICENSE.txt
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
 # 105. CPython同梱libmpdecの版とライセンスを分離記録
     _decimal.pydに含まれるlibmpdec 2.5.1をPython本体と分けてresolved manifestへ記録し、Pythonライセンス文書に含まれていないlibmpdecのBSD-2-Clause本文をonedirへ同梱。未検証のPythonビルドは版とライセンスを未解決のままにする。
     追加・変更したファイル

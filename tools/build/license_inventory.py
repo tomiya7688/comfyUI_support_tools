@@ -31,6 +31,13 @@ _CPYTHON_BZIP2_PINS = {
         "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
     },
 }
+_CPYTHON_LIBLZMA_PINS = {
+    "3.10.11": {
+        "version": "5.2.5",
+        "source_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+        "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
+    },
+}
 _EXTERNAL_COMPONENTS = (
     ("ComfyUI", "application"),
     ("WebUI1111", "application"),
@@ -222,6 +229,26 @@ def _python_native_components(
         else:
             bzip2["audit_status"] = "upstream-version-unresolved"
         components.append(bzip2)
+
+    if "_lzma.pyd" in names:
+        pinned_build = _CPYTHON_LIBLZMA_PINS.get(python_version or sys.version.split()[0])
+        liblzma = {
+            "name": "XZ Utils liblzma",
+            "component_type": "native-runtime-library",
+            "distribution_status": "bundled",
+            "version": pinned_build["version"] if pinned_build else None,
+            "license_metadata": None,
+            "source_urls": ["https://tukaani.org/xz/"],
+            "license_files": [],
+        }
+        if pinned_build:
+            liblzma["license_metadata"] = "Public domain for upstream liblzma source (compiled binary scope review required)"
+            liblzma["license_reference_urls"] = ["https://raw.githubusercontent.com/tukaani-project/xz/v5.2.5/COPYING"]
+            liblzma["version_source_urls"] = [pinned_build["source_url"], pinned_build["source_script_url"]]
+            liblzma["audit_status"] = "compiled-binary-toolchain-scope-review-required"
+        else:
+            liblzma["audit_status"] = "upstream-version-unresolved"
+        components.append(liblzma)
 
     if any(name.startswith(("vcruntime", "msvcp")) and name.endswith(".dll") for name in names):
         components.append({

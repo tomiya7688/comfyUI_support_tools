@@ -55,3 +55,7 @@ The generated `external_components` section records these items as not bundled.
 Their installed versions and licenses vary by user, so this project does not make
 license or redistribution claims for them here. Audit each exact upstream
 component before adding it to a distributable artifact.
+The bundled _asyncio.pyd is the CPython 3.10.11 extension from Modules/_asynciomodule.c.
+Its native artifact entry links to the Python runtime component and the copied
+Python LICENSE.txt. Other Python builds remain attributed to their runtime
+version and license evidence rather than inheriting this exact version pin.

@@ -790,6 +790,17 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 105. CPython同梱libmpdecの版とライセンスを分離記録
+    _decimal.pydに含まれるlibmpdec 2.5.1をPython本体と分けてresolved manifestへ記録し、Pythonライセンス文書に含まれていないlibmpdecのBSD-2-Clause本文をonedirへ同梱。未検証のPythonビルドは版とライセンスを未解決のままにする。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        licenses/libmpdec/LICENSE.txt
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
 # 100. PyInstallerビルドPATHを隔離
     ビルド子プロセスへPython環境とWindows標準ディレクトリだけを含むPATHを渡し、呼び出し元のPATHに入った外部ツールのDLLが成果物へ偶発的に収録されないようにする。確認時、Codex管理下libheifから混入していたAPI-set/UCRT DLL 44件が収録されなくなり、onedirのnative inventoryは94件から50件へ変化。
     追加・変更したファイル

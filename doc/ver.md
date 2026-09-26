@@ -770,6 +770,16 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 103. CPython同梱bzip2を独立コンポーネント化
+    onedirの_bz2.pydをbzip2/libbzip2としてPython本体から分け、Python LICENSE.txtのライセンス文書とCPython 3.10.11 Windows build metadataが示す1.0.8へ紐付ける。未対応Python版は版を推測せず未解決とする。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
 # 100. PyInstallerビルドPATHを隔離
     ビルド子プロセスへPython環境とWindows標準ディレクトリだけを含むPATHを渡し、呼び出し元のPATHに入った外部ツールのDLLが成果物へ偶発的に収録されないようにする。確認時、Codex管理下libheifから混入していたAPI-set/UCRT DLL 44件が収録されなくなり、onedirのnative inventoryは94件から50件へ変化。
     追加・変更したファイル

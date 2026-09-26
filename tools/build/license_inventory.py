@@ -24,6 +24,13 @@ _CPYTHON_LIBFFI_PINS = {
         "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
     },
 }
+_CPYTHON_BZIP2_PINS = {
+    "3.10.11": {
+        "version": "1.0.8",
+        "source_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/readme.txt",
+        "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+    },
+}
 _EXTERNAL_COMPONENTS = (
     ("ComfyUI", "application"),
     ("WebUI1111", "application"),
@@ -198,6 +205,23 @@ def _python_native_components(
         else:
             libffi["audit_status"] = "upstream-version-unresolved"
         components.append(libffi)
+
+    if "_bz2.pyd" in names:
+        pinned_build = _CPYTHON_BZIP2_PINS.get(python_version or sys.version.split()[0])
+        bzip2 = {
+            "name": "bzip2",
+            "component_type": "native-runtime-library",
+            "distribution_status": "bundled",
+            "version": pinned_build["version"] if pinned_build else None,
+            "license_metadata": "bzip2/libbzip2 license (included in Python LICENSE.txt)",
+            "source_urls": ["https://sourceware.org/bzip2/"],
+            "license_files": license_files,
+        }
+        if pinned_build:
+            bzip2["version_source_urls"] = [pinned_build["source_url"], pinned_build["source_script_url"]]
+        else:
+            bzip2["audit_status"] = "upstream-version-unresolved"
+        components.append(bzip2)
 
     if any(name.startswith(("vcruntime", "msvcp")) and name.endswith(".dll") for name in names):
         components.append({

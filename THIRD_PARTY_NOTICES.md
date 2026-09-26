@@ -26,8 +26,11 @@ and linked to the corresponding notices included in Python's `LICENSE.txt`. The
 libffi 3.3.0 version is evidenced by the CPython 3.10.11 Windows build files;
 the bzip2 1.0.8 pin is evidenced by its matching CPython Windows build files;
 other CPython builds without an explicit pin remain version-unresolved. The
-Microsoft Visual C++ Runtime is separately identified, but its redistribution
-terms remain marked for review; the inventory does not assert that redistribution
+bundled liblzma 5.2.5 source is identified as public domain by XZ Utils;
+because upstream notes toolchain contributions may affect binaries, the
+compiled `_lzma.pyd` remains under binary-scope review. The Microsoft Visual
+C++ Runtime is separately identified, but its redistribution terms remain
+marked for review; the inventory does not assert that redistribution
 rights have been established.
 
 Python extension file present in the onedir output. These paths are an audit

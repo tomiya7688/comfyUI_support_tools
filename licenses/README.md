@@ -23,3 +23,8 @@ separately, not treated as Python-owned code. Their versions are sourced from
 the matching CPython Windows build metadata where known. The Microsoft
 Visual C++ Runtime is also attributed separately and remains pending review of
 the applicable redistribution terms.
+
+The `_lzma.pyd` artifact is linked to XZ Utils liblzma 5.2.5. Upstream's
+`COPYING` identifies the liblzma source as public domain and cautions that
+toolchain contributions can affect the compiled binary; therefore, the
+artifact's binary license scope remains marked for review.

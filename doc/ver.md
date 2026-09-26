@@ -780,6 +780,16 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 104. CPython同梱liblzmaを独立コンポーネント化
+    onedirの_lzma.pydをXZ Utils liblzmaとして分離し、CPython 3.10.11 Windows build metadataが示す5.2.5と根拠URLを記録。XZ UtilsのCOPYINGがliblzmaソースをpublic domainとする一方でtoolchain由来の寄与を注記しているため、コンパイル済みバイナリはscope review requiredを維持する。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
 # 100. PyInstallerビルドPATHを隔離
     ビルド子プロセスへPython環境とWindows標準ディレクトリだけを含むPATHを渡し、呼び出し元のPATHに入った外部ツールのDLLが成果物へ偶発的に収録されないようにする。確認時、Codex管理下libheifから混入していたAPI-set/UCRT DLL 44件が収録されなくなり、onedirのnative inventoryは94件から50件へ変化。
     追加・変更したファイル

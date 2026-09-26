@@ -16,7 +16,7 @@ class NativeArtifactInventoryTests(unittest.TestCase):
             python_root = root / "python"
             source_root = python_root / "DLLs"
             source_root.mkdir(parents=True)
-            artifact_names = ["libcrypto-1_1.dll", "libffi-7.dll", "VCRUNTIME140.dll"]
+            artifact_names = ["libcrypto-1_1.dll", "libffi-7.dll", "_bz2.pyd", "VCRUNTIME140.dll"]
             entries = []
             for filename in artifact_names:
                 source = source_root / filename
@@ -31,6 +31,7 @@ class NativeArtifactInventoryTests(unittest.TestCase):
             components = [
                 {"name": "OpenSSL", "version": "1.1.1t", "license_files": [license_file]},
                 {"name": "libffi", "version": "3.3.0", "license_files": [license_file]},
+                {"name": "bzip2", "version": "1.0.8", "license_files": [license_file]},
                 {"name": "Microsoft Visual C++ Runtime", "version": None, "license_files": [], "audit_status": "redistribution-terms-review-required"},
             ]
             with patch.object(inventory, "_package_owners", return_value={}):
@@ -41,6 +42,8 @@ class NativeArtifactInventoryTests(unittest.TestCase):
         self.assertEqual(by_path["libcrypto-1_1.dll"]["origin_version"], "1.1.1t")
         self.assertEqual(by_path["libffi-7.dll"]["origin_version"], "3.3.0")
         self.assertEqual(by_path["libffi-7.dll"]["audit_status"], "origin-and-license-document-linked")
+        self.assertEqual(by_path["_bz2.pyd"]["origin_component"], "bzip2")
+        self.assertEqual(by_path["_bz2.pyd"]["origin_version"], "1.0.8")
         self.assertEqual(by_path["VCRUNTIME140.dll"]["audit_status"], "redistribution-terms-review-required")
 
     def test_links_distribution_owned_artifact_to_component_license(self):

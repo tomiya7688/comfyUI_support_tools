@@ -115,6 +115,8 @@ def _attribute(
     runtime_component_name = None
     if filename.startswith(("libcrypto-", "libssl-")):
         runtime_component_name = "OpenSSL"
+    elif filename == "_bz2.pyd":
+        runtime_component_name = "bzip2"
     elif filename.startswith("libffi-") and filename.endswith(".dll"):
         runtime_component_name = "libffi"
     elif filename.startswith(("vcruntime", "msvcp")) and filename.endswith(".dll"):

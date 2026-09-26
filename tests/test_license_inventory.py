@@ -15,14 +15,14 @@ class LicenseInventoryTests(unittest.TestCase):
     def test_classifies_python_bundled_native_libraries_separately(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
-            for filename in ("libcrypto-1_1.dll", "libssl-1_1.dll", "libffi-7.dll", "VCRUNTIME140.dll"):
+            for filename in ("libcrypto-1_1.dll", "libssl-1_1.dll", "libffi-7.dll", "_bz2.pyd", "VCRUNTIME140.dll"):
                 (distribution / filename).touch()
 
             with patch("ssl.OPENSSL_VERSION", "OpenSSL 1.1.1t 7 Feb 2023"):
                 components = _python_native_components(distribution, "licenses/Python/LICENSE.txt", "3.10.11")
 
         by_name = {item["name"]: item for item in components}
-        self.assertEqual(set(by_name), {"OpenSSL", "libffi", "Microsoft Visual C++ Runtime"})
+        self.assertEqual(set(by_name), {"OpenSSL", "libffi", "bzip2", "Microsoft Visual C++ Runtime"})
         self.assertEqual(by_name["OpenSSL"]["version"], "1.1.1t")
         self.assertEqual(by_name["OpenSSL"]["license_files"], ["licenses/Python/LICENSE.txt"])
         self.assertEqual(by_name["libffi"]["version"], "3.3.0")
@@ -31,6 +31,12 @@ class LicenseInventoryTests(unittest.TestCase):
             "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
         ])
         self.assertEqual(by_name["libffi"]["license_files"], ["licenses/Python/LICENSE.txt"])
+        self.assertEqual(by_name["bzip2"]["version"], "1.0.8")
+        self.assertEqual(by_name["bzip2"]["license_files"], ["licenses/Python/LICENSE.txt"])
+        self.assertEqual(by_name["bzip2"]["version_source_urls"], [
+            "https://github.com/python/cpython/blob/v3.10.11/PCbuild/readme.txt",
+            "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+        ])
         self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["audit_status"], "redistribution-terms-review-required")
         self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["license_files"], [])
 

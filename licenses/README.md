@@ -18,8 +18,8 @@ The onedir also embeds PyInstaller bootloader and runtime-hook code. Their separ
 
 The `native_artifacts` manifest section fingerprints each `.dll`, `.pyd`, `.exe`, `.so`, and `.dylib` found in the onedir output. A fingerprint is an exact-file identity. The manifest attempts to associate each file with its PyInstaller build source and package license documents, while sanitizing absolute builder paths. Unresolved and operating-system-supplied items still require license review.
 
-OpenSSL and libffi DLLs shipped with Python are attributed to their own
-components, not treated as Python-owned code. The libffi version is sourced
-from the matching CPython Windows build metadata where known. The Microsoft
+OpenSSL, libffi, and bzip2 components shipped with Python are attributed
+separately, not treated as Python-owned code. Their versions are sourced from
+the matching CPython Windows build metadata where known. The Microsoft
 Visual C++ Runtime is also attributed separately and remains pending review of
 the applicable redistribution terms.

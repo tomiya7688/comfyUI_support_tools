@@ -115,6 +115,8 @@ def _attribute(
     runtime_component_name = None
     if filename.startswith(("libcrypto-", "libssl-")):
         runtime_component_name = "OpenSSL"
+    elif filename == "_asyncio.pyd":
+        runtime_component_name = "Python"
     elif filename == "_bz2.pyd":
         runtime_component_name = "bzip2"
     elif filename == "_lzma.pyd":

@@ -41,3 +41,7 @@ For the audited CPython 3.10.11 runtime, Expat is version 2.5.0 and its MIT
 notice is stored in `licenses/expat/LICENSE.txt` and copied into the onedir
 artifact. The inventory links both the Python and Expat license documents;
 other Python builds remain unresolved until individually verified.
+The bundled _asyncio.pyd is linked to the Python runtime component and its
+LICENSE.txt document in the native artifact manifest. CPython 3.10.11's
+upstream implementation source is Modules/_asynciomodule.c; unverified Python
+builds retain their detected runtime version rather than this exact pin.

@@ -857,3 +857,12 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 100. CPython同梱_asyncio.pydの出所をPythonライセンスへ紐付け
+    実onedirの_asyncio.pydをCPython 3.10.11のModules/_asynciomodule.cと対応付け、native artifact inventoryでPython runtime componentおよびコピー済みPython LICENSE.txtへリンクする。
+    根拠: https://github.com/python/cpython/blob/v3.10.11/Modules/_asynciomodule.c
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tests/test_asyncio_runtime_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md

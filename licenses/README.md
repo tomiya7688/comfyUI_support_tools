@@ -28,3 +28,10 @@ The `_lzma.pyd` artifact is linked to XZ Utils liblzma 5.2.5. Upstream's
 `COPYING` identifies the liblzma source as public domain and cautions that
 toolchain contributions can affect the compiled binary; therefore, the
 artifact's binary license scope remains marked for review.
+
+The bundled `_decimal.pyd` includes CPython's extension wrapper and libmpdec.
+For the audited CPython 3.10.11 runtime, libmpdec is version 2.5.1 and its
+BSD-2-Clause notice is stored in `licenses/libmpdec/LICENSE.txt` and copied
+into the onedir artifact. The inventory links both the Python and libmpdec
+license documents; other Python builds remain unresolved until individually
+verified.

@@ -21,8 +21,8 @@ absolute source paths are never written into the artifact; unresolved origins
 remain explicitly marked for review. A fingerprint or origin label is not by
 itself a license-compliance determination.
 
-Python-bundled OpenSSL, libffi, and bzip2 are listed as separate native components
-and linked to the corresponding notices included in Python's `LICENSE.txt`. The
+Python-bundled OpenSSL, libffi, bzip2, and libmpdec are listed as separate native components.
+OpenSSL, libffi, and bzip2 link to corresponding notices included in Python's `LICENSE.txt`. The
 libffi 3.3.0 version is evidenced by the CPython 3.10.11 Windows build files;
 the bzip2 1.0.8 pin is evidenced by its matching CPython Windows build files;
 other CPython builds without an explicit pin remain version-unresolved. The
@@ -32,6 +32,12 @@ compiled `_lzma.pyd` remains under binary-scope review. The Microsoft Visual
 C++ Runtime is separately identified, but its redistribution terms remain
 marked for review; the inventory does not assert that redistribution
 rights have been established.
+
+CPython 3.10.11 bundles libmpdec 2.5.1. Its BSD-2-Clause notice is copied
+separately because the installed Python `LICENSE.txt` does not contain that
+notice. The `_decimal.pyd` inventory entry links both the CPython wrapper
+license and libmpdec license. Other Python builds remain version-unresolved
+until individually verified.
 
 Python extension file present in the onedir output. These paths are an audit
 inventory only: entries whose origin/license is not mapped remain explicitly

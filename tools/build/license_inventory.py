@@ -38,6 +38,14 @@ _CPYTHON_LIBLZMA_PINS = {
         "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
     },
 }
+_CPYTHON_LIBMPDEC_PINS = {
+    "3.10.11": {
+        "version": "2.5.1",
+        "source_url": "https://github.com/python/cpython/issues/85541",
+        "source_file_url": "https://github.com/python/cpython/tree/v3.10.11/Modules/_decimal/libmpdec",
+        "license_url": "https://raw.githubusercontent.com/python/cpython/v3.10.11/Doc/license.rst",
+    },
+}
 _EXTERNAL_COMPONENTS = (
     ("ComfyUI", "application"),
     ("WebUI1111", "application"),
@@ -250,6 +258,25 @@ def _python_native_components(
             liblzma["audit_status"] = "upstream-version-unresolved"
         components.append(liblzma)
 
+    if "_decimal.pyd" in names:
+        pinned_build = _CPYTHON_LIBMPDEC_PINS.get(python_version or sys.version.split()[0])
+        libmpdec = {
+            "name": "libmpdec",
+            "component_type": "native-runtime-library",
+            "distribution_status": "bundled",
+            "version": pinned_build["version"] if pinned_build else None,
+            "license_metadata": "Python Software Foundation License Agreement AND BSD-2-Clause (libmpdec)",
+            "source_urls": ["https://www.bytereef.org/mpdecimal/"],
+            "license_files": ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"] if pinned_build else [],
+        }
+        if pinned_build:
+            libmpdec["version_source_urls"] = [pinned_build["source_url"], pinned_build["source_file_url"]]
+            libmpdec["license_reference_urls"] = [pinned_build["license_url"]]
+        else:
+            libmpdec["license_metadata"] = None
+            libmpdec["audit_status"] = "upstream-version-unresolved"
+        components.append(libmpdec)
+
     if any(name.startswith(("vcruntime", "msvcp")) and name.endswith(".dll") for name in names):
         components.append({
             "name": "Microsoft Visual C++ Runtime",
@@ -289,6 +316,15 @@ def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Pat
         "license_files": [python_target.relative_to(distribution_dir).as_posix()],
     })
 
+    python_version = sys.version.split()[0]
+    if (distribution_dir / "_decimal.pyd").is_file() and python_version in _CPYTHON_LIBMPDEC_PINS:
+        libmpdec_license = root / "licenses" / "libmpdec" / "LICENSE.txt"
+        if not libmpdec_license.is_file():
+            raise RuntimeError(f"libmpdec license text is missing: {libmpdec_license}")
+        libmpdec_target = distribution_dir / "licenses" / "libmpdec" / "LICENSE.txt"
+        libmpdec_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(libmpdec_license, libmpdec_target)
+
     tcl_license = root / "licenses" / "TclTk" / "license.terms"
     if not tcl_license.is_file():
         raise RuntimeError(f"Tcl/Tk license terms are missing: {tcl_license}")
@@ -309,6 +345,7 @@ def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Pat
         _python_native_components(
             distribution_dir,
             python_target.relative_to(distribution_dir).as_posix(),
+            python_version,
         )
     )
     components.extend(_pyinstaller_components(site_packages, distribution_dir))

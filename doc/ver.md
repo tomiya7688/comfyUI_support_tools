@@ -717,3 +717,166 @@
         setup_kadoka_tools.bat
         nuno/_touka/run_image_enhancer.bat
         doc/ver.md
+
+# 92. PixAI TaggerのGPU自動選択
+    GUIからPixAI Tagger APIを起動するとき、ONNX_MODEが未設定ならgpuを既定にする。明示的なcpu設定は尊重する。
+    追加・変更したファイル
+        scripts/backend/pixai_tagger_server.py
+        doc/ver.md
+    GTX 1080用GPU推論ではcuDNN 9.1.0.70を使用し、NVIDIA DLLディレクトリをPixAI子プロセスのPATHへ渡す。
+
+# 93. 本体MITライセンスの明記
+    ルートに本体コード向けMIT Licenseを追加し、READMEで第三者ライブラリ・バイナリ・モデルのライセンスが別途適用されることを明記した。配布物の依存ライセンス棚卸しは別工程。
+    追加・変更したファイル
+        LICENSE
+        README.md
+
+# 94. onedir成果物へ本体ライセンスとNoticeを同梱
+    PyInstaller onedirの成果物へLICENSEとTHIRD_PARTY_NOTICES.mdをコピーし、配布依存全体の監査が終わっていないことを明示する回帰テストを追加した。
+    追加・変更したファイル
+        tools/build/build_one_dir.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        README.md
+        doc/ver.md
+# 95. onedirへ実行時依存のライセンス資料を同梱
+    実行時依存パッケージのライセンス・Noticeを依存閉包から収集し、Python/Tcl-Tkのライセンス資料と解決済みコンポーネント一覧を成果物へ含める。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/build_one_dir.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        licenses/TclTk/license.terms
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 101. Python同梱native runtimeを個別にライセンス台帳化
+    OpenSSL・libffi・Microsoft Visual C++ RuntimeをPython本体から分離してresolved manifestへ記録。Python LICENSE.txtに含まれるライセンス文書へリンクし、libffi版の未確定とMicrosoft再配布条件の要確認を監査状態として明示する。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 102. CPython 3.10.11のlibffi版根拠を記録
+    CPython v3.10.11のWindowsビルド設定に明記されたlibffi 3.3.0をmanifestへ記録し、根拠となるpython.props/get_externals.batのURLを保持する。未対応のCPython版では版を推測せず未解決のままにする。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 103. CPython同梱bzip2を独立コンポーネント化
+    onedirの_bz2.pydをbzip2/libbzip2としてPython本体から分け、Python LICENSE.txtのライセンス文書とCPython 3.10.11 Windows build metadataが示す1.0.8へ紐付ける。未対応Python版は版を推測せず未解決とする。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 104. CPython同梱liblzmaを独立コンポーネント化
+    onedirの_lzma.pydをXZ Utils liblzmaとして分離し、CPython 3.10.11 Windows build metadataが示す5.2.5と根拠URLを記録。XZ UtilsのCOPYINGがliblzmaソースをpublic domainとする一方でtoolchain由来の寄与を注記しているため、コンパイル済みバイナリはscope review requiredを維持する。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 106. CPython同梱Expatの版とライセンスを分離記録
+    pyexpat.pydに含まれるExpat 2.5.0をPython本体から分けてmanifestへ記録し、Pythonライセンス文書に含まれていないMIT notice本文をonedirへ同梱。未検証のPythonビルドは版とライセンスを未解決のままにする。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        licenses/expat/LICENSE.txt
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 105. CPython同梱libmpdecの版とライセンスを分離記録
+    _decimal.pydに含まれるlibmpdec 2.5.1をPython本体と分けてresolved manifestへ記録し、Pythonライセンス文書に含まれていないlibmpdecのBSD-2-Clause本文をonedirへ同梱。未検証のPythonビルドは版とライセンスを未解決のままにする。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tools/build/native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_native_artifact_inventory.py
+        licenses/libmpdec/LICENSE.txt
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 100. PyInstallerビルドPATHを隔離
+    ビルド子プロセスへPython環境とWindows標準ディレクトリだけを含むPATHを渡し、呼び出し元のPATHに入った外部ツールのDLLが成果物へ偶発的に収録されないようにする。確認時、Codex管理下libheifから混入していたAPI-set/UCRT DLL 44件が収録されなくなり、onedirのnative inventoryは94件から50件へ変化。
+    追加・変更したファイル
+        tools/build/build_one_dir.py
+        tests/test_workspace_build.py
+        doc/ver.md
+
+# 96. 配布ライセンスmanifestへ同梱範囲を記録
+    onedirに含まれる実行時依存と、ユーザー別に導入する外部アプリ・サービス・バイナリ・モデル重みをmachine-readable manifest上で区別する。外部物のバージョンやライセンスは推測で埋めず、個別監査が必要であることを記録する。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 97. PyInstaller組込みコードのライセンスを収録
+    onedir実行ファイルに組み込まれるPyInstallerブートローダーとruntime hooksを、各々のライセンス区分・使用版・COPYING文書とともにresolved manifestへ記録。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tests/test_license_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 98. onedir nativeファイルをハッシュ付きで棚卸し
+    実配布フォルダに存在するDLL・Python拡張・実行ファイルを相対パス、サイズ、SHA-256付きでmanifestへ記録。由来・ライセンス未確認のファイルは未監査と明示する。
+    追加・変更したファイル
+        tools/build/license_inventory.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 99. native artifactをPyInstaller出所へ紐付け
+    COLLECT-00.tocから各nativeファイルのbuild sourceを取得し、Python package・Python runtime・Windows system・外部build環境へ分類。既知packageのmanifest license文書へ紐付け、未解決項目は絶対パスを出さずreview対象として示す。
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tools/build/license_inventory.py
+        tools/build/build_one_dir.py
+        tests/test_native_artifact_inventory.py
+        tests/test_license_inventory.py
+        tests/test_workspace_build.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 100. CPython同梱_asyncio.pydの出所をPythonライセンスへ紐付け
+    実onedirの_asyncio.pydをCPython 3.10.11のModules/_asynciomodule.cと対応付け、native artifact inventoryでPython runtime componentおよびコピー済みPython LICENSE.txtへリンクする。
+    根拠: https://github.com/python/cpython/blob/v3.10.11/Modules/_asynciomodule.c
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tests/test_asyncio_runtime_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md
+# 101. CPython同梱_ctypes.pydとlibffi依存を記録
+    CPython 3.10.11の_ctypes.pydについてPython拡張とlibffi 3.3.0依存を分けてresolved native artifact manifestへ記録する。CPythonの該当ソース、Windows build definition、ライセンス根拠を参照し、他の版には根拠を流用しない。
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tests/test_ctypes_runtime_inventory.py
+        THIRD_PARTY_NOTICES.md
+        doc/ver.md
+# 102. CPython同梱_hashlib.pydとOpenSSL依存を記録
+    CPython 3.10.11の_hashlib.pydについてPython拡張とOpenSSL 1.1.1t依存をresolved native artifact manifestへ記録する。CPythonソース、Windows build definition、版情報、ライセンス根拠を参照し、他の版へ根拠を流用しない。
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tests/test_hashlib_runtime_inventory.py
+        THIRD_PARTY_NOTICES.md
+        doc/ver.md

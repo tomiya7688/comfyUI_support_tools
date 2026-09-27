@@ -3,10 +3,16 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+_BUILD_TOOL_DIR = str(Path(__file__).resolve().parent)
+if _BUILD_TOOL_DIR not in sys.path:
+    sys.path.insert(0, _BUILD_TOOL_DIR)
+from license_inventory import collect_license_inventory
 
 APP_NAME = "KadokaTools"
 EXCLUDED_MODULES = ("torch", "torchvision", "torchaudio")
@@ -15,6 +21,25 @@ EXCLUDED_MODULES = ("torch", "torchvision", "torchaudio")
 def executable_path(output: Path) -> Path:
     suffix = ".exe" if os.name == "nt" else ""
     return output / APP_NAME / f"{APP_NAME}{suffix}"
+
+
+def _build_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    for key in ("PYTHONHOME", "PYTHONPATH"):
+        environment.pop(key, None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    if os.name == "nt":
+        system_root = Path(
+            environment.get("SystemRoot") or environment.get("WINDIR") or r"C:\Windows"
+        )
+        allowed_paths = (
+            Path(sys.prefix) / "Scripts",
+            Path(sys.base_prefix),
+            system_root / "System32",
+            system_root,
+        )
+        environment["PATH"] = os.pathsep.join(str(path) for path in allowed_paths)
+    return environment
 
 
 def build(root: Path, output: Path) -> Path:
@@ -46,7 +71,7 @@ def build(root: Path, output: Path) -> Path:
         command.extend(("--exclude-module", module_name))
     command.append(str(root / "tabbed_tools_gui.py"))
 
-    subprocess.run(command, cwd=root, check=True)
+    subprocess.run(command, cwd=root, env=_build_environment(), check=True)
 
     distribution_dir = output / APP_NAME
     (distribution_dir / "user_data" / "input" / "config" / "common").mkdir(
@@ -56,6 +81,12 @@ def build(root: Path, output: Path) -> Path:
     executable = executable_path(output)
     if not executable.is_file():
         raise FileNotFoundError(f"PyInstaller output executable was not created: {executable}")
+    for filename in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+        source = root / filename
+        if not source.is_file():
+            raise FileNotFoundError(f"Required license notice was not found: {source}")
+        shutil.copy2(source, distribution_dir / filename)
+    collect_license_inventory(root, distribution_dir, work_dir / APP_NAME / "COLLECT-00.toc")
     return executable
 
 

@@ -1,3 +1,5 @@
+import os
+
 from ..context import *
 from ..runtime_python import venv_python
 
@@ -53,9 +55,16 @@ class PixAITaggerServer:
             if not script_path.is_file():
                 raise FileNotFoundError(f"PixAI Tagger APIがありません: {script_path}")
             creationflags = 0x00000200 if os.name == "nt" else 0
+            environment = os.environ.copy()
+            environment.setdefault("ONNX_MODE", "gpu")
+            site_packages = python_path.parent.parent / "Lib" / "site-packages"
+            nvidia_bin_dirs = [str(path) for path in (site_packages / "nvidia").glob("*/bin") if path.is_dir()]
+            if nvidia_bin_dirs:
+                environment["PATH"] = os.pathsep.join(nvidia_bin_dirs + [environment.get("PATH", "")])
             process = subprocess.Popen(
                 [str(python_path), str(script_path), "--host", "127.0.0.1", "--port", "7861"],
                 cwd=str(PIXAI_TAGGER_DIR),
+                env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,

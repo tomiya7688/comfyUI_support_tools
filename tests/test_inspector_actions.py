@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from PIL import Image
 from comfyui_support_tools.shared.contracts.media_item import MediaItem
-from comfyui_support_tools.shared.contracts.inspector_contracts import ActionEvent, MediaNotes, TaggerSettings
+from comfyui_support_tools.shared.contracts.inspector_contracts import ActionEvent, MediaNotes, ScoredLabel, TaggerSettings
 from comfyui_support_tools.applications.main_gui.process.processing.inspector_state import InspectorState
 from comfyui_support_tools.applications.main_gui.process.processing.media_actions import validate_settings
 from comfyui_support_tools.applications.main_gui.process.processing.tag_result import parse_tags
@@ -75,7 +75,16 @@ class InspectorStateTests(unittest.TestCase):
         request = self.state.begin("tag")
         self.state.accept((ActionEvent(request.token, "result", self.a, message='{"tags":{"sky":0.9}}'),
                            ActionEvent(request.token, "done")))
-        self.assertEqual(self.state.current_notes(), replace(notes, content_tags=("sky",)))
+        self.assertEqual(
+            self.state.current_notes(),
+            replace(
+                notes,
+                content_tags=("sky",),
+                tagger_backend="pixai_http",
+                tagger_model="test",
+                content_scores=(ScoredLabel("sky", 0.9),),
+            ),
+        )
 
     def test_immutable_batch_snapshot_and_results_do_not_follow_new_selection(self):
         self.state.select((self.a, self.b))

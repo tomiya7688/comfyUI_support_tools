@@ -27,7 +27,12 @@ class InspectorCommander:
         return self._state.status()
 
     def start(self, kind):
-        request = self._state.begin(kind)
+        return self._start_request(self._state.begin(kind))
+
+    def export(self, settings):
+        return self._start_request(self._state.begin_export(settings))
+
+    def _start_request(self, request):
         try:
             self._data.start(request)
         except Exception:

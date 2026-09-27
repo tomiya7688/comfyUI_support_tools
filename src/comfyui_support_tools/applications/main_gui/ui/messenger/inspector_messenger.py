@@ -27,6 +27,9 @@ class InspectorUiMessenger:
     def start(self, kind):
         return self._target.start(kind)
 
+    def export(self, settings):
+        return self._target.export(settings)
+
     def poll(self):
         return self._target.poll()
 

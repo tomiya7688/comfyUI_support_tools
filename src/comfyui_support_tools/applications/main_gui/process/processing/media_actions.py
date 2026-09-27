@@ -5,12 +5,13 @@ from urllib.parse import urlsplit
 from comfyui_support_tools.shared.contracts.inspector_contracts import (
     ActionAvailability, ActionDefinition, TaggerSettings,
 )
+from comfyui_support_tools.shared.contracts.tagger_backend import resolve_backend
 
-# EXTENSION_POINT: add explicit supported kinds and an API adapter together.
-# Do not turn a placeholder on until its handler exists. See doc/gui/inspector_actions.md.
+# EXTENSION_POINT: a new executable action requires both a definition and an
+# adapter. Style remains disabled until #64 provides its service contract.
 ACTIONS = (
     ActionDefinition("tag", "Tag / 内容タグ付け", ("image",)),
-    ActionDefinition("style", "Analyze Style", ("image",), "Style Analyzer API adapter未実装"),
+    ActionDefinition("style", "Analyze Style", ("image",), "Style Analyzer service未実装 (#64)。同じAction導線へadapter追加予定"),
     ActionDefinition("img2img", "Img2img", ("image",), "生成Action adapter未実装"),
     ActionDefinition("dataset", "Add to LoRA Dataset", ("image",), "Dataset登録Action未実装"),
     ActionDefinition("character", "Character Replace", ("image",), "Character API adapter未実装"),
@@ -29,9 +30,9 @@ def validate_settings(settings: TaggerSettings) -> None:
     if (parts.scheme not in ("http", "https") or not parts.hostname
             or parts.username is not None or parts.password is not None
             or parts.query or parts.fragment or any(c.isspace() for c in url)
-            or not parts.path.endswith(("/pixai/v1/interrogate", "/tagger/v1/interrogate"))
             or len(url) > 2048 or (port is not None and not 1 <= port <= 65535)):
-        raise ValueError("HTTP(S)の /pixai/v1/interrogate または /tagger/v1/interrogate URLを指定してください（認証情報・query不可）")
+        raise ValueError("認証情報/queryを含まないHTTP(S) Tagger API URLを指定してください")
+    resolve_backend(settings.backend, url)
     if len(settings.model) > 256 or any(ord(c) < 32 for c in settings.model):
         raise ValueError("モデル名が不正です")
     for number in (settings.threshold, settings.character_threshold):
@@ -52,6 +53,6 @@ def action_options(items, ready: bool, busy: bool):
         if not reason and busy:
             reason = "Action実行中です。終了または停止を待ってください"
         if not reason and not ready:
-            reason = "Tagger API未確認・未接続。API設定から接続確認してください"
+            reason = "Tagger API未確認・未接続。Backend/API設定から接続確認してください"
         results.append(ActionAvailability(action, not reason, reason))
     return tuple(results)

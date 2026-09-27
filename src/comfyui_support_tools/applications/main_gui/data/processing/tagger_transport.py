@@ -1,12 +1,11 @@
-"""HTTP contract already used by FolderTaggerTab; never starts its server.
+"""HTTP Tagger adapter used by the new Media Action.
 
-Only user-configured HTTP(S) URLs. No proxy discovery, redirects or app imports.
-HTTP responses/images have explicit byte limits; errors never echo server bodies.
+It preserves the existing PixAI contract and the common /tagger/v1 contract.
+No proxy discovery, redirects, server startup, Python runtime sharing or app imports.
 """
 import base64
 from io import BytesIO
 import json
-import math
 from pathlib import Path
 import ssl
 from urllib.error import HTTPError, URLError
@@ -14,6 +13,8 @@ from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Requ
 
 from PIL import Image
 import certifi
+
+from comfyui_support_tools.shared.contracts.tagger_backend import resolve_backend
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -26,8 +27,11 @@ class NoRedirect(HTTPRedirectHandler):
 
 class TaggerTransport:
     def __init__(self):
-        self._opener = build_opener(ProxyHandler({}), NoRedirect(),
-                                   HTTPSHandler(context=ssl.create_default_context(cafile=certifi.where())))
+        self._opener = build_opener(
+            ProxyHandler({}),
+            NoRedirect(),
+            HTTPSHandler(context=ssl.create_default_context(cafile=certifi.where())),
+        )
 
     def _json(self, url, timeout, payload=None):
         body = None if payload is None else json.dumps(payload, allow_nan=False).encode("utf-8")
@@ -48,6 +52,7 @@ class TaggerTransport:
             raise ValueError("Tagger APIのJSON応答が不正です") from None
 
     def probe(self, settings):
+        resolve_backend(settings.backend, settings.url)
         result = self._json(settings.url.rsplit("/", 1)[0] + "/interrogators", min(10, settings.timeout))
         models = result.get("models") if isinstance(result, dict) else result
         if (not isinstance(models, list) or not models or len(models) > 256
@@ -57,6 +62,7 @@ class TaggerTransport:
         return tuple(dict.fromkeys(models))
 
     def tag(self, item, settings):
+        backend = resolve_backend(settings.backend, settings.url)
         path = Path(item.path)
         if item.kind != "image" or not path.is_absolute() or path.is_symlink() or not path.is_file():
             raise ValueError("画像ファイルがありません / リンクは送信しません")
@@ -79,8 +85,11 @@ class TaggerTransport:
                 image.verify()
         except Exception:
             raise ValueError("破損・巨大・複数フレーム画像はTag Actionへ送信できません") from None
-        payload = {"image": base64.b64encode(data).decode("ascii"),
-                   "model": settings.model, "threshold": settings.threshold}
-        if "/pixai/v1/" in settings.url:
+        payload = {
+            "image": base64.b64encode(data).decode("ascii"),
+            "model": settings.model,
+            "threshold": settings.threshold,
+        }
+        if backend.supports_character_threshold:
             payload["character_threshold"] = settings.character_threshold
         return self._json(settings.url, settings.timeout, payload)

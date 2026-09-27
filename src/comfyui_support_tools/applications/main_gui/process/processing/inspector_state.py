@@ -1,12 +1,23 @@
-"""Session-only notes, capability checks and immutable batch snapshots."""
+"""Session-only normalized analysis, notes and immutable batch/export snapshots."""
 from dataclasses import replace
 import json
 
 from comfyui_support_tools.shared.contracts.inspector_contracts import (
-    ActionRequest, InspectorStatus, MediaNotes, TaggerSettings,
+    ActionRequest,
+    ExportSettings,
+    InspectorStatus,
+    MediaExportRecord,
+    MediaNotes,
+    TaggerSettings,
 )
-from comfyui_support_tools.applications.main_gui.process.processing.media_actions import action_options, validate_settings
-from comfyui_support_tools.applications.main_gui.process.processing.tag_result import parse_tags
+from comfyui_support_tools.applications.main_gui.process.processing.media_actions import (
+    action_options,
+    validate_settings,
+)
+from comfyui_support_tools.applications.main_gui.process.processing.tag_result import parse_tag_result
+
+STRING_TUPLE_FIELDS = ("content_tags", "style_tags", "character_tags", "copyright_tags")
+TEXT_FIELDS = ("prompt", "negative_prompt", "character", "dataset", "rating", "caption")
 
 
 class InspectorState:
@@ -28,7 +39,7 @@ class InspectorState:
         if self.busy:
             raise ValueError("処理中はAPI設定を変更できません")
         validate_settings(settings)
-        if settings.url != self.settings.url:
+        if (settings.url, settings.backend) != (self.settings.url, self.settings.backend):
             self.models = ()
         self.settings = settings
         self.ready = settings.model in self.models
@@ -56,11 +67,38 @@ class InspectorState:
     def save_notes(self, notes):
         if self.busy or len(self.selection) != 1 or self.selection[0].kind != "image":
             raise ValueError("編集は単一選択・Action停止中のみ可能です")
-        fields = (*notes.content_tags, *notes.style_tags, notes.prompt, notes.negative_prompt, notes.character, notes.dataset)
-        if (len(notes.content_tags) > 2000 or len(notes.style_tags) > 2000
-                or any(not isinstance(text, str) or len(text) > 8192 for text in fields)
-                or sum(len(text) for text in fields) > 32768):
+        tuple_values = []
+        for field in STRING_TUPLE_FIELDS:
+            values = getattr(notes, field)
+            if len(values) > 2000:
+                raise ValueError(f"{field} が多すぎます")
+            tuple_values.extend(values)
+        text_values = [getattr(notes, field) for field in TEXT_FIELDS]
+        all_text = tuple_values + text_values
+        if (any(not isinstance(value, str) or len(value) > 8192 for value in all_text)
+                or sum(len(value) for value in all_text) > 49152):
             raise ValueError("メモが長すぎます（field上限8192文字）")
+
+        previous = self.notes.get(self.selection[0].id, MediaNotes())
+        updates = {}
+        if notes.content_tags != previous.content_tags:
+            updates["content_scores"] = ()
+        if notes.character_tags != previous.character_tags:
+            updates["character_scores"] = ()
+        if notes.rating != previous.rating:
+            updates["rating_scores"] = ()
+        analysis_fields = (
+            notes.content_tags != previous.content_tags
+            or notes.character_tags != previous.character_tags
+            or notes.copyright_tags != previous.copyright_tags
+            or notes.rating != previous.rating
+            or notes.caption != previous.caption
+        )
+        if analysis_fields:
+            updates["tagger_backend"] = "manual-edit"
+            updates["tagger_model"] = ""
+        if updates:
+            notes = replace(notes, **updates)
         self._store(self.selection[0], notes)
         self.message = "セッション内に反映しました。元ファイルへは保存しません"
 
@@ -83,12 +121,43 @@ class InspectorState:
             if option is None or not option.enabled:
                 raise ValueError(option.reason if option else "Unknown Action")
         self.token += 1
-        self.request = ActionRequest(self.token, kind, self.settings, self.selection if kind != "probe" else ())
+        self.request = ActionRequest(
+            self.token,
+            kind,
+            self.settings,
+            self.selection if kind != "probe" else (),
+        )
+        self._begin_status("接続確認中…" if kind == "probe" else f"タグ付け中: 0/{len(self.selection)}")
+        return self.request
+
+    def begin_export(self, settings: ExportSettings):
+        if self.busy:
+            raise ValueError("Action実行中です")
+        if not self.selection or len(self.selection) > 60 or any(item.kind != "image" for item in self.selection):
+            raise ValueError("Exportは画像1〜60件を選択してください")
+        if not (settings.caption_sidecar or settings.metadata_sidecar or settings.batch_txt_path):
+            raise ValueError("少なくとも1つの出力形式を選択してください")
+        records = tuple(
+            MediaExportRecord(item, self.notes.get(item.id, MediaNotes()))
+            for item in self.selection
+        )
+        self.token += 1
+        self.request = ActionRequest(
+            self.token,
+            "export",
+            self.settings,
+            self.selection,
+            settings,
+            records,
+        )
+        self._begin_status(f"Export準備中: {len(records)}件")
+        return self.request
+
+    def _begin_status(self, message):
         self.busy = True
         self.successes = self.failures = 0
         self.finished = set()
-        self.message = "接続確認中…" if kind == "probe" else f"タグ付け中: 0/{len(self.selection)}"
-        return self.request
+        self.message = message
 
     def failed_start(self):
         self.busy = False
@@ -112,29 +181,58 @@ class InspectorState:
                 try:
                     if event.failed:
                         raise ValueError(event.message)
-                    tags = parse_tags(json.loads(event.message), self.request.settings.threshold)
+                    result = parse_tag_result(
+                        json.loads(event.message),
+                        self.request.settings.threshold,
+                        self.request.settings.character_threshold,
+                        self.request.settings.backend,
+                        self.request.settings.url,
+                        self.request.settings.model,
+                    )
                     current = next((item for item in self.selection if item.id == event.item.id), event.item)
                     if (current.size, current.modified_ns) != (event.item.size, event.item.modified_ns):
                         raise ValueError("選択中のファイルは更新済みです。古いTag結果は反映しません")
                     previous = self.notes.get(event.item.id, MediaNotes())
-                    self._store(event.item, replace(previous, content_tags=tags))
+                    updated = replace(
+                        previous,
+                        content_tags=result.content_tags,
+                        character_tags=result.character_tags,
+                        copyright_tags=result.copyright_tags,
+                        rating=result.rating,
+                        caption=result.caption,
+                        tagger_backend=result.backend,
+                        tagger_model=result.model,
+                        content_scores=result.content_scores,
+                        character_scores=result.character_scores,
+                        rating_scores=result.rating_scores,
+                    )
+                    self._store(event.item, updated)
                     self.successes += 1
-                    messages.append(f"Tag: {event.item.name} / {len(tags)} tags")
-                except (ValueError, TypeError) as exc:
+                    messages.append(
+                        f"Tag: {event.item.name} / {len(result.content_tags)} general"
+                        + (f" / rating={result.rating}" if result.rating else "")
+                    )
+                except (ValueError, TypeError, json.JSONDecodeError) as exc:
                     self.failures += 1
                     messages.append(f"Tag失敗: {event.item.name} / {exc}"[:400])
                 self.message = f"Tag: 成功{self.successes} / 失敗{self.failures} / 全{len(self.request.items)}"
+            elif event.kind == "exported":
+                self.message = event.message
+                messages.append(event.message)
             elif event.kind == "error":
-                self.ready = False
+                if self.request.kind in ("probe", "tag"):
+                    self.ready = False
                 self.message = event.message
                 messages.append(event.message)
             elif event.kind == "done":
                 self.busy = False
-                if self.request.kind != "probe":
+                if self.request.kind == "tag":
                     remaining = len(self.request.items) - len(self.finished)
                     self.message = f"{event.message}: 成功{self.successes} / 失敗{self.failures} / 未処理{remaining}"
-                elif event.message != "完了":
+                elif self.request.kind == "probe" and event.message != "完了":
                     self.ready = False
+                    self.message = event.message
+                elif self.request.kind == "export" and event.message != "完了":
                     self.message = event.message
                 messages.append(self.message)
         return tuple(messages)

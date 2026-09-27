@@ -117,6 +117,23 @@ def _attribute(
         runtime_component_name = "OpenSSL"
     elif filename == "_asyncio.pyd":
         runtime_component_name = "Python"
+    elif filename == "_ctypes.pyd" and _within(source, python_root):
+        python = _license_component("Python", components)
+        libffi = _license_component("libffi", components)
+        if python and python.get("version") == "3.10.11" and libffi and libffi.get("version") == "3.3.0":
+            return {
+                "origin_type": "python-runtime-extension",
+                "origin_component": "Python _ctypes",
+                "origin_version": python["version"],
+                "related_components": [{"name": "libffi", "version": libffi["version"]}],
+                "license_files": python.get("license_files", []),
+                "source_reference_urls": [
+                    "https://github.com/python/cpython/blob/v3.10.11/Modules/_ctypes/_ctypes.c",
+                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_ctypes.vcxproj",
+                    "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
+                ],
+                "audit_status": "origin-and-license-document-linked",
+            }
     elif filename == "_bz2.pyd":
         runtime_component_name = "bzip2"
     elif filename == "_lzma.pyd":

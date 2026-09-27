@@ -873,3 +873,10 @@
         tests/test_ctypes_runtime_inventory.py
         THIRD_PARTY_NOTICES.md
         doc/ver.md
+# 102. CPython同梱_hashlib.pydとOpenSSL依存を記録
+    CPython 3.10.11の_hashlib.pydについてPython拡張とOpenSSL 1.1.1t依存をresolved native artifact manifestへ記録する。CPythonソース、Windows build definition、版情報、ライセンス根拠を参照し、他の版へ根拠を流用しない。
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tests/test_hashlib_runtime_inventory.py
+        THIRD_PARTY_NOTICES.md
+        doc/ver.md

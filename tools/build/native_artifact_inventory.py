@@ -136,6 +136,24 @@ def _attribute(
             }
     elif filename == "_bz2.pyd":
         runtime_component_name = "bzip2"
+    elif filename == "_hashlib.pyd" and _within(source, python_root):
+        python = _license_component("Python", components)
+        openssl = _license_component("OpenSSL", components)
+        if python and python.get("version") == "3.10.11" and openssl and openssl.get("version") == "1.1.1t":
+            return {
+                "origin_type": "python-runtime-extension",
+                "origin_component": "Python _hashlib",
+                "origin_version": python["version"],
+                "related_components": [{"name": "OpenSSL", "version": openssl["version"]}],
+                "license_files": python.get("license_files", []),
+                "source_reference_urls": [
+                    "https://github.com/python/cpython/blob/v3.10.11/Modules/_hashopenssl.c",
+                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_hashlib.vcxproj",
+                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+                    "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
+                ],
+                "audit_status": "origin-and-license-document-linked",
+            }
     elif filename == "_lzma.pyd":
         runtime_component_name = "XZ Utils liblzma"
     elif filename == "_decimal.pyd":

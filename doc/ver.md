@@ -866,3 +866,10 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 101. CPython同梱_ctypes.pydとlibffi依存を記録
+    CPython 3.10.11の_ctypes.pydについてPython拡張とlibffi 3.3.0依存を分けてresolved native artifact manifestへ記録する。CPythonの該当ソース、Windows build definition、ライセンス根拠を参照し、他の版には根拠を流用しない。
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tests/test_ctypes_runtime_inventory.py
+        THIRD_PARTY_NOTICES.md
+        doc/ver.md

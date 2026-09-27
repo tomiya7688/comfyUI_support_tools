@@ -59,3 +59,8 @@ The bundled _asyncio.pyd is the CPython 3.10.11 extension from Modules/_asynciom
 Its native artifact entry links to the Python runtime component and the copied
 Python LICENSE.txt. Other Python builds remain attributed to their runtime
 version and license evidence rather than inheriting this exact version pin.
+The bundled _ctypes.pyd is recorded as the CPython 3.10.11 _ctypes extension,
+with libffi 3.3.0 tracked as a related runtime dependency. CPython's matching
+LICENSE.txt contains the libffi notice; the artifact manifest links that file
+and the version-pinned CPython source, Windows build definition, and license
+references. Other Python/libffi versions remain under runtime-scope review.

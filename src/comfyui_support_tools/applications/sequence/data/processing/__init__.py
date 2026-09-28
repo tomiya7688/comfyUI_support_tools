@@ -1,0 +1,1 @@
+"""Sequence definition persistence."""

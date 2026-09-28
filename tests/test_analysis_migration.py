@@ -93,6 +93,8 @@ class NormalizedTagResultTests(unittest.TestCase):
         self.assertEqual(result.content_tags, ("sky",))
         self.assertEqual(result.character_tags, ("hero",))
         self.assertEqual(result.rating, "safe")
+        flat = parse_tag_result({"tag": {"sky": 0.9, "low": 0.1}}, 0.35, 0.85)
+        self.assertEqual(flat.content_tags, ("sky",))
         self.assertEqual(parse_tags({"tag": {"sky": 0.9, "low": 0.1}}, 0.35), ("sky",))
         self.assertEqual(parse_tags({"caption": "sky, clouds"}, 0.35), ("sky", "clouds"))
 

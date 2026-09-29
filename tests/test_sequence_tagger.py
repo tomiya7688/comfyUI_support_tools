@@ -100,6 +100,7 @@ class TaggerCommandTests(unittest.TestCase):
             ),
         )
 
+
         result = SequenceRunner({"tagger": self.command, "consume": consume}).run(definition)
 
         self.assertEqual(result.state, "done", result.steps)
@@ -113,6 +114,33 @@ class TaggerCommandTests(unittest.TestCase):
         with Image.open(self.image_path) as image:
             self.assertEqual(image.format, "PNG")
         self.assertTrue(_TaggerHandler.image_bytes.startswith(b"\x89PNG"))
+
+    def test_explicit_txt_and_metadata_paths_write_sidecar_files(self) -> None:
+        output_directory = Path(self.temp.name) / "results"
+        txt_path = output_directory / "tags.txt"
+        metadata_path = output_directory / "metadata.json"
+
+        result = self.command(
+            {
+                "image": str(self.image_path),
+                "url": self.url,
+                "backend": "pixai_http",
+                "model": "fixture-model",
+                "txt_output": str(txt_path),
+                "metadata_output": str(metadata_path),
+            },
+            {},
+        )
+
+        self.assertEqual(
+            txt_path.read_text(encoding="utf-8"),
+            "blue sky, sample character, sample series\n",
+        )
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        self.assertEqual(metadata["caption"], "A character beneath a blue sky.")
+        self.assertEqual(metadata["rating"], "safe")
+        self.assertEqual(result["txt_path"], str(txt_path))
+        self.assertEqual(result["metadata_path"], str(metadata_path))
 
     def test_non_loopback_url_is_rejected_before_any_request(self) -> None:
         with self.assertRaisesRegex(ValueError, "localhost/loopback"):

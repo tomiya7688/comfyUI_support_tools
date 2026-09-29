@@ -22,6 +22,9 @@ from urllib.request import (
 
 from PIL import Image
 
+from comfyui_support_tools.applications.sequence.data.processing.tagger_result_writer import (
+    TaggerResultWriter,
+)
 from comfyui_support_tools.shared.contracts.tagger_backend import resolve_backend
 from comfyui_support_tools.shared.tag_result_normalizer import parse_tag_result
 
@@ -40,6 +43,7 @@ class TaggerCommand:
     """Send one image to a compatible Tagger service running on this machine."""
 
     def __init__(self, timeout: float = 60.0) -> None:
+        self._result_writer = TaggerResultWriter()
         self._validate_timeout(timeout)
         self._timeout = timeout
         self._opener = build_opener(
@@ -59,6 +63,18 @@ class TaggerCommand:
         )
         timeout = inputs.get("timeout", self._timeout)
         self._validate_timeout(timeout)
+        txt_value = inputs.get("txt_output")
+        metadata_value = inputs.get("metadata_output")
+        txt_output = (
+            self._result_writer.validate_path(txt_value, "txt_output")
+            if txt_value is not None
+            else None
+        )
+        metadata_output = (
+            self._result_writer.validate_path(metadata_value, "metadata_output")
+            if metadata_value is not None
+            else None
+        )
         image = self._read_image(Path(image_path))
         backend = resolve_backend(backend_id, url)
         payload = {
@@ -79,7 +95,13 @@ class TaggerCommand:
             *result.copyright_tags,
         )
         tag_text = ", ".join(tags)
-        return {
+        if (
+            txt_output is not None
+            and metadata_output is not None
+            and txt_output.resolve(strict=False) == metadata_output.resolve(strict=False)
+        ):
+            raise ValueError("txt_output and metadata_output must be different paths")
+        outputs = {
             "backend": result.backend,
             "model": result.model,
             "tags": list(tags),
@@ -90,6 +112,14 @@ class TaggerCommand:
             "metadata": normalized,
             "result": normalized,
         }
+
+        if txt_output is not None:
+            self._result_writer.write_text(txt_output, tag_text)
+            outputs["txt_path"] = str(txt_output)
+        if metadata_output is not None:
+            self._result_writer.write_metadata(metadata_output, normalized)
+            outputs["metadata_path"] = str(metadata_output)
+        return outputs
 
     @staticmethod
     def _required_text(inputs: Mapping[str, Any], key: str) -> str:

@@ -1,4 +1,4 @@
-"""Command-line entrypoint for listing and running saved sequences."""
+"""Command-line entrypoint for saving, listing, and running saved sequences."""
 
 from __future__ import annotations
 
@@ -86,6 +86,13 @@ def _parser() -> argparse.ArgumentParser:
         help="definition folder (default: KADOKA_SEQUENCE_DIR or user_data/input/config/sequences)",
     )
     subparsers = parser.add_subparsers(dest="action", required=True)
+    save_parser = subparsers.add_parser("save", help="import a saved sequence definition")
+    save_parser.add_argument("source", help="path to an exported sequence JSON file")
+    save_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace an existing definition with the same name",
+    )
     subparsers.add_parser("list", help="list saved sequence names")
     run_parser = subparsers.add_parser("run", help="run one saved sequence")
     run_parser.add_argument("name", help="sequence name (without .json)")
@@ -106,6 +113,25 @@ def main(
     try:
         if args.action == "list":
             _write_json(output, {"sequences": _definition_names(directory)})
+            return 0
+        if args.action == "save":
+            source = Path(args.source).expanduser()
+            definition = SequenceStore(source.parent).load(source.stem)
+            store = SequenceStore(directory)
+            try:
+                store.load(definition.name)
+            except FileNotFoundError:
+                pass
+            else:
+                if not args.overwrite:
+                    raise FileExistsError(
+                        f"sequence already exists: {definition.name}; pass --overwrite to replace it"
+                    )
+            saved_path = store.save(definition)
+            _write_json(
+                output,
+                {"state": "saved", "sequence_name": definition.name, "path": str(saved_path)},
+            )
             return 0
         definition = SequenceStore(directory).load(args.name)
         result = (runner or _build_runner()).run(definition)

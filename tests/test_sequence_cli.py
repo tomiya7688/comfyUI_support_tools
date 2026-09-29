@@ -82,5 +82,44 @@ class SequenceCliTests(unittest.TestCase):
         self.assertEqual(json.loads(errors.getvalue())["state"], "error")
 
 
+    def test_save_imports_definition_file_into_configured_directory(self) -> None:
+        source_directory = self.directory / "imported"
+        definition = SequenceDefinition(
+            "portable-sequence",
+            (SequenceStep("one", "echo", {"value": "saved"}),),
+        )
+        source_path = SequenceStore(source_directory).save(definition)
+        output = io.StringIO()
+
+        status = main(
+            ["--directory", str(self.directory), "save", str(source_path)],
+            stdout=output,
+        )
+
+        self.assertEqual(status, 0)
+        self.assertEqual(SequenceStore(self.directory).load(definition.name), definition)
+        self.assertEqual(json.loads(output.getvalue())["state"], "saved")
+
+    def test_save_does_not_replace_existing_definition_without_overwrite_flag(self) -> None:
+        existing = SequenceDefinition(
+            "same-name",
+            (SequenceStep("one", "echo", {"value": "keep"}),),
+        )
+        replacement = SequenceDefinition(
+            "same-name",
+            (SequenceStep("one", "echo", {"value": "replace"}),),
+        )
+        self.store.save(existing)
+        source_path = SequenceStore(self.directory / "imported").save(replacement)
+        errors = io.StringIO()
+
+        status = main(
+            ["--directory", str(self.directory), "save", str(source_path)],
+            stderr=errors,
+        )
+
+        self.assertEqual(status, 2)
+        self.assertEqual(SequenceStore(self.directory).load("same-name"), existing)
+        self.assertIn("--overwrite", errors.getvalue())
 if __name__ == "__main__":
     unittest.main()

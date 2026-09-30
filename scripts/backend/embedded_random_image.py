@@ -1,7 +1,8 @@
 from ..context import *
 import io
 from PIL import Image
-from .comfy_ui_client import ComfyUIClient
+from .text_to_image_backend_factory import create_text_to_image_backend
+from .text_to_image_request import TextToImageRequest
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
 
@@ -280,9 +281,15 @@ class EmbeddedRandomImage:
             prompt = self.process_file(self.input_file, self.root_dir, wildcard_cache=wildcard_cache)
         prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
         prompt = self._correct_prompt(prompt)
-        image_bytes = None
-        if RUNTIME_BACKEND == "comfyui":
-            image_bytes = ComfyUIClient(self.api_url, self.api_timeout).txt2img(
+        workflow_path = (COMFY_FLOWS_DIR / self.comfy_flow) if self.comfy_flow else None
+        backend = create_text_to_image_backend(
+            RUNTIME_BACKEND,
+            self.api_url,
+            self.api_timeout,
+            request_post=requests.post,
+        )
+        image_bytes = backend.generate(
+            TextToImageRequest(
                 prompt=prompt,
                 negative=negative,
                 checkpoint=self.sd_model_checkpoint,
@@ -291,24 +298,17 @@ class EmbeddedRandomImage:
                 sampler=self.sampler_index,
                 width=self.width,
                 height=self.height,
-                stop_event=self._stop_event,
+                use_model_vae=self.use_model_vae,
                 enable_hr=self.enable_hr,
                 hr_scale=self.hr_scale,
                 hr_upscaler=self.hr_upscaler,
                 hr_second_pass_steps=self.hr_second_pass_steps,
                 denoising_strength=self.denoising_strength,
-                workflow_path=(COMFY_FLOWS_DIR / self.comfy_flow) if self.comfy_flow else None,
+                workflow_path=workflow_path,
                 model_overrides=self.comfy_model_overrides,
-            )
-        else:
-            payload = {"prompt": prompt, "negative_prompt": negative, "steps": self.steps, "cfg_scale": 7, "enable_hr": self.enable_hr, "hr_scale": self.hr_scale, "hr_upscaler": self.hr_upscaler, "hr_second_pass_steps": self.hr_second_pass_steps, "denoising_strength": self.denoising_strength, "width": self.width, "height": self.height, "sampler_index": self.sampler_index, "override_settings": {"sd_model_checkpoint": self.sd_model_checkpoint}}
-            if self.use_model_vae:
-                payload["override_settings"]["sd_vae"] = "Automatic"
-            response = requests.post(self.api_url, json=payload, timeout=self.api_timeout)
-            response.raise_for_status()
-            images = response.json().get("images", [])
-            if images:
-                image_bytes = base64.b64decode(images[0])
+            ),
+            stop_event=self._stop_event,
+        )
         if image_bytes:
             image_bytes = self._apply_nsfw_mosaic(image_bytes)
             image_bytes, output_extension = self._encoded_output(image_bytes)

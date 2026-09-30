@@ -8,6 +8,10 @@ classDiagram
     class A1111BackendCatalog {
         +query_choices()
     }
+    class A1111TextToImageBackend {
+        +__init__()
+        +generate()
+    }
     class ComfyUIClient {
         +__init__()
         +sampler_name()
@@ -24,6 +28,10 @@ classDiagram
     }
     class ComfyUIBackendCatalog {
         +query_choices()
+    }
+    class ComfyUITextToImageBackend {
+        +__init__()
+        +generate()
     }
     class DependencyChecker {
         +check_paths()
@@ -123,6 +131,12 @@ classDiagram
         +_write_log()
         +start()
         +stop()
+    }
+    class TextToImageBackend {
+        +generate()
+    }
+    Protocol <|-- TextToImageBackend
+    class TextToImageRequest {
     }
     class ToukaDatasetPresetBuilder {
         +image_count()

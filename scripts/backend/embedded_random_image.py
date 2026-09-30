@@ -1,10 +1,14 @@
-from ..context import *
 import io
+import json
+
 from PIL import Image
+
+from ..context import *
 from .image_generation_backend_factory import create_image_generation_backend
 from .text_to_image_request import TextToImageRequest
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
+from .generation_parameter_resolver import GenerationParameterResolver
 
 class EmbeddedRandomImage:
     input_file = str(WILDCARDS_DIR / "random_batch_nsfw_hub.txt")
@@ -42,6 +46,7 @@ class EmbeddedRandomImage:
     enable_failure_isolation = False
     image_failure_min_variance = 8.0
     comfy_model_overrides = {}
+    generation_parameter_config = None
     use_model_vae = True
     save_prompts = False
     prompt_output = ""
@@ -219,18 +224,46 @@ class EmbeddedRandomImage:
             self._log(f"NSFWモザイクをスキップしました: {error}")
         return image_bytes
 
-    def _save_failure_report(self, output, failure, prompt, negative):
+    def _save_failure_report(self, output, failure, prompt, negative, parameters):
         report_dir = USER_DATA_DIR / "output" / "image_generate" / "log" / "image_failure"
         report_dir.mkdir(parents=True, exist_ok=True)
         report = {
             "output": str(output), "failure": failure, "backend": RUNTIME_BACKEND,
             "checkpoint": self.sd_model_checkpoint, "sampler": self.sampler_index,
             "width": self.width, "height": self.height, "steps": self.steps,
+            "generation_parameters": parameters,
             "prompt": prompt, "negative_prompt": negative,
         }
         report_path = report_dir / f"{output.stem}.json"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return report_path
+
+    def _resolve_generation_parameters(self):
+        configuration = self.generation_parameter_config
+        if configuration is None:
+            configuration = {
+                "cfg": {"mode": "fixed", "value": 7.0},
+                "steps": {"mode": "fixed", "value": self.steps},
+                "resolution": {
+                    "mode": "fixed",
+                    "value": {"width": self.width, "height": self.height},
+                },
+                "sampler": {"mode": "fixed", "value": self.sampler_index},
+            }
+        return GenerationParameterResolver().resolve(configuration)
+
+    def _save_generation_metadata(self, image_path, parameters):
+        metadata_path = image_path.with_suffix(".generation.json")
+        metadata = {
+            "backend": RUNTIME_BACKEND,
+            "checkpoint": self.sd_model_checkpoint,
+            **parameters,
+        }
+        metadata_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return metadata_path
 
     def _save_prompt(self, image_output, prompt):
         if not self.save_prompts or not self.prompt_output:
@@ -282,6 +315,14 @@ class EmbeddedRandomImage:
             prompt = self.process_file(self.input_file, self.root_dir, wildcard_cache=wildcard_cache)
         prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
         prompt = self._correct_prompt(prompt)
+        parameters = self._resolve_generation_parameters()
+        resolution = parameters["resolution"]
+        self._log(
+            "🎛️ 生成パラメータ: "
+            f"CFG={parameters['cfg']:g}, Steps={parameters['steps']}, "
+            f"Resolution={resolution['width']}x{resolution['height']}, "
+            f"Sampler={parameters['sampler']}"
+        )
         workflow_path = (COMFY_FLOWS_DIR / self.comfy_flow) if self.comfy_flow else None
         backend = create_image_generation_backend(
             RUNTIME_BACKEND,
@@ -300,11 +341,11 @@ class EmbeddedRandomImage:
                 prompt=prompt,
                 negative=negative,
                 checkpoint=self.sd_model_checkpoint,
-                steps=self.steps,
-                cfg=7,
-                sampler=self.sampler_index,
-                width=self.width,
-                height=self.height,
+                steps=parameters["steps"],
+                cfg=parameters["cfg"],
+                sampler=parameters["sampler"],
+                width=resolution["width"],
+                height=resolution["height"],
                 use_model_vae=self.use_model_vae,
                 enable_hr=self.enable_hr,
                 hr_scale=self.hr_scale,
@@ -331,12 +372,16 @@ class EmbeddedRandomImage:
             output = output_dir / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.{output_extension}"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(image_bytes)
+            metadata_path = self._save_generation_metadata(output, parameters)
             prompt_path = self._save_prompt(output, prompt)
             if failure:
-                report_path = self._save_failure_report(output, failure, prompt, negative)
+                report_path = self._save_failure_report(output, failure, prompt, negative, parameters)
                 self._log(f"⚠️ 破綻候補を隔離しました: {output} / 記録: {report_path}")
             else:
-                self._log(f"✅ 生成成功: {output}" + (f" / prompt: {prompt_path}" if prompt_path else ""))
+                self._log(
+                    f"✅ 生成成功: {output} / parameters: {metadata_path}"
+                    + (f" / prompt: {prompt_path}" if prompt_path else "")
+                )
 
     def _sequential_prompt_sources(self):
         source = Path(self.input_file)

@@ -896,3 +896,13 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 109. Random Image生成パラメータの共通抽選
+    CFG/stepsの固定値・範囲と解像度/samplerの単一値・複数候補を生成ごとに一度だけ解決し、バックエンドへ渡す値をログと画像単位のgeneration JSONへ保存する。UI設定はRandom Imageプリセットに保存する。
+    追加・変更したファイル
+        scripts/backend/generation_parameter_resolver.py
+        scripts/backend/embedded_random_image.py
+        scripts/tabs/random_image.py
+        tests/test_generation_parameter_resolver.py
+        tests/test_embedded_random_image_generation_parameters.py
+        tests/test_random_image_parameter_configuration.py
+        doc/ver.md

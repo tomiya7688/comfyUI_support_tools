@@ -65,6 +65,8 @@ classDiagram
         +_with_action_prompt()
         +_apply_nsfw_mosaic()
         +_save_failure_report()
+        +_resolve_generation_parameters()
+        +_save_generation_metadata()
         +_save_prompt()
         +_encoded_output()
         +_correct_prompt()
@@ -90,6 +92,21 @@ classDiagram
     Protocol <|-- GenerationBackendCatalog
     class GenerationCapabilities {
         +supports()
+    }
+    class GenerationParameterResolver {
+        +__init__()
+        +resolve()
+        +_resolve_number()
+        +_resolve_integer()
+        +_resolve_resolution()
+        +_validate_resolution_value()
+        +_dimension()
+        +_resolve_sampler()
+        +_validate_numeric_options()
+        +_validate_integer_options()
+        +_validate_numeric_candidates()
+        +_candidate_values()
+        +_resolve_scalar()
     }
     class ImageFailureInspector {
         +__init__()
@@ -369,6 +386,10 @@ classDiagram
         +_finish_ollama_models()
         +_finish_backend_refresh()
         +_settings_from_gui()
+        +_generation_parameter_input()
+        +_apply_generation_parameter_input()
+        +_generation_parameter_config()
+        +_parse_range()
         +_sync()
         +update_running_generation()
         +one()

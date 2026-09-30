@@ -172,6 +172,21 @@ def _attribute(
                 ],
                 "audit_status": "origin-and-license-document-linked",
             }
+    elif filename == "_overlapped.pyd" and _within(source, python_root):
+        python = _license_component("Python", components)
+        if python and python.get("version") == "3.10.11":
+            return {
+                "origin_type": "python-runtime-extension",
+                "origin_component": "Python _overlapped",
+                "origin_version": python["version"],
+                "license_files": python.get("license_files", []),
+                "source_reference_urls": [
+                    "https://github.com/python/cpython/blob/v3.10.11/Modules/overlapped.c",
+                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_overlapped.vcxproj",
+                    "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
+                ],
+                "audit_status": "origin-and-license-document-linked",
+            }
     elif filename == "_lzma.pyd":
         runtime_component_name = "XZ Utils liblzma"
     elif filename == "_decimal.pyd":

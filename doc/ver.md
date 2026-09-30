@@ -888,3 +888,11 @@
         THIRD_PARTY_NOTICES.md
         licenses/README.md
         doc/ver.md
+# 108. CPython同梱_overlapped.pydの出所をPythonライセンスへ紐付け
+    実onedirの_overlapped.pydをCPython 3.10.11のModules/overlapped.cとWindowsビルド定義へ対応付け、native artifact inventoryでPython runtime componentおよびPython LICENSE.txtへリンクする。
+    追加・変更したファイル
+        tools/build/native_artifact_inventory.py
+        tests/test_overlapped_runtime_inventory.py
+        THIRD_PARTY_NOTICES.md
+        licenses/README.md
+        doc/ver.md

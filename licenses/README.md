@@ -52,3 +52,8 @@ The bundled _asyncio.pyd is linked to the Python runtime component and its
 LICENSE.txt document in the native artifact manifest. CPython 3.10.11's
 upstream implementation source is Modules/_asynciomodule.c; unverified Python
 builds retain their detected runtime version rather than this exact pin.
+
+The bundled `_overlapped.pyd` is the CPython 3.10.11 Windows overlapped-I/O
+extension. Its artifact inventory entry links the copied Python
+`LICENSE.txt`, upstream implementation, and Windows build project. Other
+Python runtime versions remain under review until individually verified.

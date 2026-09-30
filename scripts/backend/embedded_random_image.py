@@ -1,7 +1,7 @@
 from ..context import *
 import io
 from PIL import Image
-from .text_to_image_backend_factory import create_text_to_image_backend
+from .image_generation_backend_factory import create_image_generation_backend
 from .text_to_image_request import TextToImageRequest
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
@@ -282,7 +282,7 @@ class EmbeddedRandomImage:
         prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
         prompt = self._correct_prompt(prompt)
         workflow_path = (COMFY_FLOWS_DIR / self.comfy_flow) if self.comfy_flow else None
-        backend = create_text_to_image_backend(
+        backend = create_image_generation_backend(
             RUNTIME_BACKEND,
             self.api_url,
             self.api_timeout,

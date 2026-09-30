@@ -59,6 +59,7 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertEqual(calls[0][0], "http://localhost:7860/sdapi/v1/txt2img")
         self.assertEqual(calls[0][1]["timeout"], 30)
         self.assertEqual(calls[0][1]["json"]["cfg_scale"], 6.5)
+        self.assertTrue(calls[0][1]["json"]["save_images"])
         self.assertEqual(calls[0][1]["json"]["override_settings"], {
             "sd_model_checkpoint": "model.safetensors",
             "sd_vae": "Automatic",

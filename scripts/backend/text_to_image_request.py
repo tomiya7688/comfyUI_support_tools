@@ -17,6 +17,7 @@ class TextToImageRequest:
     width: int
     height: int
     use_model_vae: bool = True
+    save_images: bool = True
     enable_hr: bool = False
     hr_scale: float = 1.5
     hr_upscaler: str = ""

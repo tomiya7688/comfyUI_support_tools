@@ -38,6 +38,7 @@ python -m comfyui_support_tools.entrypoints.sequence_cli save <definition.json>
 sampler・steps・cfg・寸法・Hires.fix設定は省略時に既定値を使います。
 画像は `output_dir` に一意なファイル名で保存され、後続stepでは
 `{"$ref": "context.generate.image"}` で受け取れます。
+シーケンスstepはA1111側の追加保存を無効にするため、出力が二重になりません。
 
 接続先はローカルホストまたはloopback IPに限られます。WebUI 1111本体やモデルは
 同梱せず、既存のHTTP APIを呼び出します。

@@ -10,6 +10,9 @@ from pathlib import Path
 import sys
 from typing import Any, TextIO
 
+from comfyui_support_tools.applications.sequence.data.processing.a1111_generate_command import (
+    A1111GenerateCommand,
+)
 from comfyui_support_tools.applications.sequence.data.processing.comfyui_generate_command import (
     ComfyUIGenerateCommand,
 )
@@ -27,6 +30,7 @@ DEFAULT_SEQUENCE_DIRECTORY = Path("user_data/input/config/sequences")
 
 def _build_runner() -> SequenceRunner:
     commands = {
+        "a1111_generate": A1111GenerateCommand(),
         "comfyui_generate": ComfyUIGenerateCommand(),
         "ollama_prompt": OllamaPromptCommand(),
         "tagger": TaggerCommand(),

@@ -59,18 +59,20 @@ USER_DATA_FILE = COMMON_CONFIG_DIR / "paths.json"
 LEGACY_USER_DATA_FILE = USER_DATA_DIR / "paths.json"
 
 
-def _load_user_paths():
-    defaults = {
-        "sd_root": str(APP_DIR),
-        "models_root": str(APP_DIR / "models"),
-        "checkpoints": str(APP_DIR / "models" / "checkpoints"),
-        "comfy_flows": str(APP_DIR / "models" / "flows"),
-        "wildcards": str(APP_DIR / "wildcards"),
-        "a1111_dir": str(APP_DIR / "stable-diffusion-webui"),
-        "comfyui_dir": str(APP_DIR / "ComfyUI"),
-        "pixai_tagger_dir": str(APP_DIR / "pixai_tagger" / "pixai-tagger-v0.9-demo"),
-        "taggui_dir": str(APP_DIR / "taggui"),
-        "taggui_exe": str(APP_DIR / "taggui-v1.34.0-windows" / "taggui.exe"),
+def _default_user_paths(app_dir=APP_DIR):
+    """Build portable defaults relative to the checked-out application folder."""
+    app_dir = Path(app_dir)
+    return {
+        "sd_root": str(app_dir),
+        "models_root": str(app_dir / "models"),
+        "checkpoints": str(app_dir / "models" / "checkpoints"),
+        "comfy_flows": str(app_dir / "models" / "flows"),
+        "wildcards": str(app_dir / "wildcards"),
+        "a1111_dir": str(app_dir / "external" / "stable-diffusion-webui"),
+        "comfyui_dir": str(app_dir / "external" / "ComfyUI"),
+        "pixai_tagger_dir": str(app_dir / "external" / "pixai_tagger"),
+        "taggui_dir": str(app_dir / "external" / "taggui"),
+        "taggui_exe": str(app_dir / "external" / "taggui" / "taggui.exe"),
         "webui_api_url": "http://127.0.0.1:7860",
         "comfyui_api_url": "http://127.0.0.1:8188",
         "pixai_api_url": "http://127.0.0.1:7861/pixai/v1/interrogate",
@@ -86,9 +88,13 @@ def _load_user_paths():
         "ffmpeg_input_file": "",
         "ffmpeg_output_file": "",
         "random_img2img_input_dir": "",
-        "youtube_downloader_dir": r"I:\scripts\youtubez_downloader",
-        "nuno_touka_dir": r"K:\sd\nuno\_touka",
+        "youtube_downloader_dir": str(app_dir / "external" / "youtubez_downloader"),
+        "nuno_touka_dir": str(app_dir / "nuno" / "_touka"),
     }
+
+
+def _load_user_paths():
+    defaults = _default_user_paths()
     try:
         source_path = USER_DATA_FILE if USER_DATA_FILE.is_file() else LEGACY_USER_DATA_FILE
         with source_path.open("r", encoding="utf-8") as source:

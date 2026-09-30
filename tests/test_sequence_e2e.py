@@ -278,6 +278,7 @@ class SequenceEndToEndTests(unittest.TestCase):
         self.assertEqual(_A1111Handler.payload["steps"], 8)
         self.assertEqual(_A1111Handler.payload["width"], 64)
         self.assertEqual(_A1111Handler.payload["height"], 64)
+        self.assertFalse(_A1111Handler.payload["save_images"])
         self.assertTrue(_TaggerHandler.image_data.startswith(b"\x89PNG"))
 
     def test_a1111_command_rejects_remote_api_before_creating_output_directory(self) -> None:

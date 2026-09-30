@@ -86,6 +86,7 @@ class A1111GenerateCommand:
             width=A1111GenerateCommand._multiple_of_eight(inputs, "width", 512),
             height=A1111GenerateCommand._multiple_of_eight(inputs, "height", 512),
             use_model_vae=use_model_vae,
+            save_images=False,
             enable_hr=enable_hr,
             hr_scale=A1111GenerateCommand._number(inputs, "hr_scale", 1.5, 1, 4),
             hr_upscaler=hr_upscaler.strip(),

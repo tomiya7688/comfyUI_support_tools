@@ -47,6 +47,7 @@ class A1111ImageGenerationBackend:
             "width": request.width,
             "height": request.height,
             "sampler_index": request.sampler,
+            "save_images": request.save_images,
             "override_settings": {"sd_model_checkpoint": request.checkpoint},
         }
         if request.use_model_vae:

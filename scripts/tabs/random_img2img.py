@@ -19,6 +19,7 @@ class RandomImg2ImgTab(ttk.Frame):
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.stop_event=threading.Event()
+        self._active_backend=None
         self.preset_store=PresetStore("random_img2img"); self.preset_name=tk.StringVar()
         self.input_dir=tk.StringVar(value=self.DEFAULT_INPUT_DIR); self.output_dir=tk.StringVar(value=self.DEFAULT_OUTPUT_DIR)
         default_tagger="PixAI v0.9" if RUNTIME_BACKEND == "comfyui" else "A1111 standard"
@@ -109,7 +110,12 @@ class RandomImg2ImgTab(ttk.Frame):
     def _compose_prompt(additional, manual_prompt, tags):
         return ", ".join([*additional, *( [manual_prompt.strip()] if manual_prompt.strip() else []), *tags])
     def start(self): self.stop_event.clear(); _safe_thread(self.logbox,self.run)
-    def stop(self): self.stop_event.set(); self.logbox.log("停止要求を送信しました")
+    def stop(self):
+        self.stop_event.set()
+        backend=self._active_backend
+        if backend is not None and backend.capabilities.supports("interrupt"):
+            _safe_thread(self.logbox,backend.interrupt)
+        self.logbox.log("停止要求を送信しました")
     def run(self):
         import base64, secrets, requests
         root=Path(self.input_dir.get().strip()); out=Path(self.output_dir.get().strip()); out.mkdir(parents=True,exist_ok=True)
@@ -137,8 +143,10 @@ class RandomImg2ImgTab(ttk.Frame):
                     10000,
                     request_post=requests.post,
                 )
-                image_bytes = backend.generate_from_image(
-                    ImageToImageRequest(
+                self._active_backend=backend
+                try:
+                    image_bytes = backend.generate_from_image(
+                        ImageToImageRequest(
                         image_path=img,
                         prompt=prompt,
                         negative=self.negative.get(),
@@ -149,9 +157,12 @@ class RandomImg2ImgTab(ttk.Frame):
                         denoise=float(self.denoise.get()),
                         width=int(self.width.get()),
                         height=int(self.height.get()),
-                    ),
-                    stop_event=self.stop_event,
-                )
+                        ),
+                        stop_event=self.stop_event,
+                    )
+                finally:
+                    if self._active_backend is backend:
+                        self._active_backend=None
                 if image_bytes:
                     op=out/f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.png"; op.write_bytes(image_bytes); self.logbox.log(f"✅ {op}")
                 for _ in range(150):

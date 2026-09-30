@@ -10,11 +10,14 @@ classDiagram
     }
     class A1111ImageGenerationBackend {
         +__init__()
+        +capabilities()
+        +interrupt()
         +generate()
         +generate_from_image()
     }
     class ComfyUIClient {
         +__init__()
+        +interrupt()
         +sampler_name()
         +scheduler_name()
         +_queue_and_fetch()
@@ -32,6 +35,8 @@ classDiagram
     }
     class ComfyUIImageGenerationBackend {
         +__init__()
+        +capabilities()
+        +interrupt()
         +generate()
         +generate_from_image()
     }
@@ -68,6 +73,7 @@ classDiagram
         +_generate_sequential()
         +_start_thread()
         +_stop()
+        +_interrupt_backend()
     }
     class EmbeddedStartWebUI {
         +__init__()
@@ -82,14 +88,19 @@ classDiagram
         +query_choices()
     }
     Protocol <|-- GenerationBackendCatalog
+    class GenerationCapabilities {
+        +supports()
+    }
     class ImageFailureInspector {
         +__init__()
         +inspect()
         +_variance()
     }
     class ImageGenerationBackend {
+        +capabilities()
         +generate()
         +generate_from_image()
+        +interrupt()
     }
     Protocol <|-- ImageGenerationBackend
     class ImageToImageRequest {

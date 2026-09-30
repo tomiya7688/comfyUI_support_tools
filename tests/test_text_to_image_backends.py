@@ -161,6 +161,38 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertIs(backend.client.arguments["stop_event"], stop_event)
         self.assertEqual(backend.client.arguments["denoise"], 0.65)
 
+    def test_a1111_interrupt_uses_service_root_and_declares_capabilities(self):
+        calls = []
+        response = FakeResponse({})
+        backend = A1111ImageGenerationBackend(
+            "http://localhost:7860/sdapi/v1/img2img",
+            30,
+            lambda url, **kwargs: (calls.append((url, kwargs)) or response),
+        )
+
+        backend.interrupt()
+
+        self.assertEqual(calls[0][0], "http://localhost:7860/sdapi/v1/interrupt")
+        self.assertEqual(calls[0][1]["timeout"], 10)
+        self.assertTrue(backend.capabilities.supports("img2img"))
+        self.assertFalse(backend.capabilities.supports("workflow"))
+
+    def test_comfyui_interrupt_delegates_and_declares_workflow_support(self):
+        class FakeClient:
+            def __init__(self, _url, _timeout):
+                self.interrupted = False
+
+            def interrupt(self):
+                self.interrupted = True
+
+        backend = ComfyUIImageGenerationBackend("http://localhost:8188", 60, FakeClient)
+
+        backend.interrupt()
+
+        self.assertTrue(backend.client.interrupted)
+        self.assertTrue(backend.capabilities.supports("workflow"))
+        self.assertTrue(backend.capabilities.supports("interrupt"))
+
     def test_factory_selects_supported_backend_and_rejects_unknown(self):
         post = lambda *args, **kwargs: FakeResponse({"images": []})
         self.assertIsInstance(

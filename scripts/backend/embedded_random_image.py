@@ -59,6 +59,7 @@ class EmbeddedRandomImage:
         self.action_wildcards = [dict(item) for item in self.action_wildcards]
         self.comfy_model_overrides = dict(self.comfy_model_overrides)
         self._stop_event = threading.Event()
+        self._active_backend = None
         self._worker_thread = None
         self._settings_lock = threading.Lock()
         self._pending_settings = None
@@ -288,8 +289,14 @@ class EmbeddedRandomImage:
             self.api_timeout,
             request_post=requests.post,
         )
-        image_bytes = backend.generate(
-            TextToImageRequest(
+        if workflow_path and not backend.capabilities.supports("workflow"):
+            raise ValueError("選択中の生成バックエンドはカスタムworkflowに対応していません")
+        if self.enable_hr and not backend.capabilities.supports("hires_fix"):
+            raise ValueError("選択中の生成バックエンドはHires Fixに対応していません")
+        self._active_backend = backend
+        try:
+            image_bytes = backend.generate(
+                TextToImageRequest(
                 prompt=prompt,
                 negative=negative,
                 checkpoint=self.sd_model_checkpoint,
@@ -306,9 +313,12 @@ class EmbeddedRandomImage:
                 denoising_strength=self.denoising_strength,
                 workflow_path=workflow_path,
                 model_overrides=self.comfy_model_overrides,
-            ),
-            stop_event=self._stop_event,
-        )
+                ),
+                stop_event=self._stop_event,
+            )
+        finally:
+            if self._active_backend is backend:
+                self._active_backend = None
         if image_bytes:
             image_bytes = self._apply_nsfw_mosaic(image_bytes)
             image_bytes, output_extension = self._encoded_output(image_bytes)
@@ -394,3 +404,14 @@ class EmbeddedRandomImage:
 
     def _stop(self):
         self._stop_event.set()
+        backend = self._active_backend
+        if backend is None or not backend.capabilities.supports("interrupt"):
+            return
+        threading.Thread(target=self._interrupt_backend, args=(backend,), daemon=True).start()
+
+    def _interrupt_backend(self, backend):
+        try:
+            backend.interrupt()
+            self._log("⏹️ 生成中断をバックエンドへ送信しました")
+        except Exception as error:
+            self._log(f"⚠️ バックエンド中断に失敗しました: {error}")

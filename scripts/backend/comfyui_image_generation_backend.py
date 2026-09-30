@@ -7,12 +7,25 @@ from typing import Callable
 
 from .comfy_ui_client import ComfyUIClient
 from .image_to_image_request import ImageToImageRequest
+from .generation_capabilities import GenerationCapabilities
 from .text_to_image_request import TextToImageRequest
 
 
 class ComfyUIImageGenerationBackend:
+    CAPABILITIES = GenerationCapabilities(frozenset({
+        "txt2img", "img2img", "interrupt", "hires_fix", "model_catalog",
+        "sampler_catalog", "upscaler_catalog", "workflow", "model_overrides",
+    }))
+
     def __init__(self, api_url: str, timeout: int, client_factory: Callable[..., ComfyUIClient] = ComfyUIClient) -> None:
         self.client = client_factory(api_url, timeout)
+
+    @property
+    def capabilities(self) -> GenerationCapabilities:
+        return self.CAPABILITIES
+
+    def interrupt(self) -> None:
+        self.client.interrupt()
 
     def generate(self, request: TextToImageRequest, stop_event: Event | None = None) -> bytes | None:
         return self.client.txt2img(

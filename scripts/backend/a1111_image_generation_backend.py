@@ -7,14 +7,29 @@ from collections.abc import Callable
 from typing import Any
 
 from .image_to_image_request import ImageToImageRequest
+from .generation_capabilities import GenerationCapabilities
 from .text_to_image_request import TextToImageRequest
 
 
 class A1111ImageGenerationBackend:
+    CAPABILITIES = GenerationCapabilities(frozenset({
+        "txt2img", "img2img", "interrupt", "hires_fix", "model_catalog",
+        "sampler_catalog", "upscaler_catalog", "vae_override",
+    }))
+
     def __init__(self, api_url: str, timeout: int, request_post: Callable[..., Any]) -> None:
         self.api_url = api_url
         self.timeout = timeout
         self.request_post = request_post
+
+    @property
+    def capabilities(self) -> GenerationCapabilities:
+        return self.CAPABILITIES
+
+    def interrupt(self) -> None:
+        api_root = self.api_url.split("/sdapi/", 1)[0].rstrip("/")
+        response = self.request_post(f"{api_root}/sdapi/v1/interrupt", timeout=10)
+        response.raise_for_status()
 
     def generate(self, request: TextToImageRequest, stop_event=None) -> bytes | None:
         if stop_event is not None and stop_event.is_set():

@@ -18,6 +18,10 @@ class ComfyUIClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
+    def interrupt(self):
+        response = requests.post(f"{self.base_url}/interrupt", timeout=10)
+        response.raise_for_status()
+
     @classmethod
     def sampler_name(cls, value):
         return cls.SAMPLER_MAP.get(value, value.strip().lower().replace(" ", "_"))

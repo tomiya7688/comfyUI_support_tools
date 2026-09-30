@@ -69,3 +69,10 @@ OpenSSL 1.1.1t as a related runtime dependency. The Python LICENSE.txt includes
 the OpenSSL and Original SSLeay notices; the artifact manifest links that
 notice and version-pinned CPython source, Windows build definition, and version
 metadata. Other Python/OpenSSL versions remain under runtime-scope review.
+
+The bundled `_ssl.pyd` is recorded as the CPython 3.10.11 extension with
+OpenSSL 1.1.1t as a related runtime dependency. Its OpenSSL and Original
+SSLeay notices are included in the copied Python `LICENSE.txt`; the artifact
+manifest links that notice and version-pinned CPython source, Windows build
+definition, and version metadata. Other Python/OpenSSL versions remain under
+runtime-scope review.

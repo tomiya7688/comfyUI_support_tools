@@ -1,4 +1,4 @@
-"""ComfyUI txt2img API adapter."""
+"""ComfyUI txt2img and img2img API adapter."""
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ from threading import Event
 from typing import Callable
 
 from .comfy_ui_client import ComfyUIClient
+from .image_to_image_request import ImageToImageRequest
 from .text_to_image_request import TextToImageRequest
 
 
-class ComfyUITextToImageBackend:
+class ComfyUIImageGenerationBackend:
     def __init__(self, api_url: str, timeout: int, client_factory: Callable[..., ComfyUIClient] = ComfyUIClient) -> None:
         self.client = client_factory(api_url, timeout)
 
@@ -31,4 +32,19 @@ class ComfyUITextToImageBackend:
             denoising_strength=request.denoising_strength,
             workflow_path=request.workflow_path,
             model_overrides=request.model_overrides,
+        )
+
+    def generate_from_image(self, request: ImageToImageRequest, stop_event: Event | None = None) -> bytes | None:
+        return self.client.img2img(
+            image_path=request.image_path,
+            prompt=request.prompt,
+            negative=request.negative,
+            checkpoint=request.checkpoint,
+            steps=request.steps,
+            cfg=request.cfg,
+            sampler=request.sampler,
+            denoise=request.denoise,
+            width=request.width,
+            height=request.height,
+            stop_event=stop_event,
         )

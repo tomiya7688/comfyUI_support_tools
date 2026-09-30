@@ -2,6 +2,8 @@ from ..context import *
 from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
+from ..backend.image_to_image_request import ImageToImageRequest
+from ..backend.image_generation_backend_factory import create_image_generation_backend
 
 class RandomImg2ImgTab(ttk.Frame):
     TAGGER_PRESETS = {
@@ -129,8 +131,14 @@ class RandomImg2ImgTab(ttk.Frame):
                 prompt=self._compose_prompt(add, self.manual_prompt.get(), tags)
                 if not prompt: raise ValueError("Taggerをオフにする場合は手動プロンプトまたは追加タグを入力してください")
                 self.logbox.log(f"Prompt: {prompt}")
-                if RUNTIME_BACKEND == "comfyui":
-                    image_bytes = ComfyUIClient(self.api_img2img.get(), 10000).img2img(
+                backend = create_image_generation_backend(
+                    RUNTIME_BACKEND,
+                    self.api_img2img.get(),
+                    10000,
+                    request_post=requests.post,
+                )
+                image_bytes = backend.generate_from_image(
+                    ImageToImageRequest(
                         image_path=img,
                         prompt=prompt,
                         negative=self.negative.get(),
@@ -141,13 +149,9 @@ class RandomImg2ImgTab(ttk.Frame):
                         denoise=float(self.denoise.get()),
                         width=int(self.width.get()),
                         height=int(self.height.get()),
-                        stop_event=self.stop_event,
-                    )
-                else:
-                    payload={"prompt":prompt,"negative_prompt":self.negative.get(),"init_images":[b64],"steps":int(self.steps.get()),"cfg_scale":float(self.cfg.get()),"width":int(self.width.get()),"height":int(self.height.get()),"denoising_strength":float(self.denoise.get()),"sampler_index":self.sampler.get(),"override_settings":{"sd_model_checkpoint":self.checkpoint.get()}}
-                    rr=requests.post(self.api_img2img.get(),json=payload,timeout=10000); rr.raise_for_status()
-                    data=rr.json().get("images",[])
-                    image_bytes=base64.b64decode(data[0]) if data else None
+                    ),
+                    stop_event=self.stop_event,
+                )
                 if image_bytes:
                     op=out/f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.png"; op.write_bytes(image_bytes); self.logbox.log(f"✅ {op}")
                 for _ in range(150):

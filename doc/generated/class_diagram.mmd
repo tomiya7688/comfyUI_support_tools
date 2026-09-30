@@ -8,9 +8,10 @@ classDiagram
     class A1111BackendCatalog {
         +query_choices()
     }
-    class A1111TextToImageBackend {
+    class A1111ImageGenerationBackend {
         +__init__()
         +generate()
+        +generate_from_image()
     }
     class ComfyUIClient {
         +__init__()
@@ -29,9 +30,10 @@ classDiagram
     class ComfyUIBackendCatalog {
         +query_choices()
     }
-    class ComfyUITextToImageBackend {
+    class ComfyUIImageGenerationBackend {
         +__init__()
         +generate()
+        +generate_from_image()
     }
     class DependencyChecker {
         +check_paths()
@@ -85,6 +87,13 @@ classDiagram
         +inspect()
         +_variance()
     }
+    class ImageGenerationBackend {
+        +generate()
+        +generate_from_image()
+    }
+    Protocol <|-- ImageGenerationBackend
+    class ImageToImageRequest {
+    }
     class OllamaPromptCorrector {
         +models()
         +payload()
@@ -132,10 +141,6 @@ classDiagram
         +start()
         +stop()
     }
-    class TextToImageBackend {
-        +generate()
-    }
-    Protocol <|-- TextToImageBackend
     class TextToImageRequest {
     }
     class ToukaDatasetPresetBuilder {

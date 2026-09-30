@@ -31,6 +31,13 @@ class RandomImageTab(ttk.Frame):
         self.var_width = tk.IntVar()
         self.var_height = tk.IntVar()
         self.var_steps = tk.IntVar()
+        self.var_cfg_spec = tk.StringVar(value="7")
+        self.var_steps_mode = tk.StringVar(value="fixed")
+        self.var_steps_range = tk.StringVar()
+        self.var_resolution_mode = tk.StringVar(value="fixed")
+        self.var_resolution_candidates = tk.StringVar()
+        self.var_sampler_mode = tk.StringVar(value="fixed")
+        self.var_sampler_candidates = tk.StringVar()
         self.var_enable_hr = tk.BooleanVar()
         self.var_hr_scale = tk.DoubleVar()
         self.var_hr_upscaler = tk.StringVar()
@@ -128,6 +135,24 @@ class RandomImageTab(ttk.Frame):
             self.flow_models_frame = ttk.LabelFrame(self, text="フロー固有モデル", padding=6)
             self.flow_models_frame.pack(fill="x", pady=4)
 
+        parameter_options = ttk.LabelFrame(self, text="生成ごとのパラメータ抽選", padding=8)
+        parameter_options.pack(fill="x", pady=6)
+        ttk.Label(parameter_options, text="CFG（固定値 または min..max）").grid(row=0, column=0, sticky="w", padx=4, pady=2)
+        ttk.Entry(parameter_options, textvariable=self.var_cfg_spec, width=18).grid(row=0, column=1, sticky="w", padx=4, pady=2)
+        ttk.Label(parameter_options, text="steps").grid(row=0, column=2, sticky="w", padx=(16, 4), pady=2)
+        ttk.Combobox(parameter_options, textvariable=self.var_steps_mode, values=["fixed", "range"], state="readonly", width=9).grid(row=0, column=3, sticky="w", padx=4, pady=2)
+        ttk.Entry(parameter_options, textvariable=self.var_steps_range, width=18).grid(row=0, column=4, sticky="w", padx=4, pady=2)
+        ttk.Label(parameter_options, text="range時は min..max（fixed時は上のsteps値）").grid(row=0, column=5, sticky="w", padx=4, pady=2)
+        ttk.Label(parameter_options, text="解像度").grid(row=1, column=0, sticky="w", padx=4, pady=2)
+        ttk.Combobox(parameter_options, textvariable=self.var_resolution_mode, values=["fixed", "candidate"], state="readonly", width=9).grid(row=1, column=1, sticky="w", padx=4, pady=2)
+        ttk.Entry(parameter_options, textvariable=self.var_resolution_candidates, width=30).grid(row=1, column=2, columnspan=2, sticky="we", padx=4, pady=2)
+        ttk.Label(parameter_options, text="candidate例: 512x768|768x1024（fixed時は幅/高さを使用）").grid(row=1, column=4, columnspan=2, sticky="w", padx=4, pady=2)
+        ttk.Label(parameter_options, text="sampler").grid(row=2, column=0, sticky="w", padx=4, pady=2)
+        ttk.Combobox(parameter_options, textvariable=self.var_sampler_mode, values=["fixed", "candidate"], state="readonly", width=9).grid(row=2, column=1, sticky="w", padx=4, pady=2)
+        ttk.Entry(parameter_options, textvariable=self.var_sampler_candidates, width=30).grid(row=2, column=2, columnspan=2, sticky="we", padx=4, pady=2)
+        ttk.Label(parameter_options, text="candidate例: Euler a|DPM++ 2M Karras（fixed時はsampler欄を使用）").grid(row=2, column=4, columnspan=2, sticky="w", padx=4, pady=2)
+        ttk.Label(parameter_options, text="候補設定はRandom Imageプリセットに保存されます。各画像で一度だけ抽選し、値をメタデータへ記録します。", wraplength=1000).grid(row=3, column=0, columnspan=6, sticky="w", padx=4, pady=(4, 0))
+
         mosaic = ttk.LabelFrame(self, text="NSFWモザイク（WebUI1111）", padding=8)
         mosaic.pack(fill="x", pady=6)
         ttk.Checkbutton(mosaic, text="NudeNetで検出した領域にモザイクを適用", variable=self.var_enable_nsfw_mosaic).pack(side="left")
@@ -166,6 +191,7 @@ class RandomImageTab(ttk.Frame):
         self.var_width.set(getattr(self.mod, "width"))
         self.var_height.set(getattr(self.mod, "height"))
         self.var_steps.set(getattr(self.mod, "steps"))
+        self._apply_generation_parameter_input()
         self.var_enable_hr.set(getattr(self.mod, "enable_hr"))
         self.var_hr_scale.set(getattr(self.mod, "hr_scale"))
         self.var_hr_upscaler.set(getattr(self.mod, "hr_upscaler"))
@@ -194,7 +220,7 @@ class RandomImageTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
+        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -226,6 +252,7 @@ class RandomImageTab(ttk.Frame):
             self.var_keep_main_wildcard_until_stop.set(values.get("keep_main_wildcard_until_stop", values.get("wildcard_cache_scope") == "until_stop"))
             self.var_enable_prompt_correction.set(values.get("enable_prompt_correction", False)); self.var_ollama_api_url.set(values.get("ollama_api_url", "http://127.0.0.1:11434")); self.var_ollama_model.set(values.get("ollama_model", ""))
             self.var_output_format.set(values.get("output_format", "png"))
+            self._apply_generation_parameter_input(values.get("generation_parameter_input", {}))
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
     def _add_additional_file_row(self, value=None):
@@ -392,6 +419,7 @@ class RandomImageTab(ttk.Frame):
             "wildcard_root_dir": wildcard_root_dir, "root_dir": wildcard_root_dir,
             "output_dir": self.var_output_dir.get().strip(), "api_url": self.var_api_url.get().strip().rstrip("/"),
             "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(),
+            "generation_parameter_config": self._generation_parameter_config(),
             "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(),
             "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(),
             "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(),
@@ -408,6 +436,86 @@ class RandomImageTab(ttk.Frame):
             "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(),
             "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(),
         }
+
+    def _generation_parameter_input(self):
+        return {
+            "cfg": self.var_cfg_spec.get().strip(),
+            "steps_mode": self.var_steps_mode.get(),
+            "steps_range": self.var_steps_range.get().strip(),
+            "resolution_mode": self.var_resolution_mode.get(),
+            "resolution_candidates": self.var_resolution_candidates.get().strip(),
+            "sampler_mode": self.var_sampler_mode.get(),
+            "sampler_candidates": self.var_sampler_candidates.get().strip(),
+        }
+
+    def _apply_generation_parameter_input(self, values=None):
+        values = values or {}
+        self.var_cfg_spec.set(values.get("cfg", "7"))
+        self.var_steps_mode.set(values.get("steps_mode", "fixed"))
+        self.var_steps_range.set(values.get("steps_range", ""))
+        self.var_resolution_mode.set(values.get("resolution_mode", "fixed"))
+        self.var_resolution_candidates.set(values.get("resolution_candidates", ""))
+        self.var_sampler_mode.set(values.get("sampler_mode", "fixed"))
+        self.var_sampler_candidates.set(values.get("sampler_candidates", ""))
+
+    def _generation_parameter_config(self):
+        cfg_text = self.var_cfg_spec.get().strip()
+        if ".." in cfg_text:
+            lower, upper = self._parse_range(cfg_text, "CFG", float)
+            cfg = {"mode": "range", "min": lower, "max": upper}
+        else:
+            try:
+                cfg = {"mode": "fixed", "value": float(cfg_text)}
+            except ValueError as error:
+                raise ValueError("CFGは数値または min..max で入力してください") from error
+
+        if self.var_steps_mode.get() == "range":
+            lower, upper = self._parse_range(self.var_steps_range.get(), "steps", int)
+            steps = {"mode": "range", "min": lower, "max": upper}
+        elif self.var_steps_mode.get() == "fixed":
+            steps = {"mode": "fixed", "value": self.var_steps.get()}
+        else:
+            raise ValueError("stepsの選択方式が不正です")
+
+        if self.var_resolution_mode.get() == "candidate":
+            sizes = [item.strip() for item in self.var_resolution_candidates.get().split("|") if item.strip()]
+            if not sizes:
+                raise ValueError("解像度候補を 512x768|768x1024 の形式で入力してください")
+            resolutions = []
+            for size in sizes:
+                parts = size.lower().split("x")
+                if len(parts) != 2:
+                    raise ValueError(f"解像度候補の形式が不正です: {size}")
+                try:
+                    resolutions.append({"width": int(parts[0]), "height": int(parts[1])})
+                except ValueError as error:
+                    raise ValueError(f"解像度候補の形式が不正です: {size}") from error
+            resolution = {"mode": "candidate", "values": resolutions}
+        elif self.var_resolution_mode.get() == "fixed":
+            resolution = {"mode": "fixed", "value": {"width": self.var_width.get(), "height": self.var_height.get()}}
+        else:
+            raise ValueError("解像度の選択方式が不正です")
+
+        if self.var_sampler_mode.get() == "candidate":
+            samplers = [item.strip() for item in self.var_sampler_candidates.get().split("|") if item.strip()]
+            if not samplers:
+                raise ValueError("sampler候補を | 区切りで入力してください")
+            sampler = {"mode": "candidate", "values": samplers}
+        elif self.var_sampler_mode.get() == "fixed":
+            sampler = {"mode": "fixed", "value": self.var_sampler_index.get().strip()}
+        else:
+            raise ValueError("samplerの選択方式が不正です")
+        return {"cfg": cfg, "steps": steps, "resolution": resolution, "sampler": sampler}
+
+    @staticmethod
+    def _parse_range(value, label, conversion):
+        parts = value.strip().split("..")
+        if len(parts) != 2:
+            raise ValueError(f"{label}の範囲は min..max の形式で入力してください")
+        try:
+            return conversion(parts[0].strip()), conversion(parts[1].strip())
+        except ValueError as error:
+            raise ValueError(f"{label}の範囲は数値の min..max で入力してください") from error
 
     def _sync(self):
         for key, value in self._settings_from_gui().items():

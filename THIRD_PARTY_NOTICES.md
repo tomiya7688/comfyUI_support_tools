@@ -76,3 +76,9 @@ SSLeay notices are included in the copied Python `LICENSE.txt`; the artifact
 manifest links that notice and version-pinned CPython source, Windows build
 definition, and version metadata. Other Python/OpenSSL versions remain under
 runtime-scope review.
+
+The bundled `_overlapped.pyd` is recorded as the CPython 3.10.11 Windows
+overlapped-I/O extension and linked to the copied Python `LICENSE.txt`. Its
+manifest entry references the pinned CPython implementation, Windows build
+project, and license document. Other Python runtime versions remain under
+review until individually verified.

@@ -279,14 +279,6 @@ def _local_backend_choices():
     }
 
 
-def _comfy_input_choices(payload, node_name, input_name):
-    node_info = payload.get(node_name, payload) if isinstance(payload, dict) else {}
-    spec = node_info.get("input", {}).get("required", {}).get(input_name, [])
-    if isinstance(spec, (list, tuple)) and spec and isinstance(spec[0], (list, tuple)):
-        return [str(value) for value in spec[0]]
-    return []
-
-
 def load_backend_choices(api_url="", query_api=False):
     """ローカルのモデル候補に、起動中APIの正確な登録名を統合する。"""
     local = _local_backend_choices()
@@ -297,43 +289,16 @@ def load_backend_choices(api_url="", query_api=False):
             warnings.append("requests が未インストールのためAPI候補を取得できません")
         else:
             base_url = api_url.strip().rstrip("/")
-            if RUNTIME_BACKEND == "a1111" and "/sdapi/" in base_url:
-                base_url = base_url.split("/sdapi/", 1)[0]
             if not base_url:
                 warnings.append("API URLが空です")
-            elif RUNTIME_BACKEND == "comfyui":
-                specs = (
-                    ("checkpoints", "CheckpointLoaderSimple", "ckpt_name"),
-                    ("upscalers", "UpscaleModelLoader", "model_name"),
-                    ("samplers", "KSampler", "sampler_name"),
-                )
-                for key, node_name, input_name in specs:
-                    try:
-                        response = requests.get(f"{base_url}/object_info/{node_name}", timeout=5)
-                        response.raise_for_status()
-                        api_choices[key].extend(
-                            _comfy_input_choices(response.json(), node_name, input_name)
-                        )
-                    except Exception as exc:
-                        warnings.append(f"{node_name}: {exc}")
             else:
-                specs = (
-                    ("checkpoints", "sd-models", ("title", "model_name", "filename")),
-                    ("upscalers", "upscalers", ("name",)),
-                    ("samplers", "samplers", ("name",)),
-                )
-                for key, endpoint, fields in specs:
-                    try:
-                        response = requests.get(f"{base_url}/sdapi/v1/{endpoint}", timeout=5)
-                        response.raise_for_status()
-                        for item in response.json():
-                            if not isinstance(item, dict):
-                                continue
-                            value = next((item.get(field) for field in fields if item.get(field)), None)
-                            if value:
-                                api_choices[key].append(str(value))
-                    except Exception as exc:
-                        warnings.append(f"{endpoint}: {exc}")
+                from .backend.generation_backend_catalog_factory import create_generation_backend_catalog
+
+                catalog = create_generation_backend_catalog(RUNTIME_BACKEND)
+                queried_choices, query_warnings = catalog.query_choices(base_url, requests.get)
+                for key in ("checkpoints", "upscalers", "samplers"):
+                    api_choices[key].extend(queried_choices[key])
+                warnings.extend(query_warnings)
 
     merged = {
         key: _unique_choices(api_choices[key] + local[key])

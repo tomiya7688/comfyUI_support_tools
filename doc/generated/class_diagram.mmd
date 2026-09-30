@@ -5,6 +5,9 @@ classDiagram
         +show_tab()
     }
     tk.Tk <|-- TabbedToolsApp
+    class A1111BackendCatalog {
+        +query_choices()
+    }
     class ComfyUIClient {
         +__init__()
         +sampler_name()
@@ -18,6 +21,9 @@ classDiagram
         +_apply_parameters()
         +txt2img()
         +img2img()
+    }
+    class ComfyUIBackendCatalog {
+        +query_choices()
     }
     class DependencyChecker {
         +check_paths()
@@ -62,6 +68,10 @@ classDiagram
         +_stop_webui()
         +_restart_webui()
     }
+    class GenerationBackendCatalog {
+        +query_choices()
+    }
+    Protocol <|-- GenerationBackendCatalog
     class ImageFailureInspector {
         +__init__()
         +inspect()

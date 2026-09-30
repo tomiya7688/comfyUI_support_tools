@@ -41,6 +41,13 @@ For the audited CPython 3.10.11 runtime, Expat is version 2.5.0 and its MIT
 notice is stored in `licenses/expat/LICENSE.txt` and copied into the onedir
 artifact. The inventory links both the Python and Expat license documents;
 other Python builds remain unresolved until individually verified.
+
+The bundled `_ssl.pyd` contains CPython's extension wrapper and uses OpenSSL.
+For the audited CPython 3.10.11 runtime, OpenSSL is version 1.1.1t and its
+OpenSSL plus Original SSLeay notices are included in the copied Python
+`LICENSE.txt`. The inventory links the Python license document and pinned
+CPython source/build metadata; other Python/OpenSSL builds remain unresolved
+until individually verified.
 The bundled _asyncio.pyd is linked to the Python runtime component and its
 LICENSE.txt document in the native artifact manifest. CPython 3.10.11's
 upstream implementation source is Modules/_asynciomodule.c; unverified Python

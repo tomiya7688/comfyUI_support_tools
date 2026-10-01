@@ -1,7 +1,9 @@
+import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from tools.maintenance.move_external_apps import MigrationError, migrate
 
@@ -29,6 +31,20 @@ class ExternalAppMigrationTests(unittest.TestCase):
         self.assertTrue(self.source.exists())
         self.assertFalse((self.root / "external" / "ComfyUI").exists())
         self.assertEqual(self.config_path.read_text(encoding="utf-8"), before)
+
+    def test_dry_run_log_supports_legacy_console_encoding(self):
+        class Cp1252Console(io.StringIO):
+            encoding = "cp1252"
+
+            def write(self, value):
+                value.encode(self.encoding)
+                return super().write(value)
+
+        console = Cp1252Console()
+        with patch("sys.stdout", console):
+            migrate(self.root)
+
+        self.assertIn("\\u5916", console.getvalue())
 
     def test_collision_stops_before_any_move(self):
         destination = self.root / "external" / "ComfyUI"

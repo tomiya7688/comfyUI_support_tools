@@ -159,6 +159,16 @@ def _write_config_atomically(path: Path, config: dict) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _safe_print(message: str, stream=None) -> None:
+    stream = stream or sys.stdout
+    try:
+        print(message, file=stream)
+    except UnicodeEncodeError:
+        encoding = getattr(stream, "encoding", None) or "ascii"
+        safe_message = message.encode(encoding, errors="backslashreplace").decode(encoding)
+        print(safe_message, file=stream)
+
+
 def _apply_plan(plan: MigrationPlan) -> None:
     moved: list[tuple[Path, Path]] = []
     created_links: list[Path] = []
@@ -204,13 +214,13 @@ def _apply_plan(plan: MigrationPlan) -> None:
 def migrate(root: Path, apply: bool = False) -> MigrationPlan:
     plan = build_plan(root)
     for source, destination in plan.app_roots:
-        print(f"外部アプリ: {source} -> {destination}")
+        _safe_print(f"外部アプリ: {source} -> {destination}")
     for link, target in plan.links:
-        print(f"データは元の場所に保持: {link} => {target}")
+        _safe_print(f"データは元の場所に保持: {link} => {target}")
     if plan.config_path is not None:
-        print(f"設定参照を更新: {plan.config_path}")
+        _safe_print(f"設定参照を更新: {plan.config_path}")
     if not apply:
-        print("確認のみです。実際に移動するには --apply を指定してください。")
+        _safe_print("確認のみです。実際に移動するには --apply を指定してください。")
         return plan
     _apply_plan(plan)
     return plan
@@ -224,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         migrate(args.root, apply=args.apply)
     except MigrationError as exc:
-        print(f"エラー: {exc}", file=sys.stderr)
+        _safe_print(f"エラー: {exc}", file=sys.stderr)
         return 1
     return 0
 

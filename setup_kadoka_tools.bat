@@ -9,7 +9,6 @@ set "VENV_DIR=%~dp0.venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 set "REQUIREMENTS=%~dp0requirements-kadoka-tools.txt"
 set "PYTHON310=%KADOKA_PYTHON310%"
-if "%PYTHON310%"=="" set "PYTHON310=E:\program_files\soft\IDE\compiler\python\python3.10\python.exe"
 
 if exist "%VENV_PY%" goto install_requirements
 

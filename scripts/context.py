@@ -66,11 +66,11 @@ def _load_user_paths():
         "checkpoints": str(APP_DIR / "models" / "checkpoints"),
         "comfy_flows": str(APP_DIR / "models" / "flows"),
         "wildcards": str(APP_DIR / "wildcards"),
-        "a1111_dir": str(APP_DIR / "stable-diffusion-webui"),
-        "comfyui_dir": str(APP_DIR / "ComfyUI"),
-        "pixai_tagger_dir": str(APP_DIR / "pixai_tagger" / "pixai-tagger-v0.9-demo"),
-        "taggui_dir": str(APP_DIR / "taggui"),
-        "taggui_exe": str(APP_DIR / "taggui-v1.34.0-windows" / "taggui.exe"),
+        "a1111_dir": str(APP_DIR / "external" / "stable-diffusion-webui"),
+        "comfyui_dir": str(APP_DIR / "external" / "ComfyUI"),
+        "pixai_tagger_dir": str(APP_DIR / "external" / "pixai_tagger" / "pixai-tagger-v0.9-demo"),
+        "taggui_dir": str(APP_DIR / "external" / "taggui"),
+        "taggui_exe": str(APP_DIR / "external" / "taggui-v1.34.0-windows" / "taggui.exe"),
         "webui_api_url": "http://127.0.0.1:7860",
         "comfyui_api_url": "http://127.0.0.1:8188",
         "pixai_api_url": "http://127.0.0.1:7861/pixai/v1/interrogate",
@@ -130,8 +130,8 @@ BACKEND_SELECTION_REQUIRED = not (_backend_environment or _backend_argument)
 RUNTIME_BACKEND = _backend_argument or _backend_environment or "a1111"
 if RUNTIME_BACKEND not in {"a1111", "comfyui"}:
     RUNTIME_BACKEND = "a1111"
-A1111_DIR = _configured_path("a1111_dir", "KADOKA_TOOLS_A1111_DIR", str(SD_ROOT / "stable-diffusion-webui"))
-COMFYUI_DIR = _configured_path("comfyui_dir", "KADOKA_TOOLS_COMFYUI_DIR", str(SD_ROOT / "ComfyUI"))
+A1111_DIR = _configured_path("a1111_dir", "KADOKA_TOOLS_A1111_DIR", str(SD_ROOT / "external" / "stable-diffusion-webui"))
+COMFYUI_DIR = _configured_path("comfyui_dir", "KADOKA_TOOLS_COMFYUI_DIR", str(SD_ROOT / "external" / "ComfyUI"))
 RUNTIME_DIR = Path(os.environ.get(
     "KADOKA_TOOLS_RUNTIME_DIR",
     str(COMFYUI_DIR if RUNTIME_BACKEND == "comfyui" else A1111_DIR),
@@ -143,9 +143,9 @@ MODELS_DIR = _configured_path("models_root", "KADOKA_TOOLS_MODELS_ROOT", str(INP
 CHECKPOINTS_DIR = _configured_path("checkpoints", "KADOKA_TOOLS_CHECKPOINTS_DIR", str(MODELS_DIR / "checkpoints"))
 COMFY_FLOWS_DIR = _configured_path("comfy_flows", "KADOKA_TOOLS_COMFY_FLOWS_DIR", str(MODELS_DIR / "flows"))
 WILDCARDS_DIR = _configured_path("wildcards", "KADOKA_TOOLS_WILDCARDS_DIR", str(SD_ROOT / "wildcards"))
-PIXAI_TAGGER_DIR = _configured_path("pixai_tagger_dir", "KADOKA_TOOLS_PIXAI_TAGGER_DIR", str(SD_ROOT / "pixai_tagger" / "pixai-tagger-v0.9-demo"))
-TAGGUI_DIR = _configured_path("taggui_dir", "KADOKA_TOOLS_TAGGUI_DIR", str(SD_ROOT / "taggui"))
-TAGGUI_PACKAGED_EXE = _configured_path("taggui_exe", "KADOKA_TOOLS_TAGGUI_EXE", str(SD_ROOT / "taggui-v1.34.0-windows" / "taggui.exe"))
+PIXAI_TAGGER_DIR = _configured_path("pixai_tagger_dir", "KADOKA_TOOLS_PIXAI_TAGGER_DIR", str(SD_ROOT / "external" / "pixai_tagger" / "pixai-tagger-v0.9-demo"))
+TAGGUI_DIR = _configured_path("taggui_dir", "KADOKA_TOOLS_TAGGUI_DIR", str(SD_ROOT / "external" / "taggui"))
+TAGGUI_PACKAGED_EXE = _configured_path("taggui_exe", "KADOKA_TOOLS_TAGGUI_EXE", str(SD_ROOT / "external" / "taggui-v1.34.0-windows" / "taggui.exe"))
 YOUTUBE_DOWNLOADER_DIR = _configured_path("youtube_downloader_dir", "KADOKA_TOOLS_YOUTUBE_DOWNLOADER_DIR", r"I:\scripts\youtubez_downloader")
 NUNO_TOUKA_DIR = _configured_path("nuno_touka_dir", "KADOKA_TOOLS_NUNO_TOUKA_DIR", r"K:\sd\nuno\_touka")
 PIXAI_TAGGER_API_URL = str(USER_PATHS.get("pixai_api_url", "http://127.0.0.1:7861/pixai/v1/interrogate"))

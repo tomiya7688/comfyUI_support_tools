@@ -906,3 +906,12 @@
         tests/test_embedded_random_image_generation_parameters.py
         tests/test_random_image_parameter_configuration.py
         doc/ver.md
+
+# 110. 外部アプリの配置分離
+    ComfyUI、WebUI、Taggerなど外部アプリをexternal/へ集約する安全な移行ツールを追加した。初期状態は確認のみで、移動先衝突を検出すると何も変更せず停止し、paths.jsonの既知のアプリ参照だけを書き換える。モデル・生成出力は元の場所に保持してジャンクションで接続し、古いコンソール文字コードでもログが落ちないようにした。
+    追加・変更したファイル
+        tools/maintenance/move_external_apps.py
+        scripts/context.py
+        tests/test_external_app_migration.py
+        external/README.md
+        doc/ver.md

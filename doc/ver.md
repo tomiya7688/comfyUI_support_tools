@@ -931,3 +931,10 @@
         src/comfyui_support_tools/shared/safetensors_metadata.py
         tests/test_model_identity.py
         doc/ver.md
+
+# 113. LoRAとベースモデルの系統互換性判定
+    共通モデル分類結果からLoRAとCheckpoint/UNetの互換性をcompatible / incompatible / unknownで判定する処理を追加した。系統が一致しない場合のみ非互換、判定不足や入力種別の誤りはunknownとし、系統一致の結果にも「系統レベルの判定」である旨を理由に含める。
+    追加・変更したファイル
+        src/comfyui_support_tools/shared/model_compatibility.py
+        tests/test_model_compatibility.py
+        doc/ver.md

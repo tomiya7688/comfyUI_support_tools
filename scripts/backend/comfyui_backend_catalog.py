@@ -10,13 +10,15 @@ class ComfyUIBackendCatalog:
 
     _ENDPOINTS = (
         ("checkpoints", "CheckpointLoaderSimple", "ckpt_name"),
+        ("unets", "UNETLoader", "unet_name"),
+        ("loras", "LoraLoader", "lora_name"),
         ("upscalers", "UpscaleModelLoader", "model_name"),
         ("samplers", "KSampler", "sampler_name"),
     )
 
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         normalized_url = base_url.strip().rstrip("/")
-        choices: ChoiceMap = {"checkpoints": [], "upscalers": [], "samplers": []}
+        choices: ChoiceMap = {"checkpoints": [], "unets": [], "loras": [], "upscalers": [], "samplers": []}
         warnings = []
         for key, node_name, input_name in self._ENDPOINTS:
             try:

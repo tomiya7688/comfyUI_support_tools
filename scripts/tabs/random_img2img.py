@@ -81,7 +81,7 @@ class RandomImg2ImgTab(ttk.Frame):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.stop, self.logbox.log)
 
     def _apply_backend_choices(self, choices):
-        self.checkpoint_combo.configure(values=choices["checkpoints"])
+        self.checkpoint_combo.configure(values=base_model_choices(choices))
         self.sampler_combo.configure(values=choices["samplers"])
 
     def _load_local_backend_choices(self):
@@ -99,6 +99,7 @@ class RandomImg2ImgTab(ttk.Frame):
         self._apply_backend_choices(choices)
         self.logbox.log(
             f"✅ 候補更新: checkpoint {len(choices['checkpoints'])} / "
+            f"UNet {len(choices.get('unets', []))} / LoRA {len(choices.get('loras', []))} / "
             f"sampler {len(choices['samplers'])}"
         )
         for warning in warnings:

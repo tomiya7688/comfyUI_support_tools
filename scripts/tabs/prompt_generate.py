@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..context import *
+from ..context import _unique_choices
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
@@ -124,7 +125,7 @@ class PromptGenerateTab(ttk.Frame):
 
     def _apply_backend_choices(self, choices):
         self.sampler_combo.configure(values=choices["samplers"])
-        self.checkpoint_combo.configure(values=choices["checkpoints"])
+        self.checkpoint_combo.configure(values=base_model_choices(choices))
         if hasattr(self, "flow_combo"):
             self.flow_combo.configure(values=choices.get("flows", []))
             self._apply_flow_checkpoint_choices()
@@ -145,7 +146,11 @@ class PromptGenerateTab(ttk.Frame):
 
     def _finish_backend_refresh(self, choices, warnings):
         self._apply_backend_choices(choices)
-        self.logbox.log(f"候補更新: checkpoint {len(choices['checkpoints'])} / sampler {len(choices['samplers'])}")
+        self.logbox.log(
+            f"候補更新: checkpoint {len(choices['checkpoints'])} / "
+            f"UNet {len(choices.get('unets', []))} / LoRA {len(choices.get('loras', []))} / "
+            f"sampler {len(choices['samplers'])}"
+        )
         for warning in warnings:
             self.logbox.log(f"API候補: {warning}")
 

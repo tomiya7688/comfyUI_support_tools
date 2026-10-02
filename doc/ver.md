@@ -938,3 +938,16 @@
         src/comfyui_support_tools/shared/model_compatibility.py
         tests/test_model_compatibility.py
         doc/ver.md
+
+# 114. A1111/ComfyUIのLoRA・UNet候補取得
+    backend候補カタログを拡張し、A1111 APIからLoRA、ComfyUI object_info APIからLoRAとUNetの候補を取得する。共通modelsフォルダと各backendのローカルモデルフォルダも種類別に走査し、API候補と重複排除して統合する。ComfyUIのベースモデル選択ではcheckpointとUNetを両方候補にし、A1111では未対応のUNet候補を選択肢へ混ぜない。
+    追加・変更したファイル
+        scripts/backend/a1111_backend_catalog.py
+        scripts/backend/comfyui_backend_catalog.py
+        scripts/context.py
+        scripts/tabs/random_image.py
+        scripts/tabs/prompt_generate.py
+        scripts/tabs/random_img2img.py
+        tests/test_generation_backend_catalog.py
+        tests/test_model_choice_catalog.py
+        doc/ver.md

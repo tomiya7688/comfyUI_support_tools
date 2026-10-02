@@ -341,8 +341,14 @@ class RandomImageTab(ttk.Frame):
             ttk.Label(self.flow_models_frame, text=f"フロー読込エラー: {error}").pack(anchor="w")
             return
         base_choices, _ = load_backend_choices(query_api=False)
-        choices = base_choices["checkpoints"]
         for field in fields:
+            field_kind = field["id"].rsplit(":", 1)[-1]
+            if field_kind == "unet_name":
+                choices = base_choices.get("unets", [])
+            elif field_kind == "ckpt_name":
+                choices = base_choices["checkpoints"]
+            else:
+                choices = base_model_choices(base_choices)
             value = (values or {}).get(field["id"], field["value"])
             variable = tk.StringVar(value=value)
             row = ttk.Frame(self.flow_models_frame); row.pack(fill="x", pady=2)
@@ -361,7 +367,7 @@ class RandomImageTab(ttk.Frame):
         self.logbox.log("画像生成タブを起動しました")
 
     def _apply_backend_choices(self, choices):
-        self.checkpoint_combo.configure(values=choices["checkpoints"])
+        self.checkpoint_combo.configure(values=base_model_choices(choices))
         self.upscaler_combo.configure(values=choices["upscalers"])
         self.sampler_combo.configure(values=choices["samplers"])
         if hasattr(self, "flow_combo"):
@@ -400,6 +406,7 @@ class RandomImageTab(ttk.Frame):
         self._apply_backend_choices(choices)
         self.logbox.log(
             f"✅ 候補更新: checkpoint {len(choices['checkpoints'])} / "
+            f"UNet {len(choices.get('unets', []))} / LoRA {len(choices.get('loras', []))} / "
             f"upscaler {len(choices['upscalers'])} / sampler {len(choices['samplers'])}"
         )
         for warning in warnings:

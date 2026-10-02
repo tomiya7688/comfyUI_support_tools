@@ -2,7 +2,7 @@ from ..context import *
 import copy
 
 class ComfyUIClient:
-    DEFAULT_WORKFLOW_PATH = COMFY_FLOWS_DIR / "default.json"
+    DEFAULT_WORKFLOW_PATH = resolve_comfy_flow_path("default.json")
     SAMPLER_MAP = {
         "Euler": "euler",
         "Euler a": "euler_ancestral",

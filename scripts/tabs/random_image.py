@@ -351,7 +351,7 @@ class RandomImageTab(ttk.Frame):
             ttk.Label(self.flow_models_frame, text="Comfyフローを選ぶと、フロー内のモデル入力を表示します。").pack(anchor="w")
             return
         try:
-            fields = ComfyUIClient.model_inputs(COMFY_FLOWS_DIR / flow_name)
+            fields = ComfyUIClient.model_inputs(resolve_comfy_flow_path(flow_name))
         except (OSError, ValueError, KeyError) as error:
             ttk.Label(self.flow_models_frame, text=f"フロー読込エラー: {error}").pack(anchor="w")
             return

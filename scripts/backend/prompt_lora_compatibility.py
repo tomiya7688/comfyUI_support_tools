@@ -12,13 +12,15 @@ from src.comfyui_support_tools.shared.model_compatibility import (
     CompatibilityStatus,
     check_lora_compatibility,
 )
-from src.comfyui_support_tools.shared.model_identity import ModelKind, classify_model
+from src.comfyui_support_tools.shared.model_identity import ModelKind
+
+from .local_model_evidence import classify_local_model_choice
 
 from .model_choice_classification import classify_base_model_choice
 
 
 _LORA_REFERENCE = re.compile(r"<lora:([^:<>]+)(?::[^<>]*)?>", re.IGNORECASE)
-_MODEL_SUFFIXES = {".safetensors", ".ckpt", ".pt", ".bin"}
+_MODEL_SUFFIXES = {".safetensors", ".ckpt", ".pt", ".pth", ".bin"}
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,10 @@ def _resolve_lora(reference: str, candidates: list[str]) -> tuple[str | None, st
     if len(exact) == 1:
         return exact[0], "Matched a catalog entry by its normalized full name."
     if len(exact) > 1:
+        filenames = [name for name in exact if PurePosixPath(name).suffix.casefold() in _MODEL_SUFFIXES]
+        aliases = [name for name in exact if PurePosixPath(name).suffix.casefold() not in _MODEL_SUFFIXES]
+        if len(filenames) == len(aliases) == 1:
+            return aliases[0], "Matched an extensionless API alias and its local catalog filename."
         return None, "Multiple LoRA catalog entries have the same normalized full name."
 
     requested_base = PurePosixPath(requested).name
@@ -97,7 +103,7 @@ def assess_prompt_loras(
             ))
             continue
 
-        lora = classify_model(resolved_name, declared_kind=ModelKind.LORA)
+        lora = classify_local_model_choice(resolved_name, ModelKind.LORA)
         if base_model is None:
             result = CompatibilityResult(
                 CompatibilityStatus.UNKNOWN,

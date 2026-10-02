@@ -340,7 +340,7 @@ class EmbeddedRandomImage:
             f"Resolution={resolution['width']}x{resolution['height']}, "
             f"Sampler={parameters['sampler']}"
         )
-        workflow_path = (COMFY_FLOWS_DIR / self.comfy_flow) if self.comfy_flow else None
+        workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
         backend = create_image_generation_backend(
             RUNTIME_BACKEND,
             self.api_url,

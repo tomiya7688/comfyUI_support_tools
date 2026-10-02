@@ -231,13 +231,23 @@ def _scan_flow_files(root):
         return []
 
 
+def resolve_comfy_flow_path(flow_name):
+    """Resolve a workflow from the configured root, then its legacy location."""
+    path = Path(flow_name)
+    if path.is_absolute():
+        return path
+    configured = COMFY_FLOWS_DIR / path
+    if configured.is_file():
+        return configured
+    legacy = LEGACY_MODELS_DIR / "flows" / path
+    return legacy if legacy.is_file() else configured
+
+
 def flow_checkpoint_choices(flow_name):
     """選択中のComfyUI API workflowに記載されたcheckpoint／UNet候補を返す。"""
     if not flow_name:
         return []
-    path = Path(flow_name)
-    if not path.is_absolute():
-        path = COMFY_FLOWS_DIR / path
+    path = resolve_comfy_flow_path(flow_name)
     try:
         with path.open(encoding="utf-8") as source:
             workflow = json.load(source)

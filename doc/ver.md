@@ -1014,3 +1014,16 @@
         tests/test_model_choice_catalog.py
         doc/model_catalog.md
         doc/ver.md
+# 120. Safetensorsのtensor構造によるモデル系統判定
+    重み本体を読まずヘッダーのtensor名とshapeからSD1.x/SDXLのUNet・LoRA、FLUX.1 base、Anima 2Bを推定。名前・metadata・構造の矛盾、不完全LoRA、未対応次元、Cosmos/Chromaとの曖昧性はunknownを保持。ヘッダーを一度だけ読み、path/更新時刻/サイズ/種別をキーに小さい判定結果をキャッシュする。根拠・対応範囲・一次資料をdoc/model_structure.mdへ記載。
+    追加・変更したファイル
+        src/comfyui_support_tools/shared/tensor_model_signals.py
+        src/comfyui_support_tools/shared/model_identity.py
+        src/comfyui_support_tools/shared/safetensors_metadata.py
+        scripts/backend/local_model_evidence.py
+        tests/test_tensor_model_family.py
+        tests/test_safetensors_evidence.py
+        tests/test_local_model_evidence.py
+        doc/model_structure.md
+        doc/model_catalog.md
+        doc/ver.md

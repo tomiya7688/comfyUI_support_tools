@@ -14,8 +14,8 @@ class SafetensorsMetadataError(ValueError):
     """Raised when a safetensors header is missing, malformed, or too large."""
 
 
-def read_safetensors_metadata(path: str | Path) -> dict[str, str]:
-    """Read text metadata without loading tensor weights into memory."""
+def _read_header(path: str | Path) -> dict:
+    """Read only the bounded JSON header, never the tensor payload."""
     model_path = Path(path)
     try:
         with model_path.open("rb") as model_file:
@@ -41,9 +41,33 @@ def read_safetensors_metadata(path: str | Path) -> dict[str, str]:
         raise SafetensorsMetadataError(f"header is not valid JSON: {exc}") from exc
     if not isinstance(header, dict):
         raise SafetensorsMetadataError("header JSON must be an object")
+    return header
+
+
+def _text_metadata(header: dict) -> dict[str, str]:
     metadata = header.get("__metadata__", {})
     if not isinstance(metadata, dict):
         raise SafetensorsMetadataError("__metadata__ must be an object")
     if any(not isinstance(key, str) or not isinstance(value, str) for key, value in metadata.items()):
         raise SafetensorsMetadataError("safetensors metadata keys and values must be strings")
     return metadata
+
+
+def read_safetensors_metadata(path: str | Path) -> dict[str, str]:
+    """Read text metadata without loading tensor weights into memory."""
+    return _text_metadata(_read_header(path))
+
+
+def read_safetensors_evidence(path: str | Path) -> tuple[dict[str, str], dict[str, tuple[int, ...]]]:
+    """Read metadata and shape descriptors with a single bounded header read."""
+    header = _read_header(path)
+    metadata = _text_metadata(header)
+    shapes = {}
+    for name, descriptor in header.items():
+        if name == "__metadata__":
+            continue
+        shape = descriptor.get("shape") if isinstance(descriptor, dict) else None
+        if not isinstance(shape, list) or any(type(dimension) is not int or dimension < 0 for dimension in shape):
+            raise SafetensorsMetadataError(f"invalid tensor shape descriptor: {name}")
+        shapes[name] = tuple(shape)
+    return metadata, shapes

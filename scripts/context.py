@@ -62,9 +62,9 @@ LEGACY_USER_DATA_FILE = USER_DATA_DIR / "paths.json"
 def _load_user_paths():
     defaults = {
         "sd_root": str(APP_DIR),
-        "models_root": str(APP_DIR / "models"),
-        "checkpoints": str(APP_DIR / "models" / "checkpoints"),
-        "comfy_flows": str(APP_DIR / "models" / "flows"),
+        "models_root": str(APP_DIR / "user_data" / "input" / "models"),
+        "checkpoints": str(APP_DIR / "user_data" / "input" / "models" / "checkpoints"),
+        "comfy_flows": str(APP_DIR / "user_data" / "input" / "models" / "flows"),
         "wildcards": str(APP_DIR / "wildcards"),
         "a1111_dir": str(APP_DIR / "external" / "stable-diffusion-webui"),
         "comfyui_dir": str(APP_DIR / "external" / "ComfyUI"),
@@ -97,7 +97,14 @@ def _load_user_paths():
             values = {}
     except (FileNotFoundError, OSError, ValueError):
         values = {}
-    return {**defaults, **values}
+    result = {**defaults, **values}
+    if "models_root" not in values and "input_models" in values:
+        result["models_root"] = values["input_models"]
+    if "checkpoints" not in values:
+        result["checkpoints"] = str(Path(result["models_root"]) / "checkpoints")
+    if "comfy_flows" not in values:
+        result["comfy_flows"] = str(Path(result["models_root"]) / "flows")
+    return result
 
 
 USER_PATHS = _load_user_paths()
@@ -140,7 +147,9 @@ BACKEND_DISPLAY_NAME = "ComfyUI" if RUNTIME_BACKEND == "comfyui" else "WebUI1111
 USER_INPUT_DIR = _configured_path("input_root", "KADOKA_TOOLS_INPUT_ROOT", str(USER_INPUT_DIR))
 INPUT_MODELS_DIR = _configured_path("input_models", "KADOKA_TOOLS_INPUT_MODELS", str(USER_INPUT_DIR / "models"))
 MODELS_DIR = _configured_path("models_root", "KADOKA_TOOLS_MODELS_ROOT", str(INPUT_MODELS_DIR))
+LEGACY_MODELS_DIR = APP_DIR / "models"
 CHECKPOINTS_DIR = _configured_path("checkpoints", "KADOKA_TOOLS_CHECKPOINTS_DIR", str(MODELS_DIR / "checkpoints"))
+LEGACY_CHECKPOINTS_DIRS = (LEGACY_MODELS_DIR / "checkpoints", APP_DIR / "checkpoints")
 COMFY_FLOWS_DIR = _configured_path("comfy_flows", "KADOKA_TOOLS_COMFY_FLOWS_DIR", str(MODELS_DIR / "flows"))
 WILDCARDS_DIR = _configured_path("wildcards", "KADOKA_TOOLS_WILDCARDS_DIR", str(SD_ROOT / "wildcards"))
 PIXAI_TAGGER_DIR = _configured_path("pixai_tagger_dir", "KADOKA_TOOLS_PIXAI_TAGGER_DIR", str(SD_ROOT / "external" / "pixai_tagger" / "pixai-tagger-v0.9-demo"))
@@ -268,22 +277,29 @@ def _local_backend_choices():
     if RUNTIME_BACKEND == "comfyui":
         checkpoint_files = (
             _scan_model_files(CHECKPOINTS_DIR)
+            + [file for legacy_root in LEGACY_CHECKPOINTS_DIRS for file in _scan_model_files(legacy_root)]
             + _scan_model_files(RUNTIME_DIR / "models" / "checkpoints")
         )
         unet_files = (
             _scan_model_files(MODELS_DIR / "diffusion_models")
             + _scan_model_files(MODELS_DIR / "unet")
+            + _scan_model_files(LEGACY_MODELS_DIR / "diffusion_models")
+            + _scan_model_files(LEGACY_MODELS_DIR / "unet")
             + _scan_model_files(RUNTIME_DIR / "models" / "diffusion_models")
             + _scan_model_files(RUNTIME_DIR / "models" / "unet")
         )
         lora_files = (
             _scan_model_files(MODELS_DIR / "Lora")
             + _scan_model_files(MODELS_DIR / "loras")
+            + _scan_model_files(LEGACY_MODELS_DIR / "Lora")
+            + _scan_model_files(LEGACY_MODELS_DIR / "loras")
             + _scan_model_files(RUNTIME_DIR / "models" / "loras")
         )
         vae_files = (
             _scan_model_files(MODELS_DIR / "VAE")
             + _scan_model_files(MODELS_DIR / "vae")
+            + _scan_model_files(LEGACY_MODELS_DIR / "VAE")
+            + _scan_model_files(LEGACY_MODELS_DIR / "vae")
             + _scan_model_files(RUNTIME_DIR / "models" / "vae")
         )
         return {
@@ -293,7 +309,10 @@ def _local_backend_choices():
             "vaes": _unique_choices(vae_files),
             "upscalers": _scan_model_files(RUNTIME_DIR / "models" / "upscale_models"),
             "samplers": list(COMFYUI_SAMPLER_CHOICES),
-            "flows": _scan_flow_files(COMFY_FLOWS_DIR),
+            "flows": _unique_choices(
+                _scan_flow_files(COMFY_FLOWS_DIR)
+                + _scan_flow_files(LEGACY_MODELS_DIR / "flows")
+            ),
         }
 
     model_root = RUNTIME_DIR / "models"
@@ -301,16 +320,20 @@ def _local_backend_choices():
     for folder_name in ("ESRGAN", "RealESRGAN", "SwinIR", "LDSR", "ScuNET", "BSRGAN"):
         upscalers.extend(_scan_model_files(model_root / folder_name, keep_suffix=False))
     return {
-        "checkpoints": _scan_model_files(CHECKPOINTS_DIR),
+        "checkpoints": _unique_choices(_scan_model_files(CHECKPOINTS_DIR) + [file for legacy_root in LEGACY_CHECKPOINTS_DIRS for file in _scan_model_files(legacy_root)]),
         "unets": [],
         "loras": _unique_choices(
             _scan_model_files(MODELS_DIR / "Lora")
             + _scan_model_files(MODELS_DIR / "loras")
+            + _scan_model_files(LEGACY_MODELS_DIR / "Lora")
+            + _scan_model_files(LEGACY_MODELS_DIR / "loras")
             + _scan_model_files(A1111_DIR / "models" / "Lora")
         ),
         "vaes": _unique_choices(
             _scan_model_files(MODELS_DIR / "VAE")
             + _scan_model_files(MODELS_DIR / "vae")
+            + _scan_model_files(LEGACY_MODELS_DIR / "VAE")
+            + _scan_model_files(LEGACY_MODELS_DIR / "vae")
             + _scan_model_files(A1111_DIR / "models" / "VAE")
             + _scan_model_files(RUNTIME_DIR / "models" / "VAE")
         ),

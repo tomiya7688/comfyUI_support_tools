@@ -992,3 +992,10 @@
         tests/test_model_choice_catalog.py
         tests/test_text_to_image_backends.py
         doc/ver.md
+# 118. 共有モデル配置と旧パス互換
+    新規設定のモデルrootをuser_data/input/modelsへ統一し、legacy設定のinput_modelsはmodels_root未指定時に引き継ぐ。既存のmodels/checkpoints等とトップレベルcheckpointsは削除・移動せず候補検索を継続する。推奨構成、既存設定の保持、手動移行時の確認手順をdoc/model_catalog.mdへ記載した。
+    追加・変更したファイル
+        scripts/context.py
+        tests/test_model_choice_catalog.py
+        doc/model_catalog.md
+        doc/ver.md

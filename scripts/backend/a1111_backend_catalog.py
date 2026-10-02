@@ -11,6 +11,7 @@ class A1111BackendCatalog:
 
     _ENDPOINTS = (
         ("checkpoints", "sd-models", ("title", "model_name", "filename")),
+        ("loras", "loras", ("name",)),
         ("upscalers", "upscalers", ("name",)),
         ("samplers", "samplers", ("name",)),
     )
@@ -19,7 +20,7 @@ class A1111BackendCatalog:
         normalized_url = base_url.strip().rstrip("/")
         if "/sdapi/" in normalized_url:
             normalized_url = normalized_url.split("/sdapi/", 1)[0]
-        choices: ChoiceMap = {"checkpoints": [], "upscalers": [], "samplers": []}
+        choices: ChoiceMap = {"checkpoints": [], "unets": [], "loras": [], "upscalers": [], "samplers": []}
         warnings = []
         for key, endpoint, fields in self._ENDPOINTS:
             try:

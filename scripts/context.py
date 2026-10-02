@@ -254,14 +254,37 @@ def flow_checkpoint_choices(flow_name):
             if value and str(value).strip() and str(value).strip() not in values:
                 values.append(str(value).strip())
     return values
+
+
+def base_model_choices(choices):
+    """Return models selectable as the primary base in the active backend."""
+    models = list(choices.get("checkpoints", []))
+    if RUNTIME_BACKEND == "comfyui":
+        models.extend(choices.get("unets", []))
+    return _unique_choices(models)
+
+
 def _local_backend_choices():
     if RUNTIME_BACKEND == "comfyui":
+        checkpoint_files = (
+            _scan_model_files(CHECKPOINTS_DIR)
+            + _scan_model_files(RUNTIME_DIR / "models" / "checkpoints")
+        )
+        unet_files = (
+            _scan_model_files(MODELS_DIR / "diffusion_models")
+            + _scan_model_files(MODELS_DIR / "unet")
+            + _scan_model_files(RUNTIME_DIR / "models" / "diffusion_models")
+            + _scan_model_files(RUNTIME_DIR / "models" / "unet")
+        )
+        lora_files = (
+            _scan_model_files(MODELS_DIR / "Lora")
+            + _scan_model_files(MODELS_DIR / "loras")
+            + _scan_model_files(RUNTIME_DIR / "models" / "loras")
+        )
         return {
-            "checkpoints": _unique_choices(
-                _scan_model_files(CHECKPOINTS_DIR)
-                + _scan_model_files(SD_ROOT / "models" / "diffusion_models")
-                + _scan_model_files(RUNTIME_DIR / "models" / "diffusion_models")
-            ),
+            "checkpoints": _unique_choices(checkpoint_files),
+            "unets": _unique_choices(unet_files),
+            "loras": _unique_choices(lora_files),
             "upscalers": _scan_model_files(RUNTIME_DIR / "models" / "upscale_models"),
             "samplers": list(COMFYUI_SAMPLER_CHOICES),
             "flows": _scan_flow_files(COMFY_FLOWS_DIR),
@@ -273,6 +296,12 @@ def _local_backend_choices():
         upscalers.extend(_scan_model_files(model_root / folder_name, keep_suffix=False))
     return {
         "checkpoints": _scan_model_files(CHECKPOINTS_DIR),
+        "unets": [],
+        "loras": _unique_choices(
+            _scan_model_files(MODELS_DIR / "Lora")
+            + _scan_model_files(MODELS_DIR / "loras")
+            + _scan_model_files(A1111_DIR / "models" / "Lora")
+        ),
         "upscalers": _unique_choices(upscalers),
         "samplers": list(A1111_SAMPLER_CHOICES),
         "flows": [],
@@ -282,7 +311,7 @@ def _local_backend_choices():
 def load_backend_choices(api_url="", query_api=False):
     """ローカルのモデル候補に、起動中APIの正確な登録名を統合する。"""
     local = _local_backend_choices()
-    api_choices = {"checkpoints": [], "upscalers": [], "samplers": [], "flows": []}
+    api_choices = {"checkpoints": [], "unets": [], "loras": [], "upscalers": [], "samplers": [], "flows": []}
     warnings = []
     if query_api:
         if requests is None:
@@ -296,13 +325,13 @@ def load_backend_choices(api_url="", query_api=False):
 
                 catalog = create_generation_backend_catalog(RUNTIME_BACKEND)
                 queried_choices, query_warnings = catalog.query_choices(base_url, requests.get)
-                for key in ("checkpoints", "upscalers", "samplers"):
+                for key in ("checkpoints", "unets", "loras", "upscalers", "samplers"):
                     api_choices[key].extend(queried_choices[key])
                 warnings.extend(query_warnings)
 
     merged = {
         key: _unique_choices(api_choices[key] + local[key])
-        for key in ("checkpoints", "upscalers", "samplers", "flows")
+        for key in ("checkpoints", "unets", "loras", "upscalers", "samplers", "flows")
     }
     return merged, warnings
 

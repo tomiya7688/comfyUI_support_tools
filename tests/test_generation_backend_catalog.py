@@ -22,6 +22,7 @@ class GenerationBackendCatalogTests(unittest.TestCase):
     def test_a1111_queries_all_catalogs_and_normalizes_api_url(self):
         payloads = {
             "sd-models": [{"title": "checkpoint.safetensors"}],
+            "loras": [{"name": "character/style"}],
             "upscalers": [{"name": "4x-UltraSharp"}],
             "samplers": [{"name": "Euler a"}],
         }
@@ -38,6 +39,8 @@ class GenerationBackendCatalogTests(unittest.TestCase):
 
         self.assertEqual(choices, {
             "checkpoints": ["checkpoint.safetensors"],
+            "unets": [],
+            "loras": ["character/style"],
             "upscalers": ["4x-UltraSharp"],
             "samplers": ["Euler a"],
         })
@@ -47,6 +50,8 @@ class GenerationBackendCatalogTests(unittest.TestCase):
     def test_comfyui_reads_choices_from_object_info(self):
         values = {
             "CheckpointLoaderSimple": ("ckpt_name", ["model.safetensors"]),
+            "UNETLoader": ("unet_name", ["diffusion_models/flux-dev.safetensors"]),
+            "LoraLoader": ("lora_name", ["style.safetensors"]),
             "UpscaleModelLoader": ("model_name", ["upscale.pth"]),
             "KSampler": ("sampler_name", ["euler"]),
         }
@@ -60,6 +65,8 @@ class GenerationBackendCatalogTests(unittest.TestCase):
 
         self.assertEqual(choices, {
             "checkpoints": ["model.safetensors"],
+            "unets": ["diffusion_models/flux-dev.safetensors"],
+            "loras": ["style.safetensors"],
             "upscalers": ["upscale.pth"],
             "samplers": ["euler"],
         })
@@ -69,6 +76,8 @@ class GenerationBackendCatalogTests(unittest.TestCase):
         def get(url, timeout):
             if url.endswith("/samplers"):
                 raise RuntimeError("offline")
+            if url.endswith("/loras"):
+                return FakeResponse([{"name": "style"}])
             if url.endswith("/sd-models"):
                 return FakeResponse([{"model_name": "checkpoint"}])
             return FakeResponse([{"name": "upscaler"}])
@@ -76,6 +85,7 @@ class GenerationBackendCatalogTests(unittest.TestCase):
         choices, warnings = A1111BackendCatalog().query_choices("http://localhost:7860", get)
 
         self.assertEqual(choices["checkpoints"], ["checkpoint"])
+        self.assertEqual(choices["loras"], ["style"])
         self.assertEqual(choices["upscalers"], ["upscaler"])
         self.assertEqual(choices["samplers"], [])
         self.assertEqual(len(warnings), 1)

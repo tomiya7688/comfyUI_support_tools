@@ -8,6 +8,7 @@ from threading import Event
 
 from scripts.backend.a1111_image_generation_backend import A1111ImageGenerationBackend
 from scripts.backend.comfyui_image_generation_backend import ComfyUIImageGenerationBackend
+from scripts.backend.comfy_ui_client import ComfyUIClient
 from scripts.backend.image_to_image_request import ImageToImageRequest
 from scripts.backend.image_generation_backend_factory import create_image_generation_backend
 from scripts.backend.text_to_image_request import TextToImageRequest
@@ -66,6 +67,42 @@ class TextToImageBackendTests(unittest.TestCase):
         })
         self.assertTrue(calls[0][1]["json"]["enable_hr"])
 
+    def test_comfyui_selected_vae_loader_is_connected_to_all_vae_consumers(self):
+        workflow = {
+            "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "model.safetensors"}},
+            "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+            "11": {"class_type": "VAEEncode", "inputs": {"pixels": ["12", 0], "vae": ["4", 2]}},
+        }
+
+        ComfyUIClient._apply_vae_selection(workflow, "vae.safetensors")
+
+        self.assertEqual(workflow["12"], {
+            "class_type": "VAELoader", "inputs": {"vae_name": "vae.safetensors"},
+        })
+        self.assertEqual(workflow["8"]["inputs"]["vae"], ["12", 0])
+        self.assertEqual(workflow["11"]["inputs"]["vae"], ["12", 0])
+
+    def test_comfyui_selection_updates_existing_vae_loader(self):
+        workflow = {
+            "61": {"class_type": "VAELoader", "inputs": {"vae_name": "old.safetensors"}},
+            "62": {"class_type": "VAEDecode", "inputs": {"samples": ["1", 0], "vae": ["61", 0]}},
+        }
+
+        ComfyUIClient._apply_vae_selection(workflow, "chosen.safetensors")
+
+        self.assertEqual(workflow["61"]["inputs"]["vae_name"], "chosen.safetensors")
+        self.assertEqual(workflow["62"]["inputs"]["vae"], ["61", 0])
+    def test_a1111_uses_explicit_vae_when_selected(self):
+        response = FakeResponse({"images": []})
+        calls = []
+        backend = A1111ImageGenerationBackend(
+            "http://localhost:7860/sdapi/v1/txt2img", 30,
+            lambda url, **kwargs: (calls.append((url, kwargs)) or response),
+        )
+
+        backend.generate(request(vae_name="vae.safetensors"))
+
+        self.assertEqual(calls[0][1]["json"]["override_settings"]["sd_vae"], "vae.safetensors")
     def test_a1111_does_not_send_request_when_already_cancelled(self):
         called = []
         stopped = Event()
@@ -88,7 +125,7 @@ class TextToImageBackendTests(unittest.TestCase):
 
         backend = ComfyUIImageGenerationBackend("http://localhost:8188", 40, FakeClient)
         stop_event = Event()
-        generation_request = request(enable_hr=True, workflow_path="flow.json", model_overrides={"4:ckpt_name": "other.safetensors"})
+        generation_request = request(enable_hr=True, workflow_path="flow.json", model_overrides={"4:ckpt_name": "other.safetensors"}, vae_name="vae.safetensors")
 
         result = backend.generate(generation_request, stop_event)
 
@@ -98,6 +135,7 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertEqual(backend.client.arguments["workflow_path"], "flow.json")
         self.assertIs(backend.client.arguments["stop_event"], stop_event)
         self.assertEqual(backend.client.arguments["model_overrides"], {"4:ckpt_name": "other.safetensors"})
+        self.assertEqual(backend.client.arguments["vae_name"], "vae.safetensors")
 
     def test_a1111_img2img_encodes_source_image_and_maps_settings(self):
         source_image = b"source-image"
@@ -161,6 +199,7 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertEqual(backend.client.arguments["image_path"], image_path)
         self.assertIs(backend.client.arguments["stop_event"], stop_event)
         self.assertEqual(backend.client.arguments["denoise"], 0.65)
+        self.assertEqual(backend.client.arguments["vae_name"], "")
 
     def test_a1111_interrupt_uses_service_root_and_declares_capabilities(self):
         calls = []

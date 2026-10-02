@@ -29,10 +29,11 @@ class PromptGenerateTab(ttk.Frame):
         self.steps = tk.IntVar(value=self.generator.steps)
         self.sampler = tk.StringVar(value=self.generator.sampler_index)
         self.checkpoint = tk.StringVar(value=self.generator.sd_model_checkpoint)
+        self.vae_name = tk.StringVar(value=getattr(self.generator, "vae_name", ""))
         self.comfy_flow = tk.StringVar(value=self.generator.comfy_flow)
         self.preset_store = PresetStore("prompt_generate")
         self.preset_name = tk.StringVar()
-        self.model_choices = {"checkpoints": [], "unets": [], "loras": []}
+        self.model_choices = {"checkpoints": [], "unets": [], "loras": [], "vaes": []}
         self._build()
         self._load_backend_choices()
 
@@ -69,15 +70,18 @@ class PromptGenerateTab(ttk.Frame):
         ttk.Label(settings, text="checkpoint / UNet").grid(row=1, column=2, sticky="w", pady=(4, 0))
         self.checkpoint_combo = ttk.Combobox(settings, textvariable=self.checkpoint, width=42)
         self.checkpoint_combo.grid(row=1, column=3, columnspan=3, sticky="we", pady=(4, 0))
+        ttk.Label(settings, text="VAE（任意）").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        self.vae_combo = ttk.Combobox(settings, textvariable=self.vae_name, width=42)
+        self.vae_combo.grid(row=2, column=1, columnspan=5, sticky="we", pady=(4, 0))
         self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
         ttk.Label(settings, textvariable=self.model_classification_text, wraplength=900).grid(
-            row=3, column=0, columnspan=6, sticky="w", pady=(2, 0)
+            row=4, column=0, columnspan=6, sticky="w", pady=(2, 0)
         )
         self.checkpoint.trace_add("write", self._update_model_classification)
         if RUNTIME_BACKEND == "comfyui":
-            ttk.Label(settings, text="Comfyフロー").grid(row=2, column=0, sticky="w", pady=(4, 0))
+            ttk.Label(settings, text="Comfyフロー").grid(row=3, column=0, sticky="w", pady=(4, 0))
             self.flow_combo = ttk.Combobox(settings, textvariable=self.comfy_flow, width=42)
-            self.flow_combo.grid(row=2, column=1, columnspan=5, sticky="we", pady=(4, 0))
+            self.flow_combo.grid(row=3, column=1, columnspan=5, sticky="we", pady=(4, 0))
             self.flow_combo.bind("<<ComboboxSelected>>", lambda _event: self._apply_flow_checkpoint_choices())
 
         buttons = ttk.Frame(self)
@@ -110,7 +114,7 @@ class PromptGenerateTab(ttk.Frame):
         return {
             "wildcard_root": self.wildcard_root.get(), "output_dir": self.output_dir.get(), "api_url": self.api_url.get(),
             "prompt": self._prompt_text(), "negative": self._negative_text(), "width": self.width.get(), "height": self.height.get(),
-            "steps": self.steps.get(), "sampler": self.sampler.get(), "checkpoint": self.checkpoint.get(), "comfy_flow": self.comfy_flow.get(),
+            "steps": self.steps.get(), "sampler": self.sampler.get(), "checkpoint": self.checkpoint.get(), "vae_name": self.vae_name.get(), "comfy_flow": self.comfy_flow.get(),
         }
 
     def _refresh_preset_choices(self):
@@ -128,7 +132,7 @@ class PromptGenerateTab(ttk.Frame):
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("wildcard_root", self.wildcard_root), ("output_dir", self.output_dir), ("api_url", self.api_url), ("width", self.width), ("height", self.height), ("steps", self.steps), ("sampler", self.sampler), ("checkpoint", self.checkpoint), ("comfy_flow", self.comfy_flow)):
+            for key, variable in (("wildcard_root", self.wildcard_root), ("output_dir", self.output_dir), ("api_url", self.api_url), ("width", self.width), ("height", self.height), ("steps", self.steps), ("sampler", self.sampler), ("checkpoint", self.checkpoint), ("vae_name", self.vae_name), ("comfy_flow", self.comfy_flow)):
                 if key in values:
                     variable.set(values[key])
             self._set_text(self.prompt, values.get("prompt", self._prompt_text()))
@@ -148,9 +152,11 @@ class PromptGenerateTab(ttk.Frame):
             "checkpoints": list(choices.get("checkpoints", [])),
             "unets": list(choices.get("unets", [])),
             "loras": list(choices.get("loras", [])),
+            "vaes": list(choices.get("vaes", [])),
         }
         self.sampler_combo.configure(values=choices["samplers"])
         self.checkpoint_combo.configure(values=base_model_choices(choices))
+        self.vae_combo.configure(values=choices.get("vaes", []))
         self._update_model_classification()
         self._update_lora_compatibility()
         if hasattr(self, "flow_combo"):
@@ -216,9 +222,10 @@ class PromptGenerateTab(ttk.Frame):
         self.generator.steps = self.steps.get()
         self.generator.sampler_index = self.sampler.get()
         self.generator.sd_model_checkpoint = self.checkpoint.get()
+        self.generator.vae_name = self.vae_name.get()
         self.generator.model_catalog = {
             key: list(self.model_choices.get(key, []))
-            for key in ("checkpoints", "unets", "loras")
+            for key in ("checkpoints", "unets", "loras", "vaes")
         }
         self.generator.comfy_flow = self.comfy_flow.get()
         cache = {}

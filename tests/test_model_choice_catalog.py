@@ -15,6 +15,7 @@ class _Catalog:
             "checkpoints": ["sdxl/api-checkpoint.safetensors"],
             "unets": ["flux/api-unet.safetensors"],
             "loras": ["sdxl/api-style.safetensors"],
+            "vaes": ["sdxl/api-vae.safetensors"],
             "upscalers": [],
             "samplers": [],
         }, []
@@ -31,6 +32,7 @@ class ModelChoiceCatalogTests(unittest.TestCase):
             "checkpoints": ["sdxl/local-checkpoint.safetensors"],
             "unets": ["flux/local-unet.safetensors"],
             "loras": ["sdxl/local-style.safetensors"],
+            "vaes": ["sdxl/local-vae.safetensors"],
             "upscalers": [],
             "samplers": [],
             "flows": [],
@@ -72,6 +74,7 @@ class ModelChoiceCatalogTests(unittest.TestCase):
             _write_file(checkpoints_root / "sdxl" / "base.safetensors")
             _write_file(models_root / "diffusion_models" / "flux" / "dev.safetensors")
             _write_file(models_root / "Lora" / "sdxl" / "style.safetensors")
+            _write_file(models_root / "VAE" / "sdxl" / "vae.safetensors")
             _write_file(runtime_root / "models" / "loras" / "flux" / "style.safetensors")
 
             with (
@@ -86,6 +89,7 @@ class ModelChoiceCatalogTests(unittest.TestCase):
         self.assertEqual(choices["checkpoints"], ["sdxl/base.safetensors"])
         self.assertEqual(choices["unets"], ["flux/dev.safetensors"])
         self.assertEqual(choices["loras"], ["sdxl/style.safetensors", "flux/style.safetensors"])
+        self.assertEqual(choices["vaes"], ["sdxl/vae.safetensors"])
 
 
 if __name__ == "__main__":

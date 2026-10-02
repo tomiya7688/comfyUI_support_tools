@@ -18,3 +18,4 @@ class ImageToImageRequest:
     denoise: float
     width: int
     height: int
+    vae_name: str = ""

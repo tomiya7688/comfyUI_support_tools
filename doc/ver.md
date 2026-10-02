@@ -972,3 +972,23 @@
         scripts/tabs/random_img2img.py
         tests/test_prompt_lora_compatibility.py
         doc/ver.md
+
+# 117. A1111/ComfyUIのVAE候補選択
+    A1111のsd-vae API、ComfyUIのVAELoader object_info、および共通/backend別モデルフォルダからVAE候補を取得し、Random Image・Prompt Generate・Random Img2Imgで任意選択できるようにした。A1111にはsd_vae overrideを渡し、ComfyUIでは選択したVAELoaderをAPI workflowへ追加または更新してVAEEncode/VAEDecodeへ接続する。空欄時は既存の既定VAE動作を維持する。
+    追加・変更したファイル
+        scripts/backend/a1111_backend_catalog.py
+        scripts/backend/comfyui_backend_catalog.py
+        scripts/backend/comfy_ui_client.py
+        scripts/backend/a1111_image_generation_backend.py
+        scripts/backend/comfyui_image_generation_backend.py
+        scripts/backend/embedded_random_image.py
+        scripts/backend/image_to_image_request.py
+        scripts/backend/text_to_image_request.py
+        scripts/context.py
+        scripts/tabs/random_image.py
+        scripts/tabs/prompt_generate.py
+        scripts/tabs/random_img2img.py
+        tests/test_generation_backend_catalog.py
+        tests/test_model_choice_catalog.py
+        tests/test_text_to_image_backends.py
+        doc/ver.md

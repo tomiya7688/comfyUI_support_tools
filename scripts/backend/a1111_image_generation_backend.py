@@ -50,7 +50,9 @@ class A1111ImageGenerationBackend:
             "save_images": request.save_images,
             "override_settings": {"sd_model_checkpoint": request.checkpoint},
         }
-        if request.use_model_vae:
+        if request.vae_name:
+            payload["override_settings"]["sd_vae"] = request.vae_name
+        elif request.use_model_vae:
             payload["override_settings"]["sd_vae"] = "Automatic"
         response = self.request_post(self.api_url, json=payload, timeout=self.timeout)
         response.raise_for_status()
@@ -72,6 +74,8 @@ class A1111ImageGenerationBackend:
             "sampler_index": request.sampler,
             "override_settings": {"sd_model_checkpoint": request.checkpoint},
         }
+        if request.vae_name:
+            payload["override_settings"]["sd_vae"] = request.vae_name
         response = self.request_post(self.api_url, json=payload, timeout=self.timeout)
         response.raise_for_status()
         images = response.json().get("images", [])

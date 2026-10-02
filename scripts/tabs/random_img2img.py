@@ -25,7 +25,7 @@ class RandomImg2ImgTab(ttk.Frame):
         super().__init__(master, padding=10)
         self.stop_event=threading.Event()
         self._active_backend=None
-        self.model_choices = {"checkpoints": [], "unets": [], "loras": []}
+        self.model_choices = {"checkpoints": [], "unets": [], "loras": [], "vaes": []}
         self.preset_store=PresetStore("random_img2img"); self.preset_name=tk.StringVar()
         self.input_dir=tk.StringVar(value=self.DEFAULT_INPUT_DIR); self.output_dir=tk.StringVar(value=self.DEFAULT_OUTPUT_DIR)
         default_tagger="PixAI v0.9" if RUNTIME_BACKEND == "comfyui" else "A1111 standard"
@@ -36,18 +36,19 @@ class RandomImg2ImgTab(ttk.Frame):
         self.threshold=tk.StringVar(value="0.35"); self.character_threshold=tk.StringVar(value="0.85"); self.additional=tk.StringVar(value="best quality"); self.manual_prompt=tk.StringVar()
         self.exclude=tk.StringVar(value="worst quality, low quality, normal quality, lowres, blurry, jpeg artifacts, bad anatomy, bad hands, extra fingers, missing fingers, poorly drawn hands, bad feet, missing arms, missing legs, extra limbs, fused fingers, deformed hands, text, error, signature, watermark, username, artist name, long neck, extra eyes, disfigured, mutation, mutated, ugly, extra arms, bad proportions, missing body parts, malformed limbs, poorly drawn face, poorly drawn eyes, cross-eye, wrong fingers, animal ears, virtual youtuber, animal face, beast face, monster girl, wrong proportions, deformed, furry, halo, kemomimi, realistic, futanari, censored, sfw")
         self.negative=tk.StringVar(value="(worst quality, low quality:1.4), (normal quality:1.1), lowres, blurry, jpeg artifacts, bad anatomy, bad hands, extra fingers, missing fingers, poorly drawn hands, bad feet, missing arms, missing legs, extra limbs, fused fingers, deformed hands, text, error, signature, watermark, username, artist name, long neck, extra limbs, extra eyes, disfigured, mutation, mutated, ugly, extra arms, bad proportions, missing body parts, malformed limbs, poorly drawn face, poorly drawn eyes, cross-eye, wrong fingers,animal ears,animal face,beast face,monster girl,wrong proportions,deformed,furry,text,halo, kemomimi,realistic,futanari")
-        self.steps=tk.StringVar(value="25"); self.cfg=tk.StringVar(value="6.5"); self.width=tk.StringVar(value="960"); self.height=tk.StringVar(value="1280"); self.denoise=tk.StringVar(value="0.75"); self.sampler=tk.StringVar(value="Euler a"); self.checkpoint=tk.StringVar(value="shiitakeMix_v20.safetensors" if RUNTIME_BACKEND == "comfyui" else "rinIllusionRNSFW_v20"); self.loops=tk.StringVar(value="100000")
+        self.steps=tk.StringVar(value="25"); self.cfg=tk.StringVar(value="6.5"); self.width=tk.StringVar(value="960"); self.height=tk.StringVar(value="1280"); self.denoise=tk.StringVar(value="0.75"); self.sampler=tk.StringVar(value="Euler a"); self.checkpoint=tk.StringVar(value="shiitakeMix_v20.safetensors" if RUNTIME_BACKEND == "comfyui" else "rinIllusionRNSFW_v20"); self.vae_name=tk.StringVar(); self.loops=tk.StringVar(value="100000")
         LabeledPathRow(self,"INPUT_DIR",self.input_dir,mode="dir").pack(fill="x",pady=2); LabeledPathRow(self,"OUTPUT_DIR",self.output_dir,mode="dir").pack(fill="x",pady=2)
         tagger_row=ttk.Frame(self); tagger_row.pack(fill="x",pady=2); ttk.Checkbutton(tagger_row,text="Taggerで入力画像からタグを取得",variable=self.use_tagger).pack(side="left"); ttk.Label(tagger_row,text="TAGGER",width=12).pack(side="left"); tagger_combo=ttk.Combobox(tagger_row,textvariable=self.tagger_kind,values=list(self.TAGGER_PRESETS),state="readonly",width=24); tagger_combo.pack(side="left"); tagger_combo.bind("<<ComboboxSelected>>",self._apply_tagger_preset); ttk.Button(tagger_row,text="PixAI API起動",command=self.start_pixai_api).pack(side="left",padx=(12,4)); ttk.Button(tagger_row,text="PixAI API停止",command=self.stop_pixai_api).pack(side="left",padx=4)
         for label,var in [("API_INTERROGATE",self.api_interrogate),("API_IMG2IMG",self.api_img2img),("手動プロンプト（Taggerなし時）",self.manual_prompt),("ADDITIONAL_TAGS",self.additional)]:
             r=ttk.Frame(self); r.pack(fill="x",pady=2); ttk.Label(r,text=label,width=22).pack(side="left"); ttk.Entry(r,textvariable=var).pack(side="left",fill="x",expand=True)
         grid=ttk.Frame(self); grid.pack(fill="x",pady=4)
-        for i,(label,var) in enumerate([("THRESHOLD",self.threshold),("CHAR_THRESHOLD",self.character_threshold),("STEPS",self.steps),("CFG",self.cfg),("WIDTH",self.width),("HEIGHT",self.height),("DENOISE",self.denoise),("SAMPLER",self.sampler),("CHECKPOINT",self.checkpoint),("LOOPS",self.loops)]):
+        for i,(label,var) in enumerate([("THRESHOLD",self.threshold),("CHAR_THRESHOLD",self.character_threshold),("STEPS",self.steps),("CFG",self.cfg),("WIDTH",self.width),("HEIGHT",self.height),("DENOISE",self.denoise),("SAMPLER",self.sampler),("CHECKPOINT",self.checkpoint),("VAE",self.vae_name),("LOOPS",self.loops)]):
             r,c=divmod(i,3); ttk.Label(grid,text=label).grid(row=r,column=c*2,sticky="w")
-            widget = ttk.Combobox(grid,textvariable=var,width=20) if label in {"SAMPLER","CHECKPOINT"} else ttk.Entry(grid,textvariable=var,width=20)
+            widget = ttk.Combobox(grid,textvariable=var,width=20) if label in {"SAMPLER","CHECKPOINT","VAE"} else ttk.Entry(grid,textvariable=var,width=20)
             widget.grid(row=r,column=c*2+1,sticky="we",padx=3)
             if label == "SAMPLER": self.sampler_combo = widget
             if label == "CHECKPOINT": self.checkpoint_combo = widget
+            if label == "VAE": self.vae_combo = widget
         self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
         ttk.Label(grid, textvariable=self.model_classification_text, wraplength=900).grid(
             row=4, column=0, columnspan=6, sticky="w", padx=3, pady=(2, 4)
@@ -62,7 +63,7 @@ class RandomImg2ImgTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        values = {key: variable.get() for key, variable in (("input_dir",self.input_dir),("output_dir",self.output_dir),("tagger_kind",self.tagger_kind),("api_interrogate",self.api_interrogate),("api_img2img",self.api_img2img),("threshold",self.threshold),("character_threshold",self.character_threshold),("additional",self.additional),("manual_prompt",self.manual_prompt),("exclude",self.exclude),("negative",self.negative),("steps",self.steps),("cfg",self.cfg),("width",self.width),("height",self.height),("denoise",self.denoise),("sampler",self.sampler),("checkpoint",self.checkpoint),("loops",self.loops))}
+        values = {key: variable.get() for key, variable in (("input_dir",self.input_dir),("output_dir",self.output_dir),("tagger_kind",self.tagger_kind),("api_interrogate",self.api_interrogate),("api_img2img",self.api_img2img),("threshold",self.threshold),("character_threshold",self.character_threshold),("additional",self.additional),("manual_prompt",self.manual_prompt),("exclude",self.exclude),("negative",self.negative),("steps",self.steps),("cfg",self.cfg),("width",self.width),("height",self.height),("denoise",self.denoise),("sampler",self.sampler),("checkpoint",self.checkpoint),("vae_name",self.vae_name),("loops",self.loops))}
         values["use_tagger"] = self.use_tagger.get()
         return values
 
@@ -76,7 +77,7 @@ class RandomImg2ImgTab(ttk.Frame):
     def load_preset(self):
         try:
             values=self.preset_store.load(self.preset_name.get())
-            for key,variable in (("input_dir",self.input_dir),("output_dir",self.output_dir),("tagger_kind",self.tagger_kind),("api_interrogate",self.api_interrogate),("api_img2img",self.api_img2img),("threshold",self.threshold),("character_threshold",self.character_threshold),("additional",self.additional),("manual_prompt",self.manual_prompt),("exclude",self.exclude),("negative",self.negative),("steps",self.steps),("cfg",self.cfg),("width",self.width),("height",self.height),("denoise",self.denoise),("sampler",self.sampler),("checkpoint",self.checkpoint),("loops",self.loops)):
+            for key,variable in (("input_dir",self.input_dir),("output_dir",self.output_dir),("tagger_kind",self.tagger_kind),("api_interrogate",self.api_interrogate),("api_img2img",self.api_img2img),("threshold",self.threshold),("character_threshold",self.character_threshold),("additional",self.additional),("manual_prompt",self.manual_prompt),("exclude",self.exclude),("negative",self.negative),("steps",self.steps),("cfg",self.cfg),("width",self.width),("height",self.height),("denoise",self.denoise),("sampler",self.sampler),("checkpoint",self.checkpoint),("vae_name",self.vae_name),("loops",self.loops)):
                 if key in values: variable.set(values[key])
             self.use_tagger.set(values.get("use_tagger", True))
             self.logbox.log("プリセットを読み込みました")
@@ -96,10 +97,12 @@ class RandomImg2ImgTab(ttk.Frame):
             "checkpoints": list(choices.get("checkpoints", [])),
             "unets": list(choices.get("unets", [])),
             "loras": list(choices.get("loras", [])),
+            "vaes": list(choices.get("vaes", [])),
         }
         self.checkpoint_combo.configure(values=base_model_choices(choices))
         self._update_model_classification()
         self.sampler_combo.configure(values=choices["samplers"])
+        self.vae_combo.configure(values=choices.get("vaes", []))
 
     def _update_model_classification(self, *_args):
         selected = self.checkpoint.get().strip()
@@ -184,6 +187,7 @@ class RandomImg2ImgTab(ttk.Frame):
                         denoise=float(self.denoise.get()),
                         width=int(self.width.get()),
                         height=int(self.height.get()),
+                        vae_name=self.vae_name.get(),
                         ),
                         stop_event=self.stop_event,
                     )

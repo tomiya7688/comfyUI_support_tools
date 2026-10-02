@@ -915,3 +915,10 @@
         tests/test_external_app_migration.py
         external/README.md
         doc/ver.md
+
+# 111. ComfyUI共有モデル参照の復旧
+    ComfyUI/models内の旧sd/modelsを向いた切れたジャンクションを検出し、paths.jsonで指定した共通models_root内に同名フォルダがある場合のみ参照先を修復するツールを追加した。初期状態はdry-runで、既存モデルファイルや外部リンクは移動・変更しない。
+    追加・変更したファイル
+        tools/maintenance/sync_comfyui_model_links.py
+        tests/test_comfyui_model_links.py
+        doc/ver.md

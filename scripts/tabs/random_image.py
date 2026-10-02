@@ -1,6 +1,10 @@
 from ..context import *
 from ..context import _safe_thread
 from ..context import _unique_choices
+from ..backend.model_choice_classification import (
+    classify_base_model_choice,
+    describe_model_classification,
+)
 from ..backend.ollama_prompt_corrector import OllamaPromptCorrector
 from ..services import *
 from ..widgets.preset_store import PresetStore
@@ -67,6 +71,7 @@ class RandomImageTab(ttk.Frame):
         self.additional_file_rows = []
         self.action_wildcard_rows = []
         self.flow_model_vars = []
+        self.model_choices = {"checkpoints": [], "unets": []}
 
         top = ttk.LabelFrame(self, text="ファイル", padding=8)
         top.pack(fill="x")
@@ -124,6 +129,11 @@ class RandomImageTab(ttk.Frame):
         ttk.Label(settings, text="checkpoint / UNet").grid(row=3, column=2, sticky="w")
         self.checkpoint_combo = ttk.Combobox(settings, textvariable=self.var_sd_model_checkpoint, width=40)
         self.checkpoint_combo.grid(row=3, column=3, columnspan=5, sticky="we")
+        self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
+        ttk.Label(settings, textvariable=self.model_classification_text, wraplength=900).grid(
+            row=6, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 4)
+        )
+        self.var_sd_model_checkpoint.trace_add("write", self._update_model_classification)
         ttk.Checkbutton(settings, text="モデル付属VAEを使う", variable=self.var_use_model_vae).grid(row=4, column=0, columnspan=3, sticky="w")
         ttk.Label(settings, text="出力形式").grid(row=4, column=3, sticky="w")
         ttk.Combobox(settings, textvariable=self.var_output_format, values=["png", "webp", "jpg", "gif"], state="readonly", width=10).grid(row=4, column=4, sticky="w")
@@ -367,12 +377,25 @@ class RandomImageTab(ttk.Frame):
         self.logbox.log("画像生成タブを起動しました")
 
     def _apply_backend_choices(self, choices):
+        self.model_choices = {
+            "checkpoints": list(choices.get("checkpoints", [])),
+            "unets": list(choices.get("unets", [])),
+        }
         self.checkpoint_combo.configure(values=base_model_choices(choices))
+        self._update_model_classification()
         self.upscaler_combo.configure(values=choices["upscalers"])
         self.sampler_combo.configure(values=choices["samplers"])
         if hasattr(self, "flow_combo"):
             self.flow_combo.configure(values=choices.get("flows", []))
             self._apply_flow_model_choices()
+
+    def _update_model_classification(self, *_args):
+        selected = self.var_sd_model_checkpoint.get().strip()
+        if not selected:
+            self.model_classification_text.set("モデルを選ぶと系統判定と根拠を表示します。")
+            return
+        classification = classify_base_model_choice(selected, self.model_choices)
+        self.model_classification_text.set(describe_model_classification(classification))
 
     def _load_local_backend_choices(self):
         if isinstance(self.mod, Exception):

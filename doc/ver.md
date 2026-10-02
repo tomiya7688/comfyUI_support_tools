@@ -951,3 +951,13 @@
         tests/test_generation_backend_catalog.py
         tests/test_model_choice_catalog.py
         doc/ver.md
+
+# 115. 生成タブの選択モデル分類表示
+    A1111/ComfyUIから取得したcheckpoint/UNet候補を共有分類器へ接続し、Random Image、Prompt Generate、Random Img2Imgで選択中モデルの系統・種別・判定根拠を表示する。同名候補が複数種別に現れる場合や系統を特定できない場合はunknownを維持する。
+    追加・変更したファイル
+        scripts/backend/model_choice_classification.py
+        scripts/tabs/random_image.py
+        scripts/tabs/prompt_generate.py
+        scripts/tabs/random_img2img.py
+        tests/test_model_choice_classification.py
+        doc/ver.md

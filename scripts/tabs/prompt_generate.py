@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from ..context import *
 from ..context import _unique_choices
+from ..backend.model_choice_classification import (
+    classify_base_model_choice,
+    describe_model_classification,
+)
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
@@ -24,6 +28,7 @@ class PromptGenerateTab(ttk.Frame):
         self.comfy_flow = tk.StringVar(value=self.generator.comfy_flow)
         self.preset_store = PresetStore("prompt_generate")
         self.preset_name = tk.StringVar()
+        self.model_choices = {"checkpoints": [], "unets": []}
         self._build()
         self._load_backend_choices()
 
@@ -55,6 +60,11 @@ class PromptGenerateTab(ttk.Frame):
         ttk.Label(settings, text="checkpoint / UNet").grid(row=1, column=2, sticky="w", pady=(4, 0))
         self.checkpoint_combo = ttk.Combobox(settings, textvariable=self.checkpoint, width=42)
         self.checkpoint_combo.grid(row=1, column=3, columnspan=3, sticky="we", pady=(4, 0))
+        self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
+        ttk.Label(settings, textvariable=self.model_classification_text, wraplength=900).grid(
+            row=3, column=0, columnspan=6, sticky="w", pady=(2, 0)
+        )
+        self.checkpoint.trace_add("write", self._update_model_classification)
         if RUNTIME_BACKEND == "comfyui":
             ttk.Label(settings, text="Comfyフロー").grid(row=2, column=0, sticky="w", pady=(4, 0))
             self.flow_combo = ttk.Combobox(settings, textvariable=self.comfy_flow, width=42)
@@ -124,8 +134,13 @@ class PromptGenerateTab(ttk.Frame):
         self._apply_backend_choices(choices)
 
     def _apply_backend_choices(self, choices):
+        self.model_choices = {
+            "checkpoints": list(choices.get("checkpoints", [])),
+            "unets": list(choices.get("unets", [])),
+        }
         self.sampler_combo.configure(values=choices["samplers"])
         self.checkpoint_combo.configure(values=base_model_choices(choices))
+        self._update_model_classification()
         if hasattr(self, "flow_combo"):
             self.flow_combo.configure(values=choices.get("flows", []))
             self._apply_flow_checkpoint_choices()
@@ -136,6 +151,14 @@ class PromptGenerateTab(ttk.Frame):
         choices = flow_checkpoint_choices(self.comfy_flow.get())
         if choices:
             self.checkpoint_combo.configure(values=_unique_choices(choices + list(self.checkpoint_combo.cget("values"))))
+
+    def _update_model_classification(self, *_args):
+        selected = self.checkpoint.get().strip()
+        if not selected:
+            self.model_classification_text.set("モデルを選ぶと系統判定と根拠を表示します。")
+            return
+        classification = classify_base_model_choice(selected, self.model_choices)
+        self.model_classification_text.set(describe_model_classification(classification))
 
     def refresh_backend_choices(self):
         def worker():

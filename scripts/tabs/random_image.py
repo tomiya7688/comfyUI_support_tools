@@ -380,6 +380,7 @@ class RandomImageTab(ttk.Frame):
         self.model_choices = {
             "checkpoints": list(choices.get("checkpoints", [])),
             "unets": list(choices.get("unets", [])),
+            "loras": list(choices.get("loras", [])),
         }
         self.checkpoint_combo.configure(values=base_model_choices(choices))
         self._update_model_classification()
@@ -460,6 +461,10 @@ class RandomImageTab(ttk.Frame):
             "api_timeout": self.var_api_timeout.get(),
             "comfy_flow": self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else "",
             "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},
+            "model_catalog": {
+                key: list(self.model_choices.get(key, []))
+                for key in ("checkpoints", "unets", "loras")
+            },
             "additional_inputs": additional_inputs, "additional_input_files": [item["path"] for item in additional_inputs],
             "action_wildcards": [{**item, "condition": item["condition"].strip(), "path": item["path"].strip()} for item in self._action_wildcard_specs() if item["condition"].strip() and item["path"].strip()],
             "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": "until_stop" if self.var_keep_main_wildcard_until_stop.get() else "each_image",

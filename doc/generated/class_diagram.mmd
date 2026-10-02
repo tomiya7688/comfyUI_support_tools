@@ -139,6 +139,8 @@ classDiagram
         +core_count()
         +apply()
     }
+    class PromptLoraFinding {
+    }
     class StaticSpecGenerator {
         +generate()
         +_function_line()
@@ -356,6 +358,7 @@ classDiagram
         +_apply_backend_choices()
         +_apply_flow_checkpoint_choices()
         +_update_model_classification()
+        +_update_lora_compatibility()
         +refresh_backend_choices()
         +_finish_backend_refresh()
         +start()

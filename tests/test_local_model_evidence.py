@@ -21,7 +21,47 @@ def _write_header(path: Path, family: str) -> None:
     path.write_bytes(struct.pack("<Q", len(header)) + header)
 
 
+def _write_shapes(path: Path, shapes: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = json.dumps({key: {"shape": list(shape)} for key, shape in shapes.items()}).encode("utf-8")
+    path.write_bytes(struct.pack("<Q", len(header)) + header)
+
+
 class LocalModelEvidenceTests(unittest.TestCase):
+    def test_structure_only_checkpoint_and_lora_mismatch_stops_generation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_shapes(root / "base.safetensors", {
+                "model.diffusion_model.input_blocks.0.0.weight": (320, 4, 3, 3),
+                "model.diffusion_model.input_blocks.4.1.transformer_blocks.0.attn2.to_k.weight": (640, 768),
+            })
+            name = "lora_unet_input_blocks_4_1_transformer_blocks_0_attn2_to_k"
+            _write_shapes(root / "style.safetensors", {
+                name + ".lora_down.weight": (16, 2048), name + ".lora_up.weight": (640, 16),
+            })
+            with patch("scripts.backend.local_model_evidence._model_roots", return_value=[root]):
+                logs = []
+                with self.assertRaisesRegex(ValueError, "生成を中止"):
+                    validate_prompt_loras(
+                        "<lora:style:1>", "base.safetensors",
+                        {"checkpoints": ["base.safetensors"], "loras": ["style.safetensors"]}, logs.append,
+                    )
+                self.assertIn("tensor", logs[0])
+
+    def test_replaced_structure_only_model_invalidates_cached_classification(self):
+        path = self.root / "base.safetensors"
+        shapes = {
+            "model.diffusion_model.input_blocks.0.0.weight": (320, 4, 3, 3),
+            "model.diffusion_model.input_blocks.4.1.transformer_blocks.0.attn2.to_k.weight": (640, 768),
+        }
+        _write_shapes(path, shapes)
+        self.assertEqual(classify_local_model_choice(path.name, ModelKind.CHECKPOINT).family, ModelFamily.SD_1_5)
+        before = path.stat()
+        shapes["model.diffusion_model.input_blocks.4.1.transformer_blocks.0.attn2.to_k.weight"] = (640, 2048)
+        _write_shapes(path, shapes)
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000))
+        self.assertEqual(classify_local_model_choice(path.name, ModelKind.CHECKPOINT).family, ModelFamily.SDXL)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

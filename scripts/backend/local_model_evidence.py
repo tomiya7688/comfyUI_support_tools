@@ -10,7 +10,7 @@ from src.comfyui_support_tools.shared.model_identity import (
     ModelClassification, ModelFamily, ModelKind, classify_model,
 )
 from src.comfyui_support_tools.shared.safetensors_metadata import (
-    SafetensorsMetadataError, read_safetensors_metadata,
+    SafetensorsMetadataError, read_safetensors_evidence,
 )
 
 
@@ -59,12 +59,17 @@ def _matching_files(name: str, kind: ModelKind) -> list[Path]:
 
 
 @lru_cache(maxsize=128)
-def _metadata(path: str, mtime_ns: int, size: int) -> tuple[dict[str, str], str]:
-    # The stat signature invalidates cached headers when a model is replaced.
+def _file_classification(path: str, mtime_ns: int, size: int, kind: ModelKind) -> ModelClassification:
+    # Cache compact results, not large headers; the stat signature detects replacements.
     try:
-        return read_safetensors_metadata(path), ""
+        metadata, shapes = read_safetensors_evidence(path)
     except SafetensorsMetadataError as exc:
-        return {}, f"Local metadata unavailable: {exc}."
+        result = classify_model(path, declared_kind=kind)
+        return ModelClassification(
+            result.family, result.kind,
+            f"{result.family_reason} Local metadata unavailable: {exc}.", result.kind_reason,
+        )
+    return classify_model(path, metadata=metadata, tensor_shapes=shapes, declared_kind=kind)
 
 
 def classify_local_model_choice(name: str, kind: ModelKind) -> ModelClassification:
@@ -76,14 +81,14 @@ def classify_local_model_choice(name: str, kind: ModelKind) -> ModelClassificati
             "Multiple distinct local files match this catalog name; model family is ambiguous.",
             f"Using declared model kind {kind.value}.",
         )
-    metadata, warning = {}, ""
+    warning = ""
     if files and files[0].suffix.casefold() == ".safetensors":
         try:
             signature = files[0].stat()
-            metadata, warning = _metadata(str(files[0]), signature.st_mtime_ns, signature.st_size)
+            return _file_classification(str(files[0]), signature.st_mtime_ns, signature.st_size, kind)
         except OSError as exc:
             warning = f"Local metadata unavailable: {exc}."
-    result = classify_model(files[0] if files else name, metadata=metadata, declared_kind=kind)
+    result = classify_model(files[0] if files else name, declared_kind=kind)
     if not warning:
         return result
     return ModelClassification(

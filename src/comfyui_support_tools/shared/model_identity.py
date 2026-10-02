@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+
+from .tensor_model_signals import tensor_family_signals
 
 
 class ModelFamily(str, Enum):
@@ -85,16 +87,23 @@ def _path_signals(model_path: str | Path) -> list[tuple[ModelFamily, str]]:
     ]
 
 
-def _infer_family(model_path: str | Path, metadata: Mapping[str, str] | None) -> tuple[ModelFamily, str]:
+def _infer_family(
+    model_path: str | Path,
+    metadata: Mapping[str, str] | None,
+    tensor_shapes: Mapping[str, Sequence[int]] | None,
+) -> tuple[ModelFamily, str]:
     signals = _metadata_signals(metadata) + _path_signals(model_path)
+    signals.extend((ModelFamily(family), reason) for family, reason in tensor_family_signals(tensor_shapes))
     families = {family for family, _ in signals}
     if len(families) > 1:
         details = ", ".join(f"{family.value} from {source}" for family, source in signals)
         return ModelFamily.UNKNOWN, f"Conflicting family signals: {details}."
     if not signals:
-        return ModelFamily.UNKNOWN, "No recognized family marker in the model path or metadata."
+        return ModelFamily.UNKNOWN, "No recognized family marker in the model path, metadata, or tensor layout."
+    if families == {ModelFamily.UNKNOWN}:
+        return ModelFamily.UNKNOWN, " ".join(reason for _, reason in signals)
     family = signals[0][0]
-    sources = ", ".join(dict.fromkeys(source for _, source in signals))
+    sources = ", ".join(dict.fromkeys(source.rstrip(".") for _, source in signals))
     return family, f"Inferred {family.value} from {sources}."
 
 
@@ -125,9 +134,10 @@ def classify_model(
     model_path: str | Path,
     *,
     metadata: Mapping[str, str] | None = None,
+    tensor_shapes: Mapping[str, Sequence[int]] | None = None,
     declared_kind: ModelKind | str | None = None,
 ) -> ModelClassification:
     """Infer a model family and kind, preserving uncertainty in the result."""
-    family, family_reason = _infer_family(model_path, metadata)
+    family, family_reason = _infer_family(model_path, metadata, tensor_shapes)
     kind, kind_reason = _infer_kind(model_path, declared_kind)
     return ModelClassification(family, kind, family_reason, kind_reason)

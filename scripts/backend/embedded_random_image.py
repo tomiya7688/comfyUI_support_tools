@@ -50,6 +50,7 @@ class EmbeddedRandomImage:
     model_catalog = {"checkpoints": [], "unets": [], "loras": []}
     generation_parameter_config = None
     use_model_vae = True
+    vae_name = ""
     save_prompts = False
     prompt_output = ""
     sequential_loop = False
@@ -363,6 +364,7 @@ class EmbeddedRandomImage:
                 width=resolution["width"],
                 height=resolution["height"],
                 use_model_vae=self.use_model_vae,
+                vae_name=self.vae_name,
                 enable_hr=self.enable_hr,
                 hr_scale=self.hr_scale,
                 hr_upscaler=self.hr_upscaler,

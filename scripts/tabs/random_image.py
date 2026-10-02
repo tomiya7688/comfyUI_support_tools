@@ -50,6 +50,7 @@ class RandomImageTab(ttk.Frame):
         self.var_sampler_index = tk.StringVar()
         self.var_sd_model_checkpoint = tk.StringVar()
         self.var_use_model_vae = tk.BooleanVar(value=True)
+        self.var_vae_name = tk.StringVar()
         self.var_save_prompts = tk.BooleanVar(value=False)
         self.var_prompt_output = tk.StringVar()
         self.var_sequential_loop = tk.BooleanVar(value=False)
@@ -131,16 +132,19 @@ class RandomImageTab(ttk.Frame):
         self.checkpoint_combo.grid(row=3, column=3, columnspan=5, sticky="we")
         self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
         ttk.Label(settings, textvariable=self.model_classification_text, wraplength=900).grid(
-            row=6, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 4)
+            row=7, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 4)
         )
         self.var_sd_model_checkpoint.trace_add("write", self._update_model_classification)
         ttk.Checkbutton(settings, text="モデル付属VAEを使う", variable=self.var_use_model_vae).grid(row=4, column=0, columnspan=3, sticky="w")
+        ttk.Label(settings, text="VAE（任意）").grid(row=5, column=0, sticky="w")
+        self.vae_combo = ttk.Combobox(settings, textvariable=self.var_vae_name, width=40)
+        self.vae_combo.grid(row=5, column=1, columnspan=5, sticky="we")
         ttk.Label(settings, text="出力形式").grid(row=4, column=3, sticky="w")
         ttk.Combobox(settings, textvariable=self.var_output_format, values=["png", "webp", "jpg", "gif"], state="readonly", width=10).grid(row=4, column=4, sticky="w")
         if RUNTIME_BACKEND == "comfyui":
-            ttk.Label(settings, text="Comfyフロー").grid(row=5, column=0, sticky="w")
+            ttk.Label(settings, text="Comfyフロー").grid(row=6, column=0, sticky="w")
             self.flow_combo = ttk.Combobox(settings, textvariable=self.var_comfy_flow, width=40)
-            self.flow_combo.grid(row=5, column=1, columnspan=7, sticky="we")
+            self.flow_combo.grid(row=6, column=1, columnspan=7, sticky="we")
             self.flow_combo.bind("<<ComboboxSelected>>", lambda _event: self._apply_flow_model_choices())
             self.flow_models_frame = ttk.LabelFrame(self, text="フロー固有モデル", padding=6)
             self.flow_models_frame.pack(fill="x", pady=4)
@@ -210,6 +214,7 @@ class RandomImageTab(ttk.Frame):
         self.var_sampler_index.set(getattr(self.mod, "sampler_index"))
         self.var_sd_model_checkpoint.set(getattr(self.mod, "sd_model_checkpoint"))
         self.var_use_model_vae.set(getattr(self.mod, "use_model_vae", True))
+        self.var_vae_name.set(getattr(self.mod, "vae_name", ""))
         self.var_save_prompts.set(getattr(self.mod, "save_prompts", False))
         self.var_prompt_output.set(getattr(self.mod, "prompt_output", ""))
         self.var_sequential_loop.set(getattr(self.mod, "sequential_loop", False))
@@ -255,7 +260,7 @@ class RandomImageTab(ttk.Frame):
             values = self.preset_store.load(self.var_preset_name.get())
             for key, variable in (("input_file", self.var_input_file), ("negative_input_file", self.var_negative_input_file), ("wildcard_root_dir", self.var_wildcard_root_dir), ("output_dir", self.var_output_dir), ("api_url", self.var_api_url), ("width", self.var_width), ("height", self.var_height), ("steps", self.var_steps), ("enable_hr", self.var_enable_hr), ("hr_scale", self.var_hr_scale), ("hr_upscaler", self.var_hr_upscaler), ("hr_second_pass_steps", self.var_hr_second_pass_steps), ("denoising_strength", self.var_denoising_strength), ("sampler_index", self.var_sampler_index), ("sd_model_checkpoint", self.var_sd_model_checkpoint), ("api_timeout", self.var_api_timeout), ("comfy_flow", self.var_comfy_flow), ("additional_position", self.var_additional_position), ("wildcard_cache_scope", self.var_wildcard_cache_scope), ("enable_nsfw_mosaic", self.var_enable_nsfw_mosaic), ("nsfw_mosaic_factor", self.var_nsfw_mosaic_factor), ("enable_failure_isolation", self.var_enable_failure_isolation), ("image_failure_min_variance", self.var_image_failure_min_variance)):
                 if key in values: variable.set(values[key])
-            self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.logbox.log("プリセットを読み込みました")
+            self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.var_vae_name.set(values.get("vae_name", "")); self.logbox.log("プリセットを読み込みました")
             self.var_save_prompts.set(values.get("save_prompts", False)); self.var_prompt_output.set(values.get("prompt_output", ""))
             self.var_sequential_loop.set(values.get("sequential_loop", False))
             self.var_sequential_reuse_wildcards.set(values.get("sequential_reuse_wildcards", True))
@@ -355,6 +360,8 @@ class RandomImageTab(ttk.Frame):
             field_kind = field["id"].rsplit(":", 1)[-1]
             if field_kind == "unet_name":
                 choices = base_choices.get("unets", [])
+            elif field_kind.startswith("vae_name"):
+                choices = base_choices.get("vaes", [])
             elif field_kind == "ckpt_name":
                 choices = base_choices["checkpoints"]
             else:
@@ -381,8 +388,10 @@ class RandomImageTab(ttk.Frame):
             "checkpoints": list(choices.get("checkpoints", [])),
             "unets": list(choices.get("unets", [])),
             "loras": list(choices.get("loras", [])),
+            "vaes": list(choices.get("vaes", [])),
         }
         self.checkpoint_combo.configure(values=base_model_choices(choices))
+        self.vae_combo.configure(values=choices.get("vaes", []))
         self._update_model_classification()
         self.upscaler_combo.configure(values=choices["upscalers"])
         self.sampler_combo.configure(values=choices["samplers"])
@@ -454,7 +463,7 @@ class RandomImageTab(ttk.Frame):
             "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(),
             "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(),
             "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(),
-            "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "use_model_vae": self.var_use_model_vae.get(),
+            "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "use_model_vae": self.var_use_model_vae.get(), "vae_name": self.var_vae_name.get(),
             "save_prompts": self.var_save_prompts.get(), "prompt_output": self.var_prompt_output.get().strip(),
             "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get().strip(), "ollama_model": self.var_ollama_model.get().strip(),
             "sequential_loop": self.var_sequential_loop.get(), "sequential_reuse_wildcards": self.var_sequential_reuse_wildcards.get(), "output_format": self.var_output_format.get(),
@@ -463,7 +472,7 @@ class RandomImageTab(ttk.Frame):
             "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},
             "model_catalog": {
                 key: list(self.model_choices.get(key, []))
-                for key in ("checkpoints", "unets", "loras")
+                for key in ("checkpoints", "unets", "loras", "vaes")
             },
             "additional_inputs": additional_inputs, "additional_input_files": [item["path"] for item in additional_inputs],
             "action_wildcards": [{**item, "condition": item["condition"].strip(), "path": item["path"].strip()} for item in self._action_wildcard_specs() if item["condition"].strip() and item["path"].strip()],

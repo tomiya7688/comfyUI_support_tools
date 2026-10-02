@@ -45,6 +45,7 @@ class ComfyUIImageGenerationBackend:
             denoising_strength=request.denoising_strength,
             workflow_path=request.workflow_path,
             model_overrides=request.model_overrides,
+            vae_name=request.vae_name,
         )
 
     def generate_from_image(self, request: ImageToImageRequest, stop_event: Event | None = None) -> bytes | None:
@@ -59,5 +60,6 @@ class ComfyUIImageGenerationBackend:
             denoise=request.denoise,
             width=request.width,
             height=request.height,
+            vae_name=request.vae_name,
             stop_event=stop_event,
         )

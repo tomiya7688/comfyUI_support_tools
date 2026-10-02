@@ -25,3 +25,4 @@ class TextToImageRequest:
     denoising_strength: float = 0.7
     workflow_path: Path | None = None
     model_overrides: dict[str, str] | None = None
+    vae_name: str = ""

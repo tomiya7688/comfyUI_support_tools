@@ -231,6 +231,32 @@ class ComfyUIClient:
             elif kind == "EmptyLatentImage":
                 inputs.update({"width": width, "height": height, "batch_size": 1})
 
+    @staticmethod
+    def _apply_vae_selection(workflow, vae_name):
+        """Apply an explicit VAE to every VAE consumer in an API-format graph."""
+        if not vae_name:
+            return
+        loaders = [(str(node_id), node) for node_id, node in workflow.items()
+                   if isinstance(node, dict) and node.get("class_type") == "VAELoader"]
+        if loaders:
+            for _, node in loaders:
+                node.setdefault("inputs", {})["vae_name"] = vae_name
+            loader_id = loaders[0][0]
+        else:
+            numeric_ids = [int(node_id) for node_id in workflow if str(node_id).isdigit()]
+            loader_id = str(max(numeric_ids, default=0) + 1)
+            workflow[loader_id] = {"class_type": "VAELoader", "inputs": {"vae_name": vae_name}}
+        consumers = 0
+        for node in workflow.values():
+            if not isinstance(node, dict) or node.get("class_type") not in {"VAEDecode", "VAEEncode", "VAEEncodeTiled"}:
+                continue
+            inputs = node.setdefault("inputs", {})
+            if "vae" in inputs:
+                inputs["vae"] = [loader_id, 0]
+                consumers += 1
+        if consumers == 0:
+            raise ValueError("選択VAEを接続できるVAEEncode/VAEDecodeノードがフローにありません")
+
     def txt2img(
         self,
         prompt,
@@ -250,6 +276,7 @@ class ComfyUIClient:
         denoising_strength=0.7,
         workflow_path=None,
         model_overrides=None,
+        vae_name="",
     ):
         workflow_path = workflow_path or (self.DEFAULT_WORKFLOW_PATH if self.DEFAULT_WORKFLOW_PATH.is_file() else None)
         workflow = self._load_workflow(workflow_path) if workflow_path else self._workflow(
@@ -313,6 +340,7 @@ class ComfyUIClient:
                 },
             })
             workflow["9"]["inputs"]["images"] = ["18", 0]
+        self._apply_vae_selection(workflow, vae_name)
         return self._queue_and_fetch(workflow, stop_event)
 
     def img2img(
@@ -328,6 +356,8 @@ class ComfyUIClient:
         width,
         height,
         stop_event=None,
+        *,
+        vae_name="",
     ):
         upload_name = f"kadoka_{secrets.token_hex(8)}{image_path.suffix.lower()}"
         with image_path.open("rb") as source:
@@ -373,4 +403,5 @@ class ComfyUIClient:
             "class_type": "VAEEncode",
             "inputs": {"pixels": ["12", 0], "vae": ["4", 2]},
         }
+        self._apply_vae_selection(workflow, vae_name)
         return self._queue_and_fetch(workflow, stop_event)

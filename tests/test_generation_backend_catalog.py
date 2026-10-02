@@ -23,6 +23,7 @@ class GenerationBackendCatalogTests(unittest.TestCase):
         payloads = {
             "sd-models": [{"title": "checkpoint.safetensors"}],
             "loras": [{"name": "character/style"}],
+            "sd-vae": [{"model_name": "vae.safetensors"}],
             "upscalers": [{"name": "4x-UltraSharp"}],
             "samplers": [{"name": "Euler a"}],
         }
@@ -41,6 +42,7 @@ class GenerationBackendCatalogTests(unittest.TestCase):
             "checkpoints": ["checkpoint.safetensors"],
             "unets": [],
             "loras": ["character/style"],
+            "vaes": ["vae.safetensors"],
             "upscalers": ["4x-UltraSharp"],
             "samplers": ["Euler a"],
         })
@@ -52,6 +54,7 @@ class GenerationBackendCatalogTests(unittest.TestCase):
             "CheckpointLoaderSimple": ("ckpt_name", ["model.safetensors"]),
             "UNETLoader": ("unet_name", ["diffusion_models/flux-dev.safetensors"]),
             "LoraLoader": ("lora_name", ["style.safetensors"]),
+            "VAELoader": ("vae_name", ["vae.safetensors"]),
             "UpscaleModelLoader": ("model_name", ["upscale.pth"]),
             "KSampler": ("sampler_name", ["euler"]),
         }
@@ -67,6 +70,7 @@ class GenerationBackendCatalogTests(unittest.TestCase):
             "checkpoints": ["model.safetensors"],
             "unets": ["diffusion_models/flux-dev.safetensors"],
             "loras": ["style.safetensors"],
+            "vaes": ["vae.safetensors"],
             "upscalers": ["upscale.pth"],
             "samplers": ["euler"],
         })
@@ -80,6 +84,8 @@ class GenerationBackendCatalogTests(unittest.TestCase):
                 return FakeResponse([{"name": "style"}])
             if url.endswith("/sd-models"):
                 return FakeResponse([{"model_name": "checkpoint"}])
+            if url.endswith("/sd-vae"):
+                return FakeResponse([{"model_name": "vae"}])
             return FakeResponse([{"name": "upscaler"}])
 
         choices, warnings = A1111BackendCatalog().query_choices("http://localhost:7860", get)

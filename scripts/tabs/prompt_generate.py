@@ -6,6 +6,10 @@ from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
 )
+from ..backend.prompt_lora_compatibility import (
+    assess_prompt_loras,
+    format_prompt_lora_findings,
+)
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
@@ -28,7 +32,7 @@ class PromptGenerateTab(ttk.Frame):
         self.comfy_flow = tk.StringVar(value=self.generator.comfy_flow)
         self.preset_store = PresetStore("prompt_generate")
         self.preset_name = tk.StringVar()
-        self.model_choices = {"checkpoints": [], "unets": []}
+        self.model_choices = {"checkpoints": [], "unets": [], "loras": []}
         self._build()
         self._load_backend_choices()
 
@@ -48,6 +52,11 @@ class PromptGenerateTab(ttk.Frame):
         negative_frame.pack(fill="both", expand=True, pady=3)
         self.negative = ScrolledText(negative_frame, height=4, wrap="word")
         self.negative.pack(fill="both", expand=True)
+        lora_frame = ttk.LabelFrame(self, text="LoRA互換性（family-level）", padding=5)
+        lora_frame.pack(fill="x", pady=(2, 4))
+        self.lora_compatibility_text = tk.StringVar(value="LoRA指定はありません。")
+        ttk.Label(lora_frame, textvariable=self.lora_compatibility_text, wraplength=900).pack(anchor="w")
+        self.prompt.bind("<KeyRelease>", self._update_lora_compatibility)
 
         settings = ttk.Frame(self)
         settings.pack(fill="x", pady=4)
@@ -125,6 +134,7 @@ class PromptGenerateTab(ttk.Frame):
             self._set_text(self.prompt, values.get("prompt", self._prompt_text()))
             self._set_text(self.negative, values.get("negative", self._negative_text()))
             self._apply_flow_checkpoint_choices()
+            self._update_lora_compatibility()
             self.logbox.log("プリセットを読み込みました")
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
@@ -137,10 +147,12 @@ class PromptGenerateTab(ttk.Frame):
         self.model_choices = {
             "checkpoints": list(choices.get("checkpoints", [])),
             "unets": list(choices.get("unets", [])),
+            "loras": list(choices.get("loras", [])),
         }
         self.sampler_combo.configure(values=choices["samplers"])
         self.checkpoint_combo.configure(values=base_model_choices(choices))
         self._update_model_classification()
+        self._update_lora_compatibility()
         if hasattr(self, "flow_combo"):
             self.flow_combo.configure(values=choices.get("flows", []))
             self._apply_flow_checkpoint_choices()
@@ -156,9 +168,17 @@ class PromptGenerateTab(ttk.Frame):
         selected = self.checkpoint.get().strip()
         if not selected:
             self.model_classification_text.set("モデルを選ぶと系統判定と根拠を表示します。")
+            self._update_lora_compatibility()
             return
         classification = classify_base_model_choice(selected, self.model_choices)
         self.model_classification_text.set(describe_model_classification(classification))
+        self._update_lora_compatibility()
+
+    def _update_lora_compatibility(self, _event=None):
+        findings = assess_prompt_loras(
+            self._prompt_text(), self.checkpoint.get(), self.model_choices
+        )
+        self.lora_compatibility_text.set(format_prompt_lora_findings(findings))
 
     def refresh_backend_choices(self):
         def worker():
@@ -196,6 +216,10 @@ class PromptGenerateTab(ttk.Frame):
         self.generator.steps = self.steps.get()
         self.generator.sampler_index = self.sampler.get()
         self.generator.sd_model_checkpoint = self.checkpoint.get()
+        self.generator.model_catalog = {
+            key: list(self.model_choices.get(key, []))
+            for key in ("checkpoints", "unets", "loras")
+        }
         self.generator.comfy_flow = self.comfy_flow.get()
         cache = {}
         prompt = self.generator._expand_text(source_prompt, self.generator.root_dir, wildcard_cache=cache)

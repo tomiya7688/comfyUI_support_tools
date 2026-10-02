@@ -23,6 +23,26 @@ class _Backend:
 
 
 class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
+    def test_incompatible_lora_stops_before_backend_request(self):
+        generator = EmbeddedRandomImage()
+        generator.sd_model_checkpoint = "sdxl/base.safetensors"
+        generator.model_catalog = {
+            "checkpoints": ["sdxl/base.safetensors"],
+            "unets": [],
+            "loras": ["flux/detail.safetensors"],
+        }
+        messages = []
+        generator._log = messages.append
+
+        with patch(
+            "scripts.backend.embedded_random_image.create_image_generation_backend"
+        ) as create_backend:
+            with self.assertRaisesRegex(ValueError, "生成を中止"):
+                generator._generate(prompt="<lora:flux/detail:1>", negative="")
+
+        create_backend.assert_not_called()
+        self.assertTrue(any("[incompatible]" in message for message in messages))
+
     def test_resolved_values_are_sent_to_backend_and_saved_as_metadata(self):
         backend = _Backend()
         messages = []

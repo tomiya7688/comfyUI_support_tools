@@ -961,3 +961,14 @@
         scripts/tabs/random_img2img.py
         tests/test_model_choice_classification.py
         doc/ver.md
+
+# 116. Prompt LoRA互換性の事前確認
+    生成prompt中の<lora:name:weight>を抽出してbackendのLoRA候補へ正確または一意のbasenameで照合し、基底モデルとのfamily-level互換性と根拠を表示する。候補未登録やbasename重複はunknownのまま警告し、familyが明確に異なる場合はA1111/ComfyUIへの生成要求前に停止する。手入力、wildcard展開後、およびImg2Img promptを検査する。
+    追加・変更したファイル
+        scripts/backend/prompt_lora_compatibility.py
+        scripts/backend/embedded_random_image.py
+        scripts/tabs/prompt_generate.py
+        scripts/tabs/random_image.py
+        scripts/tabs/random_img2img.py
+        tests/test_prompt_lora_compatibility.py
+        doc/ver.md

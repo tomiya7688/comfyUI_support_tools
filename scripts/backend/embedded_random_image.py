@@ -9,6 +9,7 @@ from .text_to_image_request import TextToImageRequest
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
 from .generation_parameter_resolver import GenerationParameterResolver
+from .prompt_lora_compatibility import validate_prompt_loras
 
 class EmbeddedRandomImage:
     input_file = str(WILDCARDS_DIR / "random_batch_nsfw_hub.txt")
@@ -46,6 +47,7 @@ class EmbeddedRandomImage:
     enable_failure_isolation = False
     image_failure_min_variance = 8.0
     comfy_model_overrides = {}
+    model_catalog = {"checkpoints": [], "unets": [], "loras": []}
     generation_parameter_config = None
     use_model_vae = True
     save_prompts = False
@@ -63,6 +65,7 @@ class EmbeddedRandomImage:
         self.additional_inputs = [dict(item) for item in self.additional_inputs]
         self.action_wildcards = [dict(item) for item in self.action_wildcards]
         self.comfy_model_overrides = dict(self.comfy_model_overrides)
+        self.model_catalog = {key: list(value) for key, value in self.model_catalog.items()}
         self._stop_event = threading.Event()
         self._active_backend = None
         self._worker_thread = None
@@ -315,6 +318,19 @@ class EmbeddedRandomImage:
             prompt = self.process_file(self.input_file, self.root_dir, wildcard_cache=wildcard_cache)
         prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
         prompt = self._correct_prompt(prompt)
+        workflow_has_model_overrides = (
+            RUNTIME_BACKEND == "comfyui" and bool(self.comfy_model_overrides)
+        )
+        validate_prompt_loras(
+            prompt,
+            None if workflow_has_model_overrides else self.sd_model_checkpoint,
+            self.model_catalog,
+            self._log,
+            base_model_reason=(
+                "The ComfyUI workflow has per-node model overrides; the LoRA's active base node is ambiguous."
+                if workflow_has_model_overrides else None
+            ),
+        )
         parameters = self._resolve_generation_parameters()
         resolution = parameters["resolution"]
         self._log(

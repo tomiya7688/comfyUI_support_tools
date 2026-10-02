@@ -8,6 +8,7 @@ from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
 )
+from ..backend.prompt_lora_compatibility import validate_prompt_loras
 
 class RandomImg2ImgTab(ttk.Frame):
     TAGGER_PRESETS = {
@@ -24,7 +25,7 @@ class RandomImg2ImgTab(ttk.Frame):
         super().__init__(master, padding=10)
         self.stop_event=threading.Event()
         self._active_backend=None
-        self.model_choices = {"checkpoints": [], "unets": []}
+        self.model_choices = {"checkpoints": [], "unets": [], "loras": []}
         self.preset_store=PresetStore("random_img2img"); self.preset_name=tk.StringVar()
         self.input_dir=tk.StringVar(value=self.DEFAULT_INPUT_DIR); self.output_dir=tk.StringVar(value=self.DEFAULT_OUTPUT_DIR)
         default_tagger="PixAI v0.9" if RUNTIME_BACKEND == "comfyui" else "A1111 standard"
@@ -94,6 +95,7 @@ class RandomImg2ImgTab(ttk.Frame):
         self.model_choices = {
             "checkpoints": list(choices.get("checkpoints", [])),
             "unets": list(choices.get("unets", [])),
+            "loras": list(choices.get("loras", [])),
         }
         self.checkpoint_combo.configure(values=base_model_choices(choices))
         self._update_model_classification()
@@ -161,6 +163,7 @@ class RandomImg2ImgTab(ttk.Frame):
                 prompt=self._compose_prompt(add, self.manual_prompt.get(), tags)
                 if not prompt: raise ValueError("Taggerをオフにする場合は手動プロンプトまたは追加タグを入力してください")
                 self.logbox.log(f"Prompt: {prompt}")
+                validate_prompt_loras(prompt, self.checkpoint.get(), self.model_choices, self.logbox.log)
                 backend = create_image_generation_backend(
                     RUNTIME_BACKEND,
                     self.api_img2img.get(),

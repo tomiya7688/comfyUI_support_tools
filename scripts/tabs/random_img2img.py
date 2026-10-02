@@ -4,6 +4,10 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..backend.image_to_image_request import ImageToImageRequest
 from ..backend.image_generation_backend_factory import create_image_generation_backend
+from ..backend.model_choice_classification import (
+    classify_base_model_choice,
+    describe_model_classification,
+)
 
 class RandomImg2ImgTab(ttk.Frame):
     TAGGER_PRESETS = {
@@ -20,6 +24,7 @@ class RandomImg2ImgTab(ttk.Frame):
         super().__init__(master, padding=10)
         self.stop_event=threading.Event()
         self._active_backend=None
+        self.model_choices = {"checkpoints": [], "unets": []}
         self.preset_store=PresetStore("random_img2img"); self.preset_name=tk.StringVar()
         self.input_dir=tk.StringVar(value=self.DEFAULT_INPUT_DIR); self.output_dir=tk.StringVar(value=self.DEFAULT_OUTPUT_DIR)
         default_tagger="PixAI v0.9" if RUNTIME_BACKEND == "comfyui" else "A1111 standard"
@@ -42,6 +47,11 @@ class RandomImg2ImgTab(ttk.Frame):
             widget.grid(row=r,column=c*2+1,sticky="we",padx=3)
             if label == "SAMPLER": self.sampler_combo = widget
             if label == "CHECKPOINT": self.checkpoint_combo = widget
+        self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
+        ttk.Label(grid, textvariable=self.model_classification_text, wraplength=900).grid(
+            row=4, column=0, columnspan=6, sticky="w", padx=3, pady=(2, 4)
+        )
+        self.checkpoint.trace_add("write", self._update_model_classification)
         btn=ttk.Frame(self); btn.pack(fill="x"); ttk.Button(btn,text="開始",command=self.start).pack(side="left",padx=4); ttk.Button(btn,text="停止",command=self.stop).pack(side="left",padx=4); ttk.Button(btn,text="モデル候補更新",command=self.refresh_backend_choices).pack(side="left",padx=12); ttk.Label(btn,text="preset").pack(side="left",padx=(16,4)); self.preset_combo=ttk.Combobox(btn,textvariable=self.preset_name,width=18); self.preset_combo.pack(side="left"); ttk.Button(btn,text="保存",command=self.save_preset).pack(side="left",padx=4); ttk.Button(btn,text="読込",command=self.load_preset).pack(side="left",padx=4)
         self.logbox=LogBox(self); self.logbox.pack(fill="both",expand=True)
         self.logbox.log("※ 生成中にAPIエラーが出てもGUIは継続します。")
@@ -81,8 +91,21 @@ class RandomImg2ImgTab(ttk.Frame):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.stop, self.logbox.log)
 
     def _apply_backend_choices(self, choices):
+        self.model_choices = {
+            "checkpoints": list(choices.get("checkpoints", [])),
+            "unets": list(choices.get("unets", [])),
+        }
         self.checkpoint_combo.configure(values=base_model_choices(choices))
+        self._update_model_classification()
         self.sampler_combo.configure(values=choices["samplers"])
+
+    def _update_model_classification(self, *_args):
+        selected = self.checkpoint.get().strip()
+        if not selected:
+            self.model_classification_text.set("モデルを選ぶと系統判定と根拠を表示します。")
+            return
+        classification = classify_base_model_choice(selected, self.model_choices)
+        self.model_classification_text.set(describe_model_classification(classification))
 
     def _load_local_backend_choices(self):
         choices, _ = load_backend_choices(query_api=False)

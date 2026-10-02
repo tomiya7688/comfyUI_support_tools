@@ -27,6 +27,36 @@ def _write_file(path: Path) -> None:
 
 
 class ModelChoiceCatalogTests(unittest.TestCase):
+    def test_legacy_workflow_is_loadable_after_root_change(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            legacy = root / "models" / "flows" / "old.json"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text(
+                '{"1": {"class_type": "UNETLoader", "inputs": {"unet_name": "anima/model.safetensors"}}}',
+                encoding="utf-8",
+            )
+            with (
+                patch.object(app_context, "COMFY_FLOWS_DIR", root / "shared" / "flows"),
+                patch.object(app_context, "LEGACY_MODELS_DIR", root / "models"),
+            ):
+                self.assertEqual(app_context.resolve_comfy_flow_path("old.json"), legacy)
+                self.assertEqual(app_context.flow_checkpoint_choices("old.json"), ["anima/model.safetensors"])
+                from scripts.backend.comfy_ui_client import ComfyUIClient
+                self.assertEqual(ComfyUIClient.model_inputs(app_context.resolve_comfy_flow_path("old.json"))[0]["value"], "anima/model.safetensors")
+
+    def test_configured_workflow_takes_precedence_over_legacy_copy(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            for folder in [root / "shared" / "flows", root / "models" / "flows"]:
+                folder.mkdir(parents=True)
+                (folder / "default.json").write_text("{}", encoding="utf-8")
+            with (
+                patch.object(app_context, "COMFY_FLOWS_DIR", root / "shared" / "flows"),
+                patch.object(app_context, "LEGACY_MODELS_DIR", root / "models"),
+            ):
+                self.assertEqual(app_context.resolve_comfy_flow_path("default.json"), root / "shared" / "flows" / "default.json")
+
     def test_load_backend_choices_merges_local_and_api_per_model_kind(self):
         local = {
             "checkpoints": ["sdxl/local-checkpoint.safetensors"],

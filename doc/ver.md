@@ -999,3 +999,18 @@
         tests/test_model_choice_catalog.py
         doc/model_catalog.md
         doc/ver.md
+# 119. 実モデルメタデータと旧workflowの参照統一
+    選択checkpoint/UNetとprompt LoRAを設定済みの共有・旧・backendモデルrootから解決し、Safetensorsヘッダー情報を系統判定へ接続。同名の別ファイルはunknownとし、ヘッダー破損は理由を表示してpath判定を継続。判定根拠を互換性ログへ追加し、旧配置workflowをモデル入力確認・候補取得・生成で共通解決する。
+    追加・変更したファイル
+        scripts/backend/local_model_evidence.py
+        scripts/backend/model_choice_classification.py
+        scripts/backend/prompt_lora_compatibility.py
+        src/comfyui_support_tools/shared/model_compatibility.py
+        scripts/context.py
+        scripts/backend/comfy_ui_client.py
+        scripts/backend/embedded_random_image.py
+        scripts/tabs/random_image.py
+        tests/test_local_model_evidence.py
+        tests/test_model_choice_catalog.py
+        doc/model_catalog.md
+        doc/ver.md

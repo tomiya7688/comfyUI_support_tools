@@ -19,11 +19,17 @@ user_data/input/models/
 
 Family subfolders are optional but help identify models whose filenames and metadata do not state their family. Checkpoints, UNets, LoRAs, and VAEs are cataloged separately. A1111 and ComfyUI API choices are merged with local choices; duplicate names are removed.
 
+Selected checkpoints/UNets and prompt LoRAs are resolved against configured shared, legacy, and active-backend model folders. Their Safetensors headers supply family metadata without loading tensor weights. Headers are cached by path, modification time, and size. Distinct local files with the same catalog name remain `unknown`; directory links to the same physical path are deduplicated. Invalid headers keep filename/path evidence and report why metadata was unavailable. Compatibility logs include the family evidence for both models. Formats such as `.ckpt` are not deserialized for classification.
+
+A1111 checkpoint display names may include a hexadecimal hash suffix; this display suffix is removed for local lookup. Extensionless LoRA API aliases are resolved to model filenames, including unique matches in subfolders. Multiple physical files matching an alias remain `unknown`.
+
 The root can be overridden in `user_data/input/config/common/paths.json` with `models_root`; `checkpoints` and `comfy_flows` can be set separately. Existing explicit roots are not rewritten by the application.
 
 ## Existing installations
 
 The application does not move, copy, or delete model weights automatically. Until a user verifies a migration, the catalog also scans legacy `models/checkpoints`, `models/diffusion_models`, `models/unet`, `models/Lora`, `models/loras`, `models/VAE`, `models/vae`, and the former top-level `checkpoints` directory. This preserves discoverability while the files remain where they are.
+
+Workflows listed from `models/flows` are resolved from that legacy folder when absent from the configured workflow root. A configured copy takes precedence. Model-input inspection, workflow-derived choices, and generation use the same resolved file.
 
 For a manual migration, keep the source intact while placing models into the recommended tree and verifying they appear in the generation tab for the selected backend. Only remove a source copy after confirming the destination file and generated image. Preserve customized `models_root` / `checkpoints` values in `paths.json`; do not replace them with defaults.
 

@@ -45,9 +45,11 @@ def check_lora_compatibility(
         return CompatibilityResult(
             CompatibilityStatus.INCOMPATIBLE,
             f"LoRA family {lora.family.value} does not match "
-            f"base model family {base_model.family.value}.",
+            f"base model family {base_model.family.value}. "
+            f"LoRA: {lora.family_reason} Base model: {base_model.family_reason}",
         )
     return CompatibilityResult(
         CompatibilityStatus.COMPATIBLE,
-        f"Both models are identified as {lora.family.value}; this is a family-level match.",
+        f"Both models are identified as {lora.family.value}; this is a family-level match. "
+        f"LoRA: {lora.family_reason} Base model: {base_model.family_reason}",
     )

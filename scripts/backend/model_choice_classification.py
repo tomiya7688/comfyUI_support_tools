@@ -7,6 +7,7 @@ from src.comfyui_support_tools.shared.model_identity import (
     ModelKind,
     classify_model,
 )
+from .local_model_evidence import classify_local_model_choice
 
 
 _BASE_MODEL_KINDS = {
@@ -27,7 +28,7 @@ def classify_base_model_choice(
         if name and name in choices.get(category, [])
     }
     if len(matching_kinds) == 1:
-        return classify_model(name, declared_kind=next(iter(matching_kinds)))
+        return classify_local_model_choice(name, next(iter(matching_kinds)))
     if len(matching_kinds) > 1:
         inferred = classify_model(name)
         return ModelClassification(

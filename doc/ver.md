@@ -922,3 +922,12 @@
         tools/maintenance/sync_comfyui_model_links.py
         tests/test_comfyui_model_links.py
         doc/ver.md
+
+# 112. モデル系統と種別の共通推定基盤
+    モデルパスとSafetensorsヘッダーメタデータからSD1.5/SDXL/Flux/Anima系統、およびCheckpoint/UNet/LoRA/VAE種別を保守的に推定する共有utilityを追加した。重み本体は読み込まず、ヘッダーサイズに上限を設けた。
+    判定が曖昧または競合する場合はunknownとし、判定理由を保持する。
+    追加・変更したファイル
+        src/comfyui_support_tools/shared/model_identity.py
+        src/comfyui_support_tools/shared/safetensors_metadata.py
+        tests/test_model_identity.py
+        doc/ver.md

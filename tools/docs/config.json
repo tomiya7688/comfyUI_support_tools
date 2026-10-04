@@ -4,9 +4,43 @@
     "nuno"
   ],
   "outputs": {
-    "class_diagram": "doc/generated/class_diagram.mmd"
+    "class_diagram": "doc/generated/class_diagram.mmd",
+    "dependency_inventory": "doc/generated/dependency_inventory.md"
   },
   "docs": {
-    "class_diagram": true
-  }
+    "class_diagram": true,
+    "dependency_inventory": true
+  },
+  "dependency_manifests": [
+    {
+      "path": "requirements-kadoka-tools.txt",
+      "environment": "Application runtime (.venv)",
+      "purpose": "Runtime dependencies for the GUI and its directly invoked application features.",
+      "packages": {
+        "numpy": "Array operations used by Touka evaluation and image-processing features.",
+        "Pillow": "Image loading, preview, conversion, and mask handling in application features.",
+        "opencv-python-headless": "Touka frame/image processing without a bundled OpenCV GUI runtime.",
+        "requests": "HTTP transport for ComfyUI, A1111, Tagger, and Ollama API clients.",
+        "psutil": "Optional process affinity and resource controls used by CPU-limiting features."
+      }
+    },
+    {
+      "path": "nuno/_touka/requirements.txt",
+      "environment": "Touka feature environment",
+      "purpose": "Image and dataset processing dependencies installed separately from the GUI runtime.",
+      "packages": {
+        "numpy": "Array and tensor preparation for image processing and dataset construction.",
+        "Pillow": "Image, mask, and dataset file loading and saving.",
+        "opencv-python-headless": "Image and video-frame processing in Touka tools."
+      }
+    },
+    {
+      "path": "tools/build/requirements.txt",
+      "environment": "Build environment",
+      "purpose": "Build-only dependencies; this manifest is not part of the application's runtime requirements.",
+      "packages": {
+        "PyInstaller": "Freezes the application into the Windows one-directory distribution."
+      }
+    }
+  ]
 }

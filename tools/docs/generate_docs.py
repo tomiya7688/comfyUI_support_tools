@@ -9,8 +9,10 @@ from pathlib import Path
 
 try:
     from .generate_class_diagram import render_class_diagram
+    from .generate_dependency_inventory import render_dependency_inventory
 except ImportError:
     from generate_class_diagram import render_class_diagram
+    from generate_dependency_inventory import render_dependency_inventory
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,20 @@ def build_documents(root: Path, config: dict) -> list[GeneratedDocument]:
         if not output:
             raise ValueError("outputs.class_diagram is required when class_diagram is enabled")
         documents.append(GeneratedDocument(root / output, render_class_diagram(source_roots)))
+
+    if docs.get("dependency_inventory", False):
+        output = outputs.get("dependency_inventory")
+        if not output:
+            raise ValueError("outputs.dependency_inventory is required when enabled")
+        manifests = config.get("dependency_manifests")
+        if not isinstance(manifests, list) or not manifests:
+            raise ValueError("dependency_manifests is required when dependency_inventory is enabled")
+        documents.append(
+            GeneratedDocument(
+                root / output,
+                render_dependency_inventory(root, manifests),
+            )
+        )
 
     return documents
 

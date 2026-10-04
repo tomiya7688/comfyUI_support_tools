@@ -45,6 +45,16 @@ from .widgets.tab_navigation import TabNavigation
 from .widgets.dark_theme import DarkTheme
 from .runtime_python import venv_python
 
+# {
+#   "責務": "指定されたWebUI1111/ComfyUIのPython環境で同じGUI moduleを起動する。",
+#   "処理": ["backend名とvenv interpreterを検証する", "backend環境変数付きでGUI subprocessを起動する"],
+#   "引数": {"backend": "a1111またはcomfyui"}, "戻り値": "起動subprocess.Popen"
+# }
+# {
+#   "責務": "指定されたWebUI1111/ComfyUIのPython環境で同じGUI moduleを起動する。",
+#   "処理": ["backend名とvenv interpreterを検証する", "backend環境変数付きでGUI subprocessを起動する"],
+#   "引数": {"backend": "a1111またはcomfyui"}, "戻り値": "起動subprocess.Popen"
+# }
 def _launch_backend_gui(backend):
     if backend not in {"a1111", "comfyui"}:
         raise ValueError(f"未対応のバックエンドです: {backend}")
@@ -64,6 +74,11 @@ def _launch_backend_gui(backend):
     )
 
 
+# {
+#   "責務": "生成backendを選択する起動画面を表示する。",
+#   "処理": ["Tk selectorとstatusを作る", "選択時にbackend GUIを起動し成功ならselectorを閉じる"],
+#   "引数": [], "戻り値": []
+# }
 def show_backend_selector():
     selector = tk.Tk()
     DarkTheme().apply(selector)
@@ -80,6 +95,11 @@ def show_backend_selector():
     ).pack(pady=(0, 14))
     status = tk.StringVar(value=f"checkpoint: {CHECKPOINTS_DIR}\nwildcard: {WILDCARDS_DIR}")
 
+    # {
+    #   "責務": "backend選択を起動処理へ渡し失敗statusを画面に表示する。",
+    #   "処理": ["_launch_backend_guiを呼び例外なら表示文を更新する", "成功ならselectorを破棄する"],
+    #   "引数": {"backend": "起動対象backend"}, "戻り値": []
+    # }
     def choose(backend):
         try:
             _launch_backend_gui(backend)
@@ -105,7 +125,16 @@ def show_backend_selector():
 
 
 
+# {
+#   "責務": "Legacy Tabbed Tools GUIのtab画面、状態保存、選択遷移を管理する。",
+#   "フィールド": ["last_settings_store: backend別最終設定", "tab_frames/tab_buttons/tab_instances: tab画面・選択ボタン・widget実体", "current_tab_index: 現在表示中のindex"]
+# }
 class TabbedToolsApp(tk.Tk):
+    # {
+    #   "責務": "テーマ、各tab、tab navigation、設定復元を初期化する。",
+    #   "処理": ["windowと設定storeを準備する", "tabを順に生成し初期化失敗を個別frameに表示する", "選択buttonとclose callbackを設定する"],
+    #   "引数": [], "戻り値": []
+    # }
     def __init__(self):
         super().__init__()
         DarkTheme().apply(self)
@@ -185,6 +214,11 @@ class TabbedToolsApp(tk.Tk):
         self.show_tab(0)
         self.protocol("WM_DELETE_WINDOW", self._close)
 
+    # {
+    #   "責務": "tabの最終設定を保存してGUIを終了する。",
+    #   "処理": ["設定保存を試みI/O errorを無視する", "Tk windowを破棄する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _close(self):
         try:
             self.last_settings_store.save(self.tab_instances)
@@ -192,6 +226,11 @@ class TabbedToolsApp(tk.Tk):
             pass
         self.destroy()
 
+    # {
+    #   "責務": "指定indexのtabを前面にし選択button状態を更新する。",
+    #   "処理": ["前tab buttonをraisedに戻す", "新tabをraiseしbuttonをsunkenにする"],
+    #   "引数": {"index": "表示対象tab index"}, "戻り値": []
+    # }
     def show_tab(self, index: int):
         if self.current_tab_index is not None:
             self.tab_buttons[self.current_tab_index].config(relief="raised")
@@ -200,6 +239,11 @@ class TabbedToolsApp(tk.Tk):
         self.current_tab_index = index
 
 
+# {
+#   "責務": "Legacy Tabbed Tools GUIのTk event loopを起動する。",
+#   "処理": ["TabbedToolsAppを作成しmainloopを開始する"],
+#   "引数": [], "戻り値": []
+# }
 def main():
     app = TabbedToolsApp()
     app.mainloop()

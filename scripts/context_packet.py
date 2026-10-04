@@ -12,6 +12,11 @@ import subprocess
 from pathlib import Path
 
 
+# {
+#   "責務": "repository rootをworking directoryにしてsubprocessを実行しstdoutを返す。",
+#   "処理": ["text captureとUTF-8 replacementを有効にして実行する", "nonzero exitを例外として伝える"],
+#   "引数": {"command": "argv list", "cwd": "working directory"}, "戻り値": "標準出力文字列"
+# }
 def run(command: list[str], cwd: Path) -> str:
     result = subprocess.run(
         command,
@@ -25,11 +30,21 @@ def run(command: list[str], cwd: Path) -> str:
     return result.stdout
 
 
+# {
+#   "責務": "baseとHEAD間で変更されたrelative file pathを列挙する。",
+#   "処理": ["git diff --name-onlyを実行し空行を除いて返す"],
+#   "引数": {"root": "repository root", "base": "比較するgit ref"}, "戻り値": "変更file path list"
+# }
 def changed_files(root: Path, base: str) -> list[str]:
     output = run(["git", "diff", "--name-only", f"{base}...HEAD"], root)
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
+# {
+#   "責務": "変更Python filesからclass/function宣言位置を抽出する。",
+#   "処理": ["Python fileをAST parseする", "class/function/async function名とlineを収集し一意安定順で返す"],
+#   "引数": {"root": "repository root", "files": "relative file path list"}, "戻り値": "宣言位置文字列list"
+# }
 def changed_symbols(root: Path, files: list[str]) -> list[str]:
     symbols: list[str] = []
     for relative in files:
@@ -46,6 +61,11 @@ def changed_symbols(root: Path, files: list[str]) -> list[str]:
     return sorted(set(symbols))
 
 
+# {
+#   "責務": "GitHub Issue、変更file/symbol、bounded diffからlocal task packetを生成する。",
+#   "処理": ["ghからissue metadataを取得する", "変更file・symbol・diffを集め上限を適用する", "packet内の案内file群を保存する"],
+#   "引数": {"root": "repository root", "issue": "Issue number", "base": "比較git ref", "max_diff": "diff行上限"}, "戻り値": "生成したpacket directory Path"
+# }
 def create_packet(root: Path, issue: int, base: str, max_diff: int) -> Path:
     issue_data = json.loads(run(["gh", "issue", "view", str(issue), "--json", "number,title,body,url"], root))
     files = changed_files(root, base)
@@ -71,6 +91,11 @@ def create_packet(root: Path, issue: int, base: str, max_diff: int) -> Path:
     return packet
 
 
+# {
+#   "責務": "task packet CLIの引数を解析しpacket生成を開始する。",
+#   "処理": ["issue/base/root/diff上限optionを読む", "create_packetを呼び生成pathを表示する"],
+#   "引数": [], "戻り値": []
+# }
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create a bounded Codex task packet from a GitHub Issue")
     parser.add_argument("issue", type=int, help="GitHub Issue number")

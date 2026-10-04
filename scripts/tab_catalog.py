@@ -38,6 +38,11 @@ TAB_CATALOG = (
 )
 
 
+# {
+#   "責務": "stable tool IDからlegacy tabのcatalog indexを検索する。",
+#   "処理": ["TAB_CATALOGを順に走査し一致indexを返す", "未登録IDはValueErrorにする"],
+#   "引数": {"tool_id": "catalog内のclass-name ID"}, "戻り値": "0-based tab index"
+# }
 def tab_index(tool_id: str) -> int:
     for index, (identifier, _label, _category) in enumerate(TAB_CATALOG):
         if identifier == tool_id:

@@ -5,17 +5,36 @@ from pathlib import Path
 from ..context import USER_INPUT_DIR
 
 
+# {
+#   "責務": "tab別preset JSONの名前一覧、保存、形式検証付き読み込みを管理する。",
+#   "フィールド": ["directory: tab preset JSONを置くdirectory"]
+# }
 class PresetStore:
     """タブ別プリセットJSONの保存と読み込みを担当する。"""
 
+    # {
+    #   "責務": "tab識別子に対応したpreset directoryを設定する。",
+    #   "処理": ["user input preset root下にtab別directory pathを保存する"],
+    #   "引数": {"tab_name": "preset namespaceとなるtab名"}, "戻り値": []
+    # }
     def __init__(self, tab_name):
         self.directory = USER_INPUT_DIR / "preset" / tab_name
 
+    # {
+    #   "責務": "preset directoryのJSON file名をcase-insensitive順で列挙する。",
+    #   "処理": ["directoryがなければ空listを返す", "JSON filename stemをsortして返す"],
+    #   "引数": [], "戻り値": "preset name list"
+    # }
     def names(self):
         if not self.directory.is_dir():
             return []
         return [path.stem for path in sorted(self.directory.glob("*.json"), key=lambda path: path.name.casefold())]
 
+    # {
+    #   "責務": "安全化したpreset名でvaluesをUTF-8 JSON fileへ保存する。",
+    #   "処理": ["禁止filename文字を置換し空名を拒否する", "directoryを作成しJSONを保存する"],
+    #   "引数": {"name": "preset名", "values": "JSON保存する設定dict"}, "戻り値": "保存先Path"
+    # }
     def save(self, name, values):
         safe_name = re.sub(r'[\\/:*?"<>|]+', "_", name.strip())
         if not safe_name:
@@ -25,6 +44,11 @@ class PresetStore:
         path.write_text(json.dumps(values, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return path
 
+    # {
+    #   "責務": "指定preset JSONを読みobject形式を検証する。",
+    #   "処理": ["preset fileをparseする", "dict以外はValueErrorにする"],
+    #   "引数": {"name": "preset file stem"}, "戻り値": "preset values dict"
+    # }
     def load(self, name):
         path = self.directory / f"{name}.json"
         with path.open(encoding="utf-8") as source:

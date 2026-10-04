@@ -59,6 +59,11 @@ USER_DATA_FILE = COMMON_CONFIG_DIR / "paths.json"
 LEGACY_USER_DATA_FILE = USER_DATA_DIR / "paths.json"
 
 
+# {
+#   "責務": "user paths JSONと既定値・旧key互換からpath設定をロードする。",
+#   "処理": ["新形式またはlegacy JSONを読む", "不正時に既定値へ戻しmodels_root由来のpathを補完する"],
+#   "引数": [], "戻り値": "有効なpath setting dict"
+# }
 def _load_user_paths():
     defaults = {
         "sd_root": str(APP_DIR),
@@ -110,6 +115,11 @@ def _load_user_paths():
 USER_PATHS = _load_user_paths()
 
 
+# {
+#   "責務": "環境変数、user config、fallbackの優先順でpathを解決する。",
+#   "処理": ["優先値を取得しuser expansionとabsolute resolveを行う"],
+#   "引数": {"key": "user path key", "environment_key": "上書き環境変数名", "fallback": "最終既定値"}, "戻り値": "解決済みPath"
+# }
 def _configured_path(key, environment_key, fallback):
     return Path(os.environ.get(environment_key, USER_PATHS.get(key, fallback))).expanduser().resolve()
 
@@ -117,6 +127,11 @@ def _configured_path(key, environment_key, fallback):
 SD_ROOT = _configured_path("sd_root", "KADOKA_TOOLS_SD_ROOT", str(APP_DIR))
 
 
+# {
+#   "責務": "process argvから--backendの値を読み取る。",
+#   "処理": ["分離引数と等号形式を走査し値を小文字化する"],
+#   "引数": [], "戻り値": "backend名。未指定なら空文字"
+# }
 def _backend_from_command_line():
     for index, value in enumerate(sys.argv):
         if value == "--backend" and index + 1 < len(sys.argv):
@@ -126,6 +141,11 @@ def _backend_from_command_line():
     return ""
 
 
+# {
+#   "責務": "argvにapi-only optionがあるかを判定する。",
+#   "処理": ["argv itemとの完全一致を検査する"],
+#   "引数": [], "戻り値": "option有無bool"
+# }
 def _api_only_from_command_line():
     return any(value == "--api-only" for value in sys.argv)
 
@@ -161,6 +181,11 @@ PIXAI_TAGGER_API_URL = str(USER_PATHS.get("pixai_api_url", "http://127.0.0.1:786
 PIXAI_TAGGER_MODEL = "deepghs/pixai-tagger-v0.9-onnx"
 
 
+# {
+#   "責務": "必要時にPillow Image moduleを遅延importして依存競合を避ける。",
+#   "処理": ["PIL.Imageをimportし失敗を利用者向けRuntimeErrorへ変換する"],
+#   "引数": [], "戻り値": "Pillow Image module"
+# }
 def _load_pillow_image():
     """WebUIの依存関係更新とDLLロックが競合しないよう、Pillowは使用時だけ読む。"""
     try:
@@ -185,6 +210,11 @@ A1111_UPSCALER_CHOICES = [
 ]
 
 
+# {
+#   "責務": "入力候補を大文字小文字を区別せず重複排除する。",
+#   "処理": ["空値を除きtrimした文字列を順序保持で重複排除する"],
+#   "引数": {"values": "任意候補値のiterable"}, "戻り値": "一意な文字列list"
+# }
 def _unique_choices(values):
     result = []
     seen = set()
@@ -199,6 +229,11 @@ def _unique_choices(values):
     return result
 
 
+# {
+#   "責務": "root配下から対応model拡張子の相対file名を列挙する。",
+#   "処理": ["directoryとfile accessを安全に検査する", "suffix filter後に相対pathを安定順で返す"],
+#   "引数": {"root": "走査root", "keep_suffix": "suffixを返却名に残すか"}, "戻り値": "相対model path list"
+# }
 def _scan_model_files(root, *, keep_suffix=True):
     root = Path(root)
     if not root.is_dir():
@@ -221,6 +256,11 @@ def _scan_model_files(root, *, keep_suffix=True):
     return result
 
 
+# {
+#   "責務": "root配下のJSON workflow fileを相対pathで列挙する。",
+#   "処理": ["directoryを検証しJSON fileをcase-insensitive安定順で走査する"],
+#   "引数": {"root": "workflow走査root"}, "戻り値": "相対flow path list"
+# }
 def _scan_flow_files(root):
     root = Path(root)
     if not root.is_dir():
@@ -231,6 +271,11 @@ def _scan_flow_files(root):
         return []
 
 
+# {
+#   "責務": "ComfyUI workflow名をconfigured rootまたはlegacy root配下のfileへ解決する。",
+#   "処理": ["absolute pathをそのまま扱う", "configured候補を優先し存在しなければlegacy候補を使う"],
+#   "引数": {"flow_name": "workflow名またはpath"}, "戻り値": "解決されたPath"
+# }
 def resolve_comfy_flow_path(flow_name):
     """Resolve a workflow from the configured root, then its legacy location."""
     path = Path(flow_name)
@@ -243,6 +288,11 @@ def resolve_comfy_flow_path(flow_name):
     return legacy if legacy.is_file() else configured
 
 
+# {
+#   "責務": "workflow JSONからcheckpoint loaderとUNet loaderの選択値を抽出する。",
+#   "処理": ["flowを解決・parseする", "API形式またはnode widget形式のloader値を重複なく収集する"],
+#   "引数": {"flow_name": "workflow名またはpath"}, "戻り値": "model名list。未読込なら空list"
+# }
 def flow_checkpoint_choices(flow_name):
     """選択中のComfyUI API workflowに記載されたcheckpoint／UNet候補を返す。"""
     if not flow_name:
@@ -275,6 +325,11 @@ def flow_checkpoint_choices(flow_name):
     return values
 
 
+# {
+#   "責務": "active backendでprimary base modelとして選択可能な候補を返す。",
+#   "処理": ["checkpointを取得しComfyUI時だけUNetを加えて重複排除する"],
+#   "引数": {"choices": "backend候補dict"}, "戻り値": "一意なbase model名list"
+# }
 def base_model_choices(choices):
     """Return models selectable as the primary base in the active backend."""
     models = list(choices.get("checkpoints", []))
@@ -283,6 +338,11 @@ def base_model_choices(choices):
     return _unique_choices(models)
 
 
+# {
+#   "責務": "選択backendのmodel/upscaler/sampler/flowをローカルfile systemから列挙する。",
+#   "処理": ["backend別directoryを走査する", "legacy/runtime model locationを統合しbackend候補dictを作る"],
+#   "引数": [], "戻り値": "local model choice dict"
+# }
 def _local_backend_choices():
     if RUNTIME_BACKEND == "comfyui":
         checkpoint_files = (
@@ -353,6 +413,11 @@ def _local_backend_choices():
     }
 
 
+# {
+#   "責務": "ローカルbackend候補と任意の稼働API登録候補を統合する。",
+#   "処理": ["local choicesをロードする", "要求時にbackend catalog APIを照会し警告と候補を統合する"],
+#   "引数": {"api_url": "backend API base URL", "query_api": "API照会を有効化するか"}, "戻り値": "候補dictとwarning listのtuple"
+# }
 def load_backend_choices(api_url="", query_api=False):
     """ローカルのモデル候補に、起動中APIの正確な登録名を統合する。"""
     local = _local_backend_choices()
@@ -381,6 +446,11 @@ def load_backend_choices(api_url="", query_api=False):
     return merged, warnings
 
 
+# {
+#   "責務": "複数のTagger response形式からtag名listを正規化する。",
+#   "処理": ["caption/tagsのstr・list・dict形式を解析する", "未対応構造ならRuntimeErrorを送出する"],
+#   "引数": {"result": "Tagger応答JSONまたは値"}, "戻り値": "trim済みtag名list"
+# }
 def extract_tagger_tags(result):
     caption = result.get("caption", result) if isinstance(result, dict) else result
     if isinstance(caption, str):
@@ -402,7 +472,17 @@ def extract_tagger_tags(result):
 
 
 
+ # {
+ #   "責務": "例外をlogへ通知するdaemon worker threadを起動する。",
+ #   "処理": ["callableと引数をrunnerへ渡しthreadを開始する"],
+ #   "引数": {"logbox": "エラー表示先", "func": "実行callable", "args": "位置引数", "kwargs": "keyword引数"}, "戻り値": []
+ # }
 def _safe_thread(logbox, func, *args, **kwargs):
+    # {
+    #   "責務": "対象callableを実行し例外をGUI logまたはstderrへ報告する。",
+    #   "処理": ["funcを指定引数で呼ぶ", "失敗時にlogboxを試し、さらに失敗すればstderrへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def runner():
         try:
             func(*args, **kwargs)

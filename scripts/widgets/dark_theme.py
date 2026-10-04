@@ -3,6 +3,10 @@ from __future__ import annotations
 from tkinter import ttk
 
 
+# {
+#   "責務": "Tk rootへ共通のdark paletteとttk widget styleを適用する。",
+#   "フィールド": ["BACKGROUND/PANEL/INPUT/BORDER/TEXT/MUTED/ACCENT/ACTIVE: palette色定数"]
+# }
 class DarkTheme:
     """Apply the shared black visual theme to the Tk application."""
 
@@ -15,6 +19,11 @@ class DarkTheme:
     ACCENT = "#3977c6"
     ACTIVE = "#28558d"
 
+    # {
+    #   "責務": "Tk rootとttk styleの共通色・interaction状態を設定する。",
+    #   "処理": ["tk option defaultsを設定する", "clam themeを選びwidget styleとstate mapを適用する"],
+    #   "引数": {"root": "themeを適用するTk root"}, "戻り値": []
+    # }
     def apply(self, root) -> None:
         root.configure(bg=self.BACKGROUND)
         root.option_add("*Text.Background", self.INPUT)

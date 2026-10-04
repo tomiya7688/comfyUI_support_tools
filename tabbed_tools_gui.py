@@ -12,6 +12,11 @@ if not getattr(sys, "frozen", False):
     sys.path.insert(0, str(SD_ROOT / "src"))
 
 
+# {
+#   "責務": "従来のタブGUIを選択ツールで開き、Workspaceへ戻る操作を提供する。",
+#   "処理": ["tool_idからタブindexを取得する", "TabbedToolsAppを構築してmainloopを実行する", "戻る操作の有無を返す"],
+#   "引数": {"tool_id": "起動するツールID"}, "戻り値": "Workspaceへ戻る操作が行われたか"
+# }
 def _legacy_window(tool_id: str) -> bool:
     """Sequential roots in the SAME Main GUI app; no Python/sub-app subprocess."""
     from tkinter import ttk
@@ -22,6 +27,11 @@ def _legacy_window(tool_id: str) -> bool:
     app = TabbedToolsApp()
     return_to_shell = False
 
+    # {
+    #   "責務": "従来GUIを閉じてWorkspaceへ戻る状態を設定する。",
+    #   "処理": ["戻り先フラグを設定する", "TabbedToolsAppを閉じる"],
+    #   "引数": [], "戻り値": "なし"
+    # }
     def go_back() -> None:
         nonlocal return_to_shell
         return_to_shell = True
@@ -34,6 +44,11 @@ def _legacy_window(tool_id: str) -> bool:
     return return_to_shell
 
 
+# {
+#   "責務": "起動引数に応じたGUIまたはsmoke testを実行する。",
+#   "処理": ["新旧UIの起動経路を選ぶ", "要求されたimport/shell smoke testを実行する"],
+#   "引数": [], "戻り値": "なし"
+# }
 def _run() -> None:
     if "--shell-smoke-test" in sys.argv or "--new-ui" in sys.argv:
         from comfyui_support_tools.entrypoints.workspace import create_navigation, run_shell, smoke_test

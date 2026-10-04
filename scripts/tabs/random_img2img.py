@@ -10,6 +10,10 @@ from ..backend.model_choice_classification import (
 )
 from ..backend.prompt_lora_compatibility import validate_prompt_loras
 
+# {
+#   "責務": "フォルダ画像にTaggerを適用し、ランダムpromptでimg2img生成する。",
+#   "フィールド": ["input/output/Tagger/API/model/生成設定: UI状態", "generator: 生成backend", "stop_event: 停止要求", "preset_store/preset_name: preset状態", "model_choices: model catalog", "logbox: 実行結果"]
+# }
 class RandomImg2ImgTab(ttk.Frame):
     TAGGER_PRESETS = {
         "A1111 standard": "http://127.0.0.1:7860/sdapi/v1/interrogate",
@@ -21,6 +25,11 @@ class RandomImg2ImgTab(ttk.Frame):
         if RUNTIME_BACKEND == "comfyui"
         else (A1111_DIR / "outputs" / "img2img-images" / "amahane_yukiko_img2img")
     )
+    # {
+    #   "責務": "img2imgタブのgenerator、入力状態、候補一覧とUIを初期化する。",
+    #   "処理": ["生成backendから初期値を読み各種UI変数を作る", "画面を構築する"],
+    #   "引数": {"master": "親Tk widget"}, "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.stop_event=threading.Event()
@@ -62,18 +71,38 @@ class RandomImg2ImgTab(ttk.Frame):
         self._load_local_backend_choices()
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "現在のimg2img設定をpreset用dictへまとめる。",
+    #   "処理": ["入出力、Tagger、生成条件、model選択値を読み取る"],
+    #   "引数": [], "戻り値": "preset保存用dict"
+    # }
     def _preset_values(self):
         values = {key: variable.get() for key, variable in (("input_dir",self.input_dir),("output_dir",self.output_dir),("tagger_kind",self.tagger_kind),("api_interrogate",self.api_interrogate),("api_img2img",self.api_img2img),("threshold",self.threshold),("character_threshold",self.character_threshold),("additional",self.additional),("manual_prompt",self.manual_prompt),("exclude",self.exclude),("negative",self.negative),("steps",self.steps),("cfg",self.cfg),("width",self.width),("height",self.height),("denoise",self.denoise),("sampler",self.sampler),("checkpoint",self.checkpoint),("vae_name",self.vae_name),("loops",self.loops))}
         values["use_tagger"] = self.use_tagger.get()
         return values
 
+    # {
+    #   "責務": "保存済みpreset名で選択widgetを更新する。",
+    #   "処理": ["PresetStoreのname一覧をcomboboxへ設定する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "現在のimg2img設定を名前付きpresetに保存する。",
+    #   "処理": ["設定値を保存し候補を更新する", "結果をlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def save_preset(self):
         try:
             path=self.preset_store.save(self.preset_name.get(),self._preset_values()); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetからimg2imgのUI状態を復元する。",
+    #   "処理": ["保存済み設定を変数へ適用する", "成功またはエラーをlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def load_preset(self):
         try:
             values=self.preset_store.load(self.preset_name.get())
@@ -83,15 +112,35 @@ class RandomImg2ImgTab(ttk.Frame):
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "選択Taggerの既定endpoint/modelを反映する。",
+    #   "処理": ["TAGGER_PRESETSからURLとmodelを取得しUI変数を更新する"],
+    #   "引数": {"_event": "combobox event。省略可"}, "戻り値": []
+    # }
     def _apply_tagger_preset(self, _event=None):
         self.api_interrogate.set(self.TAGGER_PRESETS[self.tagger_kind.get()])
 
+    # {
+    #   "責務": "PixAI Tagger serverの起動を非同期依頼する。",
+    #   "処理": ["共通thread helperでserver.startを実行する"],
+    #   "引数": [], "戻り値": []
+    # }
     def start_pixai_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.start, self.logbox.log)
 
+    # {
+    #   "責務": "PixAI Tagger serverの停止を非同期依頼する。",
+    #   "処理": ["共通thread helperでserver.stopを実行する"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop_pixai_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.stop, self.logbox.log)
 
+    # {
+    #   "責務": "backend model候補を選択widgetと分類表示へ反映する。",
+    #   "処理": ["checkpoint/UNet/LoRA/VAE catalogを保持する", "選択widgetと系統分類を更新する"],
+    #   "引数": {"choices": "backend model choices"}, "戻り値": []
+    # }
     def _apply_backend_choices(self, choices):
         self.model_choices = {
             "checkpoints": list(choices.get("checkpoints", [])),
@@ -104,6 +153,11 @@ class RandomImg2ImgTab(ttk.Frame):
         self.sampler_combo.configure(values=choices["samplers"])
         self.vae_combo.configure(values=choices.get("vaes", []))
 
+    # {
+    #   "責務": "選択base modelのfamily分類説明をUIへ反映する。",
+    #   "処理": ["未選択なら案内を表示する", "model catalogで分類して説明を表示する"],
+    #   "引数": {"_args": "trace callback引数"}, "戻り値": []
+    # }
     def _update_model_classification(self, *_args):
         selected = self.checkpoint.get().strip()
         if not selected:
@@ -112,17 +166,37 @@ class RandomImg2ImgTab(ttk.Frame):
         classification = classify_base_model_choice(selected, self.model_choices)
         self.model_classification_text.set(describe_model_classification(classification))
 
+    # {
+    #   "責務": "ローカルbackend catalogを読んで選択肢を初期化する。",
+    #   "処理": ["API照会なしで候補一覧をロードする", "choicesをwidgetへ適用する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _load_local_backend_choices(self):
         choices, _ = load_backend_choices(query_api=False)
         self._apply_backend_choices(choices)
 
+    # {
+    #   "責務": "backend APIを使う候補一覧更新をworkerで始める。",
+    #   "処理": ["取得workerをdaemon起動する", "更新中の状態をlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def refresh_backend_choices(self):
+        # {
+        #   "責務": "backend APIからmodel候補を取得してGUI threadへ反映を予約する。",
+        #   "処理": ["API照会付き候補ロードを行う", "候補とwarningをafter callbackに渡す"],
+        #   "引数": [], "戻り値": []
+        # }
         def worker():
             choices, warnings = load_backend_choices(self.api_img2img.get(), query_api=True)
             self.after(0, lambda: self._finish_backend_refresh(choices, warnings))
         threading.Thread(target=worker, daemon=True).start()
         self.logbox.log("🔄 モデル候補をフォルダとAPIから更新中...")
 
+    # {
+    #   "責務": "取得済みbackend候補とwarningを適用・表示する。",
+    #   "処理": ["choicesをUIへ適用する", "件数とwarningをlogへ出す"],
+    #   "引数": {"choices": "候補dict", "warnings": "警告list"}, "戻り値": []
+    # }
     def _finish_backend_refresh(self, choices, warnings):
         self._apply_backend_choices(choices)
         self.logbox.log(
@@ -133,18 +207,43 @@ class RandomImg2ImgTab(ttk.Frame):
         for warning in warnings:
             self.logbox.log(f"⚠️ API候補: {warning}")
 
+    # {
+    #   "責務": "カンマ区切り文字列から空でないtagを抽出する。",
+    #   "処理": ["区切りで分割しstrip後の空文字を除外する"],
+    #   "引数": {"s": "tag列"}, "戻り値": "tag list"
+    # }
     @staticmethod
     def _split(s): return [x.strip() for x in s.split(",") if x.strip()]
+    # {
+    #   "責務": "追加prompt、手入力prompt、tagを一つのpositive promptへ結合する。",
+    #   "処理": ["空要素を除き指定順でcomma joinする"],
+    #   "引数": {"additional": "prefix tags", "manual_prompt": "手入力文", "tags": "自動tag list"}, "戻り値": "結合prompt"
+    # }
     @staticmethod
     def _compose_prompt(additional, manual_prompt, tags):
         return ", ".join([*additional, *( [manual_prompt.strip()] if manual_prompt.strip() else []), *tags])
+    # {
+    #   "責務": "停止flagを解除しimg2img処理を安全threadで開始する。",
+    #   "処理": ["stop eventをclearしsafe thread helperでrunする"],
+    #   "引数": [], "戻り値": []
+    # }
     def start(self): self.stop_event.clear(); _safe_thread(self.logbox,self.run)
+    # {
+    #   "責務": "img2img workerへ停止要求を伝える。",
+    #   "処理": ["stop eventをsetしlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop(self):
         self.stop_event.set()
         backend=self._active_backend
         if backend is not None and backend.capabilities.supports("interrupt"):
             _safe_thread(self.logbox,backend.interrupt)
         self.logbox.log("停止要求を送信しました")
+    # {
+    #   "責務": "入力folderの画像へtag抽出とprompt構築を行いimg2img生成する。",
+    #   "処理": ["入力と設定を検証する", "各画像をtaggerへ送りpromptと生成条件を適用する", "停止要求を確認し進捗を記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def run(self):
         import base64, secrets, requests
         root=Path(self.input_dir.get().strip()); out=Path(self.output_dir.get().strip()); out.mkdir(parents=True,exist_ok=True)

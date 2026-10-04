@@ -3,6 +3,10 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+# {
+#   "責務": "wildcard構文を展開して指定回数のprompt行を生成するGUIを提供する。",
+#   "フィールド": ["stop_event/worker_thread: 実行制御", "input_file/output_file/root_dir: wildcard入出力", "loops/auto_root_dir/show_each_line: 実行option", "preset_store/preset_name: preset", "logbox: 進捗"]
+# }
 class RandomLinePickerTab(ttk.Frame):
     """random_line_picker.py を統合版に内包したタブ。
 
@@ -14,6 +18,11 @@ class RandomLinePickerTab(ttk.Frame):
     DEFAULT_LOOPS = "100000"
     MAX_DEPTH = 20
 
+    # {
+    #   "責務": "random line pickerの状態と画面を初期化する。",
+    #   "処理": ["停止・preset・file・root・loop状態を作る", "UIを構築する"],
+    #   "引数": {"master": "親Tk widget"}, "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.stop_event = threading.Event()
@@ -30,6 +39,11 @@ class RandomLinePickerTab(ttk.Frame):
 
         self._build()
 
+    # {
+    #   "責務": "wildcard入出力、root、生成制御、presetとlog UIを構築する。",
+    #   "処理": ["path・loop・option入力を配置する", "実行停止/preset/log widgetを初期化する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _build(self):
         top = ttk.LabelFrame(self, text="Random Line Picker", padding=8)
         top.pack(fill="x")
@@ -87,9 +101,19 @@ class RandomLinePickerTab(ttk.Frame):
         self.logbox.log(f"loops 初期値: {self.DEFAULT_LOOPS}")
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "保存済みpreset名を選択widgetに設定する。",
+    #   "処理": ["PresetStoreからnamesを取得しcomboboxへ反映する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "現在のwildcard生成設定をpresetに保存する。",
+    #   "処理": ["入出力/loop/root/optionを保存する", "候補を更新し結果をlogする"],
+    #   "引数": [], "戻り値": []
+    # }
     def save_preset(self):
         try:
             values = {
@@ -107,6 +131,11 @@ class RandomLinePickerTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetからwildcard生成設定を復元する。",
+    #   "処理": ["保存値を対応変数へ反映し結果をlogする"],
+    #   "引数": [], "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -120,14 +149,29 @@ class RandomLinePickerTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "wildcard root directoryを選択して状態へ設定する。",
+    #   "処理": ["現在rootを初期表示してdirectory dialogを開く", "選択pathがあれば保存する"],
+    #   "引数": [], "戻り値": []
+    # }
     def select_root_dir(self):
         path = filedialog.askdirectory(initialdir=self.root_dir.get().strip() or os.getcwd())
         if path:
             self.root_dir.set(path)
 
+    # {
+    #   "責務": "実行log widgetの全文を消去する。",
+    #   "処理": ["Text widgetの先頭から末尾まで削除する"],
+    #   "引数": [], "戻り値": []
+    # }
     def clear_log(self):
         self.logbox.delete("1.0", "end")
 
+    # {
+    #   "責務": "重複起動を防ぎwildcard生成workerを開始する。",
+    #   "処理": ["稼働中なら開始を拒否する", "停止flagを解除しdaemon threadを起動する"],
+    #   "引数": [], "戻り値": []
+    # }
     def start(self):
         if self.worker_thread and self.worker_thread.is_alive():
             self.logbox.log("すでに実行中です。停止してから再実行してください。")
@@ -136,10 +180,20 @@ class RandomLinePickerTab(ttk.Frame):
         self.worker_thread = threading.Thread(target=self.run_safe, daemon=True)
         self.worker_thread.start()
 
+    # {
+    #   "責務": "wildcard生成workerへ停止要求を送る。",
+    #   "処理": ["stop eventをsetしlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop(self):
         self.stop_event.set()
         self.logbox.log("停止要求を送信しました")
 
+    # {
+    #   "責務": "wildcard生成処理を呼び出し例外をGUI logへ整形する。",
+    #   "処理": ["runを呼び例外時は型とmessageをlogへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def run_safe(self):
         try:
             self.run()
@@ -148,6 +202,11 @@ class RandomLinePickerTab(ttk.Frame):
             self.logbox.log("❌ Random Line Picker エラー:")
             self.logbox.log("".join(traceback.format_exception_only(type(e), e)).strip())
 
+    # {
+    #   "責務": "出力指定を検証し必要に応じて日時付きTXT pathへ変換する。",
+    #   "処理": ["空pathを拒否する", "directory/拡張子なし指定ならfolderを作り日時file名を作る"],
+    #   "引数": {"output_path": "利用者の出力指定"}, "戻り値": "確定した出力file path"
+    # }
     def _resolve_output_path(self, output_path: str) -> str:
         output_path = output_path.strip()
         if not output_path:
@@ -164,6 +223,11 @@ class RandomLinePickerTab(ttk.Frame):
             os.makedirs(out_dir, exist_ok=True)
         return output_path
 
+    # {
+    #   "責務": "中括弧内のa|b選択式をランダムに一つずつ展開する。",
+    #   "処理": ["中括弧候補を検索し選択肢からランダム選択して全式がなくなるまで置換する"],
+    #   "引数": {"text": "choice構文を含む文字列"}, "戻り値": "choice展開済み文字列"
+    # }
     @staticmethod
     def _expand_choices(text: str) -> str:
         pattern = re.compile(r"\{([^{}]+)\}")
@@ -176,6 +240,11 @@ class RandomLinePickerTab(ttk.Frame):
             text = text[:match.start()] + choice + text[match.end():]
         return text
 
+    # {
+    #   "責務": "wildcard fileから一行を選びchoiceとnested wildcardを再帰展開する。",
+    #   "処理": ["停止・depth上限を確認する", "file行を選びchoice式を展開する", "nested参照を再帰置換して結果を返す"],
+    #   "引数": {"rel_path": "root相対wildcard path", "root_dir": "wildcard root", "parent": "参照元。省略可", "depth": "再帰深度"}, "戻り値": "展開済みprompt fragment"
+    # }
     def process_file(self, rel_path: str, root_dir: str, parent: str | None = None, depth: int = 0) -> str:
         if self.stop_event.is_set():
             return ""
@@ -196,6 +265,11 @@ class RandomLinePickerTab(ttk.Frame):
         chosen_line = secrets.choice(lines)
         chosen_line = self._expand_choices(chosen_line)
 
+        # {
+        #   "責務": "nested wildcard参照一件をroot相対fileから展開する。",
+        #   "処理": ["参照名からtxt pathを作りprocess_fileへ再帰委譲する"],
+        #   "引数": {"match": "正規表現match"}, "戻り値": "nested wildcard展開値"
+        # }
         def repl(match):
             key = match.group(1)
             nested_rel = f"{key}.txt"
@@ -204,6 +278,11 @@ class RandomLinePickerTab(ttk.Frame):
         result = re.sub(r"__(.*?)__", repl, chosen_line)
         return self._expand_choices(result)
 
+    # {
+    #   "責務": "入力wildcardと実行回数を検証して結果行を出力fileへ生成する。",
+    #   "処理": ["input/root/output/loopsを確定・検証する", "出力を初期化して各iterationを展開する", "停止・例外・進捗をlogへ報告する"],
+    #   "引数": [], "戻り値": []
+    # }
     def run(self):
         input_file = self.input_file.get().strip()
         output_file = self.output_file.get().strip()

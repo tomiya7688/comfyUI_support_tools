@@ -14,9 +14,18 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   "責務": "手入力promptをwildcard展開し生成backendへ送り、モデル選択互換情報を表示する。",
+#   "フィールド": ["generator: 生成backend client", "wildcard_root/output_dir/api_url: pathと接続先", "prompt/negative UI: 入力文", "width/height/steps/sampler/checkpoint/vae/flow: 生成条件", "model_choices: model catalog", "preset_store/preset_name: preset", "logbox: 実行log"]
+# }
 class PromptGenerateTab(ttk.Frame):
     """手入力プロンプトを現在の生成バックエンドへ送る。"""
 
+    # {
+    #   "責務": "prompt generationタブの初期状態とbackend候補を準備する。",
+    #   "処理": ["generatorから初期生成値を読みUI変数とpreset状態を作る", "画面を作りローカル候補を適用する"],
+    #   "引数": {"master": "親Tk widget"}, "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.generator = EmbeddedRandomImage()
@@ -37,6 +46,11 @@ class PromptGenerateTab(ttk.Frame):
         self._build()
         self._load_backend_choices()
 
+    # {
+    #   "責務": "prompt入力、生成設定、model互換情報、実行とpresetのUIを構築する。",
+    #   "処理": ["pathとpositive/negative prompt欄を配置する", "生成条件・model選択・実行操作・logを配置する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _build(self):
         LabeledPathRow(self, "wildcard root", self.wildcard_root, mode="dir").pack(fill="x", pady=3)
         LabeledPathRow(self, "出力先", self.output_dir, mode="dir").pack(fill="x", pady=3)
@@ -97,19 +111,44 @@ class PromptGenerateTab(ttk.Frame):
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "worker由来のmessageをTk UI thread上でlogへ反映する。",
+    #   "処理": ["after callbackを登録しmessageを文字列化して表示する"],
+    #   "引数": {"message": "worker log message"}, "戻り値": []
+    # }
     def _log_from_worker(self, message):
         self.after(0, lambda: self.logbox.log(str(message)))
 
+    # {
+    #   "責務": "positive prompt widgetの内容を取得する。",
+    #   "処理": ["末尾改行を除いてText内容を読み取る"],
+    #   "引数": [], "戻り値": "positive prompt文字列"
+    # }
     def _prompt_text(self):
         return self.prompt.get("1.0", "end-1c")
 
+    # {
+    #   "責務": "negative prompt widgetの内容を取得する。",
+    #   "処理": ["末尾改行を除いてText内容を読み取る"],
+    #   "引数": [], "戻り値": "negative prompt文字列"
+    # }
     def _negative_text(self):
         return self.negative.get("1.0", "end-1c")
 
+    # {
+    #   "責務": "Text widgetの既存内容を指定文字列へ置き換える。",
+    #   "処理": ["全文を削除し先頭からvalueを挿入する"],
+    #   "引数": {"widget": "編集対象Text widget", "value": "設定する文字列"}, "戻り値": []
+    # }
     def _set_text(self, widget, value):
         widget.delete("1.0", "end")
         widget.insert("1.0", value)
 
+    # {
+    #   "責務": "現在の生成設定とpromptをpreset保存dictへまとめる。",
+    #   "処理": ["path・API・prompt・生成値・model・flow UI値を読み取る"],
+    #   "引数": [], "戻り値": "preset保存用dict"
+    # }
     def _preset_values(self):
         return {
             "wildcard_root": self.wildcard_root.get(), "output_dir": self.output_dir.get(), "api_url": self.api_url.get(),
@@ -117,9 +156,19 @@ class PromptGenerateTab(ttk.Frame):
             "steps": self.steps.get(), "sampler": self.sampler.get(), "checkpoint": self.checkpoint.get(), "vae_name": self.vae_name.get(), "comfy_flow": self.comfy_flow.get(),
         }
 
+    # {
+    #   "責務": "preset storeにある名前を選択widgetへ反映する。",
+    #   "処理": ["保存済みname一覧をcombobox候補に設定する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "現在のprompt生成設定を名前付きpresetとして保存する。",
+    #   "処理": ["UI状態を保存し選択名・候補を更新する", "成否をlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), self._preset_values())
@@ -129,6 +178,11 @@ class PromptGenerateTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択された生成presetの設定をUIへ復元する。",
+    #   "処理": ["値とprompt本文を復元する", "flow候補・LoRA互換表示を更新する"],
+    #   "引数": [], "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -143,10 +197,20 @@ class PromptGenerateTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "API照会なしのローカルbackend候補を読み込みUIへ適用する。",
+    #   "処理": ["load_backend_choicesをquery_api=Falseで呼び出す", "候補を_apply_backend_choicesへ渡す"],
+    #   "引数": [], "戻り値": []
+    # }
     def _load_backend_choices(self):
         choices, _ = load_backend_choices(query_api=False)
         self._apply_backend_choices(choices)
 
+    # {
+    #   "責務": "backend model/sampler/flow候補を選択widgetと互換表示へ反映する。",
+    #   "処理": ["model catalogを保存する", "選択widgetと分類/LoRA説明を更新する"],
+    #   "引数": {"choices": "backend候補dict"}, "戻り値": []
+    # }
     def _apply_backend_choices(self, choices):
         self.model_choices = {
             "checkpoints": list(choices.get("checkpoints", [])),
@@ -163,6 +227,11 @@ class PromptGenerateTab(ttk.Frame):
             self.flow_combo.configure(values=choices.get("flows", []))
             self._apply_flow_checkpoint_choices()
 
+    # {
+    #   "責務": "選択flowに対応するcheckpoint候補をcheckpoint widgetへ追加する。",
+    #   "処理": ["flowを調べmodel choiceと重複しない候補を設定する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _apply_flow_checkpoint_choices(self):
         if not hasattr(self, "flow_combo"):
             return
@@ -170,6 +239,11 @@ class PromptGenerateTab(ttk.Frame):
         if choices:
             self.checkpoint_combo.configure(values=_unique_choices(choices + list(self.checkpoint_combo.cget("values"))))
 
+    # {
+    #   "責務": "選択checkpointの系統分類と根拠を表示する。",
+    #   "処理": ["未選択なら案内を表示する", "model catalogで分類しLoRA互換表示を再計算する"],
+    #   "引数": {"_args": "trace callback引数"}, "戻り値": []
+    # }
     def _update_model_classification(self, *_args):
         selected = self.checkpoint.get().strip()
         if not selected:
@@ -180,19 +254,39 @@ class PromptGenerateTab(ttk.Frame):
         self.model_classification_text.set(describe_model_classification(classification))
         self._update_lora_compatibility()
 
+    # {
+    #   "責務": "prompt内LoRAとcheckpointのfamily互換診断を表示する。",
+    #   "処理": ["prompt text/model catalogを診断器へ渡し整形結果を更新する"],
+    #   "引数": {"_event": "UI event。省略可"}, "戻り値": []
+    # }
     def _update_lora_compatibility(self, _event=None):
         findings = assess_prompt_loras(
             self._prompt_text(), self.checkpoint.get(), self.model_choices
         )
         self.lora_compatibility_text.set(format_prompt_lora_findings(findings))
 
+    # {
+    #   "責務": "backend API照会による候補更新を非同期で開始する。",
+    #   "処理": ["workerを起動して更新中logを出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def refresh_backend_choices(self):
+        # {
+        #   "責務": "backend APIから候補を取得してUI threadへ完了処理を予約する。",
+        #   "処理": ["load_backend_choicesをquery_api=Trueで実行する", "候補とwarningをafter経由で反映する"],
+        #   "引数": [], "戻り値": []
+        # }
         def worker():
             choices, warnings = load_backend_choices(self.api_url.get(), query_api=True)
             self.after(0, lambda: self._finish_backend_refresh(choices, warnings))
         threading.Thread(target=worker, daemon=True).start()
         self.logbox.log("モデル候補を更新中...")
 
+    # {
+    #   "責務": "API取得済み候補とwarningをUIへ反映し結果をlogする。",
+    #   "処理": ["候補を適用する", "件数とwarningをlogへ出す"],
+    #   "引数": {"choices": "backend候補dict", "warnings": "取得時warning一覧"}, "戻り値": []
+    # }
     def _finish_backend_refresh(self, choices, warnings):
         self._apply_backend_choices(choices)
         self.logbox.log(
@@ -203,9 +297,19 @@ class PromptGenerateTab(ttk.Frame):
         for warning in warnings:
             self.logbox.log(f"API候補: {warning}")
 
+    # {
+    #   "責務": "prompt生成処理を安全なworker threadで開始する。",
+    #   "処理": ["safe thread helperからrunを実行する"],
+    #   "引数": [], "戻り値": []
+    # }
     def start(self):
         _safe_thread(self.logbox, self.run)
 
+    # {
+    #   "責務": "promptと設定を検証・wildcard展開し生成backendへ1枚生成を依頼する。",
+    #   "処理": ["wildcard root/promptを検証する", "generatorへ設定を転送しpromptを展開する", "生成処理へpositive/negativeと共有wildcard cacheを渡す"],
+    #   "引数": [], "戻り値": []
+    # }
     def run(self):
         root = Path(self.wildcard_root.get().strip())
         if not root.is_dir():

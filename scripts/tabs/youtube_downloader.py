@@ -6,9 +6,19 @@ from ..widgets.preset_store import PresetStore
 from ..subapp_runtime import packaged_executable
 
 
+# {
+#   "責務": "同梱YouTube Downloaderを起動しURL listから動画を取得するUI。",
+#   "フィールド": ["process: 実行中subprocess", "preset_store/preset_name/preset_combo: 設定管理", "url_file: URL list", "output_dir: 保存folder", "max_height: 解像度上限", "cpu_cores: CPU上限", "remove_downloaded: 処理後list整理設定", "logbox: 実行結果"]
+# }
 class YouTubeDownloaderTab(ttk.Frame):
     """URLリストからYouTube動画をダウンロードするタブ。"""
 
+    # {
+    #   "責務": "URL・保存先・download optionとprocess状態を初期化してUIを構築する。",
+    #   "処理": ["presetと入力状態を初期化する", "path・option・開始停止・log widgetを作る"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.process = None
@@ -21,6 +31,12 @@ class YouTubeDownloaderTab(ttk.Frame):
         self.remove_downloaded = tk.BooleanVar(value=False)
         self._build()
 
+    # {
+    #   "責務": "URL list・出力先・download制限・presetと実行操作の画面を組み立てる。",
+    #   "処理": ["入力説明とpath欄を配置する", "解像度/CPU/cleanup optionとbutton群を作る", "preset一覧とlog領域を初期化する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _build(self):
         ttk.Label(self, text="URL以外の行（コメント・空行を含む）は自動的に無視します。").pack(anchor="w", pady=(0, 6))
         LabeledPathRow(self, "URLリスト", self.url_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
@@ -41,18 +57,42 @@ class YouTubeDownloaderTab(ttk.Frame):
         self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "保存済みpreset名をcomboboxへ表示する。",
+    #   "処理": ["PresetStoreのname一覧を選択肢へ設定する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "URL・出力・解像度・CPU・cleanup設定を保存する。",
+    #   "処理": ["現在の設定をpresetへ保存する", "名称・一覧を更新し結果をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), {"url_file": self.url_file.get(), "output_dir": self.output_dir.get(), "max_height": self.max_height.get(), "cpu_cores": self.cpu_cores.get(), "remove_downloaded": self.remove_downloaded.get()}); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetからdownload設定を画面へ復元する。",
+    #   "処理": ["保存値を各入力variableへ適用する", "復元結果をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get()); self.url_file.set(values.get("url_file", self.url_file.get())); self.output_dir.set(values.get("output_dir", self.output_dir.get())); self.max_height.set(values.get("max_height", self.max_height.get())); self.cpu_cores.set(values.get("cpu_cores", self.cpu_cores.get())); self.remove_downloaded.set(values.get("remove_downloaded", self.remove_downloaded.get())); self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "設定と同梱executableを検証しdownload subprocessを開始する。",
+    #   "処理": ["既存process・URL file・CPU上限・executableを検査する", "引数を組み立てworkerを開始する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def start(self):
         if self.process and self.process.poll() is None:
             self.logbox.log("実行中です。停止してから再開してください。"); return
@@ -72,6 +112,12 @@ class YouTubeDownloaderTab(ttk.Frame):
         if self.max_height.get().strip(): command += ["--max-height", self.max_height.get().strip()]
         if self.remove_downloaded.get(): command += ["--remove-downloaded"]
         self.logbox.log("CPU制限: なし" if cpu_count is None else f"CPU制限: 論理CPU 0-{cpu_count - 1}")
+        # {
+        #   "責務": "downloader processを実行しCPU制限・stdout・終了状態を中継する。",
+        #   "処理": ["subprocessを起動する", "CPU affinityを設定しstdoutをlogへ転送する", "終了codeまたは起動errorを報告する"],
+        #   "引数": [],
+        #   "戻り値": []
+        # }
         def worker():
             try:
                 self.process = subprocess.Popen(command, cwd=str(executable.parent), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
@@ -81,6 +127,12 @@ class YouTubeDownloaderTab(ttk.Frame):
             except Exception as exc: self.logbox.log(f"起動エラー: {exc}")
         _safe_thread(self.logbox, worker)
 
+    # {
+    #   "責務": "稼働中のdownloader processへterminate要求を送る。",
+    #   "処理": ["processが実行中の場合終了要求を出しlogへ記録する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def stop(self):
         if self.process and self.process.poll() is None:
             self.process.terminate(); self.logbox.log("停止要求を送信しました")

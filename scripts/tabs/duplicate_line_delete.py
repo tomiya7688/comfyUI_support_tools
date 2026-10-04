@@ -3,8 +3,18 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+# {
+#   "責務": "選択したテキストファイルから重複行を除去するUI。",
+#   "フィールド": ["DEFAULT_FILE: 初期対象ファイル", "target_file: 対象パス", "preset_store: プリセット保存先", "preset_name: 選択プリセット名", "preset_combo: 選択肢UI", "logbox: 実行結果表示"]
+# }
 class DuplicateLineDeleteTab(ttk.Frame):
     DEFAULT_FILE = str(WILDCARDS_DIR / "anime_character_name.txt")
+    # {
+    #   "責務": "対象ファイル・プリセット操作・ログ領域を初期化する。",
+    #   "処理": ["初期対象とプリセット状態を設定する", "パス欄・操作button・ログ領域を配置する", "保存済みプリセット一覧を反映する"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.target_file=tk.StringVar(value=self.DEFAULT_FILE)
@@ -18,15 +28,39 @@ class DuplicateLineDeleteTab(ttk.Frame):
         ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
         ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
         self.logbox=LogBox(self); self.logbox.pack(fill="both",expand=True); self._refresh_preset_choices()
+    # {
+    #   "責務": "保存済みプリセット名をcomboboxへ反映する。",
+    #   "処理": ["PresetStoreから名前を取得し選択肢へ設定する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
+    # {
+    #   "責務": "現在の対象ファイルをプリセットへ保存する。",
+    #   "処理": ["対象パスを保存し名前・選択肢を更新する", "成功または失敗をログへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), {"target_file": self.target_file.get()}); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
+    # {
+    #   "責務": "選択したプリセットから対象ファイルを復元する。",
+    #   "処理": ["プリセット値を読み対象パスへ反映する", "成否をログへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             self.target_file.set(self.preset_store.load(self.preset_name.get()).get("target_file", self.target_file.get())); self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
+    # {
+    #   "責務": "対象ファイルの行順を保ち、完全一致する重複行を除いて上書きする。",
+    #   "処理": ["入力ファイルの存在を確認する", "初出行を保持して同一ファイルへ書き戻す", "処理前後と削除数をログへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def run(self):
         path=self.target_file.get().strip()
         if not os.path.isfile(path): self.logbox.log(f"ファイルが存在しません: {path}"); return

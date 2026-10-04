@@ -9,9 +9,19 @@ from ..services import LogBox, LabeledPathRow
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   "責務": "タグの完全一致置換規則をfolder内TXTへ適用するUI。",
+#   "フィールド": ["input_dir/output_dir: sourceとdestination", "recursive: 子folder走査", "overwrite: 入力上書きmode", "preset_name/preset_store/preset_combo: 設定保存・選択", "rule_rows: 置換row state", "logbox: 結果表示"]
+# }
 class TagReplacerTab(ttk.Frame):
     """タグ置換規則をフォルダ内TXTへ適用する画面。"""
 
+    # {
+    #   "責務": "置換path・option・規則状態を初期化して画面を作る。",
+    #   "処理": ["Tk variableとpreset storeを初期化する", "置換規則・実行・log widgetを構築する"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.input_dir = tk.StringVar()
@@ -23,6 +33,12 @@ class TagReplacerTab(ttk.Frame):
         self.rule_rows = []
         self._build()
 
+    # {
+    #   "責務": "入力・出力・option・規則編集・preset・log UIを配置する。",
+    #   "処理": ["folderとoverwrite/recurse optionを表示する", "初期規則rowと操作buttonを作る"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _build(self):
         LabeledPathRow(self, "入力タグフォルダ", self.input_dir, mode="dir").pack(fill="x", pady=3)
         LabeledPathRow(self, "出力先（上書き時は不要）", self.output_dir, mode="dir").pack(fill="x", pady=3)
@@ -42,6 +58,12 @@ class TagReplacerTab(ttk.Frame):
         self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "source/mode/replacementを編集する規則rowを追加する。",
+    #   "処理": ["valueから各fieldを初期化する", "削除操作を結びrow stateを管理する"],
+    #   "引数": {"value": "規則field mappingまたはNone"},
+    #   "戻り値": []
+    # }
     def _add_rule(self, value=None):
         value = value or {}
         row = ttk.Frame(self.rules_frame); row.pack(fill="x", pady=2)
@@ -53,22 +75,52 @@ class TagReplacerTab(ttk.Frame):
         ttk.Button(row, text="削除", command=lambda: self._remove_rule(item)).pack(side="left")
         self.rule_rows.append(item)
 
+    # {
+    #   "責務": "指定置換規則rowを除去し空listなら編集行を補充する。",
+    #   "処理": ["widgetとstateを削除する", "rule rowがなくなれば空行を追加する"],
+    #   "引数": {"item": "削除するrule row state"},
+    #   "戻り値": []
+    # }
     def _remove_rule(self, item):
         item["row"].destroy(); self.rule_rows.remove(item)
         if not self.rule_rows: self._add_rule()
 
+    # {
+    #   "責務": "入力済み置換行を検証前の規則listへ変換する。",
+    #   "処理": ["source/mode/replacementをtrimし不完全行を除く"],
+    #   "引数": [],
+    #   "戻り値": "適用するrule mappingのlist"
+    # }
     def _rules(self):
         return [{key: item[key].get().strip() for key in ("source", "mode", "replacement")} for item in self.rule_rows if item["source"].get().strip() and item["replacement"].get().strip()]
 
+    # {
+    #   "責務": "保存済みpreset名を選択UIへ表示する。",
+    #   "処理": ["PresetStoreの名前一覧でcomboboxを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "path・走査option・置換規則をpresetへ保存する。",
+    #   "処理": ["現在の設定とrule listを永続化する", "選択名・一覧・成否logを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), {"input_dir": self.input_dir.get(), "output_dir": self.output_dir.get(), "recursive": self.recursive.get(), "overwrite": self.overwrite.get(), "rules": self._rules()})
             self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetからpath・option・置換規則を復元する。",
+    #   "処理": ["各設定値を復元する", "既存rule rowsを置き換えて結果をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get()); self.input_dir.set(values.get("input_dir", self.input_dir.get())); self.output_dir.set(values.get("output_dir", self.output_dir.get())); self.recursive.set(values.get("recursive", self.recursive.get())); self.overwrite.set(values.get("overwrite", self.overwrite.get()))
@@ -79,9 +131,21 @@ class TagReplacerTab(ttk.Frame):
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "タグ置換処理をdaemon threadで開始する。",
+    #   "処理": ["runをworker threadとして起動する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
 
+    # {
+    #   "責務": "規則を検証し入力TXTへ置換を適用して上書きまたは別folderへ保存する。",
+    #   "処理": ["input/rule/output条件を検証する", "再帰設定に応じてtxtを列挙する", "共有wildcard cacheを用いてfileごとに置換し件数を報告する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def run(self):
         input_root = Path(self.input_dir.get().strip()); output_root = Path(self.output_dir.get().strip()); rules = self._rules()
         if not input_root.is_dir(): self.logbox.log(f"入力タグフォルダがありません: {input_root}"); return

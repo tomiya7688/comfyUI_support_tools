@@ -5,6 +5,10 @@ from ..widgets.preset_store import PresetStore
 from ..backend.taggui_controller import TagGUIController
 from ..backend.tag_category_splitter import TagCategorySplitter
 
+# {
+#   "責務": "PixAI Tagger/TagGUIで画像・動画フォルダを一括tagし、結果を分類保存する。",
+#   "フィールド": ["stop_event/worker_thread: worker状態", "taggui_controller: TagGUI制御", "preset_store/preset_name: preset管理", "input_dir/output_file: 入出力", "tagger/API/model/threshold: Tagger接続と採点条件", "recursive/overwrite/GIF/video各設定: 対象範囲と出力動作", "logbox: 実行結果"]
+# }
 class FolderTaggerTab(ttk.Frame):
     TAGGER_PRESETS = {
         "PixAI Tagger": (PIXAI_TAGGER_API_URL, PIXAI_TAGGER_MODEL),
@@ -22,6 +26,11 @@ class FolderTaggerTab(ttk.Frame):
     IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
     VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
 
+    # {
+    #   "責務": "folder taggerの初期状態とUIを構築する。",
+    #   "処理": ["worker・preset・path・Tagger・tag filter・media option状態を初期化する", "入力widgetを構築する"],
+    #   "引数": {"master": "親Tk widget"}, "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.stop_event = threading.Event()
@@ -50,6 +59,11 @@ class FolderTaggerTab(ttk.Frame):
         self.video_frames = tk.IntVar(value=8)
         self._build()
 
+    # {
+    #   "責務": "入出力、Tagger/API、tag条件、メディアoption、実行logのUIを作る。",
+    #   "処理": ["pathとTagger操作を配置する", "filter/実行/preset/log widgetを配置し初期案内を記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _build(self):
         paths = ttk.LabelFrame(self, text="入出力", padding=8)
         paths.pack(fill="x")
@@ -137,18 +151,38 @@ class FolderTaggerTab(ttk.Frame):
         self.logbox.log("PixAI Taggerは1画像につき1行を出力TXTへ保存します。GIFは全フレームのタグ信頼度を平均します。")
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "現在のfolder tagger設定をpreset用dictに変換する。",
+    #   "処理": ["path/API/model/閾値/tag filter/再帰/動画などのUI状態を読む"],
+    #   "引数": [], "戻り値": "preset保存用dict"
+    # }
     def _preset_values(self):
         return {"input_dir": self.input_dir.get(), "output_file": self.output_file.get(), "tagger_kind": self.tagger_kind.get(), "api_url": self.api_url.get(), "model": self.model.get(), "threshold": self.threshold.get(), "character_threshold": self.character_threshold.get(), "timeout": self.timeout.get(), "additional": self.additional.get(), "exclude": self.exclude.get(), "recursive": self.recursive.get(), "overwrite": self.overwrite.get(), "gif_average": self.gif_average.get(), "character_crop": self.character_crop.get(), "split_categories": self.split_categories.get(), "tag_videos": self.tag_videos.get(), "video_frames": self.video_frames.get()}
 
+    # {
+    #   "責務": "保存済みpreset名で選択widgetを更新する。",
+    #   "処理": ["PresetStoreのnamesをcomboboxへ反映する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "現設定を名前付きpresetに保存し結果をlogへ出す。",
+    #   "処理": ["現在値を保存し選択名と候補を更新する", "例外を捕捉してlogへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), self._preset_values())
             self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetからfolder taggerのUI状態を復元する。",
+    #   "処理": ["保存されたkeyを対応する変数へ設定する", "成功・失敗をlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -157,18 +191,38 @@ class FolderTaggerTab(ttk.Frame):
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "カンマ区切りtag文字列を空要素なしのlistへ分割する。",
+    #   "処理": ["各tagをstripし空文字を除外する"],
+    #   "引数": {"text": "tag列"}, "戻り値": "tag名list"
+    # }
     @staticmethod
     def _split_tags(text):
         return [tag.strip() for tag in text.split(",") if tag.strip()]
 
+    # {
+    #   "責務": "選択Taggerに対応する既定API URLとmodelを反映する。",
+    #   "処理": ["TAGGER_PRESETSから設定を引きAPI URL/model変数を更新する"],
+    #   "引数": {"_event": "combobox event。省略可"}, "戻り値": []
+    # }
     def _apply_tagger_preset(self, _event=None):
         api_url, model = self.TAGGER_PRESETS[self.tagger_kind.get()]
         self.api_url.set(api_url)
         self.model.set(model)
 
+    # {
+    #   "責務": "PixAI Tagger API serverを非同期起動する。",
+    #   "処理": ["共通safe threadからserver.startを実行しlog callbackを渡す"],
+    #   "引数": [], "戻り値": []
+    # }
     def start_pixai_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.start, self.logbox.log)
 
+    # {
+    #   "責務": "指定画像folderを対象にTagGUIを起動する。",
+    #   "処理": ["入力pathを検証し、未指定なら案内をlogへ出す", "controllerをsafe threadで起動する"],
+    #   "引数": [], "戻り値": []
+    # }
     def start_taggui(self):
         image_directory = self.input_dir.get().strip()
         if not image_directory:
@@ -176,15 +230,35 @@ class FolderTaggerTab(ttk.Frame):
             return
         _safe_thread(self.logbox, self.taggui_controller.start, image_directory, self.logbox.log)
 
+    # {
+    #   "責務": "TagGUI controllerへ非同期停止を依頼する。",
+    #   "処理": ["safe threadからcontroller.stopを実行しlog callbackを渡す"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop_taggui(self):
         _safe_thread(self.logbox, self.taggui_controller.stop, self.logbox.log)
 
+    # {
+    #   "責務": "PixAI Tagger API serverを非同期停止する。",
+    #   "処理": ["safe threadからserver.stopを実行しlog callbackを渡す"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop_pixai_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.stop, self.logbox.log)
 
+    # {
+    #   "責務": "API model一覧取得をバックグラウンドで開始する。",
+    #   "処理": ["safe threadから_refresh_modelsを呼び出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def refresh_models(self):
         _safe_thread(self.logbox, self._refresh_models)
 
+    # {
+    #   "責務": "Tagger APIからmodel一覧を取得しmodel選択肢へ反映する。",
+    #   "処理": ["API URLとrequestsを検証する", "interrogators endpointを要求し応答一覧をUI threadへ設定する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _refresh_models(self):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
@@ -204,6 +278,11 @@ class FolderTaggerTab(ttk.Frame):
         if not models:
             raise RuntimeError(f"モデル一覧が空です: {result}")
 
+        # {
+        #   "責務": "取得したmodel一覧をcomboboxへ反映し現在値を補正する。",
+        #   "処理": ["候補一覧を設定し未選択modelなら先頭候補を選ぶ"],
+        #   "引数": [], "戻り値": []
+        # }
         def update_combo():
             self.model_combo.configure(values=models)
             if self.model.get() not in models:
@@ -212,6 +291,11 @@ class FolderTaggerTab(ttk.Frame):
         self.after(0, update_combo)
         self.logbox.log(f"✅ モデル一覧: {len(models)}件")
 
+    # {
+    #   "責務": "重複実行を避けてfolder tagger workerを開始する。",
+    #   "処理": ["実行中ならlogして戻る", "停止eventを解除しdaemon threadを起動する"],
+    #   "引数": [], "戻り値": []
+    # }
     def start(self):
         if self.worker_thread and self.worker_thread.is_alive():
             self.logbox.log("⚠️ Folder Taggerは実行中です")
@@ -220,18 +304,38 @@ class FolderTaggerTab(ttk.Frame):
         self.worker_thread = threading.Thread(target=self.run_safe, daemon=True)
         self.worker_thread.start()
 
+    # {
+    #   "責務": "folder tagger workerへ停止要求を送る。",
+    #   "処理": ["停止eventをsetしlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop(self):
         self.stop_event.set()
         self.logbox.log("停止要求を送信しました")
 
+    # {
+    #   "責務": "runを実行し例外をGUI logへ安全に報告する。",
+    #   "処理": ["runを呼び出し例外時は型と内容をlogする"],
+    #   "引数": [], "戻り値": []
+    # }
     def run_safe(self):
         try:
             self.run()
         except Exception as e:
             self.logbox.log(f"❌ Folder Taggerエラー: {type(e).__name__}: {e}")
 
+    # {
+    #   "責務": "さまざまなTagger応答形式をtag score辞書へ正規化する。",
+    #   "処理": ["dict/list/string応答を再帰的に解析する", "形式が異なる場合は共通tag extractorへ委譲する"],
+    #   "引数": {"result": "Tagger API応答"}, "戻り値": "tag名からconfidenceへのdict"
+    # }
     @staticmethod
     def _tag_scores(result):
+        # {
+        #   "責務": "Tagger応答の入れ子値からtagとscoreを抽出する。",
+        #   "処理": ["dict/list/string各形式を判定し数値scoreを正規化する"],
+        #   "引数": {"value": "応答内の任意値"}, "戻り値": "tag score dict。認識不能なら空dict"
+        # }
         def from_value(value):
             if isinstance(value, dict):
                 direct = {str(tag).strip(): float(score) for tag, score in value.items() if isinstance(score, (int, float)) and str(tag).strip()}
@@ -254,6 +358,11 @@ class FolderTaggerTab(ttk.Frame):
         if scores: return scores
         return {tag: 1.0 for tag in extract_tagger_tags(result)}
 
+    # {
+    #   "責務": "GIF各frameのtag scoreを算術平均する。",
+    #   "処理": ["tagごとのscore合計を集計しframe数で割る"],
+    #   "引数": {"frame_scores": "frameごとのtag score dict"}, "戻り値": "平均score dict"
+    # }
     @staticmethod
     def _average_gif_scores(frame_scores):
         if not frame_scores: return {}
@@ -262,6 +371,11 @@ class FolderTaggerTab(ttk.Frame):
             for tag, score in scores.items(): totals[tag] = totals.get(tag, 0.0) + float(score)
         return {tag: score / len(frame_scores) for tag, score in totals.items()}
 
+    # {
+    #   "責務": "画像byteをTagger APIへ送信しtag scoreを返す。",
+    #   "処理": ["byteをbase64化しendpointに合うpayloadを作る", "POST応答を検査してscoreを正規化する"],
+    #   "引数": {"data": "画像byte", "api_url": "interrogate endpoint", "model": "model名", "threshold": "tag閾値", "character_threshold": "人物閾値", "timeout": "要求timeout秒"}, "戻り値": "tag score dict"
+    # }
     def _interrogate_bytes(self, data, api_url, model, threshold, character_threshold, timeout):
         encoded = base64.b64encode(data).decode("utf-8")
         if "/tagger/v1/" in api_url:
@@ -278,9 +392,19 @@ class FolderTaggerTab(ttk.Frame):
         response.raise_for_status()
         return self._tag_scores(response.json())
 
+    # {
+    #   "責務": "画像fileを読みTagger APIへ照会する。",
+    #   "処理": ["file byteを読み_interrogate_bytesへ渡す"],
+    #   "引数": {"image_path": "画像path", "api_url": "API URL", "model": "model名", "threshold": "tag閾値", "character_threshold": "人物閾値", "timeout": "要求timeout秒"}, "戻り値": "tag score dict"
+    # }
     def _interrogate(self, image_path, api_url, model, threshold, character_threshold, timeout):
         return self._interrogate_bytes(image_path.read_bytes(), api_url, model, threshold, character_threshold, timeout)
 
+    # {
+    #   "責務": "人物tag向けに透過余白またはGrabCutで画像領域をcropする。",
+    #   "処理": ["alpha boundsを優先してcropする", "利用不能ならGrabCut輪郭を使い、失敗時は元画像を返す"],
+    #   "引数": {"image": "PIL画像"}, "戻り値": "crop画像と適用方式のtuple"
+    # }
     @staticmethod
     def _crop_character_image(image):
         import cv2
@@ -312,12 +436,22 @@ class FolderTaggerTab(ttk.Frame):
             pass
         return Image.fromarray(rgb), "original"
 
+    # {
+    #   "責務": "PIL画像をPNG byteへ変換してTagger APIへ照会する。",
+    #   "処理": ["必要時に人物領域をcropする", "RGB PNGをbuffer化しAPI照会する"],
+    #   "引数": {"image": "PIL画像", "api_url": "API URL", "model": "model名", "threshold": "tag閾値", "character_threshold": "人物閾値", "timeout": "要求timeout秒", "character_crop": "人物cropの有無"}, "戻り値": "tag score dict"
+    # }
     def _interrogate_pil_image(self, image, api_url, model, threshold, character_threshold, timeout, character_crop):
         if character_crop:
             image, _ = self._crop_character_image(image)
         buffer = io.BytesIO(); image.convert("RGB").save(buffer, format="PNG")
         return self._interrogate_bytes(buffer.getvalue(), api_url, model, threshold, character_threshold, timeout)
 
+    # {
+    #   "責務": "GIF全frameをTaggerへ照会しtag scoreを平均する。",
+    #   "処理": ["frameを順に読み停止要求を確認する", "各frame scoreを集約し処理frame数を返す"],
+    #   "引数": {"image_path": "GIF path", "api_url": "API URL", "model": "model名", "threshold": "tag閾値", "character_threshold": "人物閾値", "timeout": "要求timeout秒", "character_crop": "人物cropの有無"}, "戻り値": "平均score dictとframe数"
+    # }
     def _interrogate_gif(self, image_path, api_url, model, threshold, character_threshold, timeout, character_crop=False):
         from PIL import Image, ImageSequence
         frame_scores = []
@@ -328,6 +462,11 @@ class FolderTaggerTab(ttk.Frame):
         if not frame_scores: raise RuntimeError("GIFから処理可能なフレームを取得できませんでした")
         return self._average_gif_scores(frame_scores), len(frame_scores)
 
+    # {
+    #   "責務": "動画から等間隔frameを抽出してTagger照会しscoreを平均する。",
+    #   "処理": ["動画とframe数を読み検査する", "指定数のframeをencodeしてAPIへ送り結果を集約する"],
+    #   "引数": {"video_path": "動画path", "api_url": "API URL", "model": "model名", "threshold": "tag閾値", "character_threshold": "人物閾値", "timeout": "要求timeout秒", "frame_count": "照会frame数"}, "戻り値": "平均score dictと処理frame数"
+    # }
     def _interrogate_video(self, video_path, api_url, model, threshold, character_threshold, timeout, frame_count):
         import cv2
         capture = cv2.VideoCapture(str(video_path))
@@ -346,6 +485,11 @@ class FolderTaggerTab(ttk.Frame):
         if not scores: raise RuntimeError("動画から処理可能なフレームを取得できませんでした")
         return self._average_gif_scores(scores), len(scores)
 
+    # {
+    #   "責務": "指定folder内の画像・GIF・任意の動画をtag化しTXT等へ保存する。",
+    #   "処理": ["入力・出力・API・閾値を検証する", "対象mediaを順次照会してtag filterとカテゴリ分割を適用する", "結果を書き込み進捗をlogへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def run(self):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")

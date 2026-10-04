@@ -9,9 +9,19 @@ from ..services import LogBox, LabeledPathRow
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   "責務": "tag txtを入力folderから読み分類カテゴリ別の出力へ分割するUI。",
+#   "フィールド": ["input_dir: source folder", "output_dir: 分類出力folder", "recursive: 子folder走査設定", "preset_name/preset_store/preset_combo: 設定保存と選択", "logbox: 実行ログ"]
+# }
 class TagSplitterTab(ttk.Frame):
     """タグtxtを用途別のフォルダ群へ複製して分割する画面。"""
 
+    # {
+    #   "責務": "入出力先と走査設定を初期化し分類画面を構築する。",
+    #   "処理": ["folder・再帰・preset stateを初期化する", "path・カテゴリ説明・実行・log UIを配置する"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.input_dir = tk.StringVar()
@@ -21,6 +31,12 @@ class TagSplitterTab(ttk.Frame):
         self.preset_store = PresetStore("tag_splitter")
         self._build()
 
+    # {
+    #   "責務": "入力・出力folderと再帰・preset・実行log UIを構築する。",
+    #   "処理": ["pathと再帰設定を入力可能にする", "カテゴリ説明・操作button・log領域を配置する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _build(self):
         LabeledPathRow(self, "入力タグフォルダ", self.input_dir, mode="dir").pack(fill="x", pady=3)
         LabeledPathRow(self, "出力先", self.output_dir, mode="dir").pack(fill="x", pady=3)
@@ -35,9 +51,21 @@ class TagSplitterTab(ttk.Frame):
         self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "保存済みpreset一覧をcomboboxへ反映する。",
+    #   "処理": ["PresetStoreから名前を読み選択肢を更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "input/output folderと再帰設定をpresetへ保存する。",
+    #   "処理": ["現在設定を保存する", "名前・選択肢と結果logを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), {"input_dir": self.input_dir.get(), "output_dir": self.output_dir.get(), "recursive": self.recursive.get()})
@@ -45,6 +73,12 @@ class TagSplitterTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetからinput/output folderと再帰設定を復元する。",
+    #   "処理": ["保存値を各入力変数へ反映する", "読込結果をログへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -53,9 +87,21 @@ class TagSplitterTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "tag分類処理をdaemon threadで開始する。",
+    #   "処理": ["runをworker threadとして起動する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
 
+    # {
+    #   "責務": "入力folderのtxtを走査しカテゴリ別の複製結果を生成する。",
+    #   "処理": ["folderと対象file一覧を検証する", "TagCategorySplitterでfileごとに分類し相対pathと集計をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def run(self):
         input_root = Path(self.input_dir.get().strip())
         output_root = Path(self.output_dir.get().strip())

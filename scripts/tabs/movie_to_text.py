@@ -9,9 +9,18 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   "責務": "動画フレームをTagger APIで採点し、共通タグまたはフレーム別wildcardを保存する。",
+#   "フィールド": ["stop_event: 停止要求", "input_file/output_file: 入出力path", "api_url/model: Tagger接続先", "frame_count/threshold/minimum_coverage: 抽出条件", "output_mode: 出力形式", "preset_store/preset_name: 設定preset"]
+# }
 class MovieToTextTab(ttk.Frame):
     """動画の代表フレームをPixAI Taggerへ送り、共通タグをプロンプト化する。"""
 
+    # {
+    #   "責務": "動画タグ化タブの状態とUIを初期化する。",
+    #   "処理": ["停止event・入出力・API・抽出条件・preset状態を作る", "画面を構築する"],
+    #   "引数": {"master": "親Tk widget"}, "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.stop_event = threading.Event()
@@ -27,6 +36,11 @@ class MovieToTextTab(ttk.Frame):
         self.preset_name = tk.StringVar()
         self._build()
 
+    # {
+    #   "責務": "動画・出力・Tagger条件・実行操作とlogのUIを構築する。",
+    #   "処理": ["入出力とAPI設定欄を配置する", "抽出条件、preset、実行停止ボタン、logを配置する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _build(self):
         LabeledPathRow(self, "入力動画", self.input_file, mode="file", filetypes=[("動画", "*.mp4 *.mkv *.mov *.avi *.webm *.m4v"), ("All files", "*.*")]).pack(fill="x", pady=3)
         LabeledPathRow(self, "出力TXT", self.output_file, mode="save", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
@@ -51,23 +65,53 @@ class MovieToTextTab(ttk.Frame):
         self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "PixAI Tagger APIの起動をバックグラウンドへ依頼する。",
+    #   "処理": ["共通thread helper経由でserver起動しlog callbackを渡す"],
+    #   "引数": [], "戻り値": []
+    # }
     def start_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.start, self.logbox.log)
 
+    # {
+    #   "責務": "PixAI Tagger APIの停止をバックグラウンドへ依頼する。",
+    #   "処理": ["共通thread helper経由でserver停止しlog callbackを渡す"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.stop, self.logbox.log)
 
+    # {
+    #   "責務": "保存済みpreset名を選択UIへ反映する。",
+    #   "処理": ["PresetStoreの名前一覧でcombobox候補を更新する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "現在の動画タグ化設定をpreset保存用dictにまとめる。",
+    #   "処理": ["入出力、API、抽出条件、出力形式のUI値を読み取る"],
+    #   "引数": [], "戻り値": "設定key/valueのdict"
+    # }
     def _preset_values(self):
         return {"input_file": self.input_file.get(), "output_file": self.output_file.get(), "api_url": self.api_url.get(), "model": self.model.get(), "frame_count": self.frame_count.get(), "threshold": self.threshold.get(), "minimum_coverage": self.minimum_coverage.get(), "output_mode": self.output_mode.get()}
 
+    # {
+    #   "責務": "現在設定を名前付きpresetとして保存する。",
+    #   "処理": ["設定値を保存し選択肢を更新する", "成功または失敗をlogへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), self._preset_values()); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetの動画タグ化設定をUIへ復元する。",
+    #   "処理": ["保存済み値を対応する変数へ設定する", "出力形式を復元して結果をlogへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -77,6 +121,11 @@ class MovieToTextTab(ttk.Frame):
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "Tagger応答からtag名とconfidenceの辞書を正規化する。",
+    #   "処理": ["tagsまたは応答本体の数値scoreを抽出する", "辞書形式でなければ共通tag抽出器を使う"],
+    #   "引数": {"result": "Tagger API応答"}, "戻り値": "tag名からscoreへのdict"
+    # }
     @staticmethod
     def _scores(result):
         tags = result.get("tags", result) if isinstance(result, dict) else result
@@ -84,6 +133,11 @@ class MovieToTextTab(ttk.Frame):
             return {str(tag).strip(): float(score) for tag, score in tags.items() if isinstance(score, (int, float)) and str(tag).strip()}
         return {tag: 1.0 for tag in extract_tagger_tags(result)}
 
+    # {
+    #   "責務": "複数frameのtag scoreを集約し頻度・閾値で共通tagを選ぶ。",
+    #   "処理": ["各tagのscore合計と出現数を集計する", "出現率と平均scoreを満たすtagを安定順で返す"],
+    #   "引数": {"frame_scores": "各frameのtag score", "minimum_coverage": "必要出現率", "threshold": "平均score下限"}, "戻り値": "採用tag名のlist"
+    # }
     @staticmethod
     def aggregate(frame_scores, minimum_coverage, threshold):
         totals, appearances = {}, {}
@@ -94,17 +148,37 @@ class MovieToTextTab(ttk.Frame):
         count = max(1, len(frame_scores))
         return [tag for tag in sorted(totals, key=lambda tag: (-appearances[tag], -totals[tag], tag.casefold())) if appearances[tag] / count >= minimum_coverage and totals[tag] / appearances[tag] >= threshold]
 
+    # {
+    #   "責務": "単一frameのtag scoreを閾値以上に絞り安定順で並べる。",
+    #   "処理": ["score降順、tag名順で整列して閾値未満を除く"],
+    #   "引数": {"scores": "tag score辞書", "threshold": "採用score下限"}, "戻り値": "tag名のlist"
+    # }
     @staticmethod
     def frame_tags(scores, threshold):
         return [tag for tag, score in sorted(scores.items(), key=lambda item: (-item[1], item[0].casefold())) if score >= threshold]
 
+    # {
+    #   "責務": "停止状態を解除し動画タグ化処理を非同期に開始する。",
+    #   "処理": ["stop eventをclearする", "安全thread helperからrunを呼ぶ"],
+    #   "引数": [], "戻り値": []
+    # }
     def start(self):
         self.stop_event.clear()
         _safe_thread(self.logbox, self.run)
 
+    # {
+    #   "責務": "動画タグ化workerへ停止要求を伝える。",
+    #   "処理": ["stop eventをsetしてlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop(self):
         self.stop_event.set(); self.logbox.log("停止要求を送信しました")
 
+    # {
+    #   "責務": "動画から代表frameを抽出しTaggerへ送り、指定形式のtag fileを生成する。",
+    #   "処理": ["依存と入力を検証する", "動画全体から代表frameを順に読みAPI採点する", "共通tagまたはframe別tagを出力する"],
+    #   "引数": [], "戻り値": []
+    # }
     def run(self):
         try:
             import cv2

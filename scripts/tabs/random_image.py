@@ -10,7 +10,17 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
 
+# {
+#   "責務": "txt2img生成条件・backend連携・連続実行を操作する画面。",
+#   "フィールド": ["mod: 埋込み生成runner", "Tk variable群: prompt/backend/workflow/model/parameter/path状態", "追加wildcard row群: dynamic入力状態", "model_choices: catalog候補", "_queue: worker log queue", "logbox: 実行ログ"]
+# }
 class RandomImageTab(ttk.Frame):
+    # {
+    #   "責務": "生成UIの状態・依存serviceを初期化して画面を構築する。",
+    #   "処理": ["runnerとpreset storeを設定する", "widget群・既定値・local候補を初期化する", "log pollをscheduleする"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.mod = EMBEDDED_RANDOM_IMAGE
@@ -22,6 +32,12 @@ class RandomImageTab(ttk.Frame):
         self._load_local_backend_choices()
         self.after(100, self._poll)
 
+    # {
+    #   "責務": "txt2img prompt・backend・model・生成条件・操作のwidget群を構築する。",
+    #   "処理": ["runner利用可能性を検査する", "各設定入力とwildcard行UIを配置する", "model分類・log・実行制御を接続する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _build(self):
         if isinstance(self.mod, Exception):
             ttk.Label(self, text=f"random_image_creater_gui.py を読み込めませんでした: {self.mod}").pack(anchor="w")
@@ -194,6 +210,12 @@ class RandomImageTab(ttk.Frame):
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
 
+    # {
+    #   "責務": "ユーザー設定・flow・runner既定値から画面の初期値を復元する。",
+    #   "処理": ["保存済みpathとbackend設定を読む", "default flowのmodel inputを反映する", "生成設定を初期化する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _load_defaults(self):
         if isinstance(self.mod, Exception):
             return
@@ -234,12 +256,30 @@ class RandomImageTab(ttk.Frame):
         self._apply_flow_model_choices()
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "全生成widgetと追加wildcard rowの値をpreset用mappingへ集約する。",
+    #   "処理": ["画面設定を読み取る", "動的row設定とともに保存形式を返す"],
+    #   "引数": [],
+    #   "戻り値": "生成preset values mapping"
+    # }
     def _preset_values(self):
         return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
 
+    # {
+    #   "責務": "preset名の選択候補を画面へ反映する。",
+    #   "処理": ["PresetStoreから名前一覧を取得してcomboboxを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "現在のtxt2img設定を名前付きpresetとして永続化する。",
+    #   "処理": ["画面値を保存する", "preset名・選択肢と成否logを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             values = self._preset_values()
@@ -255,6 +295,12 @@ class RandomImageTab(ttk.Frame):
             self.var_preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetから生成設定とdynamic wildcard rowsを復元する。",
+    #   "処理": ["保存値を対応widgetへ反映する", "候補とflow model rowsを同期する", "成否をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.var_preset_name.get())
@@ -270,6 +316,12 @@ class RandomImageTab(ttk.Frame):
             self._apply_generation_parameter_input(values.get("generation_parameter_input", {}))
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "additional wildcard fileを選ぶdynamic UI rowを追加する。",
+    #   "処理": ["初期値をもつpath widgetを生成する", "row stateを管理listへ登録する"],
+    #   "引数": {"value": "選択するpathまたは未指定None"},
+    #   "戻り値": "追加したrow state"
+    # }
     def _add_additional_file_row(self, value=None):
         value = value if isinstance(value, dict) else {"path": value or ""}
         row = ttk.LabelFrame(self.additional_files_frame, text="追加ワイルドカード", padding=4)
@@ -287,15 +339,33 @@ class RandomImageTab(ttk.Frame):
         ttk.Button(settings, text="削除", command=lambda: self._remove_additional_file_row(item)).pack(side="right")
         self.additional_file_rows.append(item)
 
+    # {
+    #   "責務": "指定additional wildcard rowを画面とstateから削除する。",
+    #   "処理": ["widgetを破棄する", "管理listからrow stateを除く"],
+    #   "引数": {"item": "削除対象row state"},
+    #   "戻り値": []
+    # }
     def _remove_additional_file_row(self, item):
         item["row"].destroy()
         self.additional_file_rows = [current for current in self.additional_file_rows if current is not item]
         if not self.additional_file_rows:
             self._add_additional_file_row()
 
+    # {
+    #   "責務": "additional wildcard file rowsをrunner用spec listに変換する。",
+    #   "処理": ["rowから選択値を集め空欄を除外する"],
+    #   "引数": [],
+    #   "戻り値": "追加wildcard specのlist"
+    # }
     def _additional_specs(self):
         return [{key: item[key].get() for key in ("path", "label", "position", "cache_scope")} for item in self.additional_file_rows]
 
+    # {
+    #   "責務": "設定値に基づきadditional wildcard rowsを作り直す。",
+    #   "処理": ["既存rowを破棄する", "values中の各pathに対応するrowを追加する"],
+    #   "引数": {"values": "復元するwildcard pathのlist"},
+    #   "戻り値": []
+    # }
     def _set_additional_file_rows(self, values):
         for item in self.additional_file_rows:
             item["row"].destroy()
@@ -305,6 +375,12 @@ class RandomImageTab(ttk.Frame):
         if not self.additional_file_rows:
             self._add_additional_file_row()
 
+    # {
+    #   "責務": "action wildcard設定を入力するdynamic rowを追加する。",
+    #   "処理": ["入力widget群を生成しvalueを初期設定する", "row stateを管理listへ登録する"],
+    #   "引数": {"value": "rowの初期設定値またはNone"},
+    #   "戻り値": "追加したrow state"
+    # }
     def _add_action_wildcard_row(self, value=None):
         value = value or {}
         row = ttk.LabelFrame(self.action_wildcards_frame, text="Action", padding=4)
@@ -322,15 +398,33 @@ class RandomImageTab(ttk.Frame):
         ttk.Button(fields, text="削除", command=lambda: self._remove_action_wildcard_row(item)).pack(side="right")
         self.action_wildcard_rows.append(item)
 
+    # {
+    #   "責務": "指定action wildcard rowを画面とstateから除去する。",
+    #   "処理": ["widgetを破棄する", "管理listから対象stateを削除する"],
+    #   "引数": {"item": "削除対象row state"},
+    #   "戻り値": []
+    # }
     def _remove_action_wildcard_row(self, item):
         item["row"].destroy()
         self.action_wildcard_rows = [current for current in self.action_wildcard_rows if current is not item]
         if not self.action_wildcard_rows:
             self._add_action_wildcard_row()
 
+    # {
+    #   "責務": "action wildcard rowsを実行用spec listに整形する。",
+    #   "処理": ["各rowの設定値を収集して実行形式にする"],
+    #   "引数": [],
+    #   "戻り値": "action wildcard specのlist"
+    # }
     def _action_wildcard_specs(self):
         return [{key: item[key].get() for key in ("condition", "path", "position", "cache_scope")} for item in self.action_wildcard_rows]
 
+    # {
+    #   "責務": "preset等のaction wildcard値に合わせてrow群を再構築する。",
+    #   "処理": ["現在のrowを削除する", "valuesから新しいrowを追加する"],
+    #   "引数": {"values": "復元するaction wildcardのlist"},
+    #   "戻り値": []
+    # }
     def _set_action_wildcard_rows(self, values):
         for item in self.action_wildcard_rows:
             item["row"].destroy()
@@ -340,6 +434,12 @@ class RandomImageTab(ttk.Frame):
         if not self.action_wildcard_rows:
             self._add_action_wildcard_row()
 
+    # {
+    #   "責務": "現在のflowに含まれるmodel選択widgetを候補で初期化する。",
+    #   "処理": ["workflow model fieldとbackend catalog候補を対応づける", "選択値を保ってcombobox候補を更新する"],
+    #   "引数": {"values": "field idごとに値を上書きするmappingまたはNone"},
+    #   "戻り値": []
+    # }
     def _apply_flow_model_choices(self, values=None):
         if not hasattr(self, "flow_models_frame"):
             return
@@ -375,14 +475,32 @@ class RandomImageTab(ttk.Frame):
         if not fields:
             ttk.Label(self.flow_models_frame, text="モデル入力は検出されませんでした。").pack(anchor="w")
 
+    # {
+    #   "責務": "生成runnerのlog callbackを画面log queueへ接続する。",
+    #   "処理": ["runner利用可能性を確認する", "callbackを設定し起動記録を出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _attach_backend_logger(self):
         if isinstance(self.mod, Exception):
             return
+        # {
+        #   "責務": "runner log messageをthread-safe queueへ渡す。",
+        #   "処理": ["入力messageを文字列化しqueueへ追加する"],
+        #   "引数": {"msg": "runnerから届いたlog message"},
+        #   "戻り値": []
+        # }
         def tab_log(msg: str):
             self._queue.put(str(msg))
         self.mod._log = tab_log
         self.logbox.log("画像生成タブを起動しました")
 
+    # {
+    #   "責務": "backend catalog結果をmodel・sampler等のcomboboxへ適用する。",
+    #   "処理": ["checkpoints/UNets/LoRAs/VAEsを保存する", "model分類とその他候補を更新する", "workflow model候補を再評価する"],
+    #   "引数": {"choices": "backend catalogの候補mapping"},
+    #   "戻り値": []
+    # }
     def _apply_backend_choices(self, choices):
         self.model_choices = {
             "checkpoints": list(choices.get("checkpoints", [])),
@@ -399,6 +517,12 @@ class RandomImageTab(ttk.Frame):
             self.flow_combo.configure(values=choices.get("flows", []))
             self._apply_flow_model_choices()
 
+    # {
+    #   "責務": "選択checkpointのmodel family分類と根拠を表示する。",
+    #   "処理": ["未選択時は案内文を設定する", "model catalogとの照合結果を表示widgetへ設定する"],
+    #   "引数": {"_args": "Tk callbackが渡す未使用引数"},
+    #   "戻り値": []
+    # }
     def _update_model_classification(self, *_args):
         selected = self.var_sd_model_checkpoint.get().strip()
         if not selected:
@@ -407,20 +531,50 @@ class RandomImageTab(ttk.Frame):
         classification = classify_base_model_choice(selected, self.model_choices)
         self.model_classification_text.set(describe_model_classification(classification))
 
+    # {
+    #   "責務": "API照会前のローカルmodel候補を読んで画面へ適用する。",
+    #   "処理": ["runner状態を検証する", "local catalogを読みmodel widgetへ反映する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _load_local_backend_choices(self):
         if isinstance(self.mod, Exception):
             return
         choices, _ = load_backend_choices(query_api=False)
         self._apply_backend_choices(choices)
 
+    # {
+    #   "責務": "API経由のbackend候補更新を非同期で開始する。",
+    #   "処理": ["workerを起動する", "取得結果をTk threadのfinish callbackへ送る", "更新中表示を出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def refresh_backend_choices(self):
+        # {
+        #   "責務": "backend候補と警告を取得しUI反映をscheduleする。",
+        #   "処理": ["API問い合わせを有効にしてcatalogを読む", "結果をmain threadへ渡す"],
+        #   "引数": [],
+        #   "戻り値": []
+        # }
         def worker():
             choices, warnings = load_backend_choices(self.var_api_url.get(), query_api=True)
             self.after(0, lambda: self._finish_backend_refresh(choices, warnings))
         threading.Thread(target=worker, daemon=True).start()
         self.logbox.log("🔄 モデル候補をフォルダとAPIから更新中...")
 
+    # {
+    #   "責務": "Ollama model一覧の非同期refreshを開始する。",
+    #   "処理": ["照会workerを起動する", "更新開始をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def refresh_ollama_models(self):
+        # {
+        #   "責務": "Ollama APIへmodel一覧を問い合わせ結果をUI threadへ返す。",
+        #   "処理": ["requestsとAPIを使ってmodel一覧を取得する", "成功値かerrorをfinish callbackへ渡す"],
+        #   "引数": [],
+        #   "戻り値": []
+        # }
         def worker():
             try:
                 if requests is None: raise RuntimeError("requests がありません")
@@ -429,12 +583,24 @@ class RandomImageTab(ttk.Frame):
             except Exception as error: self.after(0, lambda: self._finish_ollama_models([], error))
         threading.Thread(target=worker, daemon=True).start(); self.logbox.log("🔄 Ollamaモデルを更新中...")
 
+    # {
+    #   "責務": "Ollama model取得結果をcomboboxまたはlogへ反映する。",
+    #   "処理": ["errorがあれば記録して終了する", "候補と未選択時の初期modelを設定する"],
+    #   "引数": {"models": "取得model名のlist", "error": "失敗例外またはNone"},
+    #   "戻り値": []
+    # }
     def _finish_ollama_models(self, models, error):
         if error is not None: self.logbox.log(f"Ollamaモデル取得エラー: {error}"); return
         self.ollama_model_combo.configure(values=models)
         if not self.var_ollama_model.get() and models: self.var_ollama_model.set(models[0])
         self.logbox.log(f"✅ Ollamaモデル候補: {len(models)}")
 
+    # {
+    #   "責務": "backend候補refreshの結果と警告を画面へ反映する。",
+    #   "処理": ["選択widgetへ候補mappingを適用する", "警告文をlogへ出す"],
+    #   "引数": {"choices": "catalog候補mapping", "warnings": "API/catalog警告文字列列"},
+    #   "戻り値": []
+    # }
     def _finish_backend_refresh(self, choices, warnings):
         self._apply_backend_choices(choices)
         self.logbox.log(
@@ -445,6 +611,12 @@ class RandomImageTab(ttk.Frame):
         for warning in warnings:
             self.logbox.log(f"⚠️ API候補: {warning}")
 
+    # {
+    #   "責務": "GUI入力をEmbeddedRandomImageの実行設定へ変換する。",
+    #   "処理": ["画面値とdynamic rowsを読み込む", "parameter設定を解決しrunner引数mappingを返す"],
+    #   "引数": [],
+    #   "戻り値": "runner実行引数のdict"
+    # }
     def _settings_from_gui(self):
         input_file = self.var_input_file.get().strip()
         wildcard_root_dir = self.var_wildcard_root_dir.get().strip()
@@ -481,6 +653,12 @@ class RandomImageTab(ttk.Frame):
             "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(),
         }
 
+    # {
+    #   "責務": "parameter fieldごとのmode・数値・range・candidate入力を収集する。",
+    #   "処理": ["widget stateを設定形式へ写像する"],
+    #   "引数": [],
+    #   "戻り値": "mode別parameter入力mapping"
+    # }
     def _generation_parameter_input(self):
         return {
             "cfg": self.var_cfg_spec.get().strip(),
@@ -492,6 +670,12 @@ class RandomImageTab(ttk.Frame):
             "sampler_candidates": self.var_sampler_candidates.get().strip(),
         }
 
+    # {
+    #   "責務": "parameter設定mappingを対応する入力widgetへ復元する。",
+    #   "処理": ["利用可能なmode/valueをfield別Tk variableへ適用する", "未指定値は既存値を保つ"],
+    #   "引数": {"values": "復元するmappingまたはNone"},
+    #   "戻り値": []
+    # }
     def _apply_generation_parameter_input(self, values=None):
         values = values or {}
         self.var_cfg_spec.set(values.get("cfg", "7"))
@@ -502,6 +686,12 @@ class RandomImageTab(ttk.Frame):
         self.var_sampler_mode.set(values.get("sampler_mode", "fixed"))
         self.var_sampler_candidates.set(values.get("sampler_candidates", ""))
 
+    # {
+    #   "責務": "GUI上のparameter文字列を検証してresolver用configを作る。",
+    #   "処理": ["parameter mode別入力を取得する", "range/candidate形式を検査しconfigへ整形する"],
+    #   "引数": [],
+    #   "戻り値": "GenerationParameterResolver向けconfig mapping"
+    # }
     def _generation_parameter_config(self):
         cfg_text = self.var_cfg_spec.get().strip()
         if ".." in cfg_text:
@@ -551,6 +741,12 @@ class RandomImageTab(ttk.Frame):
             raise ValueError("samplerの選択方式が不正です")
         return {"cfg": cfg, "steps": steps, "resolution": resolution, "sampler": sampler}
 
+    # {
+    #   "責務": "min..max形式をconversionで変換し範囲pairを返す。",
+    #   "処理": ["区切り形式を検証する", "両端を変換し入力不正をlabel付きValueErrorへ変換する"],
+    #   "引数": {"value": "範囲入力文字列", "label": "入力項目名", "conversion": "端点変換関数"},
+    #   "戻り値": "変換済みのlower/upper tuple"
+    # }
     @staticmethod
     def _parse_range(value, label, conversion):
         parts = value.strip().split("..")
@@ -561,10 +757,22 @@ class RandomImageTab(ttk.Frame):
         except ValueError as error:
             raise ValueError(f"{label}の範囲は数値の min..max で入力してください") from error
 
+    # {
+    #   "責務": "現在の画面設定をEmbeddedRandomImageのrunner stateへ転送する。",
+    #   "処理": ["GUI設定mappingを作る", "各項目をrunner属性へ設定する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _sync(self):
         for key, value in self._settings_from_gui().items():
             setattr(self.mod, key, value)
 
+    # {
+    #   "責務": "実行中runnerへ次の生成から適用する設定更新を依頼する。",
+    #   "処理": ["現在の画面設定をqueue_settings_updateへ渡す", "成功または失敗をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def update_running_generation(self):
         try:
             self.mod.queue_settings_update(self._settings_from_gui())
@@ -572,6 +780,12 @@ class RandomImageTab(ttk.Frame):
         except Exception as e:
             self.logbox.log(f"設定更新エラー: {e}")
 
+    # {
+    #   "責務": "設定を同期し単発生成modeをrunnerで開始する。",
+    #   "処理": ["GUI設定を同期する", "once modeを開始し例外をlogへ報告する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def one(self):
         try:
             self._sync()
@@ -579,6 +793,12 @@ class RandomImageTab(ttk.Frame):
         except Exception as e:
             self.logbox.log(f"エラー: {e}")
 
+    # {
+    #   "責務": "設定を同期しinfinite生成modeをrunnerで開始する。",
+    #   "処理": ["GUI設定を同期する", "infinite modeを開始し例外をlogへ報告する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def infinite(self):
         try:
             self._sync()
@@ -586,6 +806,12 @@ class RandomImageTab(ttk.Frame):
         except Exception as e:
             self.logbox.log(f"エラー: {e}")
 
+    # {
+    #   "責務": "設定を同期し入力listに沿うsequential生成を開始する。",
+    #   "処理": ["GUI設定を同期する", "sequential modeを開始し例外をlogへ報告する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def sequential(self):
         try:
             self._sync()
@@ -593,12 +819,24 @@ class RandomImageTab(ttk.Frame):
         except Exception as e:
             self.logbox.log(f"エラー: {e}")
 
+    # {
+    #   "責務": "EmbeddedRandomImage runnerへ停止要求を送信する。",
+    #   "処理": ["runnerのstop操作を呼び出す", "例外をlogへ記録する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def stop(self):
         try:
             self.mod._stop()
         except Exception as e:
             self.logbox.log(f"エラー: {e}")
 
+    # {
+    #   "責務": "worker log queueをTk logへ排出して次回pollをscheduleする。",
+    #   "処理": ["runner利用可能時にqueueの全messageを読みlogへ渡す", "100ms後のpollを登録する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _poll(self):
         if not isinstance(self.mod, Exception):
             while not self._queue.empty():

@@ -3,6 +3,10 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+# {
+#   "責務": "体格入力から寸法推定・分類tag・生成promptを作るUI。",
+#   "フィールド": ["FIELDS: 入力項目名", "vars: 項目ごとの入力値", "preset_store/preset_name/preset_combo: 設定保存と選択", "output: promptとerrorの表示領域"]
+# }
 class BodyPromptTab(ttk.Frame):
     """body_prompt_gui.py を統合版向けに移植したタブ。
 
@@ -11,6 +15,12 @@ class BodyPromptTab(ttk.Frame):
     """
     FIELDS = ["height", "weight", "bust", "waist", "hips", "cup", "age"]
 
+    # {
+    #   "責務": "体格入力変数・presetを初期化し画面を構築する。",
+    #   "処理": ["項目別Tk variableを作る", "preset storeを初期化し入力・出力widgetを構築する"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.vars = {name: tk.StringVar(value="") for name in self.FIELDS}
@@ -18,6 +28,12 @@ class BodyPromptTab(ttk.Frame):
         self.preset_name = tk.StringVar()
         self._build()
 
+    # {
+    #   "責務": "体格項目入力、preset操作、prompt/error表示UIを組み立てる。",
+    #   "処理": ["項目別entryを作る", "生成・preset操作を配置する", "出力領域を作りpreset一覧を更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _build(self):
         form = ttk.LabelFrame(self, text="入力", padding=8)
         form.pack(fill="x")
@@ -51,9 +67,21 @@ class BodyPromptTab(ttk.Frame):
         self.output.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "保存済みpreset名を選択widgetへ設定する。",
+    #   "処理": ["preset storeからnamesを取りcomboboxへ設定する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "体格入力値をpresetとして保存し結果をoutputへ表示する。",
+    #   "処理": ["各入力値を保存する", "選択名と一覧を更新する", "成否をoutputへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             values = {field: variable.get() for field, variable in self.vars.items()}
@@ -64,6 +92,12 @@ class BodyPromptTab(ttk.Frame):
         except Exception as error:
             self._write_output(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "presetから体格入力値を復元し結果をoutputへ表示する。",
+    #   "処理": ["保存値を対応する入力variableへ反映する", "成否をoutputへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -73,12 +107,24 @@ class BodyPromptTab(ttk.Frame):
         except Exception as error:
             self._write_output(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "出力Textを指定文で置換して末尾を表示する。",
+    #   "処理": ["widgetを編集可能にし既存文を消す", "textを書き込み末尾へscrollする"],
+    #   "引数": {"text": "表示するpromptまたはメッセージ"},
+    #   "戻り値": []
+    # }
     def _write_output(self, text: str) -> None:
         self.output.configure(state="normal")
         self.output.delete("1.0", tk.END)
         self.output.insert(tk.END, text)
         self.output.see("end")
 
+    # {
+    #   "責務": "表記ゆれを正規化して空値または浮動小数値へ変換する。",
+    #   "処理": ["前後空白と全角commaを正規化する", "空文字ならNone、それ以外はfloatへ変換する"],
+    #   "引数": {"text": "数値または空の入力文字列"},
+    #   "戻り値": "空入力はNone、その他はfloat。変換不能ならValueError"
+    # }
     @staticmethod
     def _parse_float(text: str):
         text = text.strip().replace("，", ",").replace(",", ".")
@@ -86,6 +132,12 @@ class BodyPromptTab(ttk.Frame):
             return None
         return float(text)
 
+    # {
+    #   "責務": "整数入力を検査し空値またはintegerへ変換する。",
+    #   "処理": ["前後空白を除く", "空文字ならNone、その他はfloat経由で整数化する"],
+    #   "引数": {"text": "整数として解釈する文字列"},
+    #   "戻り値": "空入力はNone、その他はint。変換不能ならValueError"
+    # }
     @staticmethod
     def _parse_int(text: str):
         text = text.strip()
@@ -93,6 +145,12 @@ class BodyPromptTab(ttk.Frame):
             return None
         return int(float(text))
 
+    # {
+    #   "責務": "体格入力widgetの値を正規化したdata mappingとして取得する。",
+    #   "処理": ["数値項目をparseしcupを大文字化する", "height/weight/bust/waist/hips/cup/ageをmappingで返す"],
+    #   "引数": [],
+    #   "戻り値": "各入力項目を型変換したdict"
+    # }
     def get_input_data(self):
         return {
             "height": self._parse_float(self.vars["height"].get()),
@@ -104,6 +162,12 @@ class BodyPromptTab(ttk.Frame):
             "age": self._parse_int(self.vars["age"].get()),
         }
 
+    # {
+    #   "責務": "入力dataの年齢区分とwaistからunderbust寸法を推定する。",
+    #   "処理": ["waistまたはageが欠ける場合Noneを返す", "年齢別加算値をwaistへ加える"],
+    #   "引数": {"data": "waistとageを含む入力mapping"},
+    #   "戻り値": "推定underbust値、または入力不足時None"
+    # }
     @staticmethod
     def estimate_underbust(data):
         """
@@ -134,6 +198,12 @@ class BodyPromptTab(ttk.Frame):
             return data["waist"] + 11
 
 
+    # {
+    #   "責務": "明示cupまたはbust-under寸法差からcup分類を求める。",
+    #   "処理": ["入力cupがあれば優先する", "寸法不足をNoneとし、差のthreshold帯からAA〜ZZへ対応づける"],
+    #   "引数": {"data": "cupとbustを含む入力mapping", "under": "推定underbust寸法"},
+    #   "戻り値": "cup文字列、または推定不能時None"
+    # }
     @staticmethod
     def estimate_cup(data, under):
         if data["cup"]:
@@ -170,12 +240,24 @@ class BodyPromptTab(ttk.Frame):
         if diff < 72.5: return "Z"
         return "ZZ"
 
+    # {
+    #   "責務": "身長と体重からBMIを計算する。",
+    #   "処理": ["height/weightのtruthyを確認する", "kgとm換算の式でBMIを算出する"],
+    #   "引数": {"data": "cm単位heightとkg単位weightを含むmapping"},
+    #   "戻り値": "BMI値、または必要寸法がない場合None"
+    # }
     @staticmethod
     def calculate_bmi(data):
         if data["height"] and data["weight"]:
             return data["weight"] / ((data["height"] / 100) ** 2)
         return None
 
+    # {
+    #   "責務": "年齢・寸法・BMI・cupの区分から体格を表すtag群を作る。",
+    #   "処理": ["年齢・身長・BMI帯に応じたtagを追加する", "cup・waist・hips条件のtagを追加する", "標準の体型tagを末尾へ加える"],
+    #   "引数": {"data": "年齢と体格寸法のmapping", "bmi": "算出BMIまたはNone", "cup": "cup区分またはNone"},
+    #   "戻り値": "生成したtag文字列のlist"
+    # }
     @staticmethod
     def generate_body_tags(data, bmi, cup):
         tags = []
@@ -257,6 +339,12 @@ class BodyPromptTab(ttk.Frame):
         tags += ["feminine proportions", "compact build"]
         return tags
 
+    # {
+    #   "責務": "体格data・cup・tagをカンマ区切り生成promptへ整形する。",
+    #   "処理": ["基礎character tagを加える", "利用可能な年齢・身長・体重・寸法とtagを順に追加する", "カンマ区切りの文字列を返す"],
+    #   "引数": {"data": "体格入力mapping", "cup": "cup区分またはNone", "tags": "追加の体格tag列"},
+    #   "戻り値": "生成prompt文字列"
+    # }
     @staticmethod
     def generate_prompt(data, cup, tags):
         prompt = ["1girl"]
@@ -288,6 +376,12 @@ class BodyPromptTab(ttk.Frame):
 
         return ", ".join(prompt)
 
+    # {
+    #   "責務": "入力を検証・推定し体格promptを生成して画面へ表示する。",
+    #   "処理": ["入力dataからunderbust・cup・BMI・tagを求める", "promptを生成してoutputへ書き込む", "失敗時の例外詳細をoutputへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def process_safe(self):
         try:
             data = self.get_input_data()

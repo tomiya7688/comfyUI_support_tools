@@ -9,11 +9,21 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   "責務": "wildcard txt群の参照存在を検査し、確認可能な表記揺れを任意修正するUI。",
+#   "フィールド": ["REFERENCE_PATTERN: __reference__検出pattern", "root_dir: wildcard root", "auto_fix: canonical表記で修正するか", "preset_store/preset_name/preset_combo: 設定管理", "logbox: 検査log"]
+# }
 class WildcardCheckerTab(ttk.Frame):
     """ワイルドカード参照の存在確認と、表記ゆれの安全な修正を行う。"""
 
     REFERENCE_PATTERN = re.compile(r"__([^\r\n]+?)__")
 
+    # {
+    #   "責務": "root・修正option・presetを初期化してchecker画面を構築する。",
+    #   "処理": ["rootとauto-fix変数を設定する", "path・option・操作・log widgetを作る"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.root_dir = tk.StringVar(value=str(WILDCARDS_DIR))
@@ -22,6 +32,12 @@ class WildcardCheckerTab(ttk.Frame):
         self.preset_name = tk.StringVar()
         self._build()
 
+    # {
+    #   "責務": "wildcard root・修正option・検査・preset UIを配置する。",
+    #   "処理": ["root folderとauto-fix設定を表示する", "検査・preset buttonとlog領域を作る"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _build(self):
         LabeledPathRow(self, "wildcard root", self.root_dir, mode="dir").pack(fill="x", pady=4)
         ttk.Checkbutton(self, text="確認できた表記ゆれ（大小文字・\\ /）を自動修正", variable=self.auto_fix).pack(anchor="w", pady=4)
@@ -37,9 +53,21 @@ class WildcardCheckerTab(ttk.Frame):
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "保存済みpreset名をcomboboxへ設定する。",
+    #   "処理": ["PresetStoreのnamesを読み選択候補を更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "rootと自動修正optionをpresetとして保存する。",
+    #   "処理": ["現在設定を保存する", "選択値・一覧・logを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), {"root_dir": self.root_dir.get(), "auto_fix": self.auto_fix.get()})
@@ -49,6 +77,12 @@ class WildcardCheckerTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択presetからrootと修正optionを復元する。",
+    #   "処理": ["保存値をroot/auto_fixへ反映する", "読込結果をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -58,9 +92,21 @@ class WildcardCheckerTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "wildcard参照検査をdaemon threadで開始する。",
+    #   "処理": ["run処理をworker threadで起動する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
 
+    # {
+    #   "責務": "wildcard参照を安全に正規化しlookup用keyを作る。",
+    #   "処理": ["slashを統一して前後slashを除く", "empty・LORA_・dot pathを除外しcanonicalとcasefold keyを返す"],
+    #   "引数": {"value": "__...__内のwildcard path"},
+    #   "戻り値": "canonical値とcasefold keyのtuple。無効値では空tuple"
+    # }
     @staticmethod
     def _reference_key(value):
         normalized = value.strip().replace("\\", "/").strip("/")
@@ -70,6 +116,12 @@ class WildcardCheckerTab(ttk.Frame):
             return "", ""
         return normalized, normalized.casefold()
 
+    # {
+    #   "責務": "txt fileとその親folderを大小文字無視で引けるindexにする。",
+    #   "処理": ["root相対pathとsuffixなしfile名を作る", "各fileと親folderをcasefold keyで登録する"],
+    #   "引数": {"root": "wildcard root path", "files": "検査対象txtのPath列"},
+    #   "戻り値": "casefold済み相対nameからcanonical nameへのdict"
+    # }
     @staticmethod
     def _index(root, files):
         index = {}
@@ -83,6 +135,12 @@ class WildcardCheckerTab(ttk.Frame):
                 index.setdefault(directory.casefold(), directory)
         return index
 
+    # {
+    #   "責務": "wildcard root配下の参照を検査し欠損と任意修正を報告する。",
+    #   "処理": ["rootとtxt一覧を検証する", "各参照をindexへ照会する", "auto-fix時はcanonical表記へ置換し欠損・件数をlogへ記録する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def run(self):
         root = Path(self.root_dir.get().strip()).expanduser()
         if not root.is_dir():

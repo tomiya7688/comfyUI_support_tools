@@ -3,11 +3,21 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+# {
+#   "責務": "入力ツリー内のファイルを1フォルダへ平坦化してコピーまたは移動するUI。",
+#   "フィールド": ["DEFAULT_OPERATION: 初期操作種別", "DEFAULT_INPUT_DIR: 初期入力フォルダ", "DEFAULT_OUTPUT_DIR: 初期出力フォルダ", "operation: copy/move選択", "preset_store: 設定保存先", "preset_name: 選択プリセット", "input_dir: 入力フォルダ", "output_dir: 出力フォルダ", "logbox: 実行ログ"]
+# }
 class FlatFileCopyTab(ttk.Frame):
     DEFAULT_OPERATION = "move"
     DEFAULT_INPUT_DIR = USER_PATHS["flat_copy_input_dir"]
     DEFAULT_OUTPUT_DIR = USER_PATHS["flat_copy_output_dir"]
 
+    # {
+    #   "責務": "操作・入出力フォルダを初期化して画面を作る。",
+    #   "処理": ["初期設定とプリセット保存先を用意する", "操作選択・パス欄・操作ボタン・ログ領域を構築する"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.operation = tk.StringVar(value=self.DEFAULT_OPERATION)
@@ -17,6 +27,12 @@ class FlatFileCopyTab(ttk.Frame):
         self.output_dir = tk.StringVar(value=self.DEFAULT_OUTPUT_DIR)
         self._build()
 
+    # {
+    #   "責務": "ファイル操作に必要な入力・操作・ログUIを配置する。",
+    #   "処理": ["copy/move選択と入出力path欄を配置する", "開始・プリセット操作とログ領域を配置する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _build(self):
         row = ttk.Frame(self)
         row.pack(fill="x", pady=4)
@@ -33,21 +49,51 @@ class FlatFileCopyTab(ttk.Frame):
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "プリセット名を選択UIへ反映する。",
+    #   "処理": ["PresetStoreの名前一覧でcomboboxを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "操作種別と入出力フォルダをプリセットとして保存する。",
+    #   "処理": ["現在の設定を保存し名前・選択肢を更新する", "成否をログへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), {"operation": self.operation.get(), "input_dir": self.input_dir.get(), "output_dir": self.output_dir.get()}); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択したプリセットから操作種別と入出力フォルダを復元する。",
+    #   "処理": ["保存値を各入力状態へ反映する", "成否をログへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get()); self.operation.set(values.get("operation", self.operation.get())); self.input_dir.set(values.get("input_dir", self.input_dir.get())); self.output_dir.set(values.get("output_dir", self.output_dir.get())); self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "ファイルコピーまたは移動処理をdaemon threadで開始する。",
+    #   "処理": ["runをworker threadで起動する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def run_thread(self):
         threading.Thread(target=self.run, daemon=True).start()
 
+    # {
+    #   "責務": "入力フォルダ配下の各ファイルを出力直下へコピーまたは移動する。",
+    #   "処理": ["設定と入力folderを検証する", "出力名の衝突を回避しながら全階層を走査する", "処理・skip件数をログへ報告する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def run(self):
         operation = self.operation.get().strip()
         input_dir = self.input_dir.get().strip()

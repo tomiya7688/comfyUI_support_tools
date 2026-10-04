@@ -21,12 +21,26 @@ TRANSPARENT_TARGET_PRESET_LABELS = {
     "薄紙": "thin_paper", "透明フィルム": "clear_film",
 }
 
+# {
+#   "責務": "Touka image/video enhancement CLIを操作し対象選択、候補評価、結果表示を管理する。",
+#   "フィールド": ["process: 外部処理process", "ranking_data: 選択候補metadata", "preset_store/preset_name: preset", "mode/profile/object_preset/surface_preset: 処理対象設定", "input/output/reference/evaluation paths: 入出力設定", "preview/ROI/CPU variables: 動画範囲と資源設定", "ranking/logbox: 結果表示"]
+# }
 class ToukaEnhancerTab(ttk.Frame):
+    # {
+    #   "責務": "Touka enhancement画面の状態を初期化し保存設定を復元する。",
+    #   "処理": ["preset・mode・対象・path・video/CPU変数を初期化する", "保存設定を読み込み画面を構築する"],
+    #   "引数": {"master": "親Tk widget"}, "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10); self.process = None; self.ranking_data = {}
         self.preset_store = PresetStore("touka"); self.preset_name = tk.StringVar()
         self.mode = tk.StringVar(value="image"); self.profile = tk.StringVar(value="balanced"); self.object_preset = tk.StringVar(value="汎用"); self.surface_preset = tk.StringVar(value="自動推定"); self.cpu_cores = tk.StringVar(); self.preview_seconds = tk.StringVar(value="5"); self.preview_start_seconds = tk.StringVar(value="0"); self.roi = tk.StringVar(); self.input_path = tk.StringVar(); self.output_path = tk.StringVar(); self.reference_path = tk.StringVar(); self.surface_reference_path = tk.StringVar(); self.evaluation_path = tk.StringVar(); self.dataset_preset_name = tk.StringVar(); self.denoise_references = tk.BooleanVar(value=False); self._restore_settings(); self._build()
 
+    # {
+    #   "責務": "永続化されたTouka UI設定を既知の変数へ復元する。",
+    #   "処理": ["JSON objectを読み取る", "既知keyの型を確認して変数へ設定する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _restore_settings(self):
         try:
             values = json.loads(TOUKA_SETTINGS_FILE.read_text(encoding="utf-8"))
@@ -37,6 +51,11 @@ class ToukaEnhancerTab(ttk.Frame):
             value = values.get(key)
             if isinstance(value, (str, bool)): variable.set(value)
 
+    # {
+    #   "責務": "Touka UI設定をuser config JSONへ保存する。",
+    #   "処理": ["現在値をdict化する", "親folderを作りJSONを保存し結果をlogする"],
+    #   "引数": [], "戻り値": []
+    # }
     def save_settings(self):
         values = {"mode": self.mode.get(), "profile": self.profile.get(), "object_preset": self.object_preset.get(), "surface_preset": self.surface_preset.get(), "cpu_cores": self.cpu_cores.get(), "preview_seconds": self.preview_seconds.get(), "preview_start_seconds": self.preview_start_seconds.get(), "roi": self.roi.get(), "input_path": self.input_path.get(), "output_path": self.output_path.get(), "reference_path": self.reference_path.get(), "surface_reference_path": self.surface_reference_path.get(), "evaluation_path": self.evaluation_path.get(), "dataset_preset_name": self.dataset_preset_name.get(), "denoise_references": self.denoise_references.get()}
         try:
@@ -46,16 +65,36 @@ class ToukaEnhancerTab(ttk.Frame):
         except OSError as exc:
             self.logbox.log(f"設定保存エラー: {exc}")
 
+    # {
+    #   "責務": "現在のTouka処理設定をpreset dictへまとめる。",
+    #   "処理": ["mode/profile/対象/path/範囲/CPU/referenceの設定値を読む"],
+    #   "引数": [], "戻り値": "preset保存用dict"
+    # }
     def _preset_values(self):
         return {"mode": self.mode.get(), "profile": self.profile.get(), "object_preset": self.object_preset.get(), "surface_preset": self.surface_preset.get(), "cpu_cores": self.cpu_cores.get(), "preview_seconds": self.preview_seconds.get(), "preview_start_seconds": self.preview_start_seconds.get(), "roi": self.roi.get(), "input_path": self.input_path.get(), "output_path": self.output_path.get(), "reference_path": self.reference_path.get(), "surface_reference_path": self.surface_reference_path.get(), "evaluation_path": self.evaluation_path.get(), "dataset_preset_name": self.dataset_preset_name.get(), "denoise_references": self.denoise_references.get()}
 
+    # {
+    #   "責務": "Touka preset一覧を選択widgetへ反映する。",
+    #   "処理": ["PresetStoreのnamesをcombobox候補へ設定する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   "責務": "現在のTouka処理設定を名前付きpresetとして保存する。",
+    #   "処理": ["設定値を保存し選択肢とlogを更新する", "失敗をlogへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), self._preset_values()); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   "責務": "選択Touka presetの値を対応する画面変数へ復元する。",
+    #   "処理": ["保存済み各keyを現在値へ反映する", "結果をlogへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -64,6 +103,11 @@ class ToukaEnhancerTab(ttk.Frame):
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   "責務": "Toukaのimage/video条件、対象/reference指定、結果操作UIを構築する。",
+    #   "処理": ["mode/profile/対象と入出力条件を配置する", "選択・診断・ランキング・実行操作とlogを配置する"],
+    #   "引数": [], "戻り値": []
+    # }
     def _build(self):
         ttk.Label(self, text="元データに残る色差・明暗差・輪郭を強調します。完全に隠れた情報は復元できません。").pack(anchor="w", pady=(0, 8))
         mode_row = ttk.Frame(self); mode_row.pack(fill="x", pady=3); ttk.Label(mode_row, text="モード", width=16).pack(side="left")
@@ -96,6 +140,11 @@ class ToukaEnhancerTab(ttk.Frame):
         self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   "責務": "同梱Touka Editorがあれば起動する。",
+    #   "処理": ["実行fileの有無を確認し起動または案内をlogへ出す"],
+    #   "引数": [], "戻り値": []
+    # }
     def open_editor(self):
         executable = packaged_executable("ToukaEditor")
         if not executable.is_file():
@@ -107,6 +156,11 @@ class ToukaEnhancerTab(ttk.Frame):
         except Exception as exc:
             self.logbox.log(f"起動エラー: {exc}")
 
+    # {
+    #   "責務": "Touka関連同梱実行fileの導入状況をlogへ表示する。",
+    #   "処理": ["各executable pathを検査し存在状態を出力する"],
+    #   "引数": [], "戻り値": []
+    # }
     def diagnose_environment(self):
         executables = (
             ("Touka", packaged_executable("Touka")),
@@ -119,6 +173,11 @@ class ToukaEnhancerTab(ttk.Frame):
             else:
                 self.logbox.log(f"{label}: 未導入 / {executable}")
 
+    # {
+    #   "責務": "同梱Fashionpedia preset builderを安全threadで起動する。",
+    #   "処理": ["executableを検査する", "builder実行をsafe threadへ依頼する"],
+    #   "引数": [], "戻り値": []
+    # }
     def create_fashionpedia_presets(self):
         executable = packaged_executable("ToukaFashionpediaPresets")
         if not executable.is_file():
@@ -127,6 +186,11 @@ class ToukaEnhancerTab(ttk.Frame):
         self.logbox.log("FashionpediaからToukaプリセットを作成します")
         _safe_thread(self.logbox, self._run_fashionpedia_preset_builder, executable)
 
+    # {
+    #   "責務": "Fashionpedia preset builderを実行し完了結果をGUI threadへ渡す。",
+    #   "処理": ["subprocessを起動しstdout/stderrを取得する", "失敗を報告し成功時は完了callbackを予約する"],
+    #   "引数": {"executable": "builder executable path"}, "戻り値": []
+    # }
     def _run_fashionpedia_preset_builder(self, executable):
         result = subprocess.run([str(executable)], cwd=str(executable.parent), capture_output=True, text=True, encoding="utf-8", errors="replace")
         message = result.stdout.strip() or result.stderr.strip()
@@ -135,10 +199,20 @@ class ToukaEnhancerTab(ttk.Frame):
             return
         self.after(0, lambda: self._finish_fashionpedia_preset_builder(message))
 
+    # {
+    #   "責務": "Fashionpedia preset builder成功結果をUIへ通知する。",
+    #   "処理": ["preset choicesを更新し完了messageをlogへ出す"],
+    #   "引数": {"message": "builder標準出力または完了情報"}, "戻り値": []
+    # }
     def _finish_fashionpedia_preset_builder(self, message):
         self._refresh_preset_choices()
         self.logbox.log(f"Fashionpediaプリセットを作成しました\n{message}")
 
+    # {
+    #   "責務": "強調対象参考画像群からdataset presetを作成して保存する。",
+    #   "処理": ["reference画像と対象presetから値を抽出する", "presetを保存し画像件数とpathをlogする"],
+    #   "引数": [], "戻り値": []
+    # }
     def create_dataset_preset(self):
         try:
             builder = ToukaDatasetPresetBuilder()
@@ -149,6 +223,11 @@ class ToukaEnhancerTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"データセットプリセット作成エラー: {error}")
 
+    # {
+    #   "責務": "reference画像をToukaで解析し適切な強調対象presetを提案する。",
+    #   "処理": ["reference folderとTouka executableを検査する", "解析commandを組みsafe threadへ渡す"],
+    #   "引数": [], "戻り値": []
+    # }
     def suggest_reference_preset(self):
         reference_dir = Path(self.reference_path.get().strip())
         if not reference_dir.is_dir():
@@ -162,6 +241,11 @@ class ToukaEnhancerTab(ttk.Frame):
         if self.denoise_references.get(): command.append("--denoise-reference")
         _safe_thread(self.logbox, self._read_reference_suggestion, command)
 
+    # {
+    #   "責務": "reference解析commandを実行しJSON提案をUIへ反映する。",
+    #   "処理": ["subprocess outputを取得する", "return code/JSONを検証して提案callbackを登録する"],
+    #   "引数": {"command": "Touka analysis argv"}, "戻り値": []
+    # }
     def _read_reference_suggestion(self, command):
         result = subprocess.run(command, cwd=str(Path(command[0]).parent), capture_output=True, text=True, encoding="utf-8", errors="replace")
         if result.returncode != 0:
@@ -184,11 +268,21 @@ class ToukaEnhancerTab(ttk.Frame):
             return
         self.after(0, lambda: self._apply_reference_suggestion(label, image_count, confidence, distribution, common_count, shape_consistency, outlier_count))
 
+    # {
+    #   "責務": "reference解析結果から選択presetと信頼度情報をUIへ適用する。",
+    #   "処理": ["提案値を確認して対象選択を更新する", "画像件数、分布、形状一貫性をlogへ示す"],
+    #   "引数": {"label": "提案preset", "image_count": "解析画像数", "confidence": "提案信頼度", "distribution": "分類分布", "common_count": "共通検出数", "shape_consistency": "形状一貫性", "outlier_count": "外れ値数"}, "戻り値": []
+    # }
     def _apply_reference_suggestion(self, label, image_count, confidence, distribution, common_count=0, shape_consistency=0.0, outlier_count=0):
         self.object_preset.set(label)
         details = ", ".join(f"{key}: {value}" for key, value in distribution.items()) or "有効な形状なし"
         self.logbox.log(f"強調対象参考画像から提案: {label}（解析画像 {image_count} 件、共通候補 {common_count} 件、形状一致 {shape_consistency:.0%}、除外候補 {outlier_count} 件、確信度 {confidence:.0%}、内訳 {details}）")
 
+    # {
+    #   "責務": "動画frame上でrectangleを選び対象ROIを正規化座標で保存する。",
+    #   "処理": ["動画frameを表示する", "mouse drag rectangleをROIへ変換しUI変数に反映する"],
+    #   "引数": [], "戻り値": []
+    # }
     def select_video_roi(self):
         try:
             import cv2
@@ -202,11 +296,26 @@ class ToukaEnhancerTab(ttk.Frame):
             image = Image.fromarray(rgb); image.thumbnail((900, 600)); preview_w, preview_h = image.size
             dialog = tk.Toplevel(self); dialog.title("対象範囲をドラッグして選択"); canvas = tk.Canvas(dialog, width=preview_w, height=preview_h); canvas.pack(); photo = ImageTk.PhotoImage(image); canvas.create_image(0, 0, anchor="nw", image=photo); canvas.image = photo
             state = {"start": None, "item": None}
+            # {
+            #   "責務": "ROI選択canvas上のdrag開始座標を記録する。",
+            #   "処理": ["event座標をrectangle状態へ保存する"],
+            #   "引数": {"event": "mouse press event"}, "戻り値": []
+            # }
             def press(event): state["start"] = (event.x, event.y)
+            # {
+            #   "責務": "ROI選択中のrectangle previewを更新する。",
+            #   "処理": ["既存previewを消しdrag範囲のrectangleを描画する"],
+            #   "引数": {"event": "mouse motion event"}, "戻り値": []
+            # }
             def drag(event):
                 if state["start"]:
                     if state["item"]: canvas.delete(state["item"])
                     state["item"] = canvas.create_rectangle(*state["start"], event.x, event.y, outline="#00ffff", width=2)
+            # {
+            #   "責務": "mouse release位置から有効ROIを確定する。",
+            #   "処理": ["座標をframe boundsにclipする", "正規化ROIを保存しdialogを閉じる"],
+            #   "引数": {"event": "mouse release event"}, "戻り値": []
+            # }
             def release(event):
                 if not state["start"]: return
                 x0,y0=state["start"]; x1,y1=event.x,event.y; state["start"]=None
@@ -218,6 +327,11 @@ class ToukaEnhancerTab(ttk.Frame):
             canvas.bind("<ButtonPress-1>", press); canvas.bind("<B1-Motion>", drag); canvas.bind("<ButtonRelease-1>", release)
         except Exception as exc: self.logbox.log(f"動画対象選択エラー: {exc}")
 
+    # {
+    #   "責務": "動画先頭frameからAuto objectを抽出しROIと対象presetを設定する。",
+    #   "処理": ["frameにGrabCutを適用する", "最大輪郭の形状から対象presetを推定しpreviewを表示する"],
+    #   "引数": [], "戻り値": []
+    # }
     def auto_select_video_object(self):
         try:
             import cv2
@@ -247,6 +361,11 @@ class ToukaEnhancerTab(ttk.Frame):
             self.logbox.log(f"Auto object: {label} / ROI={self.roi.get()}")
         except Exception as exc: self.logbox.log(f"動画Auto objectエラー: {exc}")
 
+    # {
+    #   "責務": "動画の候補評価preview範囲をsliderで選択する。",
+    #   "処理": ["動画長を取得し範囲選択dialogを開く", "選択区間をUIへ適用する"],
+    #   "引数": [], "戻り値": []
+    # }
     def select_preview_range(self):
         try:
             import cv2
@@ -260,12 +379,22 @@ class ToukaEnhancerTab(ttk.Frame):
             start = tk.DoubleVar(value=min(float(self.preview_start_seconds.get() or 0), duration)); length = tk.DoubleVar(value=min(max(0.5, float(self.preview_seconds.get() or 5)), duration))
             ttk.Label(dialog, text="開始秒").pack(anchor="w", padx=12); ttk.Scale(dialog, from_=0, to=max(0, duration - 0.1), variable=start, orient="horizontal", length=420).pack(padx=12)
             ttk.Label(dialog, text="候補の長さ（秒）").pack(anchor="w", padx=12); ttk.Scale(dialog, from_=0.5, to=min(30.0, duration), variable=length, orient="horizontal", length=420).pack(padx=12)
+            # {
+            #   "責務": "slider値をvideo bounds内へ制限してpreview区間を保存する。",
+            #   "処理": ["開始・長さをduration内にclipする", "UI値とlogを更新しdialogを閉じる"],
+            #   "引数": [], "戻り値": []
+            # }
             def apply_range():
                 selected_start = min(start.get(), max(0, duration - 0.1)); selected_length = min(length.get(), max(0.1, duration - selected_start))
                 self.preview_start_seconds.set(f"{selected_start:.2f}"); self.preview_seconds.set(f"{selected_length:.2f}"); self.logbox.log(f"プレビュー範囲: {selected_start:.2f}秒 から {selected_length:.2f}秒"); dialog.destroy()
             ttk.Button(dialog, text="この範囲を使う", command=apply_range).pack(pady=12)
         except Exception as exc: self.logbox.log(f"プレビュー範囲選択エラー: {exc}")
 
+    # {
+    #   "責務": "動画全体からdetailとmotionが高い代表区間を自動選択する。",
+    #   "処理": ["各秒のframeを解析しROI内detailとframe差分からscoreを評価する", "最高score周辺をpreview区間に設定する"],
+    #   "引数": [], "戻り値": []
+    # }
     def auto_select_preview_range(self):
         try:
             import cv2
@@ -298,12 +427,22 @@ class ToukaEnhancerTab(ttk.Frame):
             self.logbox.log(f"代表区間を設定: {start:.2f}秒から {length:.2f}秒（解析score={best_score:.2f}）")
         except Exception as exc: self.logbox.log(f"代表区間の自動選択エラー: {exc}")
 
+    # {
+    #   "責務": "現在profileに対応する候補score JSONを既定appで開く。",
+    #   "処理": ["output directoryから対象fileを選び存在確認後に開く"],
+    #   "引数": [], "戻り値": []
+    # }
     def open_scores(self):
         path = Path(self.output_path.get()) / ("candidate_ranking.json" if self.profile.get() == "all" else "candidate_scores.json")
         if not path.is_file(): self.logbox.log(f"ランキングJSONがありません: {path}"); return
         try: os.startfile(str(path))
         except Exception as exc: self.logbox.log(f"ランキング表示エラー: {exc}")
 
+    # {
+    #   "責務": "候補比較画像があれば既定image viewerで表示する。",
+    #   "処理": ["comparison pathを作り存在確認して開く"],
+    #   "引数": [], "戻り値": []
+    # }
     def open_comparison(self):
         path = Path(self.output_path.get()) / "candidate_comparison.png"
         if not path.is_file():
@@ -311,6 +450,11 @@ class ToukaEnhancerTab(ttk.Frame):
         try: os.startfile(path)
         except Exception as exc: self.logbox.log(f"候補比較画像を開けません: {exc}")
 
+    # {
+    #   "責務": "候補ranking JSONを読みTreeviewと選択dataへ反映する。",
+    #   "処理": ["rankingを読み行を再構築する", "行IDとitem metadataを対応付ける"],
+    #   "引数": [], "戻り値": []
+    # }
     def load_ranking(self):
         path = Path(self.output_path.get()) / ("candidate_ranking.json" if self.profile.get() == "all" else "candidate_scores.json")
         if not path.is_file(): self.logbox.log(f"ランキングJSONがありません: {path}"); return
@@ -324,6 +468,11 @@ class ToukaEnhancerTab(ttk.Frame):
             self.logbox.log(f"ランキングを読み込みました: {len(rows)}件")
         except Exception as exc: self.logbox.log(f"ランキング読込エラー: {exc}")
 
+    # {
+    #   "責務": "rankingで選択中の生成候補fileを開く。",
+    #   "処理": ["行選択とfile存在を検査し既定appで開く"],
+    #   "引数": [], "戻り値": []
+    # }
     def open_selected_candidate(self):
         selection = self.ranking.selection()
         if not selection: self.logbox.log("ランキングから候補を選択してください"); return
@@ -332,6 +481,11 @@ class ToukaEnhancerTab(ttk.Frame):
         try: os.startfile(path)
         except Exception as exc: self.logbox.log(f"候補動画を開けません: {exc}")
 
+    # {
+    #   "責務": "rankingで選択中の候補mask previewを開く。",
+    #   "処理": ["行選択とmask file存在を検査して既定appで開く"],
+    #   "引数": [], "戻り値": []
+    # }
     def open_selected_mask(self):
         selection = self.ranking.selection()
         if not selection:
@@ -342,6 +496,11 @@ class ToukaEnhancerTab(ttk.Frame):
         try: os.startfile(path)
         except Exception as exc: self.logbox.log(f"マスクプレビューを開けません: {exc}")
 
+    # {
+    #   "責務": "選択候補のquality・tracking・mask診断値をdialogに表示する。",
+    #   "処理": ["ranking itemから診断keyを整形する", "読み取り専用text dialogを表示する"],
+    #   "引数": [], "戻り値": []
+    # }
     def show_selected_diagnostics(self):
         selection = self.ranking.selection()
         if not selection:
@@ -364,6 +523,11 @@ class ToukaEnhancerTab(ttk.Frame):
         text = tk.Text(dialog, width=54, height=len(lines) + 2, wrap="word")
         text.insert("1.0", "\n".join(lines)); text.configure(state="disabled"); text.pack(padx=12, pady=12)
 
+    # {
+    #   "責務": "対応profileの候補をpreviewでなく全尺renderするよう再実行する。",
+    #   "処理": ["選択profileを検証する", "開始0秒・長さ0へ設定し処理を始める"],
+    #   "引数": [], "戻り値": []
+    # }
     def render_selected_candidate(self):
         selection = self.ranking.selection()
         if not selection:
@@ -375,16 +539,31 @@ class ToukaEnhancerTab(ttk.Frame):
         self.logbox.log(f"全尺レンダリング開始: {profile}")
         self.start()
 
+    # {
+    #   "責務": "path label、entry、folder/file chooserからなる共通rowを追加する。",
+    #   "処理": ["入力変数とdialog種別に接続したwidgetを親へpackする"],
+    #   "引数": {"label": "row label", "variable": "path StringVar", "output": "出力選択mode"}, "戻り値": []
+    # }
     def _path_row(self, label, variable, output):
         row = ttk.Frame(self); row.pack(fill="x", pady=3); ttk.Label(row, text=label, width=16).pack(side="left")
         ttk.Entry(row, textvariable=variable).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="フォルダ", command=lambda: self._choose_directory(variable, output)).pack(side="left", padx=(4, 0))
         ttk.Button(row, text="ファイル", command=lambda: self._choose_file(variable, output)).pack(side="left", padx=4)
 
+    # {
+    #   "責務": "folder chooserからpathを選び指定variableへ設定する。",
+    #   "処理": ["入出力に応じたtitleでdirectory dialogを開き選択値を反映する"],
+    #   "引数": {"variable": "更新するpath変数", "output": "出力folder選択mode"}, "戻り値": []
+    # }
     def _choose_directory(self, variable, output):
         value = filedialog.askdirectory(title="入力フォルダを選択" if not output else "出力フォルダを選択")
         if value: variable.set(value)
 
+    # {
+    #   "責務": "modeに応じた画像/動画file chooserを開きpathを設定する。",
+    #   "処理": ["入力または出力file dialogを開く", "選択されたfile pathをvariableへ設定する"],
+    #   "引数": {"variable": "更新するpath変数", "output": "出力file選択mode"}, "戻り値": []
+    # }
     def _choose_file(self, variable, output):
         video_types = [("動画", "*.mp4 *.mkv *.mov *.avi *.webm *.m4v"), ("すべて", "*.*")]
         image_types = [("画像", "*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff"), ("すべて", "*.*")]
@@ -394,6 +573,11 @@ class ToukaEnhancerTab(ttk.Frame):
             value = filedialog.askopenfilename(title="入力ファイルを選択", filetypes=video_types if self.mode.get() == "video" else image_types)
         if value: variable.set(value)
 
+    # {
+    #   "責務": "Touka CLI実行条件を検証しprocess workerを開始する。",
+    #   "処理": ["入力・出力・preview・referenceを検証する", "CLI argvを構築しprocess出力と評価履歴を処理するworkerを開始する"],
+    #   "引数": [], "戻り値": []
+    # }
     def start(self):
         if self.process and self.process.poll() is None: self.logbox.log("処理中です"); return
         source, target = Path(self.input_path.get()), Path(self.output_path.get())
@@ -427,6 +611,11 @@ class ToukaEnhancerTab(ttk.Frame):
         if self.reference_path.get().strip(): command.extend(["--reference-dir", self.reference_path.get().strip()])
         if self.surface_reference_path.get().strip(): command.extend(["--surface-reference-dir", self.surface_reference_path.get().strip()])
         if self.denoise_references.get(): command.append("--denoise-reference")
+        # {
+        #   "責務": "Touka CLIを起動しstdoutをlogして完了後に評価履歴を保存する。",
+        #   "処理": ["processを起動しCPU制限を適用する", "出力をlogへ流し正常完了なら評価しhistoryを保存する"],
+        #   "引数": [], "戻り値": []
+        # }
         def worker():
             try:
                 self.process = subprocess.Popen(command, cwd=str(executable.parent), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
@@ -441,5 +630,10 @@ class ToukaEnhancerTab(ttk.Frame):
             except Exception as exc: self.logbox.log(f"エラー: {exc}")
         _safe_thread(self.logbox, worker)
 
+    # {
+    #   "責務": "実行中Touka processへterminate要求を送る。",
+    #   "処理": ["processが稼働中なら終了signalを送りlogへ記録する"],
+    #   "引数": [], "戻り値": []
+    # }
     def stop(self):
         if self.process and self.process.poll() is None: self.process.terminate(); self.logbox.log("停止要求を送信しました")

@@ -4,10 +4,20 @@ from ..services import *
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
 from ..widgets.preset_store import PresetStore
 
+# {
+#   "責務": "動画folder内の動画からrandom frameを並列抽出するUI。",
+#   "フィールド": ["DEFAULT_INPUT_DIR/DEFAULT_OUTPUT_DIR: 既定path", "VIDEO_EXTS: 対象拡張子", "input_dir/output_dir: 入出力folder", "frames/image_format: 抽出数と形式", "max_workers/cpu_cores/low_priority: 実行制限", "preset_store/preset_name/preset_combo: 設定管理", "logbox: 実行ログ"]
+# }
 class ScreenshotFromMovieTab(ttk.Frame):
     DEFAULT_INPUT_DIR = USER_PATHS["screenshot_input_dir"]
     DEFAULT_OUTPUT_DIR = USER_PATHS["screenshot_output_dir"]
     VIDEO_EXTS = (".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v")
+    # {
+    #   "責務": "抽出数・形式・並列数・CPU優先度を初期化し画面を作る。",
+    #   "処理": ["入出力と処理optionを初期化する", "path・parameter・preset・log UIを配置しpreset候補を読む"],
+    #   "引数": {"master": "親Tk widget"},
+    #   "戻り値": []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.input_dir = tk.StringVar(value=self.DEFAULT_INPUT_DIR)
@@ -36,31 +46,73 @@ class ScreenshotFromMovieTab(ttk.Frame):
         ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
         ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
         self.logbox=LogBox(self); self.logbox.pack(fill="both", expand=True); self._refresh_preset_choices()
+    # {
+    #   "責務": "保存済み抽出preset名を選択UIへ反映する。",
+    #   "処理": ["PresetStoreからnamesを得てcomboboxを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
+    # {
+    #   "責務": "動画抽出path・format・並列・CPU優先度設定をpresetへ保存する。",
+    #   "処理": ["現在値を保存する", "preset名・候補と完了logを更新する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def save_preset(self):
         try:
             values = {"input_dir": self.input_dir.get(), "output_dir": self.output_dir.get(), "frames": self.frames.get(), "image_format": self.image_format.get(), "max_workers": self.max_workers.get(), "cpu_cores": self.cpu_cores.get(), "low_priority": self.low_priority.get()}
             path = self.preset_store.save(self.preset_name.get(), values); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
+    # {
+    #   "責務": "選択presetから動画抽出条件を復元する。",
+    #   "処理": ["保存値をpath・format・limit variableへ設定する", "結果をlogへ報告する"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get()); self.input_dir.set(values.get("input_dir", self.input_dir.get())); self.output_dir.set(values.get("output_dir", self.output_dir.get())); self.frames.set(str(values.get("frames", self.frames.get()))); self.image_format.set(values.get("image_format", self.image_format.get())); self.max_workers.set(str(values.get("max_workers", self.max_workers.get()))); self.cpu_cores.set(str(values.get("cpu_cores", self.cpu_cores.get()))); self.low_priority.set(bool(values.get("low_priority", self.low_priority.get()))); self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
+    # {
+    #   "責務": "ffprobeで動画の再生時間を取得する。",
+    #   "処理": ["ffprobeをjson出力で実行する", "format.durationをfloatに変換する"],
+    #   "引数": {"path": "動画file path"},
+    #   "戻り値": "動画durationの秒数"
+    # }
     def _duration(self, path):
         import json
         p=subprocess.run(["ffprobe","-v","error","-print_format","json","-show_format",path],capture_output=True,text=True,encoding="utf-8",errors="ignore",check=True)
         return float(json.loads(p.stdout)["format"]["duration"])
+    # {
+    #   "責務": "ffmpegを低priorityで起動するためのplatform引数を作る。",
+    #   "処理": ["低priority無効時は空mappingを返す", "Windows creation flagまたはUnix niceness callbackを返す"],
+    #   "引数": [],
+    #   "戻り値": "subprocess.Popenへ渡すkeyword mapping"
+    # }
     def _low_kwargs(self):
         if not self.low_priority.get(): return {}
         if os.name=="nt": return {"creationflags":0x00000040}
         return {"preexec_fn":lambda: os.nice(19)}
 
+    # {
+    #   "責務": "動画の指定timestampから1frameを画像fileへ抽出する。",
+    #   "処理": ["出力folderを作る", "ffmpegを指定位置で実行しCPU制限を適用して完了待ちする"],
+    #   "引数": {"video": "入力動画path", "ts": "抽出位置の秒数", "out": "出力画像path", "cpu_cores": "CPU logical core limit"},
+    #   "戻り値": []
+    # }
     def _extract(self, video, ts, out, cpu_cores):
         os.makedirs(os.path.dirname(out), exist_ok=True)
         cmd=["ffmpeg","-y","-ss",f"{ts:.6f}","-i",video,"-frames:v","1","-q:v","2",out]
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **self._low_kwargs())
         ProcessCpuLimiter.apply(proc.pid, cpu_cores)
         proc.wait()
+    # {
+    #   "責務": "入力動画ごとに指定数のrandom frameを並列抽出する。",
+    #   "処理": ["format・folder・worker・CPU条件を検証する", "各動画durationから抽出時刻を選ぶ", "ThreadPoolExecutorでffmpeg抽出し処理状況をlogへ出す"],
+    #   "引数": [],
+    #   "戻り値": []
+    # }
     def run(self):
         import random
         from concurrent.futures import ThreadPoolExecutor, as_completed

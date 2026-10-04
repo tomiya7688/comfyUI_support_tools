@@ -1027,3 +1027,12 @@
         doc/model_structure.md
         doc/model_catalog.md
         doc/ver.md
+# 121. 依存manifestの用途一覧を自動生成
+    GUI実行時、Touka機能、onedir buildのrequirementsを用途別に説明するdependency inventoryを生成。各manifestの配布名と理由の欠落・余分・重複を検出し、completion gateのgenerated-doc checkからstaleを拒否する。
+    追加・変更したファイル
+        tools/docs/generate_dependency_inventory.py
+        tools/docs/generate_docs.py
+        tools/docs/config.json
+        tests/test_dependency_inventory.py
+        doc/generated/dependency_inventory.md
+        doc/ver.md

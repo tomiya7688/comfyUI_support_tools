@@ -11,6 +11,16 @@ from .ollama_prompt_corrector import OllamaPromptCorrector
 from .generation_parameter_resolver import GenerationParameterResolver
 from .prompt_lora_compatibility import validate_prompt_loras
 
+# {
+# 責務: [EmbeddedRandomImage: wildcard promptを解決し生成backendで画像を順次または反復生成する]
+# フィールド: [input_file: 正prompt source, negative_input_file: 負prompt source,
+# root_dir: wildcard探索root, output_dir: 生成画像保存先,
+# wildcard_cache_scope: wildcard結果の再利用範囲, sequential_reuse_wildcards: 順次処理内cache設定,
+# _active_backend: 現在の生成backend, _stop_event: worker停止通知,
+# _worker_thread: 実行worker, _pending_settings: 次画像から適用する設定]
+# 処理: [1: wildcardと追加promptを展開する, 2: backendへ生成要求を渡す,
+# 3: 画像・metadata・prompt・failure reportを保存する]
+# }
 class EmbeddedRandomImage:
     input_file = str(WILDCARDS_DIR / "random_batch_nsfw_hub.txt")
     negative_input_file = str(WILDCARDS_DIR / "all_negative.txt")
@@ -60,6 +70,13 @@ class EmbeddedRandomImage:
     ollama_api_url = "http://127.0.0.1:11434"
     ollama_model = ""
 
+    # {
+    # 責務: [__init__: 既定設定をinstance用に複製しworker制御状態を初期化する]
+    # 処理: [1: mutable設定をcopyする, 2: stop event・backend参照・worker thread・lockを用意する,
+    # 3: pending設定とlog callbackを設定する]
+    # 引数: []
+    # 戻り値: []
+    # }
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
         self.additional_input_files = list(self.additional_input_files)
@@ -74,11 +91,23 @@ class EmbeddedRandomImage:
         self._pending_settings = None
         self._log = print
 
+    # {
+    # 責務: [queue_settings_update: 実行中workerが次の画像前に適用する設定を予約する]
+    # 処理: [1: lock内でsettingsをcopyしてpending領域へ置く]
+    # 引数: [settings: 次の生成へ反映する設定mapping]
+    # 戻り値: []
+    # }
     def queue_settings_update(self, settings):
         """Stage settings so a running worker applies them before its next image."""
         with self._settings_lock:
             self._pending_settings = dict(settings)
 
+    # {
+    # 責務: [_apply_pending_settings: 予約済み設定をatomicに取り出してinstanceへ反映する]
+    # 処理: [1: lock内でpending値を取得・clearする, 2: 各fieldへ設定し適用logを出す]
+    # 引数: []
+    # 戻り値: [設定を適用した場合はTrue、pendingがなければFalse]
+    # }
     def _apply_pending_settings(self):
         with self._settings_lock:
             settings = self._pending_settings
@@ -90,6 +119,13 @@ class EmbeddedRandomImage:
         self._log("🔄 次の生成へ設定更新を適用しました")
         return True
 
+    # {
+    # 責務: [_select_source: file参照またはwildcard directoryからsource fileを解決する]
+    # 処理: [1: root相対pathを組み立てる, 2: 拡張子なし同名directoryを許容する,
+    # 3: directoryなら配下txtから1件を選びlogする]
+    # 引数: [rel_path: source fileまたはdirectory指定, root: 任意のwildcard root]
+    # 戻り値: [選択されたPath、候補がなければNone]
+    # }
     def _select_source(self, rel_path, root=None):
         root = root or self.root_dir
         path = Path(rel_path) if os.path.isabs(rel_path) else Path(root) / rel_path
@@ -107,6 +143,12 @@ class EmbeddedRandomImage:
         self._log(f"📁 ワイルドカードディレクトリから選択: {selected}")
         return selected
 
+    # {
+    # 責務: [_read_lines: UTF-8 text fileから空行を除いた行を取得する]
+    # 処理: [1: fileを読み各行をtrimする, 2: file不存在をlogして空一覧を返す]
+    # 引数: [path: 読み込むtext file path]
+    # 戻り値: [空でない行の一覧]
+    # }
     def _read_lines(self, path):
         try:
             with open(path, encoding="utf-8") as source:
@@ -115,6 +157,14 @@ class EmbeddedRandomImage:
             self._log(f"⚠️ ファイルが見つかりません: {path}")
             return []
 
+    # {
+    # 責務: [_expand_text: inline choice・LoRA保護・nested wildcardをprompt内で展開する]
+    # 処理: [1: brace choiceから候補を選ぶ, 2: LoRA表記を一時保護する,
+    # 3: wildcard tokenを再帰展開してLoRA表記を戻す]
+    # 引数: [text: 展開するprompt断片, root: wildcard探索root, depth: nested展開深度,
+    # wildcard_cache: 任意の解決結果cache]
+    # 戻り値: [展開後text]
+    # }
     def _expand_text(self, text, root, depth=0, wildcard_cache=None):
         pattern = re.compile(r"\{([^{}]+)\}")
         while pattern.search(text):
@@ -123,6 +173,12 @@ class EmbeddedRandomImage:
         placeholders = {}
         text = re.sub(r"<[^>]*>", lambda match: placeholders.setdefault(f"__LORA_{len(placeholders)}__", match.group(0)), text)
 
+        # {
+        # 責務: [expand_wildcard: wildcard tokenをfile参照へ変換し再帰展開する]
+        # 処理: [1: LoRA保護tokenをそのまま維持する, 2: token名に対応するtxtをprocess_fileへ渡す]
+        # 引数: [match: 正規表現が検出したwildcard token]
+        # 戻り値: [wildcard展開後textまたは保護token]
+        # }
         def expand_wildcard(match):
             name = match.group(1)
             if name.startswith("LORA_"):
@@ -134,6 +190,14 @@ class EmbeddedRandomImage:
             text = text.replace(key, value)
         return text
 
+    # {
+    # 責務: [process_file: wildcard fileから1行を選びnested tokenを再帰展開する]
+    # 処理: [1: depth上限とcacheを確認する, 2: file・directoryを解決して行を選ぶ,
+    # 3: nested textを展開してcacheへ保存する]
+    # 引数: [rel_path: wildcard text指定, root: 任意の探索root, depth: 再帰深度,
+    # wildcard_cache: 同一結果を再利用する任意cache]
+    # 戻り値: [展開済みwildcard text、解決不能・空時は空文字]
+    # }
     def process_file(self, rel_path, root=None, depth=0, wildcard_cache=None):
         if depth > 50:
             return ""
@@ -154,6 +218,12 @@ class EmbeddedRandomImage:
             wildcard_cache[cache_key] = text
         return text
 
+    # {
+    # 責務: [_additional_entries: 新旧設定形式の追加prompt指定を共通entryへそろえる]
+    # 処理: [1: structured entryがあればpath有効なものに絞る, 2: なければlegacy file一覧をentry化する]
+    # 引数: []
+    # 戻り値: [path・position・cache scopeを持つ追加prompt entry一覧]
+    # }
     def _additional_entries(self):
         if self.additional_inputs:
             return [item for item in self.additional_inputs if item.get("path")]
@@ -162,6 +232,13 @@ class EmbeddedRandomImage:
             for path in self.additional_input_files if path
         ]
 
+    # {
+    # 責務: [_additional_prompts: 追加wildcard fileを展開しprefix・suffixへ分ける]
+    # 処理: [1: entryごとにcache scopeを選ぶ, 2: wildcard textを展開する,
+    # 3: positionに応じてprefixとsuffixへ振り分ける]
+    # 引数: [wildcard_cache: 呼び出し元が共有する任意cache]
+    # 戻り値: [prefix listとsuffix listの組]
+    # }
     def _additional_prompts(self, wildcard_cache=None):
         prefix, suffix = [], []
         for item in self._additional_entries():
@@ -172,6 +249,12 @@ class EmbeddedRandomImage:
             (suffix if item.get("position") == "suffix" else prefix).append(part)
         return prefix, suffix
 
+    # {
+    # 責務: [_with_additional_prompt: prefix追加prompt・元prompt・suffixを連結する]
+    # 処理: [1: 追加promptを解決する, 2: 空要素を避けて順序どおり連結する]
+    # 引数: [prompt: 元の生成prompt, wildcard_cache: 共有可能なwildcard cache]
+    # 戻り値: [追加promptを含むcomma区切りprompt]
+    # }
     def _with_additional_prompt(self, prompt, wildcard_cache=None):
         prefix, suffix = self._additional_prompts(wildcard_cache)
         parts = [*prefix]
@@ -180,12 +263,25 @@ class EmbeddedRandomImage:
         parts.extend(suffix)
         return ", ".join(parts)
 
+    # {
+    # 責務: [_action_condition_matches: 条件式を展開済みprompt tagへ照合する]
+    # 処理: [1: vertical barでOR候補へ分ける, 2: 各候補内comma tagをAND照合する]
+    # 引数: [condition: comma-AND・pipe-OR条件式, normalized_prompt: 正規化済みprompt]
+    # 戻り値: [いずれかの条件候補が一致した場合はTrue]
+    # }
     @staticmethod
     def _action_condition_matches(condition, normalized_prompt):
         """`,` はAND、`|` はORとして展開済みプロンプトのタグを照合する。"""
         alternatives = [item.strip() for item in condition.split("|") if item.strip()]
         return any(all(tag.strip() in normalized_prompt for tag in item.split(",") if tag.strip()) for item in alternatives)
 
+    # {
+    # 責務: [_with_action_prompt: prompt条件に一致したaction wildcardを追加する]
+    # 処理: [1: promptとcondition表記を正規化する, 2: 一致entryだけ展開する,
+    # 3: position別に追加して一致内容をlogする]
+    # 引数: [prompt: wildcard展開済みprompt, wildcard_cache: 任意の共有cache]
+    # 戻り値: [action wildcardを含むprompt]
+    # }
     def _with_action_prompt(self, prompt, wildcard_cache=None):
         prefix, suffix = [], []
         normalized_prompt = prompt.casefold().replace("_", " ")
@@ -201,6 +297,13 @@ class EmbeddedRandomImage:
                 self._log(f"⚡ Action wildcard: {condition} -> {path}")
         return ", ".join([*prefix, prompt, *suffix])
 
+    # {
+    # 責務: [_apply_nsfw_mosaic: 対応環境でNudeNet検出領域にpixelate処理を要求する]
+    # 処理: [1: optionとbackendを確認する, 2: censor APIへ画像と設定を送る,
+    # 3: censored bytesまたは元画像を返す]
+    # 引数: [image_bytes: encode済み生成画像]
+    # 戻り値: [モザイク処理後または元の画像bytes]
+    # }
     def _apply_nsfw_mosaic(self, image_bytes):
         if not self.enable_nsfw_mosaic:
             return image_bytes
@@ -228,6 +331,14 @@ class EmbeddedRandomImage:
             self._log(f"NSFWモザイクをスキップしました: {error}")
         return image_bytes
 
+    # {
+    # 責務: [_save_failure_report: 破綻候補画像の生成条件をuser dataへJSON保存する]
+    # 処理: [1: failure log directoryを作る, 2: path・backend・model・prompt等を記録する,
+    # 3: output stem名のJSONを保存する]
+    # 引数: [output: 破綻候補画像path, failure: 検出理由, prompt: 正prompt,
+    # negative: 負prompt, parameters: 確定生成parameter]
+    # 戻り値: [保存したreport path]
+    # }
     def _save_failure_report(self, output, failure, prompt, negative, parameters):
         report_dir = USER_DATA_DIR / "output" / "image_generate" / "log" / "image_failure"
         report_dir.mkdir(parents=True, exist_ok=True)
@@ -242,6 +353,13 @@ class EmbeddedRandomImage:
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return report_path
 
+    # {
+    # 責務: [_resolve_generation_parameters: UI設定または既定値から確定生成parameterを得る]
+    # 処理: [1: 明示configurationの有無を確認する, 2: 未指定なら現在設定をfixed値にする,
+    # 3: resolverで型・範囲を検証する]
+    # 引数: []
+    # 戻り値: [cfg・steps・resolution・samplerの確定値]
+    # }
     def _resolve_generation_parameters(self):
         configuration = self.generation_parameter_config
         if configuration is None:
@@ -256,6 +374,13 @@ class EmbeddedRandomImage:
             }
         return GenerationParameterResolver().resolve(configuration)
 
+    # {
+    # 責務: [_save_generation_metadata: 生成画像と同名のbackend・model・parameter JSONを保存する]
+    # 処理: [1: sidecar pathを作る, 2: backend・checkpoint・確定parameterを記録する,
+    # 3: UTF-8 JSONを書き込む]
+    # 引数: [image_path: 保存済み画像path, parameters: 生成時parameter]
+    # 戻り値: [生成metadata sidecar path]
+    # }
     def _save_generation_metadata(self, image_path, parameters):
         metadata_path = image_path.with_suffix(".generation.json")
         metadata = {
@@ -269,6 +394,12 @@ class EmbeddedRandomImage:
         )
         return metadata_path
 
+    # {
+    # 責務: [_save_prompt: optionに応じpromptを共通fileまたは画像別sidecarへ保存する]
+    # 処理: [1: 保存設定を確認する, 2: file指定なら追記しdirectory指定ならstem別textを作る]
+    # 引数: [image_output: 対応画像path, prompt: 保存する展開済みprompt]
+    # 戻り値: [保存path、保存無効ならNone]
+    # }
     def _save_prompt(self, image_output, prompt):
         if not self.save_prompts or not self.prompt_output:
             return None
@@ -283,6 +414,12 @@ class EmbeddedRandomImage:
         target.write_text(prompt.strip() + "\n", encoding="utf-8")
         return target
 
+    # {
+    # 責務: [_encoded_output: 生成画像を選択形式に変換し拡張子を決める]
+    # 処理: [1: PNGと非対応formatを無変換扱いにする, 2: WebP・JPEG・GIFへencodeする]
+    # 引数: [image_bytes: backendから得た画像bytes]
+    # 戻り値: [保存bytesとfile extensionの組]
+    # }
     def _encoded_output(self, image_bytes):
         """Return generated image bytes in the format selected by the user."""
         image_format = str(self.output_format).lower()
@@ -302,6 +439,12 @@ class EmbeddedRandomImage:
                 converted.save(buffer, format="JPEG", quality=95, optimize=True)
         return buffer.getvalue(), image_format
 
+    # {
+    # 責務: [_correct_prompt: option有効時だけOllamaへ展開済みpromptの補正を依頼する]
+    # 処理: [1: 無効なら入力を返す, 2: OllamaCorrectorを呼んで結果をlogする]
+    # 引数: [prompt: 追加wildcard適用後のprompt]
+    # 戻り値: [補正promptまたは元prompt]
+    # }
     def _correct_prompt(self, prompt):
         """Correct the fully expanded prompt only when the user enabled Ollama."""
         if not self.enable_prompt_correction:
@@ -310,6 +453,14 @@ class EmbeddedRandomImage:
         self._log(f"🪄 Ollamaでプロンプトを補正しました: {corrected}")
         return corrected
 
+    # {
+    # 責務: [_generate: promptを準備しbackendで画像を生成して成果物とmetadataを保存する]
+    # 処理: [1: prompt・LoRA・generation parameterを解決する, 2: backend capabilityを検証して生成する,
+    # 3: mosaic・format・failure isolationを適用し画像とsidecarを保存する]
+    # 引数: [prompt: 任意の事前展開済み正prompt, negative: 任意の負prompt,
+    # wildcard_cache: 呼び出し単位の共有wildcard cache]
+    # 戻り値: []
+    # }
     def _generate(self, prompt=None, negative=None, wildcard_cache=None):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
@@ -401,6 +552,13 @@ class EmbeddedRandomImage:
                     + (f" / prompt: {prompt_path}" if prompt_path else "")
                 )
 
+    # {
+    # 責務: [_sequential_prompt_sources: 順次生成対象を単一text fileまたはdirectoryから列挙する]
+    # 処理: [1: input pathをroot基準で解決する, 2: 拡張子なしdirectoryを許容する,
+    # 3: directoryなら配下text fileをcasefold順で返す]
+    # 引数: []
+    # 戻り値: [順次読むprompt source path一覧]
+    # }
     def _sequential_prompt_sources(self):
         source = Path(self.input_file)
         if not source.is_absolute():
@@ -413,6 +571,13 @@ class EmbeddedRandomImage:
             return sorted((path for path in source.rglob("*.txt") if path.is_file()), key=lambda path: path.as_posix().casefold())
         return []
 
+    # {
+    # 責務: [_generate_sequential: source fileの全非空行を一件ずつ生成へ渡す]
+    # 処理: [1: fileとprompt行を列挙する, 2: 必要なら1巡共有wildcard cacheを作る,
+    # 3: 各行を展開・生成し失敗を個別logする, 4: loop設定に応じて繰り返す]
+    # 引数: []
+    # 戻り値: []
+    # }
     def _generate_sequential(self):
         sources = self._sequential_prompt_sources()
         prompts = [(path, line) for path in sources for line in self._read_lines(path)]
@@ -444,11 +609,25 @@ class EmbeddedRandomImage:
         else:
             self._log(f"✅ 順次生成完了: {completed}/{total}件")
 
+    # {
+    # 責務: [_start_thread: modeに応じた生成workerを重複防止付きで開始する]
+    # 処理: [1: worker稼働中なら拒否する, 2: stop eventをclearする,
+    # 3: mode別workerをdaemon threadとして起動する]
+    # 引数: [mode: sequential・once・連続生成の実行mode]
+    # 戻り値: []
+    # }
     def _start_thread(self, mode):
         if self._worker_thread and self._worker_thread.is_alive():
             self._log("実行中: すでに生成中です。停止してから開始してください。")
             return
         self._stop_event.clear()
+        # {
+        # 責務: [worker: 選択modeに応じて設定適用と画像生成を停止まで実行する]
+        # 処理: [1: sequentialなら順次生成を実行する, 2: それ以外はwildcard cacheを準備し,
+        # 3: pending設定を適用しgenerateする, 4: once modeなら一回で終える]
+        # 引数: []
+        # 戻り値: []
+        # }
         def worker():
             if mode == "sequential":
                 self._generate_sequential()
@@ -465,6 +644,13 @@ class EmbeddedRandomImage:
         self._worker_thread = threading.Thread(target=worker, daemon=True)
         self._worker_thread.start()
 
+    # {
+    # 責務: [_stop: worker停止を通知し対応backendへ非同期interruptを要求する]
+    # 処理: [1: stop eventをsetする, 2: active backend capabilityを確認する,
+    # 3: 対応する場合にinterrupt helper threadを開始する]
+    # 引数: []
+    # 戻り値: []
+    # }
     def _stop(self):
         self._stop_event.set()
         backend = self._active_backend
@@ -472,6 +658,12 @@ class EmbeddedRandomImage:
             return
         threading.Thread(target=self._interrupt_backend, args=(backend,), daemon=True).start()
 
+    # {
+    # 責務: [_interrupt_backend: backend interruptを呼び出し成否をlogする]
+    # 処理: [1: interrupt APIを呼ぶ, 2: 成功または例外をlogする]
+    # 引数: [backend: interrupt対応を表明した生成backend]
+    # 戻り値: []
+    # }
     def _interrupt_backend(self, backend):
         try:
             backend.interrupt()

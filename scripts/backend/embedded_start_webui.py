@@ -1,6 +1,12 @@
 from ..context import *
 from ..runtime_python import venv_python
 
+# {
+# 責務: [EmbeddedStartWebUI: Stable Diffusion backendの起動・停止と稼働状態を管理する]
+# フィールド: [_current_proc: 起動したbackend process, _stop_event: 起動処理の停止通知,
+# _health_check_stop: health check thread停止通知, _api_status: 表示用API状態, _log_msg: log callback]
+# 処理: [1: API稼働状態を監視する, 2: backend processを起動・停止・再起動する]
+# }
 class EmbeddedStartWebUI:
     DEFAULT_FLAGS = (
         ["--listen", "127.0.0.1", "--port", "8188", "--lowvram", "--disable-auto-launch"]
@@ -31,6 +37,12 @@ class EmbeddedStartWebUI:
     PORT = 8188 if RUNTIME_BACKEND == "comfyui" else 7860
     DISPLAY_NAME = BACKEND_DISPLAY_NAME
 
+    # {
+    # 責務: [__init__: process管理とhealth check用の初期状態を用意する]
+    # 処理: [1: process参照、停止event、初期状態を設定する]
+    # 引数: []
+    # 戻り値: []
+    # }
     def __init__(self):
         self._current_proc = None
         self._stop_event = threading.Event()
@@ -38,6 +50,12 @@ class EmbeddedStartWebUI:
         self._api_status = "⚫ オフライン"
         self._log_msg = print
 
+    # {
+    # 責務: [_health_check_now: 現在のbackend APIへ一度接続して状態を返す]
+    # 処理: [1: requestsの有無を確認する, 2: APIへtimeout付きGETを送り結果を状態辞書にする]
+    # 引数: []
+    # 戻り値: [status表示文字列とonlineフラグを含む辞書]
+    # }
     def _health_check_now(self):
         if requests is None:
             return {"status": "❓ requests 未インストール", "online": False}
@@ -51,6 +69,12 @@ class EmbeddedStartWebUI:
         except Exception as e:
             return {"status": f"❓ エラー: {str(e)[:30]}", "online": False}
 
+    # {
+    # 責務: [_health_check_thread: 停止指示までbackend API状態を周期確認する]
+    # 処理: [1: processとAPI状態を確認する, 2: 表示状態を更新して次の確認を待つ]
+    # 引数: []
+    # 戻り値: []
+    # }
     def _health_check_thread(self):
         while not self._health_check_stop.is_set():
             if self._current_proc is None:
@@ -60,6 +84,12 @@ class EmbeddedStartWebUI:
                 self._api_status = result["status"]
             time.sleep(100)
 
+    # {
+    # 責務: [_find_and_kill_webui_process: 指定portを占有する既存WebUI processを終了する]
+    # 処理: [1: OSからport利用中processを特定する, 2: 終了を要求し結果を返す]
+    # 引数: [port: 検索するAPI port、省略時は既定port]
+    # 戻り値: [対象processを終了できた場合はTrue]
+    # }
     def _find_and_kill_webui_process(self, port=None):
         port = port or self.PORT
         try:
@@ -76,6 +106,14 @@ class EmbeddedStartWebUI:
             self._log_msg(f"❌ プロセス検出エラー: {e}")
         return False
 
+    # {
+    # 責務: [_start_webui_thread: backend起動引数を組み立ててprocessを開始する]
+    # 処理: [1: venvとbackend entrypointを解決する, 2: 低負荷・資源制限設定を引数化する,
+    # 3: 起動processと監視状態を保持する]
+    # 引数: [flags: 起動追加引数, logical_cpu: CPU設定, ram_gb: RAM設定, low_prio: 低優先度指定,
+    # soft_stop_sec: graceful stop待ち時間, hard_kill_sec: 強制終了までの待ち時間]
+    # 戻り値: []
+    # }
     def _start_webui_thread(self, flags, logical_cpu, ram_gb, low_prio, soft_stop_sec, hard_kill_sec):
         python_path = venv_python(RUNTIME_DIR / "venv")
         launch_py = RUNTIME_DIR / ("main.py" if RUNTIME_BACKEND == "comfyui" else "launch.py")
@@ -98,6 +136,12 @@ class EmbeddedStartWebUI:
         self._health_check_stop.set()
         self._current_proc = None
 
+    # {
+    # 責務: [_stop_webui: 起動中backendをgraceful stop後に必要なら強制終了する]
+    # 処理: [1: soft stop signalを送る, 2: 指定時間待つ, 3: 残存時は強制終了する]
+    # 引数: [soft_stop_sec: 正常終了を待つ秒数, hard_kill_sec: 強制終了後の待ち時間]
+    # 戻り値: []
+    # }
     def _stop_webui(self, soft_stop_sec, hard_kill_sec):
         proc = self._current_proc
         if not proc:
@@ -118,6 +162,12 @@ class EmbeddedStartWebUI:
         if proc.poll() is None:
             proc.kill()
 
+    # {
+    # 責務: [_restart_webui: 既存backendを停止して同じ設定で起動し直す]
+    # 処理: [1: health check停止を通知する, 2: 既存processを停止する, 3: 引数を使って再起動する]
+    # 引数: [args: _start_webui_threadへ渡す起動・停止設定]
+    # 戻り値: []
+    # }
     def _restart_webui(self, *args):
         self._stop_event.set()
         self._stop_webui(args[-2], args[-1])

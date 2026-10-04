@@ -6,6 +6,11 @@ from __future__ import annotations
 from .generation_backend_catalog import ChoiceMap, RequestGet
 
 
+# {
+# 責務: [A1111BackendCatalog: AUTOMATIC1111 APIから生成UI用モデル選択肢を集める]
+# フィールド: []
+# 処理: [1: API応答をcheckpoint・LoRA・VAE・sampler等の選択肢へ変換する]
+# }
 class A1111BackendCatalog:
     """Query model, upscaler, and sampler names from the A1111 API."""
 
@@ -17,6 +22,12 @@ class A1111BackendCatalog:
         ("samplers", "samplers", ("name",)),
     )
 
+    # {
+    # 責務: [query_choices: AUTOMATIC1111 APIの選択肢をまとめて取得する]
+    # 処理: [1: APIの基底URLを正規化する, 2: 選択肢endpointを照会する, 3: 結果と警告を返す]
+    # 引数: [base_url: AUTOMATIC1111 APIのURL, request_get: HTTP GET関数]
+    # 戻り値: [カテゴリ別選択肢と取得時の警告]
+    # }
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         normalized_url = base_url.strip().rstrip("/")
         if "/sdapi/" in normalized_url:

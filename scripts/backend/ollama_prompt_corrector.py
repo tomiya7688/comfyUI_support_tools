@@ -1,13 +1,38 @@
 from __future__ import annotations
 
+# {
+# 責務: [OllamaPromptCorrector: Ollama APIからmodel一覧を取得し生成promptを整形する]
+# フィールド: [INSTRUCTION: prompt整形時にOllamaへ渡す固定指示]
+# 処理: [1: model listを取得する, 2: API payloadを作る, 3: 応答文を検証して返す]
+# }
 class OllamaPromptCorrector:
     """Ollama APIで自由文を画像生成向けタグへ整形する。"""
     INSTRUCTION = "Convert the user's request into a concise comma-separated image generation prompt. Keep useful English tags, translate Japanese concepts into common English image tags, and output only the prompt without explanation."
+    # {
+    # 責務: [models: Ollama tags APIから利用可能model名を得る]
+    # 処理: [1: APIへGETする, 2: HTTP errorを検査する, 3: 空名を除いたmodel名を返す]
+    # 引数: [api_url: Ollama API base URL, requests_module: HTTP request module]
+    # 戻り値: [利用可能なmodel名一覧]
+    # }
     def models(self, api_url: str, requests_module) -> list[str]:
         response=requests_module.get(api_url.rstrip("/")+"/api/tags",timeout=10); response.raise_for_status()
         return [str(item.get("name","")).strip() for item in response.json().get("models",[]) if str(item.get("name","")).strip()]
+    # {
+    # 責務: [payload: Ollama generate API向けのprompt補正requestを作る]
+    # 処理: [1: 固定指示とuser requestを連結する, 2: non-streaming低温度設定を付ける]
+    # 引数: [model: Ollama model名, source: 補正元の自然文]
+    # 戻り値: [Ollama generate endpoint用JSON payload]
+    # }
     def payload(self, model: str, source: str) -> dict:
         return {"model":model,"prompt":f"{self.INSTRUCTION}\n\nUser request:\n{source.strip()}","stream":False,"options":{"temperature":0.2}}
+    # {
+    # 責務: [correct: Ollamaを呼び出して生成向けpromptへ変換する]
+    # 処理: [1: sourceとmodel名を検証する, 2: generate APIへpayloadをPOSTする,
+    # 3: 応答promptを検証して返す]
+    # 引数: [api_url: Ollama API base URL, model: 使用するmodel名,
+    # source: 補正元text, requests_module: HTTP request module]
+    # 戻り値: [補正後prompt]
+    # }
     def correct(self, api_url: str, model: str, source: str, requests_module) -> str:
         if not source.strip(): raise ValueError("校正するプロンプトを入力してください")
         if not model.strip(): raise ValueError("Ollamaモデルを指定してください")

@@ -4,9 +4,20 @@ import ctypes
 import os
 
 
+# {
+# 責務: [ProcessCpuLimiter: 子processへ適用するCPU core数を解釈しOS別に制限する]
+# フィールド: []
+# 処理: [1: 要求値を利用可能範囲へ正規化する, 2: 対応OSでprocess affinityを設定する]
+# }
 class ProcessCpuLimiter:
     """Apply a Windows CPU affinity limit to a spawned process."""
 
+    # {
+    # 責務: [core_count: CPU制限入力を有効なcore数へ正規化する]
+    # 処理: [1: 空値なら制限なしを返す, 2: 整数化し利用可能CPU数の範囲へclampする]
+    # 引数: [value: core数または文字列指定]
+    # 戻り値: [有効なcore数、空入力ならNone]
+    # }
     @staticmethod
     def core_count(value: str | int | None) -> int | None:
         if value is None or str(value).strip() == "":
@@ -14,6 +25,12 @@ class ProcessCpuLimiter:
         requested = int(str(value).strip())
         return max(1, min(requested, os.cpu_count() or 1))
 
+    # {
+    # 責務: [apply: 指定processへ可能な範囲でCPU制限を適用する]
+    # 処理: [1: core数を検証する, 2: OS・process状態を確認する, 3: affinity設定結果を説明する]
+    # 引数: [pid: 対象process ID, value: 希望するCPU core数]
+    # 戻り値: [適用結果または未適用理由の表示文]
+    # }
     @classmethod
     def apply(cls, pid: int, value: str | int | None) -> str:
         try:

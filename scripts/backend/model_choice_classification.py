@@ -16,6 +16,13 @@ _BASE_MODEL_KINDS = {
 }
 
 
+# {
+# 責務: [classify_base_model_choice: 選択中checkpointまたはUNetのmodel familyと種別を分類する]
+# 処理: [1: catalog内のbase-model categoryを照合する, 2: 一意一致ならlocal evidenceで分類する,
+# 3: 曖昧または未登録なら根拠を保ったfallback分類を返す]
+# 引数: [model_name: 選択中model名, choices: backendのカテゴリ別catalog]
+# 戻り値: [family・kindと分類根拠]
+# }
 def classify_base_model_choice(
     model_name: str,
     choices: dict[str, list[str]],
@@ -40,6 +47,12 @@ def classify_base_model_choice(
     return classify_model(name)
 
 
+# {
+# 責務: [describe_model_classification: model分類結果と根拠をUI向けの短文にする]
+# 処理: [1: family・kind・両分類根拠を連結する]
+# 引数: [result: 表示するModelClassification]
+# 戻り値: [UI label用の説明文]
+# }
 def describe_model_classification(result: ModelClassification) -> str:
     """Format the classification and its evidence for a compact UI label."""
     return (

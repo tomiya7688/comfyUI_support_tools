@@ -3,17 +3,41 @@ from __future__ import annotations
 from pathlib import Path
 
 
+# {
+# 責務: [TagTextMerger: directory内のtag textを統合して重複を整理する]
+# フィールド: []
+# 処理: [1: 複数fileのtagを読み合わせる, 2: 要求に応じて重複を除いて出力する]
+# }
 class TagTextMerger:
     """Merge text files while optionally retaining only the first occurrence of each tag."""
 
+    # {
+    # 責務: [_key: tagを重複比較用のcanonical keyへ正規化する]
+    # 処理: [1: 小文字化しunderscoreと連続spaceを標準化する]
+    # 引数: [tag: 比較対象tag]
+    # 戻り値: [canonical比較key]
+    # }
     @staticmethod
     def _key(tag: str) -> str:
         return " ".join(tag.strip().casefold().replace("_", " ").split())
 
+    # {
+    # 責務: [_tags: 複数行またはcomma区切りtextからtag要素を抽出する]
+    # 処理: [1: newlineをcomma区切りとして扱う, 2: 空要素を取り除く]
+    # 引数: [text: tag text]
+    # 戻り値: [前後空白を除いたtag一覧]
+    # }
     @staticmethod
     def _tags(text: str) -> list[str]:
         return [tag.strip() for tag in text.replace("\n", ",").split(",") if tag.strip()]
 
+    # {
+    # 責務: [merge: folder内のtag fileを1つへ統合して保存する]
+    # 処理: [1: source fileを列挙してtagを集める, 2: optionに応じて重複を除く,
+    # 3: outputへ書き込み件数を返す]
+    # 引数: [folder: 読み込むdirectory, output: 統合file出力先, deduplicate: 重複tagを除くか]
+    # 戻り値: [入力・出力tag数などの集計]
+    # }
     def merge(self, folder: str, output: str, deduplicate: bool) -> dict[str, int]:
         source = Path(folder)
         destination = Path(output)

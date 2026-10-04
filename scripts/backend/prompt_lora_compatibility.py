@@ -23,6 +23,12 @@ _LORA_REFERENCE = re.compile(r"<lora:([^:<>]+)(?::[^<>]*)?>", re.IGNORECASE)
 _MODEL_SUFFIXES = {".safetensors", ".ckpt", ".pt", ".pth", ".bin"}
 
 
+# {
+# 責務: [PromptLoraFinding: prompt内LoRA参照とcatalog照合結果をまとめる]
+# フィールド: [reference: promptに書かれた参照名, resolved_name: catalog一致名,
+# result: model familyとの互換性判定]
+# 処理: [1: 未解決参照とCompatibilityResultを1件として保持する]
+# }
 @dataclass(frozen=True)
 class PromptLoraFinding:
     reference: str
@@ -30,6 +36,12 @@ class PromptLoraFinding:
     result: CompatibilityResult
 
 
+# {
+# 責務: [extract_lora_references: promptから重複しないLoRA名を抽出する]
+# 処理: [1: LoRA記法を検索する, 2: 空名を除き大文字小文字を無視して重複排除する]
+# 引数: [prompt: LoRA参照を含む生成prompt]
+# 戻り値: [出現順を保ったLoRA参照名]
+# }
 def extract_lora_references(prompt: str) -> list[str]:
     """Return unique LoRA names in prompt order, ignoring case-only repeats."""
     references = []
@@ -43,6 +55,12 @@ def extract_lora_references(prompt: str) -> list[str]:
     return references
 
 
+# {
+# 責務: [_normalized_name: model catalog照合用にLoRA名を正規化する]
+# 処理: [1: slash、大小文字、対応拡張子を正規化する]
+# 引数: [value: 入力LoRA名またはpath]
+# 戻り値: [照合用の正規化名]
+# }
 def _normalized_name(value: str) -> str:
     name = value.replace("\\", "/").strip().strip("/").casefold()
     path = PurePosixPath(name)
@@ -51,6 +69,12 @@ def _normalized_name(value: str) -> str:
     return name
 
 
+# {
+# 責務: [_resolve_lora: prompt内LoRA参照をcatalog候補へ曖昧性を考慮して対応づける]
+# 処理: [1: 候補名を正規化して完全一致を探す, 2: 安全な一意一致または理由を返す]
+# 引数: [reference: prompt側のLoRA名, candidates: catalogのLoRA名一覧]
+# 戻り値: [一意に解決したcatalog名と判定理由]
+# }
 def _resolve_lora(reference: str, candidates: list[str]) -> tuple[str | None, str]:
     requested = _normalized_name(reference)
     exact = [name for name in candidates if _normalized_name(name) == requested]
@@ -75,6 +99,14 @@ def _resolve_lora(reference: str, candidates: list[str]) -> tuple[str | None, st
     return None, "No matching LoRA was found in the current backend catalog."
 
 
+# {
+# 責務: [assess_prompt_loras: prompt内LoRAのbase model互換性を評価する]
+# 処理: [1: base model familyを判定する, 2: LoRA参照をcatalogへ解決する,
+# 3: model familyごとの互換性結果をまとめる]
+# 引数: [prompt: 評価する生成prompt, base_model_name: 選択checkpoint名, choices: backend catalog,
+# base_model_reason: model family判定の補足根拠]
+# 戻り値: [各LoRA参照の解決名と互換性finding]
+# }
 def assess_prompt_loras(
     prompt: str,
     base_model_name: str | None,
@@ -119,6 +151,13 @@ def assess_prompt_loras(
     return findings
 
 
+# {
+# 責務: [validate_prompt_loras: LoRA互換性findingを評価して必要な警告をlogする]
+# 処理: [1: promptのLoRAを評価する, 2: 非互換・不明結果をlogする, 3: findingsを返す]
+# 引数: [prompt: 評価する生成prompt, base_model_name: 選択checkpoint名, choices: backend catalog,
+# log: 警告を出すcallback, base_model_reason: 判定根拠]
+# 戻り値: [各LoRA参照の互換性finding]
+# }
 def validate_prompt_loras(
     prompt: str,
     base_model_name: str | None,
@@ -144,6 +183,12 @@ def validate_prompt_loras(
     return findings
 
 
+# {
+# 責務: [format_prompt_lora_findings: LoRA互換性findingを表示用文字列へ整形する]
+# 処理: [1: 空findingを説明する, 2: 各結果をstatus・参照名・理由の行に変換する]
+# 引数: [findings: 表示対象のfinding一覧]
+# 戻り値: [UIやlogへ表示する文章]
+# }
 def format_prompt_lora_findings(findings: list[PromptLoraFinding]) -> str:
     """Render LoRA findings for the Prompt Generate tab."""
     if not findings:

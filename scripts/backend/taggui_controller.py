@@ -1,13 +1,30 @@
 from ..context import *
 from ..runtime_python import venv_python
 
+# {
+# 責務: [TagGUIController: TagGUIを画像フォルダ指定で起動・停止する]
+# フィールド: [_process: 起動したTagGUI process, _lock: process参照を保護するlock]
+# 処理: [1: 画像folderの妥当性を確認してGUIを起動する, 2: 起動processを終了する]
+# }
 class TagGUIController:
     """指定フォルダを読み込んだ状態でTagGUIを起動する。"""
 
+    # {
+    # 責務: [__init__: TagGUI process管理状態を初期化する]
+    # 処理: [1: process参照と同期lockを用意する]
+    # 引数: []
+    # 戻り値: []
+    # }
     def __init__(self):
         self._process = None
         self._lock = threading.Lock()
 
+    # {
+    # 責務: [_write_log: log callbackがあればメッセージを渡す]
+    # 処理: [1: callbackを安全に呼び出し、callback例外は無視する]
+    # 引数: [log: 任意のlog callback, message: 表示する文字列]
+    # 戻り値: []
+    # }
     @staticmethod
     def _write_log(log, message):
         if log is not None:
@@ -16,6 +33,13 @@ class TagGUIController:
             except Exception:
                 pass
 
+    # {
+    # 責務: [start: 指定画像folderをTagGUIへ渡してGUI processを起動する]
+    # 処理: [1: folder pathを正規化して存在を検査する, 2: process重複を防いでTagGUIを起動する,
+    # 3: stdout監視と終了状態を管理する]
+    # 引数: [image_directory: TagGUIで開く画像folder, log: 任意の状態通知callback]
+    # 戻り値: []
+    # }
     def start(self, image_directory, log=None):
         image_directory = Path(image_directory).expanduser().resolve()
         if not image_directory.is_dir():
@@ -52,6 +76,12 @@ class TagGUIController:
             )
         self._write_log(log, f"✅ TagGUIを起動しました: {image_directory}")
 
+    # {
+    # 責務: [stop: 起動中のTagGUI processを終了する]
+    # 処理: [1: process参照を解除する, 2: 未起動なら通知して戻る, 3: processへ終了要求を送る]
+    # 引数: [log: 任意の状態通知callback]
+    # 戻り値: []
+    # }
     def stop(self, log=None):
         with self._lock:
             process = self._process

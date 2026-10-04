@@ -11,6 +11,13 @@ from .comfy_ui_client import ComfyUIClient
 from .image_generation_backend import ImageGenerationBackend
 
 
+# {
+# 責務: [create_image_generation_backend: 指定backendの画像生成adapterを組み立てる]
+# 処理: [1: backendに応じたadapterを生成する, 2: 必要なHTTP依存を検証する, 3: 未対応backendを拒否する]
+# 引数: [backend: 選択するbackend名, api_url: 接続先API, timeout: API timeout,
+# request_post: A1111用POST関数, comfy_client_factory: ComfyUI client生成関数]
+# 戻り値: [選択backendのImageGenerationBackend実装]
+# }
 def create_image_generation_backend(
     backend: str,
     api_url: str,

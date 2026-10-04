@@ -56,6 +56,16 @@ def upd_architecture_check() -> CheckResult:
     return run([sys.executable, "tools/architecture/upd_check.py"])
 
 
+# {
+# 責務: [comment_coverage_check: JSON-like宣言コメントの追加漏れを検査する]
+# 処理: [1: first-party Python宣言のcoverage検査を実行する]
+# 引数: []
+# 戻り値: [completion gate用の検査結果]
+# }
+def comment_coverage_check() -> CheckResult:
+    return run([sys.executable, "tools/architecture/comment_coverage.py"])
+
+
 def diff_check() -> CheckResult:
     return run(["git", "diff", "--check"])
 
@@ -68,7 +78,13 @@ def main(argv: list[str] | None = None) -> int:
     checks = [compile_check]
     if not args.skip_tests:
         checks.append(test_check)
-    checks.extend([generated_docs_check, architecture_check, upd_architecture_check, diff_check])
+    checks.extend([
+        generated_docs_check,
+        architecture_check,
+        upd_architecture_check,
+        comment_coverage_check,
+        diff_check,
+    ])
 
     for check in checks:
         try:

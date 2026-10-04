@@ -10,8 +10,8 @@ Keep initial context small.
 6. Do not read all Issues, docs, or the whole repository unless the task requires it.
 7. Read `doc/コーディング規約.md` before implementing or refactoring code.
 8. For new or substantively modified project-owned classes/functions/methods, apply the permanent JSON-like Comment Outs declaration-comment rule from `doc/コーディング規約.md`; keep implementation-internal comments as normal comments.
-10. Prefer module independence over class-centric OOP: keep dependencies minimal and one-way, avoid peer-module internals/cycles/shared mutable state, and coordinate cross-module flows from an upper orchestrator/Commander.
-9. Stop exploration when Goal / Required / Acceptance can be implemented safely.
+9. Prefer module independence over class-centric OOP: keep dependencies minimal and one-way, avoid peer-module internals/cycles/shared mutable state, and coordinate cross-module flows from an upper orchestrator/Commander.
+10. Stop exploration when Goal / Required / Acceptance can be implemented safely.
 11. Keep unrelated refactors out of the task.
 12. Apply coding rules to new/modified code only; do not mass-refactor unrelated legacy code.
 13. Before commit/PR, run `python tools/completion/completion_gate.py`; do not proceed if it fails.

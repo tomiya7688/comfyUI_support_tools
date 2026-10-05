@@ -29,6 +29,16 @@ def compile_check() -> CheckResult:
     return run([sys.executable, "-m", "py_compile", *files])
 
 
+# {
+# 責務: [ quality_check: incremental code quality gateをcompletion gateから実行する ]
+# 処理: [ 1: quality_gate.pyを実行する, 2: 結果を返す ]
+# 引数: []
+# 戻り値: [ result: 品質gateのCheckResult ]
+# }
+def quality_check() -> CheckResult:
+    return run([sys.executable, "tools/quality/quality_gate.py"])
+
+
 def test_check() -> CheckResult:
     return run([
         sys.executable,
@@ -65,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-tests", action="store_true")
     args = parser.parse_args(argv)
 
-    checks = [compile_check]
+    checks = [compile_check, quality_check]
     if not args.skip_tests:
         checks.append(test_check)
     checks.extend([generated_docs_check, architecture_check, upd_architecture_check, diff_check])

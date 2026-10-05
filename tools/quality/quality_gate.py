@@ -47,10 +47,10 @@ class ChangeSet:
 # 引数: [ root: repository root, args: git引数, check: error化指定 ]
 # 戻り値: [ result: subprocess結果 ]
 # }
-def _run_git(root: Path, args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args], cwd=root, check=check, capture_output=True, text=True
-    )
+def _run_git(
+    root: Path, args: list[str], *, check: bool = True
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", *args], cwd=root, check=check, capture_output=True, text=True)
 
 
 # {
@@ -152,7 +152,9 @@ def _added_line_ranges(
     if base_commit is None:
         return ()
     ranges: list[tuple[int, int]] = []
-    for line in _run_git(root, ["diff", "--unified=0", base_commit, "--", path]).stdout.splitlines():
+    for line in _run_git(
+        root, ["diff", "--unified=0", base_commit, "--", path]
+    ).stdout.splitlines():
         match = HUNK_RE.match(line)
         if match:
             start, count = int(match.group(1)), int(match.group(2) or "1")
@@ -241,7 +243,11 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
     lines = source.splitlines()
     findings: list[Finding] = []
     if len(lines) > 1000:
-        findings.append(Finding("A", "QUA100", path, 1, f"{len(lines)} lines: responsibility split audit required"))
+        findings.append(
+            Finding(
+                "A", "QUA100", path, 1, f"{len(lines)} lines: responsibility split audit required"
+            )
+        )
     try:
         tree = ast.parse(source, filename=path)
     except SyntaxError as exc:
@@ -252,29 +258,85 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
             size = (node.end_lineno or node.lineno) - node.lineno + 1
             if size > 120:
                 severity = "E" if size > 200 and _line_in_ranges(node.lineno, added_ranges) else "W"
-                findings.append(Finding(severity, "QUA110", path, node.lineno, f"function {node.name!r} spans {size} lines"))
+                findings.append(
+                    Finding(
+                        severity,
+                        "QUA110",
+                        path,
+                        node.lineno,
+                        f"function {node.name!r} spans {size} lines",
+                    )
+                )
         elif isinstance(node, ast.ClassDef):
             size = (node.end_lineno or node.lineno) - node.lineno + 1
             if size > 500:
-                findings.append(Finding("W", "QUA120", path, node.lineno, f"class {node.name!r} spans {size} lines"))
+                findings.append(
+                    Finding(
+                        "W", "QUA120", path, node.lineno, f"class {node.name!r} spans {size} lines"
+                    )
+                )
 
         if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
             start = _declaration_start(node)
             if _line_in_ranges(start, added_ranges) and not _has_json_like_comment(lines, node):
-                findings.append(Finding("E", "QUA200", path, start, f"new declaration {node.name!r} lacks JSON-like Comment Outs"))
+                findings.append(
+                    Finding(
+                        "E",
+                        "QUA200",
+                        path,
+                        start,
+                        f"new declaration {node.name!r} lacks JSON-like Comment Outs",
+                    )
+                )
 
         if isinstance(node, ast.ExceptHandler) and _line_in_ranges(node.lineno, added_ranges):
             if node.type is None:
-                findings.append(Finding("E", "QUA210", path, node.lineno, "new bare except is not allowed"))
-            elif isinstance(node.type, ast.Name) and node.type.id in {"Exception", "BaseException"} and node.body and all(isinstance(item, ast.Pass) for item in node.body):
-                findings.append(Finding("E", "QUA211", path, node.lineno, "broad exception must not be silently swallowed"))
+                findings.append(
+                    Finding("E", "QUA210", path, node.lineno, "new bare except is not allowed")
+                )
+            elif (
+                isinstance(node.type, ast.Name)
+                and node.type.id in {"Exception", "BaseException"}
+                and node.body
+                and all(isinstance(item, ast.Pass) for item in node.body)
+            ):
+                findings.append(
+                    Finding(
+                        "E",
+                        "QUA211",
+                        path,
+                        node.lineno,
+                        "broad exception must not be silently swallowed",
+                    )
+                )
 
         if isinstance(node, ast.Call) and _line_in_ranges(node.lineno, added_ranges):
             called = _call_name(node.func)
-            if any(keyword.arg == "shell" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True for keyword in node.keywords):
-                findings.append(Finding("E", "QUA220", path, node.lineno, f"{called or 'subprocess call'} uses shell=True"))
+            if any(
+                keyword.arg == "shell"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in node.keywords
+            ):
+                findings.append(
+                    Finding(
+                        "E",
+                        "QUA220",
+                        path,
+                        node.lineno,
+                        f"{called or 'subprocess call'} uses shell=True",
+                    )
+                )
             if called in {"eval", "exec"}:
-                findings.append(Finding("W", "QUA221", path, node.lineno, f"new {called}() requires trust-boundary review"))
+                findings.append(
+                    Finding(
+                        "W",
+                        "QUA221",
+                        path,
+                        node.lineno,
+                        f"new {called}() requires trust-boundary review",
+                    )
+                )
     return findings
 
 
@@ -322,7 +384,9 @@ def _ruff_check(root: Path, files: tuple[str, ...], *, strict: bool) -> int:
 def _ruff_format_check(root: Path, files: tuple[str, ...]) -> int:
     if not files:
         return 0
-    return _run_command(root, [sys.executable, "-m", "ruff", "format", "--check", "--config", "ruff.toml", *files])
+    return _run_command(
+        root, [sys.executable, "-m", "ruff", "format", "--check", "--config", "ruff.toml", *files]
+    )
 
 
 # {
@@ -332,7 +396,9 @@ def _ruff_format_check(root: Path, files: tuple[str, ...]) -> int:
 # 戻り値: [ code: process終了code ]
 # }
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Incremental code-quality gate for project-owned Python files.")
+    parser = argparse.ArgumentParser(
+        description="Incremental code-quality gate for project-owned Python files."
+    )
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--base-ref")
     parser.add_argument("--all", action="store_true")
@@ -347,7 +413,13 @@ def main(argv: list[str] | None = None) -> int:
     findings: list[Finding] = []
     for path in changes.files:
         source = (root / path).read_text(encoding="utf-8")
-        ranges = _added_line_ranges(root, path, changes.base_commit, is_new=path in changes.new_files, line_count=len(source.splitlines()))
+        ranges = _added_line_ranges(
+            root,
+            path,
+            changes.base_commit,
+            is_new=path in changes.new_files,
+            line_count=len(source.splitlines()),
+        )
         findings.extend(scan_source(path, source, ranges))
     for finding in findings:
         print(f"{finding.severity} {finding.rule} {finding.path}:{finding.line} {finding.message}")
@@ -355,7 +427,10 @@ def main(argv: list[str] | None = None) -> int:
     command_failed = False
     if not args.skip_ruff:
         if not _ruff_available():
-            print("FAIL: Ruff is required. Run: python -m pip install -r requirements-dev.txt", file=sys.stderr)
+            print(
+                "FAIL: Ruff is required. Run: python -m pip install -r requirements-dev.txt",
+                file=sys.stderr,
+            )
             return 2
         command_failed |= _ruff_check(root, changes.files, strict=False) != 0
         new_files = tuple(sorted(changes.new_files))
@@ -364,7 +439,10 @@ def main(argv: list[str] | None = None) -> int:
 
     errors = [item for item in findings if item.severity == "E"]
     if errors or command_failed:
-        print(f"FAIL: code quality gate (errors={len(errors)}, files={len(changes.files)})", file=sys.stderr)
+        print(
+            f"FAIL: code quality gate (errors={len(errors)}, files={len(changes.files)})",
+            file=sys.stderr,
+        )
         return 1
     warnings = sum(item.severity in {"W", "A"} for item in findings)
     print(f"OK: code quality gate (files={len(changes.files)}, warnings={warnings})")

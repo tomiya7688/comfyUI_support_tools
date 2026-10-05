@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
@@ -26,7 +28,9 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements-kadoka-tools.txt
+            requirements-dev.txt
             tools/build/requirements.txt
+            tools/quality/requirements.txt
 
       - name: Install dependencies
         shell: pwsh
@@ -34,6 +38,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-kadoka-tools.txt
           python -m pip install -r tools/build/requirements.txt
+          python -m pip install -r requirements-dev.txt
 
       - name: Run completion gate
         run: python tools/completion/completion_gate.py

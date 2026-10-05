@@ -50,7 +50,15 @@ class ChangeSet:
 def _run_git(
     root: Path, args: list[str], *, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], cwd=root, check=check, capture_output=True, text=True)
+    return subprocess.run(
+        ["git", *args],
+        cwd=root,
+        check=check,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
 
 
 # {

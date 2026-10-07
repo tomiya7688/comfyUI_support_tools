@@ -1,0 +1,28 @@
+target-version = "py310"
+line-length = 100
+indent-width = 4
+extend-exclude = [
+  ".git",
+  ".venv",
+  "venv",
+  "external",
+  "licenses",
+  "doc/generated",
+]
+
+[lint]
+select = [
+  "E9",
+  "F63",
+  "F7",
+  "F82",
+  "B006",
+  "B008",
+  "B017",
+  "B904",
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

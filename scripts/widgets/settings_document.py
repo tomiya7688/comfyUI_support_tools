@@ -18,7 +18,7 @@ def empty_settings_document():
 
 # {
 #   責務: [load_settings_document: legacyまたはversioned JSONを現在のsettings schemaへ読み替える]
-#   処理: [JSONを読み, legacy backend mapをschema version 1へ移行し, 不正または未対応schemaを拒否する]
+#   処理: [JSONを読み, legacy backend mapをschema version 1へ移行し, 不正JSONやencodingなら空文書を返し, 未対応schemaを拒否する]
 #   引数: [path: 設定JSONのPath]
 #   戻り値: [dict: 現在のschema versionを持つsettings document]
 #   エラー: [OSError: schema versionまたはversioned document structureが未対応の場合]
@@ -28,7 +28,7 @@ def load_settings_document(path: Path):
         payload = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return empty_settings_document()
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return empty_settings_document()
 
     if not isinstance(payload, dict):

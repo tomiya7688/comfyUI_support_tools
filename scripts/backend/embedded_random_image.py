@@ -5,7 +5,7 @@ from PIL import Image
 
 from ..context import *
 from .image_generation_backend_factory import create_image_generation_backend
-from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from .text_to_image_request import TextToImageRequest
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector

@@ -5,13 +5,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
 
+from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from scripts.widgets.last_settings_store import LastSettingsStore
 from scripts.widgets.settings_document import (
     CURRENT_SCHEMA_VERSION,
     load_settings_document,
     save_settings_document,
 )
-from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 
 
 # {
@@ -65,6 +65,21 @@ class SettingsDocumentTests(TestCase):
 
             with self.assertRaisesRegex(OSError, "未対応"):
                 load_settings_document(path)
+
+    # {
+    #   責務: [test_invalid_utf8_settings_are_treated_as_empty: 不正UTF-8設定を空文書として扱うことを検証する]
+    #   処理: [不正なUTF-8 bytesを書き, load_settings_documentが復旧可能な空文書を返すことを確認する]
+    #   引数: [self: test instance]
+    #   戻り値: []
+    # }
+    def test_invalid_utf8_settings_are_treated_as_empty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "last_settings.json"
+            path.write_bytes(b"{\xff}")
+
+            loaded = load_settings_document(path)
+
+        self.assertEqual(loaded, {"schema_version": CURRENT_SCHEMA_VERSION, "backends": {}})
 
     # {
     #   責務: [test_last_settings_store_migrates_and_restores_values: legacy設定を保存時に更新し, 既存tabへ復元できることを検証する]

@@ -1,6 +1,6 @@
 import tkinter as tk
 
-from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 
 from ..context import USER_INPUT_DIR
 from .settings_document import load_settings_document, save_settings_document

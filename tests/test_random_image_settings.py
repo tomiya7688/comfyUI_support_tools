@@ -1,7 +1,7 @@
 import unittest
 
+from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from scripts.backend.embedded_random_image import EmbeddedRandomImage
-from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 
 
 # {
@@ -57,6 +57,26 @@ class EmbeddedRandomImageSettingsTests(unittest.TestCase):
 
         with self.assertRaisesRegex(TypeError, "FeatureSettings"):
             generator.queue_settings_update({"steps": 10})
+
+    # {
+    #   責務: [test_settings_snapshot_detaches_nested_values: 設定snapshotが入れ子値の変更から独立することを検証する]
+    #   処理: [入力元とto_dictの返却値を変更し, snapshot内部が変化しないことを確認する]
+    #   引数: [self: unittest instance]
+    #   戻り値: []
+    # }
+    def test_settings_snapshot_detaches_nested_values(self):
+        source = {"generation_parameter_config": {"steps": [20, 30]}}
+        settings = FeatureSettings("generation.random_image", source)
+        source["generation_parameter_config"]["steps"].append(40)
+        exported = settings.to_dict()
+        exported["values"]["generation_parameter_config"]["steps"].append(50)
+
+        self.assertEqual(
+            settings.to_dict()["values"],
+            {"generation_parameter_config": {"steps": [20, 30]}},
+        )
+        with self.assertRaises(AttributeError):
+            settings.values["generation_parameter_config"]["steps"].append(60)
 
 
 if __name__ == "__main__":

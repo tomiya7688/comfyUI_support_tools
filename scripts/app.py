@@ -43,6 +43,7 @@ from .tabs.tag_to_prompt import TagToPromptTab
 from .tabs.movie_to_text import MovieToTextTab
 from .widgets.scrollable_tab_container import ScrollableTabContainer
 from .widgets.last_settings_store import LastSettingsStore
+from .widgets.tk_tab_settings_adapter import TkTabSettingsAdapter
 from .widgets.tab_navigation import TabNavigation
 from .widgets.dark_theme import DarkTheme
 from .runtime_python import venv_python
@@ -108,13 +109,22 @@ def show_backend_selector():
 
 
 class TabbedToolsApp(tk.Tk):
+    # {
+    #   責務: [__init__: Tabbed Tools GUIと全tabを初期化する]
+    #   処理: [user_data pathをcomposition rootで解決し, Tk adapterと純Python settings storeを接続する]
+    #   引数: [self: application window]
+    #   戻り値: []
+    # }
     def __init__(self):
         super().__init__()
         DarkTheme().apply(self)
         self.title(f"Kadoka Tools - {BACKEND_DISPLAY_NAME} Tabbed GUI")
         self.geometry("1080x760")
         self.minsize(900, 600)
-        self.last_settings_store = LastSettingsStore(RUNTIME_BACKEND)
+        settings_path = USER_INPUT_DIR / "config" / "common" / "last_settings.json"
+        self.last_settings_store = TkTabSettingsAdapter(
+            LastSettingsStore(RUNTIME_BACKEND, settings_path)
+        )
 
         tab_titles = [
             (f"{BACKEND_DISPLAY_NAME}起動", StartWebUITab),
@@ -187,6 +197,12 @@ class TabbedToolsApp(tk.Tk):
         self.show_tab(0)
         self.protocol("WM_DELETE_WINDOW", self._close)
 
+    # {
+    #   責務: [_close: GUI終了前にtab設定を保存してwindowを閉じる]
+    #   処理: [Tk adapterへtab一覧を渡し, 保存エラー後もwindow破棄を続ける]
+    #   引数: [self: application window]
+    #   戻り値: []
+    # }
     def _close(self):
         try:
             self.last_settings_store.save(self.tab_instances)

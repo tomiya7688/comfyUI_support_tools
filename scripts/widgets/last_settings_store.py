@@ -1,113 +1,66 @@
-import tkinter as tk
+from pathlib import Path
 
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 
-from ..context import USER_INPUT_DIR
 from .settings_document import load_settings_document, save_settings_document
-
-STABLE_SETTINGS_IDS = {"RandomImageTab": "generation.random_image"}
 
 
 # {
-#   責務: [LastSettingsStore: GUI tabの直近設定をversioned document経由で保存・復元する]
+#   責務: [LastSettingsStore: FeatureSettingsをversioned JSON documentへ保存・復元する]
 #   フィールド: [backend: 設定を分離するbackend key, path: 設定JSONの保存先]
-#   処理: [Tk変数の読み書きとsettings documentの永続化を仲介する]
+#   処理: [Tk変数やTab classを知らずにfeature ID単位の設定mappingを永続化する]
 # }
 class LastSettingsStore:
-    """タブに表示される Tk 変数を、次回起動用に保存する。"""
-
     # {
     #   責務: [__init__: backend用settings storeを初期化する]
-    #   処理: [backend識別子と既定settings JSON pathを保持する]
-    #   引数: [self: store instance, backend: backend識別子]
+    #   処理: [backend識別子と注入されたsettings JSON pathを保持する]
+    #   引数: [self: store instance, backend: backend識別子, path: 設定JSONの保存先]
     #   戻り値: []
     # }
-    def __init__(self, backend):
+    def __init__(self, backend: str, path: Path):
         self.backend = backend
-        self.path = USER_INPUT_DIR / "config" / "common" / "last_settings.json"
+        self.path = Path(path)
 
     # {
-    #   責務: [restore: 保存済みtab設定をTk変数へ戻す]
-    #   処理: [backendとtab keyに対応する値を読み, 未対応schemaなら復元を飛ばし, 利用可能なTk variableへ設定する]
-    #   引数: [self: store instance, tab: 設定を復元するtab]
-    #   戻り値: []
+    #   責務: [load: feature IDの保存値を読み込む]
+    #   処理: [versioned documentからfeature IDを検索し, 必要なら旧tab class keyへfallbackする]
+    #   引数: [self: store instance, feature_id: 安定した設定ID, legacy_key: 旧設定のtab class key]
+    #   戻り値: [dict: 設定値の独立したmapping]
+    #   エラー: [OSError: 未対応schema versionの場合]
     # }
-    def restore(self, tab):
-        try:
-            backend_values = self._load().get("backends", {}).get(self.backend, {})
-        except OSError:
-            return
-        feature_id = self._feature_id(tab)
+    def load(self, feature_id: str, legacy_key: str | None = None) -> dict:
+        backend_values = self._load().get("backends", {}).get(self.backend, {})
+        if not isinstance(backend_values, dict):
+            return {}
         values = backend_values.get(feature_id)
-        if values is None and feature_id != type(tab).__name__:
-            values = backend_values.get(type(tab).__name__, {})
-        if values is None:
-            values = {}
-        if not isinstance(values, dict):
-            return
-        for name, value in values.items():
-            variable = getattr(tab, name, None)
-            if isinstance(variable, tk.Variable):
-                try:
-                    variable.set(value)
-                except (tk.TclError, TypeError, ValueError):
-                    continue
+        if values is None and legacy_key and legacy_key != feature_id:
+            values = backend_values.get(legacy_key)
+        return dict(values) if isinstance(values, dict) else {}
 
     # {
-    #   責務: [save: 全tabの直近設定を現在のschemaで保存する]
-    #   処理: [既存documentを保持し, 各tabのTk variable値を更新してJSONへ保存する]
-    #   引数: [self: store instance, tabs: 設定対象tabのiterable]
+    #   責務: [save: FeatureSettingsをfeature ID単位で保存する]
+    #   処理: [既存documentを保持し, settings値を更新して不要なlegacy keyを除去する]
+    #   引数: [self: store instance, settings: 保存対象の純Python設定, legacy_key: 移行対象の旧tab class key]
     #   戻り値: []
-    #   エラー: [OSError: 設定保存に失敗した場合または未対応schemaの場合]
+    #   エラー: [OSError: 設定JSONの読み込みまたは保存に失敗した場合]
     # }
-    def save(self, tabs):
-        data = self._load()
-        backend_values = data["backends"].setdefault(self.backend, {})
-        for tab in tabs:
-            settings = self._variables(tab)
-            backend_values[settings.feature_id] = dict(settings.values)
-            legacy_key = type(tab).__name__
-            if settings.feature_id != legacy_key:
-                backend_values.pop(legacy_key, None)
-        save_settings_document(self.path, data)
+    def save(self, settings: FeatureSettings, legacy_key: str | None = None) -> None:
+        document = self._load()
+        backend_values = document["backends"].setdefault(self.backend, {})
+        if not isinstance(backend_values, dict):
+            backend_values = {}
+            document["backends"][self.backend] = backend_values
+        backend_values[settings.feature_id] = settings.to_dict()["values"]
+        if legacy_key and legacy_key != settings.feature_id:
+            backend_values.pop(legacy_key, None)
+        save_settings_document(self.path, document)
 
     # {
     #   責務: [_load: 設定JSONを現在のversioned documentとして取得する]
     #   処理: [settings document moduleへloadとlegacy migrationを委譲する]
     #   引数: [self: store instance]
     #   戻り値: [dict: settings document]
-    #   エラー: [OSError: 未対応schemaの場合]
+    #   エラー: [OSError: 未対応schema versionの場合]
     # }
-    def _load(self):
+    def _load(self) -> dict:
         return load_settings_document(self.path)
-
-    # {
-    #   責務: [_variables: tabからGUI非依存のFeatureSettingsを作る]
-    #   処理: [各instance attributeを調べ, 値を取得できるTk variableだけを安定ID付きmappingへ集める]
-    #   引数: [tab: variable値を抽出するtab]
-    #   戻り値: [FeatureSettings: feature IDとvariable値mapping]
-    # }
-    @staticmethod
-    def _variables(tab):
-        values = {}
-        for name, value in vars(tab).items():
-            if not isinstance(value, tk.Variable):
-                continue
-            try:
-                values[name] = value.get()
-            except tk.TclError:
-                continue
-        return FeatureSettings(LastSettingsStore._feature_id(tab), values)
-
-    # {
-    #   責務: [_feature_id: tabの安定したsettings IDを決定する]
-    #   処理: [明示settings_idがあれば使用し, 旧tabは互換のためclass名を返す]
-    #   引数: [tab: IDを決めるtab]
-    #   戻り値: [str: 永続化用feature ID]
-    # }
-    @staticmethod
-    def _feature_id(tab):
-        feature_id = getattr(tab, "settings_id", None)
-        if isinstance(feature_id, str) and feature_id.strip():
-            return feature_id.strip()
-        return STABLE_SETTINGS_IDS.get(type(tab).__name__, type(tab).__name__)

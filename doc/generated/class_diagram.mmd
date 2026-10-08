@@ -654,11 +654,9 @@ classDiagram
     ttk.Frame <|-- LabeledPathRow
     class LastSettingsStore {
         +__init__()
-        +restore()
+        +load()
         +save()
         +_load()
-        +_variables()
-        +_feature_id()
     }
     class LogBox {
         +__init__()
@@ -693,6 +691,13 @@ classDiagram
         +_scroll_horizontal()
     }
     ttk.Frame <|-- TabNavigation
+    class TkTabSettingsAdapter {
+        +__init__()
+        +restore()
+        +save()
+        +_settings_from_tab()
+        +_feature_id()
+    }
     class FashionpediaSegmentationDataset {
         +__init__()
         +__len__()

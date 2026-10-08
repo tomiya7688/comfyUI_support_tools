@@ -12,6 +12,7 @@ from scripts.widgets.settings_document import (
     load_settings_document,
     save_settings_document,
 )
+from scripts.widgets.tk_tab_settings_adapter import TkTabSettingsAdapter
 
 
 # {
@@ -92,8 +93,7 @@ class SettingsDocumentTests(TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "last_settings.json"
             path.write_text(json.dumps(legacy), encoding="utf-8")
-            store = LastSettingsStore("comfyui")
-            store.path = path
+            store = TkTabSettingsAdapter(LastSettingsStore("comfyui", path))
             source_tab = SimpleNamespace(var_width=tk.IntVar(master=tk.Tcl(), value=768))
 
             store.save([source_tab])
@@ -117,8 +117,7 @@ class SettingsDocumentTests(TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "last_settings.json"
             path.write_text(json.dumps(legacy), encoding="utf-8")
-            store = LastSettingsStore("comfyui")
-            store.path = path
+            store = TkTabSettingsAdapter(LastSettingsStore("comfyui", path))
             tab = SimpleNamespace(
                 settings_id="generation.random_image",
                 var_width=tk.IntVar(master=tk.Tcl(), value=0),
@@ -147,8 +146,7 @@ class SettingsDocumentTests(TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "last_settings.json"
             path.write_text(json.dumps(legacy), encoding="utf-8")
-            store = LastSettingsStore("comfyui")
-            store.path = path
+            store = TkTabSettingsAdapter(LastSettingsStore("comfyui", path))
 
             store.restore(random_image_tab)
             store.save([random_image_tab])
@@ -173,3 +171,40 @@ class SettingsDocumentTests(TestCase):
         )
         with self.assertRaises(TypeError):
             settings.values["width"] = 512
+
+    # {
+    #   責務: [test_last_settings_store_handles_feature_settings_without_tabs: 永続化storeがTk tabなしで設定を扱うことを検証する]
+    #   処理: [FeatureSettingsを直接保存・読込し, versioned documentへ値が保持されることを確認する]
+    #   引数: [self: test instance]
+    #   戻り値: []
+    # }
+    def test_last_settings_store_handles_feature_settings_without_tabs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "last_settings.json"
+            store = LastSettingsStore("comfyui", path)
+
+            store.save(FeatureSettings("generation.random_image", {"width": 896}))
+            values = store.load("generation.random_image")
+
+        self.assertEqual(values, {"width": 896})
+
+    # {
+    #   責務: [test_last_settings_store_recovers_from_invalid_backend_entry: 不正backend値からstoreが復旧することを検証する]
+    #   処理: [backend領域がobjectでないversioned documentを読み, loadの空値返却とsave時の修復を確認する]
+    #   引数: [self: test instance]
+    #   戻り値: []
+    # }
+    def test_last_settings_store_recovers_from_invalid_backend_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "last_settings.json"
+            path.write_text(
+                json.dumps({"schema_version": CURRENT_SCHEMA_VERSION, "backends": {"comfyui": []}}),
+                encoding="utf-8",
+            )
+            store = LastSettingsStore("comfyui", path)
+
+            self.assertEqual(store.load("generation.random_image"), {})
+            store.save(FeatureSettings("generation.random_image", {"width": 896}))
+            saved = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(saved["backends"]["comfyui"]["generation.random_image"], {"width": 896})

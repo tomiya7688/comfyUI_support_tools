@@ -4,7 +4,14 @@ from comfyui_support_tools.shared.contracts.feature_settings import FeatureSetti
 
 from .last_settings_store import LastSettingsStore
 
-STABLE_SETTINGS_IDS = {"RandomImageTab": "generation.random_image"}
+# {
+#   責務: [STABLE_SETTINGS_IDS: 旧tab class名をstable settings IDへ対応付ける]
+#   処理: [settings_id未定義の既存tabを互換移行し, 新規tabは明示IDを優先する]
+# }
+STABLE_SETTINGS_IDS = {
+    "RandomImageTab": "generation.random_image",
+    "PromptGenerateTab": "generation.prompt_generate",
+}
 
 
 # {

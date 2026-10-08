@@ -17,6 +17,12 @@ from ..widgets.preset_store import PresetStore
 class PromptGenerateTab(ttk.Frame):
     """手入力プロンプトを現在の生成バックエンドへ送る。"""
 
+    # {
+    #   責務: [settings_id: Prompt生成機能の安定した設定識別子を定義する]
+    #   処理: [tab class名の変更に依存しないgeneration設定の保存先を指定する]
+    # }
+    settings_id = "generation.prompt_generate"
+
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.generator = EmbeddedRandomImage()

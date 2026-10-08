@@ -158,6 +158,33 @@ class SettingsDocumentTests(TestCase):
         )
 
     # {
+    #   責務: [test_prompt_generate_tab_uses_stable_settings_id: PromptGenerateTabの旧class名設定を安定IDへ移行することを検証する]
+    #   処理: [旧class名のJSONから復元し, PromptGenerateTabのstable IDへ保存されることを確認する]
+    #   引数: [self: test instance]
+    #   戻り値: []
+    # }
+    def test_prompt_generate_tab_uses_stable_settings_id(self):
+        prompt_generate_tab = type(
+            "PromptGenerateTab", (), {"settings_id": "generation.prompt_generate"}
+        )()
+        prompt_generate_tab.width = tk.IntVar(master=tk.Tcl(), value=0)
+        legacy = {"comfyui": {"PromptGenerateTab": {"width": 1024}}}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "last_settings.json"
+            path.write_text(json.dumps(legacy), encoding="utf-8")
+            store = TkTabSettingsAdapter(LastSettingsStore("comfyui", path))
+
+            store.restore(prompt_generate_tab)
+            store.save([prompt_generate_tab])
+            payload = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(prompt_generate_tab.width.get(), 1024)
+        self.assertNotIn("PromptGenerateTab", payload["backends"]["comfyui"])
+        self.assertEqual(
+            payload["backends"]["comfyui"]["generation.prompt_generate"]["width"], 1024
+        )
+
+    # {
     #   責務: [test_feature_settings_is_tk_independent_and_read_only: FeatureSettingsがTk型に依存せず値を保持することを検証する]
     #   処理: [通常のPython mappingから生成し, dict変換と内部mappingの変更拒否を確認する]
     #   引数: [self: test instance]

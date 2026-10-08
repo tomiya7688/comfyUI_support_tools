@@ -12,13 +12,10 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_PYTHON_ROOT = Path(r"E:\program_files\soft\IDE\compiler\python")
-
-
-def python_root() -> Path:
-    """Return the configured standalone Python installation root."""
-    configured = os.environ.get("KADOKA_PYTHON_ROOT")
-    return Path(configured).expanduser() if configured else DEFAULT_PYTHON_ROOT
+def python_root() -> Path | None:
+    """Return the standalone Python root only when the user configured one."""
+    configured = os.environ.get("KADOKA_PYTHON_ROOT", "").strip()
+    return Path(configured).expanduser() if configured else None
 
 
 def is_frozen() -> bool:
@@ -28,9 +25,15 @@ def is_frozen() -> bool:
 
 def preferred_python(version: str = "3.10") -> Path:
     """Return the preferred base interpreter without treating a frozen exe as Python."""
-    candidate = python_root() / f"python{version}" / "python.exe"
-    if candidate.is_file() or is_frozen():
-        return candidate
+    root = python_root()
+    if root is not None:
+        candidate = root / f"python{version}" / "python.exe"
+        if candidate.is_file():
+            return candidate
+        if is_frozen():
+            raise FileNotFoundError(f"Configured Python interpreter was not found: {candidate}")
+    elif is_frozen():
+        raise RuntimeError("Set KADOKA_PYTHON_ROOT to use an external Python from a frozen app.")
     return Path(sys.executable)
 
 

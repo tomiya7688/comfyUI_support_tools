@@ -6,6 +6,9 @@ import math
 import random
 from collections.abc import Mapping, Sequence
 from typing import Any
+from src.comfyui_support_tools.shared.contracts.resolved_generation_parameters import (
+    ResolvedGenerationParameters,
+)
 
 
 class GenerationParameterResolver:
@@ -14,15 +17,26 @@ class GenerationParameterResolver:
     def __init__(self, random_source: Any | None = None) -> None:
         self._random = random_source or random.SystemRandom()
 
-    def resolve(self, configuration: Mapping[str, Any]) -> dict[str, Any]:
+    # {
+    #   責務: [resolve: 設定候補を検証し, 1枚分の確定済み型付き生成値を作る]
+    #   処理: [CFG, step数, 解像度, samplerを抽選または固定値で解決する]
+    #   引数: [self: resolver, configuration: GUI非依存の候補設定]
+    #   戻り値: [ResolvedGenerationParameters: バックエンドへ渡す確定値]
+    # }
+    def resolve(self, configuration: Mapping[str, Any]) -> ResolvedGenerationParameters:
         if not isinstance(configuration, Mapping):
             raise ValueError("generation parameter configuration must be an object")
-        return {
-            "cfg": self._resolve_number(configuration.get("cfg"), "cfg", 0.0, 50.0),
-            "steps": self._resolve_integer(configuration.get("steps"), "steps", 1, 150),
-            "resolution": self._resolve_resolution(configuration.get("resolution")),
-            "sampler": self._resolve_sampler(configuration.get("sampler")),
-        }
+        cfg = self._resolve_number(configuration.get("cfg"), "cfg", 0.0, 50.0)
+        steps = self._resolve_integer(configuration.get("steps"), "steps", 1, 150)
+        resolution = self._resolve_resolution(configuration.get("resolution"))
+        sampler = self._resolve_sampler(configuration.get("sampler"))
+        return ResolvedGenerationParameters(
+            cfg,
+            steps,
+            resolution["width"],
+            resolution["height"],
+            sampler,
+        )
 
     def _resolve_number(self, spec: Any, name: str, minimum: float, maximum: float) -> float:
         self._validate_numeric_options(spec, name, minimum, maximum)

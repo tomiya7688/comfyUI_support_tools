@@ -5,6 +5,7 @@ from PIL import Image
 
 from ..context import *
 from .image_generation_backend_factory import create_image_generation_backend
+from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from .text_to_image_request import TextToImageRequest
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
@@ -74,18 +75,35 @@ class EmbeddedRandomImage:
         self._pending_settings = None
         self._log = print
 
-    def queue_settings_update(self, settings):
+    # {
+    #   責務: [queue_settings_update: 実行中workerへ次の画像用設定を予約する]
+    #   処理: [Random Image設定IDを確認し, FeatureSettings snapshotをlock下で保存する]
+    #   引数: [self: generator instance, settings: generation.random_image設定]
+    #   戻り値: []
+    #   エラー: [TypeError: FeatureSettings以外の場合, ValueError: feature IDが一致しない場合]
+    # }
+    def queue_settings_update(self, settings: FeatureSettings):
         """Stage settings so a running worker applies them before its next image."""
+        if not isinstance(settings, FeatureSettings):
+            raise TypeError("settings must be FeatureSettings")
+        if settings.feature_id != "generation.random_image":
+            raise ValueError(f"unsupported settings feature: {settings.feature_id}")
         with self._settings_lock:
-            self._pending_settings = dict(settings)
+            self._pending_settings = settings
 
+    # {
+    #   責務: [_apply_pending_settings: workerが予約済み設定snapshotを適用する]
+    #   処理: [lock下でsnapshotを取り出し, 各設定値をgeneratorへ適用する]
+    #   引数: [self: generator instance]
+    #   戻り値: [bool: 設定適用の有無]
+    # }
     def _apply_pending_settings(self):
         with self._settings_lock:
             settings = self._pending_settings
             self._pending_settings = None
         if settings is None:
             return False
-        for key, value in settings.items():
+        for key, value in settings.values.items():
             setattr(self, key, value)
         self._log("🔄 次の生成へ設定更新を適用しました")
         return True
@@ -310,6 +328,12 @@ class EmbeddedRandomImage:
         self._log(f"🪄 Ollamaでプロンプトを補正しました: {corrected}")
         return corrected
 
+    # {
+    #   責務: [_generate: promptと設定snapshotから画像1枚を生成する]
+    #   処理: [設定候補を解決済みparameter objectへ変換し, API backendへTextToImageRequestとして渡す]
+    #   引数: [self: generator, prompt: 任意の展開済みprompt, negative: 任意のnegative prompt, wildcard_cache: wildcard結果cache]
+    #   戻り値: []
+    # }
     def _generate(self, prompt=None, negative=None, wildcard_cache=None):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
@@ -333,12 +357,11 @@ class EmbeddedRandomImage:
             ),
         )
         parameters = self._resolve_generation_parameters()
-        resolution = parameters["resolution"]
         self._log(
             "🎛️ 生成パラメータ: "
-            f"CFG={parameters['cfg']:g}, Steps={parameters['steps']}, "
-            f"Resolution={resolution['width']}x{resolution['height']}, "
-            f"Sampler={parameters['sampler']}"
+            f"CFG={parameters.cfg:g}, Steps={parameters.steps}, "
+            f"Resolution={parameters.width}x{parameters.height}, "
+            f"Sampler={parameters.sampler}"
         )
         workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
         backend = create_image_generation_backend(
@@ -358,11 +381,11 @@ class EmbeddedRandomImage:
                 prompt=prompt,
                 negative=negative,
                 checkpoint=self.sd_model_checkpoint,
-                steps=parameters["steps"],
-                cfg=parameters["cfg"],
-                sampler=parameters["sampler"],
-                width=resolution["width"],
-                height=resolution["height"],
+                steps=parameters.steps,
+                cfg=parameters.cfg,
+                sampler=parameters.sampler,
+                width=parameters.width,
+                height=parameters.height,
                 use_model_vae=self.use_model_vae,
                 vae_name=self.vae_name,
                 enable_hr=self.enable_hr,
@@ -390,10 +413,10 @@ class EmbeddedRandomImage:
             output = output_dir / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.{output_extension}"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(image_bytes)
-            metadata_path = self._save_generation_metadata(output, parameters)
+            metadata_path = self._save_generation_metadata(output, parameters.to_dict())
             prompt_path = self._save_prompt(output, prompt)
             if failure:
-                report_path = self._save_failure_report(output, failure, prompt, negative, parameters)
+                report_path = self._save_failure_report(output, failure, prompt, negative, parameters.to_dict())
                 self._log(f"⚠️ 破綻候補を隔離しました: {output} / 記録: {report_path}")
             else:
                 self._log(

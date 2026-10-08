@@ -6,6 +6,7 @@ from ..backend.model_choice_classification import (
     describe_model_classification,
 )
 from ..backend.ollama_prompt_corrector import OllamaPromptCorrector
+from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
@@ -426,7 +427,7 @@ class RandomImageTab(ttk.Frame):
                 if requests is None: raise RuntimeError("requests がありません")
                 models = OllamaPromptCorrector().models(self.var_ollama_api_url.get(), requests)
                 self.after(0, lambda: self._finish_ollama_models(models, None))
-            except Exception as error: self.after(0, lambda: self._finish_ollama_models([], error))
+            except Exception as error: self.after(0, lambda error=error: self._finish_ollama_models([], error))
         threading.Thread(target=worker, daemon=True).start(); self.logbox.log("🔄 Ollamaモデルを更新中...")
 
     def _finish_ollama_models(self, models, error):
@@ -445,6 +446,13 @@ class RandomImageTab(ttk.Frame):
         for warning in warnings:
             self.logbox.log(f"⚠️ API候補: {warning}")
 
+    # {
+    #   責務: [_settings_from_gui: GUI値からRandom Image用の純Python設定を作る]
+    #   処理: [Tk variable値を読み取り, 安定したfeature ID付きFeatureSettingsへまとめる]
+    #   引数: [self: RandomImageTab instance]
+    #   戻り値: [FeatureSettings: Random Imageの設定値]
+    #   エラー: [ValueError: 入力値が不正な場合]
+    # }
     def _settings_from_gui(self):
         input_file = self.var_input_file.get().strip()
         wildcard_root_dir = self.var_wildcard_root_dir.get().strip()
@@ -454,7 +462,7 @@ class RandomImageTab(ttk.Frame):
         if not os.path.isdir(wildcard_root_dir):
             raise ValueError(f"wildcard rootディレクトリが存在しません: {wildcard_root_dir}")
         additional_inputs = [{**item, "path": item["path"].strip()} for item in self._additional_specs() if item["path"].strip()]
-        return {
+        return FeatureSettings("generation.random_image", {
             "input_file": input_file, "negative_input_file": self.var_negative_input_file.get().strip(),
             "wildcard_root_dir": wildcard_root_dir, "root_dir": wildcard_root_dir,
             "output_dir": self.var_output_dir.get().strip(), "api_url": self.var_api_url.get().strip().rstrip("/"),
@@ -479,7 +487,7 @@ class RandomImageTab(ttk.Frame):
             "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": "until_stop" if self.var_keep_main_wildcard_until_stop.get() else "each_image",
             "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(),
             "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(),
-        }
+        })
 
     def _generation_parameter_input(self):
         return {
@@ -561,10 +569,23 @@ class RandomImageTab(ttk.Frame):
         except ValueError as error:
             raise ValueError(f"{label}の範囲は数値の min..max で入力してください") from error
 
+    # {
+    #   責務: [_sync: GUI設定snapshotを停止中の生成backendへ反映する]
+    #   処理: [純Python FeatureSettingsの値をbackendの設定属性へ適用する]
+    #   引数: [self: RandomImageTab instance]
+    #   戻り値: []
+    # }
     def _sync(self):
-        for key, value in self._settings_from_gui().items():
+        for key, value in self._settings_from_gui().values.items():
             setattr(self.mod, key, value)
 
+    # {
+    #   責務: [update_running_generation: 実行中生成へ次回分の設定snapshotを予約する]
+    #   処理: [GUIからFeatureSettingsを作りbackendのthread-safe queueへ渡す]
+    #   引数: [self: RandomImageTab instance]
+    #   戻り値: []
+    #   エラー: [Exception: 入力値検証または設定予約に失敗した場合]
+    # }
     def update_running_generation(self):
         try:
             self.mod.queue_settings_update(self._settings_from_gui())

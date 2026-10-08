@@ -22,7 +22,6 @@ from .tabs.folder_tagger import FolderTaggerTab
 from .tabs.random_line_picker import RandomLinePickerTab
 from .tabs.body_prompt import BodyPromptTab
 from .tabs.check_braces import CheckBracesTab
-from .tabs.generic_subprocess import GenericSubprocessTab
 from .tabs.screenshot_from_movie import ScreenshotFromMovieTab
 from .tabs.images_to_webp import ImagesToWebpTab
 from .tabs.duplicate_line_delete import DuplicateLineDeleteTab

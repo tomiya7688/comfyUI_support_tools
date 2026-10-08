@@ -59,18 +59,35 @@ USER_DATA_FILE = COMMON_CONFIG_DIR / "paths.json"
 LEGACY_USER_DATA_FILE = USER_DATA_DIR / "paths.json"
 
 
-def _load_user_paths():
-    defaults = {
-        "sd_root": str(APP_DIR),
-        "models_root": str(APP_DIR / "user_data" / "input" / "models"),
-        "checkpoints": str(APP_DIR / "user_data" / "input" / "models" / "checkpoints"),
-        "comfy_flows": str(APP_DIR / "user_data" / "input" / "models" / "flows"),
-        "wildcards": str(APP_DIR / "wildcards"),
-        "a1111_dir": str(APP_DIR / "external" / "stable-diffusion-webui"),
-        "comfyui_dir": str(APP_DIR / "external" / "ComfyUI"),
-        "pixai_tagger_dir": str(APP_DIR / "external" / "pixai_tagger" / "pixai-tagger-v0.9-demo"),
-        "taggui_dir": str(APP_DIR / "external" / "taggui"),
-        "taggui_exe": str(APP_DIR / "external" / "taggui-v1.34.0-windows" / "taggui.exe"),
+# {
+#   責務: [
+#     _default_user_paths: 指定したアプリ配置場所に対する既定パスを構築する
+#   ]
+#   処理: [
+#     1: アプリ配置場所をPathとして正規化する
+#     2: 各機能の既定パスを構築して返す
+#   ]
+#   引数: [
+#     app_dir: 既定値の起点。省略時は現在のAPP_DIRを使用する
+#   ]
+#   戻り値: [
+#     user_paths: 設定キーと既定パスの対応
+#   ]
+# }
+def _default_user_paths(app_dir=None):
+    """Build portable defaults relative to the checked-out application folder."""
+    app_dir = Path(APP_DIR if app_dir is None else app_dir)
+    return {
+        "sd_root": str(app_dir),
+        "models_root": str(app_dir / "user_data" / "input" / "models"),
+        "checkpoints": str(app_dir / "user_data" / "input" / "models" / "checkpoints"),
+        "comfy_flows": str(app_dir / "user_data" / "input" / "models" / "flows"),
+        "wildcards": str(app_dir / "wildcards"),
+        "a1111_dir": str(app_dir / "external" / "stable-diffusion-webui"),
+        "comfyui_dir": str(app_dir / "external" / "ComfyUI"),
+        "pixai_tagger_dir": str(app_dir / "external" / "pixai_tagger" / "pixai-tagger-v0.9-demo"),
+        "taggui_dir": str(app_dir / "external" / "taggui"),
+        "taggui_exe": str(app_dir / "external" / "taggui-v1.34.0-windows" / "taggui.exe"),
         "webui_api_url": "http://127.0.0.1:7860",
         "comfyui_api_url": "http://127.0.0.1:8188",
         "pixai_api_url": "http://127.0.0.1:7861/pixai/v1/interrogate",
@@ -86,9 +103,13 @@ def _load_user_paths():
         "ffmpeg_input_file": "",
         "ffmpeg_output_file": "",
         "random_img2img_input_dir": "",
-        "youtube_downloader_dir": r"I:\scripts\youtubez_downloader",
-        "nuno_touka_dir": r"K:\sd\nuno\_touka",
+        "youtube_downloader_dir": str(app_dir / "external" / "youtubez_downloader"),
+        "nuno_touka_dir": str(app_dir / "nuno" / "_touka"),
     }
+
+
+def _load_user_paths():
+    defaults = _default_user_paths()
     try:
         source_path = USER_DATA_FILE if USER_DATA_FILE.is_file() else LEGACY_USER_DATA_FILE
         with source_path.open("r", encoding="utf-8") as source:

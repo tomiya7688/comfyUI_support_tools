@@ -698,15 +698,6 @@ classDiagram
         +_settings_from_tab()
         +_feature_id()
     }
-    class FashionpediaSegmentationDataset {
-        +__init__()
-        +__len__()
-        +__getitem__()
-        +_read_annotation()
-        +_build_records()
-        +_semantic_mask()
-    }
-    Dataset <|-- FashionpediaSegmentationDataset
     class FashionpediaTrainingDataset {
         +__init__()
         +_read_annotations()

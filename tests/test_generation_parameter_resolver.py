@@ -1,6 +1,7 @@
 import random
 import unittest
 
+from src.comfyui_support_tools.shared.contracts.resolved_generation_parameters import ResolvedGenerationParameters
 from scripts.backend.generation_parameter_resolver import GenerationParameterResolver
 
 
@@ -13,7 +14,8 @@ class GenerationParameterResolverTests(unittest.TestCase):
             "resolution": {"mode": "fixed", "value": {"width": 960, "height": 1280}},
             "sampler": {"mode": "fixed", "value": " Euler a "},
         })
-        self.assertEqual(result, {
+        self.assertIsInstance(result, ResolvedGenerationParameters)
+        self.assertEqual(result.to_dict(), {
             "cfg": 7.0,
             "steps": 25,
             "resolution": {"width": 960, "height": 1280},
@@ -31,10 +33,10 @@ class GenerationParameterResolverTests(unittest.TestCase):
             "sampler": {"mode": "candidate", "values": ["Euler a", "DPM++ 2M Karras"]},
         }
         results = [resolver.resolve(config) for _ in range(12)]
-        self.assertTrue(all(4.0 <= item["cfg"] <= 9.0 for item in results))
-        self.assertTrue(all(10 <= item["steps"] <= 20 for item in results))
-        self.assertEqual({item["resolution"]["width"] for item in results}, {512, 768})
-        self.assertEqual({item["sampler"] for item in results}, {"Euler a", "DPM++ 2M Karras"})
+        self.assertTrue(all(4.0 <= item.cfg <= 9.0 for item in results))
+        self.assertTrue(all(10 <= item.steps <= 20 for item in results))
+        self.assertEqual({item.width for item in results}, {512, 768})
+        self.assertEqual({item.sampler for item in results}, {"Euler a", "DPM++ 2M Karras"})
 
     def test_rejects_invalid_ranges_and_empty_candidates(self):
         resolver = GenerationParameterResolver(random.Random(2))

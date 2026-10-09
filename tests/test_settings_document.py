@@ -12,7 +12,7 @@ from scripts.widgets.settings_document import (
     load_settings_document,
     save_settings_document,
 )
-from scripts.widgets.tk_tab_settings_adapter import TkTabSettingsAdapter
+from scripts.widgets.tk_tab_settings_adapter import STABLE_SETTINGS_IDS, TkTabSettingsAdapter
 
 
 # {
@@ -21,6 +21,52 @@ from scripts.widgets.tk_tab_settings_adapter import TkTabSettingsAdapter
 #   処理: [legacy payloadの移行, versioned payloadの保存, 未対応schemaの拒否を確認する]
 # }
 class SettingsDocumentTests(TestCase):
+    # {
+    #   責務: [test_registered_tabs_have_stable_settings_ids: app内の全tabがclass名に依存しないsettings IDを持つことを検証する]
+    #   処理: [appが登録するtab class名とstable ID registryのkeyが一致することを確認する]
+    #   引数: [self: test instance]
+    #   戻り値: []
+    # }
+    def test_registered_tabs_have_stable_settings_ids(self):
+        registered_tabs = {
+            "StartWebUITab",
+            "RandomImageTab",
+            "PromptGenerateTab",
+            "RandomImg2ImgTab",
+            "FolderTaggerTab",
+            "RandomLinePickerTab",
+            "BodyPromptTab",
+            "TagDeleterTab",
+            "TagSplitterTab",
+            "TagReplacerTab",
+            "TagToPromptTab",
+            "FlatFileCopyTab",
+            "TextMergerTab",
+            "ScreenshotFromMovieTab",
+            "MovieToTextTab",
+            "ImagesToWebpTab",
+            "DuplicateLineDeleteTab",
+            "FfmpegRepairTab",
+            "CheckBracesTab",
+            "WildcardCheckerTab",
+            "WildcardMoveTab",
+            "ZipperTab",
+            "YouTubeDownloaderTab",
+            "VideoReencoderTab",
+            "StaticSpecTab",
+            "DocstringAuditTab",
+            "DependencyStatusTab",
+            "OllamaPromptTab",
+            "ToukaEnhancerTab",
+            "ToukaEvaluationReportTab",
+        }
+
+        self.assertEqual(set(STABLE_SETTINGS_IDS), registered_tabs)
+        for tab_name, expected_id in STABLE_SETTINGS_IDS.items():
+            with self.subTest(tab=tab_name):
+                tab = type(tab_name, (), {})()
+                self.assertEqual(TkTabSettingsAdapter._feature_id(tab), expected_id)
+
     # {
     #   責務: [test_legacy_backend_map_migrates_to_versioned_document: 旧backend mapがversioned documentへ移行されることを検証する]
     #   処理: [legacy JSONを一時fileへ書き, load後のversionとbackend dataを比較する]

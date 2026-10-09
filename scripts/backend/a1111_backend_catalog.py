@@ -36,3 +36,12 @@ class A1111BackendCatalog:
             except Exception as error:
                 warnings.append(f"{endpoint}: {error}")
         return choices, warnings
+
+    # {
+    #   責務: [primary_model_choices: A1111で選択できるcheckpoint候補を返す]
+    #   処理: [checkpoint候補を順序を保って重複除去し, unet候補は主モデルに含めない]
+    #   引数: [self: catalog instance, choices: A1111形式のモデル候補mapping]
+    #   戻り値: [list[str]: 選択可能なcheckpoint名]
+    # }
+    def primary_model_choices(self, choices: ChoiceMap) -> list[str]:
+        return list(dict.fromkeys(choices.get("checkpoints", [])))

@@ -9,8 +9,36 @@ from .last_settings_store import LastSettingsStore
 #   処理: [settings_id未定義の既存tabを互換移行し, 新規tabは明示IDを優先する]
 # }
 STABLE_SETTINGS_IDS = {
+    "StartWebUITab": "application.start_backend",
     "RandomImageTab": "generation.random_image",
     "PromptGenerateTab": "generation.prompt_generate",
+    "RandomImg2ImgTab": "generation.random_img2img",
+    "FolderTaggerTab": "tagger.folder",
+    "RandomLinePickerTab": "text.random_line_picker",
+    "BodyPromptTab": "prompt.body",
+    "TagDeleterTab": "tagger.delete",
+    "TagSplitterTab": "tagger.split",
+    "TagReplacerTab": "tagger.replace",
+    "TagToPromptTab": "tagger.to_prompt",
+    "FlatFileCopyTab": "files.flat_copy",
+    "TextMergerTab": "text.merge",
+    "ScreenshotFromMovieTab": "video.extract_frames",
+    "MovieToTextTab": "video.to_text",
+    "ImagesToWebpTab": "image.convert_webp",
+    "DuplicateLineDeleteTab": "text.remove_duplicate_lines",
+    "FfmpegRepairTab": "video.repair",
+    "CheckBracesTab": "developer.check_braces",
+    "WildcardCheckerTab": "wildcard.check",
+    "WildcardMoveTab": "wildcard.move",
+    "ZipperTab": "archive.zip",
+    "YouTubeDownloaderTab": "video.youtube_download",
+    "VideoReencoderTab": "video.reencode",
+    "StaticSpecTab": "developer.static_spec",
+    "DocstringAuditTab": "developer.docstring_audit",
+    "DependencyStatusTab": "developer.dependency_status",
+    "OllamaPromptTab": "prompt.ollama",
+    "ToukaEnhancerTab": "image.touka_enhancer",
+    "ToukaEvaluationReportTab": "image.touka_evaluation_report",
 }
 
 

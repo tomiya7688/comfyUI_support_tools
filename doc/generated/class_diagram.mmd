@@ -7,6 +7,7 @@ classDiagram
     tk.Tk <|-- TabbedToolsApp
     class A1111BackendCatalog {
         +query_choices()
+        +primary_model_choices()
     }
     class A1111ImageGenerationBackend {
         +__init__()
@@ -33,6 +34,7 @@ classDiagram
     }
     class ComfyUIBackendCatalog {
         +query_choices()
+        +primary_model_choices()
     }
     class ComfyUIImageGenerationBackend {
         +__init__()
@@ -89,6 +91,7 @@ classDiagram
     }
     class GenerationBackendCatalog {
         +query_choices()
+        +primary_model_choices()
     }
     Protocol <|-- GenerationBackendCatalog
     class GenerationCapabilities {

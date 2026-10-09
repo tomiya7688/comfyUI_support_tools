@@ -33,3 +33,12 @@ class ComfyUIBackendCatalog:
             except Exception as error:
                 warnings.append(f"{node_name}: {error}")
         return choices, warnings
+
+    # {
+    #   責務: [primary_model_choices: ComfyUIで選択できるcheckpointとUNet候補を返す]
+    #   処理: [checkpointとUNet候補を結合し, 元の順序を保って重複除去する]
+    #   引数: [self: catalog instance, choices: ComfyUI形式のモデル候補mapping]
+    #   戻り値: [list[str]: 選択可能な主モデル名]
+    # }
+    def primary_model_choices(self, choices: ChoiceMap) -> list[str]:
+        return list(dict.fromkeys([*choices.get("checkpoints", []), *choices.get("unets", [])]))

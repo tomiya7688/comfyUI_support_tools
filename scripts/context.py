@@ -296,12 +296,17 @@ def flow_checkpoint_choices(flow_name):
     return values
 
 
+# {
+#   責務: [base_model_choices: 選択中backendの主モデル候補をcatalogへ問い合わせる]
+#   処理: [1: 選択中backendのGenerationBackendCatalogを生成する, 2: 候補mappingを渡して主モデル名を返す]
+#   引数: [choices: checkpoint等を含む候補mapping]
+#   戻り値: [list[str]: 選択中backendで主モデルとして利用可能な候補]
+# }
 def base_model_choices(choices):
-    """Return models selectable as the primary base in the active backend."""
-    models = list(choices.get("checkpoints", []))
-    if RUNTIME_BACKEND == "comfyui":
-        models.extend(choices.get("unets", []))
-    return _unique_choices(models)
+    from .backend.generation_backend_catalog_factory import create_generation_backend_catalog
+
+    catalog = create_generation_backend_catalog(RUNTIME_BACKEND)
+    return catalog.primary_model_choices(choices)
 
 
 def _local_backend_choices():

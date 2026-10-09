@@ -19,6 +19,27 @@ class FakeResponse:
 
 
 class GenerationBackendCatalogTests(unittest.TestCase):
+    # {
+    #   責務: [test_primary_model_choices_are_backend_specific: 主モデル候補がbackend catalogごとに選ばれることを検証する]
+    #   処理: [同じcheckpoint/UNet候補mappingを各catalogへ渡し, A1111とComfyUIの結果を比較する]
+    #   引数: [self: test instance]
+    #   戻り値: []
+    # }
+    def test_primary_model_choices_are_backend_specific(self):
+        choices = {
+            "checkpoints": ["checkpoint.safetensors", "checkpoint.safetensors"],
+            "unets": ["unet.safetensors", "checkpoint.safetensors"],
+        }
+
+        self.assertEqual(
+            A1111BackendCatalog().primary_model_choices(choices),
+            ["checkpoint.safetensors"],
+        )
+        self.assertEqual(
+            ComfyUIBackendCatalog().primary_model_choices(choices),
+            ["checkpoint.safetensors", "unet.safetensors"],
+        )
+
     def test_a1111_queries_all_catalogs_and_normalizes_api_url(self):
         payloads = {
             "sd-models": [{"title": "checkpoint.safetensors"}],

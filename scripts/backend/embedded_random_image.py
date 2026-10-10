@@ -11,32 +11,36 @@ from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
 from .generation_parameter_resolver import GenerationParameterResolver
 from .prompt_lora_compatibility import validate_prompt_loras
+from .image_generation_profile import create_image_generation_profile
 
+_GENERATION_PROFILE = create_image_generation_profile(
+    RUNTIME_BACKEND,
+    str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
+    str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
+    A1111_DIR,
+    RUNTIME_DIR,
+    datetime.now().strftime("%Y%m%d"),
+)
+
+# {
+#   責務: [EmbeddedRandomImage: wildcard promptから画像生成要求を組み立てて保存する]
+#   フィールド: [generation_profile: backend選択に基づく生成既定値, api_url: API接続先, output_dir: 画像保存先, sd_model_checkpoint: 既定checkpoint]
+#   処理: [promptと生成設定を共通形式へ変換し, backend adapterへ渡す]
+# }
 class EmbeddedRandomImage:
     input_file = str(WILDCARDS_DIR / "random_batch_nsfw_hub.txt")
     negative_input_file = str(WILDCARDS_DIR / "all_negative.txt")
     wildcard_root_dir = os.path.dirname(input_file)
-    output_dir = str(
-        (RUNTIME_DIR / "output" / "KadokaTools" if RUNTIME_BACKEND == "comfyui"
-         else A1111_DIR / "outputs" / "txt2img-images")
-        / datetime.now().strftime("%Y%m%d")
-    )
-    api_url = (
-        "http://127.0.0.1:8188"
-        if RUNTIME_BACKEND == "comfyui"
-        else "http://127.0.0.1:7860/sdapi/v1/txt2img"
-    )
+    generation_profile = _GENERATION_PROFILE
+    output_dir = str(generation_profile.output_dir)
+    api_url = generation_profile.api_url
     api_timeout = 10000
     width, height, steps = 960, 1280, 25
     enable_hr, hr_scale = False, 1.5
     hr_upscaler, hr_second_pass_steps = "R-ESRGAN 4x+ Anime6B", 20
     denoising_strength = 0.7
     sampler_index = "Euler a"
-    sd_model_checkpoint = (
-        "shiitakeMix_v20.safetensors"
-        if RUNTIME_BACKEND == "comfyui"
-        else "rinIllusionRNSFW_v30"
-    )
+    sd_model_checkpoint = generation_profile.default_checkpoint
     comfy_flow = ""
     additional_input_files = []
     additional_inputs = []

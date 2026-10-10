@@ -353,8 +353,16 @@ class EmbeddedRandomImage:
             prompt = self.process_file(self.input_file, self.root_dir, wildcard_cache=wildcard_cache)
         prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
         prompt = self._correct_prompt(prompt)
+        workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
+        backend = create_image_generation_backend(
+            RUNTIME_BACKEND,
+            self.api_url,
+            self.api_timeout,
+            request_post=requests.post,
+        )
         workflow_has_model_overrides = (
-            RUNTIME_BACKEND == "comfyui" and bool(self.comfy_model_overrides)
+            backend.capabilities.supports("model_overrides")
+            and bool(self.comfy_model_overrides)
         )
         validate_prompt_loras(
             prompt,
@@ -372,13 +380,6 @@ class EmbeddedRandomImage:
             f"CFG={parameters.cfg:g}, Steps={parameters.steps}, "
             f"Resolution={parameters.width}x{parameters.height}, "
             f"Sampler={parameters.sampler}"
-        )
-        workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
-        backend = create_image_generation_backend(
-            RUNTIME_BACKEND,
-            self.api_url,
-            self.api_timeout,
-            request_post=requests.post,
         )
         if workflow_path and not backend.capabilities.supports("workflow"):
             raise ValueError("選択中の生成バックエンドはカスタムworkflowに対応していません")

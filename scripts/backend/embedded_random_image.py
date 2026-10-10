@@ -223,11 +223,17 @@ class EmbeddedRandomImage:
                 self._log(f"⚡ Action wildcard: {condition} -> {path}")
         return ", ".join([*prefix, prompt, *suffix])
 
-    def _apply_nsfw_mosaic(self, image_bytes):
+    # {
+    #   責務: [_apply_nsfw_mosaic: backend capabilityに応じてNudeNetモザイクを適用する]
+    #   処理: [1: 設定とadapter capabilityを確認する, 2: A1111 extensionへ画像を送り, 3: 加工画像または元画像を返す]
+    #   引数: [self: モザイク設定と接続設定を持つgenerator, image_bytes: 生成画像bytes, backend: 使用中のgeneration adapter]
+    #   戻り値: [bytes: モザイク後または元の画像bytes]
+    # }
+    def _apply_nsfw_mosaic(self, image_bytes, backend):
         if not self.enable_nsfw_mosaic:
             return image_bytes
-        if RUNTIME_BACKEND != "a1111":
-            self._log("NSFWモザイクはWebUI1111のNudeNet拡張が必要なため、元画像を保存します")
+        if not backend.capabilities.supports("nudenet_mosaic"):
+            self._log("選択中のbackendはNudeNetモザイクに対応していないため、元画像を保存します")
             return image_bytes
         censor_url = re.sub(r"/sdapi/.*$", "", self.api_url.rstrip("/")) + "/nudenet/censor"
         payload = {
@@ -406,7 +412,7 @@ class EmbeddedRandomImage:
             if self._active_backend is backend:
                 self._active_backend = None
         if image_bytes:
-            image_bytes = self._apply_nsfw_mosaic(image_bytes)
+            image_bytes = self._apply_nsfw_mosaic(image_bytes, backend)
             image_bytes, output_extension = self._encoded_output(image_bytes)
             failure = None
             if self.enable_failure_isolation:

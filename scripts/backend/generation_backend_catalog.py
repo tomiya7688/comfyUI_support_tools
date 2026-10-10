@@ -13,6 +13,11 @@ ScanFlowFiles = Callable[..., list[str]]
 UniqueChoices = Callable[[list[str]], list[str]]
 
 
+# {
+#   責務: [GenerationBackendCatalog: 画像生成backendが提供する候補取得契約を定義する]
+#   フィールド: [query_choices: API候補取得, local_choices: ローカル候補取得, primary_model_choices: 主モデル候補の選択]
+#   処理: [各backend catalogが共通の候補取得契約を実装できるようにする]
+# }
 class GenerationBackendCatalog(Protocol):
     """Common API for retrieving backend-specific generation choices."""
 

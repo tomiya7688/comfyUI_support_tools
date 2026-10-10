@@ -1,43 +1,49 @@
 from ..context import *
 from ..runtime_python import venv_python
+from .backend_launch_spec import create_backend_launch_spec
 
+# {
+#   責務: [EmbeddedStartWebUI: ローカル画像生成backendのプロセス起動と停止を管理する]
+#   フィールド: [launch_spec: backend固有の起動設定, _current_proc: 起動中プロセス, _stop_event: 停止要求, _health_check_stop: health監視停止要求]
+#   処理: [起動設定を共通化した上で, プロセス制御とAPIヘルス確認を行う]
+# }
 class EmbeddedStartWebUI:
-    DEFAULT_FLAGS = (
-        ["--listen", "127.0.0.1", "--port", "8188", "--lowvram", "--disable-auto-launch"]
-        if RUNTIME_BACKEND == "comfyui"
-        else [
-            "--lowvram", "--disable-safe-unpickle", "--api",
-            "--ckpt-dir", str(CHECKPOINTS_DIR),
-            "--lora-dir", str(MODELS_DIR / "Lora"),
-            "--vae-dir", str(MODELS_DIR / "VAE"),
-            "--embeddings-dir", str(MODELS_DIR / "embeddings"),
-            "--hypernetwork-dir", str(MODELS_DIR / "hypernetworks"),
-            "--esrgan-models-path", str(MODELS_DIR / "RealESRGAN"),
-            "--gfpgan-models-path", str(MODELS_DIR / "GFPGAN"),
-            "--codeformer-models-path", str(MODELS_DIR / "Codeformer"),
-        ]
-    )
     LOGICAL_TOTAL = 8
     LOGICAL_TO_USE = 4
     RAM_LIMIT_GB = None
     LOW_PRIORITY = True
     SOFT_STOP_WAIT_SEC = 4.0
     HARD_KILL_WAIT_SEC = 2.0
-    API_URL = (
-        "http://127.0.0.1:8188/system_stats"
-        if RUNTIME_BACKEND == "comfyui"
-        else "http://127.0.0.1:7860/sdapi/v1/progress"
-    )
-    PORT = 8188 if RUNTIME_BACKEND == "comfyui" else 7860
-    DISPLAY_NAME = BACKEND_DISPLAY_NAME
-
+    # {
+    #   責務: [__init__: 選択backendの起動設定とプロセス状態を初期化する]
+    #   処理: [1: USER_PATHSからAPI URLを取得する, 2: 起動設定を作る, 3: プロセスと監視状態を初期化する]
+    #   引数: [self: 初期化対象]
+    #   戻り値: []
+    # }
     def __init__(self):
+        self.launch_spec = create_backend_launch_spec(
+            RUNTIME_BACKEND,
+            str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
+            str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
+            CHECKPOINTS_DIR,
+            MODELS_DIR,
+        )
+        self.DEFAULT_FLAGS = list(self.launch_spec.default_flags)
+        self.API_URL = self.launch_spec.health_url
+        self.PORT = self.launch_spec.port
+        self.DISPLAY_NAME = self.launch_spec.display_name
         self._current_proc = None
         self._stop_event = threading.Event()
         self._health_check_stop = threading.Event()
         self._api_status = "⚫ オフライン"
         self._log_msg = print
 
+    # {
+    #   責務: [_health_check_now: backend APIの応答状態を確認する]
+    #   処理: [1: requestsの利用可否を確認する, 2: backend health URLへ問い合わせる, 3: 接続状態を返す]
+    #   引数: [self: health URLを保持する起動管理]
+    #   戻り値: [dict: status表示とonline状態]
+    # }
     def _health_check_now(self):
         if requests is None:
             return {"status": "❓ requests 未インストール", "online": False}
@@ -60,6 +66,12 @@ class EmbeddedStartWebUI:
                 self._api_status = result["status"]
             time.sleep(100)
 
+    # {
+    #   責務: [_find_and_kill_webui_process: 指定ポートを待ち受ける外部プロセスを終了する]
+    #   処理: [1: 未指定時は選択backendのportを使う, 2: WindowsのnetstatからPIDを調べる, 3: 対象PIDを終了する]
+    #   引数: [self: portとログ出力先を持つ起動管理, port: 対象ポート]
+    #   戻り値: [bool: プロセスを終了したか]
+    # }
     def _find_and_kill_webui_process(self, port=None):
         port = port or self.PORT
         try:
@@ -76,9 +88,15 @@ class EmbeddedStartWebUI:
             self._log_msg(f"❌ プロセス検出エラー: {e}")
         return False
 
+    # {
+    #   責務: [_start_webui_thread: 選択backendのローカルプロセスを起動して終了まで監視する]
+    #   処理: [1: 共通runtimeからPythonとbackend scriptを解決する, 2: processを起動する, 3: 停止要求または終了まで監視する]
+    #   引数: [self: 起動設定と停止状態を持つ管理, flags: UIで指定された起動引数, logical_cpu: 使用CPU数, ram_gb: メモリ上限GB, low_prio: 低優先度設定, soft_stop_sec: 通常停止待機秒, hard_kill_sec: 強制終了待機秒]
+    #   戻り値: []
+    # }
     def _start_webui_thread(self, flags, logical_cpu, ram_gb, low_prio, soft_stop_sec, hard_kill_sec):
         python_path = venv_python(RUNTIME_DIR / "venv")
-        launch_py = RUNTIME_DIR / ("main.py" if RUNTIME_BACKEND == "comfyui" else "launch.py")
+        launch_py = RUNTIME_DIR / self.launch_spec.launch_script_name
         if not launch_py.exists():
             self._log_msg(f"❌ 起動スクリプトが見つかりません: {launch_py}")
             return

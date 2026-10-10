@@ -1,7 +1,7 @@
 """Tests for backend-specific local launch settings."""
 
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from scripts.backend.backend_launch_spec import create_backend_launch_spec
 
@@ -20,13 +20,20 @@ class BackendLaunchSpecTests(unittest.TestCase):
     # }
     def test_comfyui_spec_keeps_low_vram_launch_defaults(self):
         spec = create_backend_launch_spec(
-            "comfyui", "http://127.0.0.1:7860", "http://localhost:8188/", Path("models/checkpoints"), Path("models")
+            "comfyui",
+            "http://127.0.0.1:7860",
+            "http://localhost:8188/",
+            Path("models/checkpoints"),
+            Path("models"),
         )
         self.assertEqual(spec.display_name, "ComfyUI")
         self.assertEqual(spec.launch_script_name, "main.py")
         self.assertEqual(spec.health_url, "http://localhost:8188/system_stats")
         self.assertEqual(spec.port, 8188)
-        self.assertEqual(spec.default_flags, ("--listen", "127.0.0.1", "--port", "8188", "--lowvram", "--disable-auto-launch"))
+        self.assertEqual(
+            spec.default_flags,
+            ("--listen", "127.0.0.1", "--port", "8188", "--lowvram", "--disable-auto-launch"),
+        )
 
     # {
     #   責務: [test_a1111_spec_keeps_model_paths_and_normalizes_api_url: A1111既定設定を検証する]
@@ -36,7 +43,11 @@ class BackendLaunchSpecTests(unittest.TestCase):
     # }
     def test_a1111_spec_keeps_model_paths_and_normalizes_api_url(self):
         spec = create_backend_launch_spec(
-            "a1111", "http://localhost:7860/sdapi/v1", "http://127.0.0.1:8188", Path("models/checkpoints"), Path("models")
+            "a1111",
+            "http://localhost:7860/sdapi/v1",
+            "http://127.0.0.1:8188",
+            Path("models/checkpoints"),
+            Path("models"),
         )
         self.assertEqual(spec.display_name, "WebUI1111")
         self.assertEqual(spec.launch_script_name, "launch.py")

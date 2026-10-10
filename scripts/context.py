@@ -191,19 +191,6 @@ def _load_pillow_image():
     return pillow_image
 
 MODEL_FILE_SUFFIXES = {".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".onnx"}
-A1111_SAMPLER_CHOICES = [
-    "Euler a", "Euler", "DPM++ 2M", "DPM++ 2M Karras",
-    "DPM++ SDE", "DPM++ SDE Karras", "DDIM", "UniPC",
-]
-COMFYUI_SAMPLER_CHOICES = [
-    "euler", "euler_ancestral", "heun", "dpm_2", "dpm_2_ancestral",
-    "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_sde", "dpmpp_3m_sde",
-    "ddim", "uni_pc",
-]
-A1111_UPSCALER_CHOICES = [
-    "None", "Lanczos", "Nearest", "Latent", "Latent (antialiased)",
-    "R-ESRGAN 4x+", "R-ESRGAN 4x+ Anime6B",
-]
 
 
 def _unique_choices(values):
@@ -309,74 +296,26 @@ def base_model_choices(choices):
     return catalog.primary_model_choices(choices)
 
 
+# {
+#   責務: [_local_backend_choices: 選択中backend catalogからローカル候補を取得する]
+#   処理: [1: 共通パス設定をcatalog用ルートmappingへまとめる, 2: 選択中catalogへ走査関数とともに渡す]
+#   引数: []
+#   戻り値: [ChoiceMap: 選択中backendのローカル生成候補]
+# }
 def _local_backend_choices():
-    if RUNTIME_BACKEND == "comfyui":
-        checkpoint_files = (
-            _scan_model_files(CHECKPOINTS_DIR)
-            + [file for legacy_root in LEGACY_CHECKPOINTS_DIRS for file in _scan_model_files(legacy_root)]
-            + _scan_model_files(RUNTIME_DIR / "models" / "checkpoints")
-        )
-        unet_files = (
-            _scan_model_files(MODELS_DIR / "diffusion_models")
-            + _scan_model_files(MODELS_DIR / "unet")
-            + _scan_model_files(LEGACY_MODELS_DIR / "diffusion_models")
-            + _scan_model_files(LEGACY_MODELS_DIR / "unet")
-            + _scan_model_files(RUNTIME_DIR / "models" / "diffusion_models")
-            + _scan_model_files(RUNTIME_DIR / "models" / "unet")
-        )
-        lora_files = (
-            _scan_model_files(MODELS_DIR / "Lora")
-            + _scan_model_files(MODELS_DIR / "loras")
-            + _scan_model_files(LEGACY_MODELS_DIR / "Lora")
-            + _scan_model_files(LEGACY_MODELS_DIR / "loras")
-            + _scan_model_files(RUNTIME_DIR / "models" / "loras")
-        )
-        vae_files = (
-            _scan_model_files(MODELS_DIR / "VAE")
-            + _scan_model_files(MODELS_DIR / "vae")
-            + _scan_model_files(LEGACY_MODELS_DIR / "VAE")
-            + _scan_model_files(LEGACY_MODELS_DIR / "vae")
-            + _scan_model_files(RUNTIME_DIR / "models" / "vae")
-        )
-        return {
-            "checkpoints": _unique_choices(checkpoint_files),
-            "unets": _unique_choices(unet_files),
-            "loras": _unique_choices(lora_files),
-            "vaes": _unique_choices(vae_files),
-            "upscalers": _scan_model_files(RUNTIME_DIR / "models" / "upscale_models"),
-            "samplers": list(COMFYUI_SAMPLER_CHOICES),
-            "flows": _unique_choices(
-                _scan_flow_files(COMFY_FLOWS_DIR)
-                + _scan_flow_files(LEGACY_MODELS_DIR / "flows")
-            ),
-        }
+    from .backend.generation_backend_catalog_factory import create_generation_backend_catalog
 
-    model_root = RUNTIME_DIR / "models"
-    upscalers = list(A1111_UPSCALER_CHOICES)
-    for folder_name in ("ESRGAN", "RealESRGAN", "SwinIR", "LDSR", "ScuNET", "BSRGAN"):
-        upscalers.extend(_scan_model_files(model_root / folder_name, keep_suffix=False))
-    return {
-        "checkpoints": _unique_choices(_scan_model_files(CHECKPOINTS_DIR) + [file for legacy_root in LEGACY_CHECKPOINTS_DIRS for file in _scan_model_files(legacy_root)]),
-        "unets": [],
-        "loras": _unique_choices(
-            _scan_model_files(MODELS_DIR / "Lora")
-            + _scan_model_files(MODELS_DIR / "loras")
-            + _scan_model_files(LEGACY_MODELS_DIR / "Lora")
-            + _scan_model_files(LEGACY_MODELS_DIR / "loras")
-            + _scan_model_files(A1111_DIR / "models" / "Lora")
-        ),
-        "vaes": _unique_choices(
-            _scan_model_files(MODELS_DIR / "VAE")
-            + _scan_model_files(MODELS_DIR / "vae")
-            + _scan_model_files(LEGACY_MODELS_DIR / "VAE")
-            + _scan_model_files(LEGACY_MODELS_DIR / "vae")
-            + _scan_model_files(A1111_DIR / "models" / "VAE")
-            + _scan_model_files(RUNTIME_DIR / "models" / "VAE")
-        ),
-        "upscalers": _unique_choices(upscalers),
-        "samplers": list(A1111_SAMPLER_CHOICES),
-        "flows": [],
+    catalog = create_generation_backend_catalog(RUNTIME_BACKEND)
+    roots = {
+        "checkpoints": CHECKPOINTS_DIR,
+        "legacy_checkpoints": LEGACY_CHECKPOINTS_DIRS,
+        "models": MODELS_DIR,
+        "legacy_models": LEGACY_MODELS_DIR,
+        "runtime": RUNTIME_DIR,
+        "a1111": A1111_DIR,
+        "comfy_flows": COMFY_FLOWS_DIR,
     }
+    return catalog.local_choices(roots, _scan_model_files, _scan_flow_files, _unique_choices)
 
 
 def load_backend_choices(api_url="", query_api=False):

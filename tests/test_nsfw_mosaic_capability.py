@@ -33,7 +33,18 @@ class NsfwMosaicCapabilityTests(unittest.TestCase):
     #   戻り値: []
     # }
     def test_comfyui_keeps_original_image_without_nudenet_request(self):
+        # {
+        #   責務: [FakeClient: ComfyUI adapterの初期化に必要なnetwork-free stubを提供する]
+        #   フィールド: []
+        #   処理: []
+        # }
         class FakeClient:
+            # {
+            #   責務: [__init__: stub clientを初期化する]
+            #   処理: []
+            #   引数: [self: stub instance, _url: 未使用のAPI URL, _timeout: 未使用timeout]
+            #   戻り値: []
+            # }
             def __init__(self, _url, _timeout):
                 pass
 

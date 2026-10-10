@@ -5,6 +5,7 @@ from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
 )
+from ..backend.generation_backend_catalog_factory import create_generation_backend_catalog
 from ..backend.ollama_prompt_corrector import OllamaPromptCorrector
 from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from ..services import *
@@ -12,9 +13,16 @@ from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
 
 class RandomImageTab(ttk.Frame):
+    # {
+    #   責務: [__init__: Random Imageタブを初期化し, backend capabilityを取得して画面を構築する]
+    #   処理: [選択backendのcatalogから機能を取得し, 画面と設定読込を初期化する]
+    #   引数: [self: RandomImageTab instance, master: 親Tk widget]
+    #   戻り値: []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.mod = EMBEDDED_RANDOM_IMAGE
+        self.backend_capabilities = create_generation_backend_catalog(RUNTIME_BACKEND).capabilities
         self.preset_store = PresetStore("random_image")
         self._queue: queue.Queue[str] = queue.Queue()
         self._build()
@@ -23,6 +31,12 @@ class RandomImageTab(ttk.Frame):
         self._load_local_backend_choices()
         self.after(100, self._poll)
 
+    # {
+    #   責務: [_build: Random Imageタブの入力UIをbackend capabilityに応じて組み立てる]
+    #   処理: [共通生成設定を描画し, workflow対応時だけComfyフロー設定欄を追加する]
+    #   引数: [self: RandomImageTab instance]
+    #   戻り値: []
+    # }
     def _build(self):
         if isinstance(self.mod, Exception):
             ttk.Label(self, text=f"random_image_creater_gui.py を読み込めませんでした: {self.mod}").pack(anchor="w")
@@ -142,7 +156,7 @@ class RandomImageTab(ttk.Frame):
         self.vae_combo.grid(row=5, column=1, columnspan=5, sticky="we")
         ttk.Label(settings, text="出力形式").grid(row=4, column=3, sticky="w")
         ttk.Combobox(settings, textvariable=self.var_output_format, values=["png", "webp", "jpg", "gif"], state="readonly", width=10).grid(row=4, column=4, sticky="w")
-        if RUNTIME_BACKEND == "comfyui":
+        if self.backend_capabilities.supports("workflow"):
             ttk.Label(settings, text="Comfyフロー").grid(row=6, column=0, sticky="w")
             self.flow_combo = ttk.Combobox(settings, textvariable=self.var_comfy_flow, width=40)
             self.flow_combo.grid(row=6, column=1, columnspan=7, sticky="we")
@@ -448,7 +462,7 @@ class RandomImageTab(ttk.Frame):
 
     # {
     #   責務: [_settings_from_gui: GUI値からRandom Image用の純Python設定を作る]
-    #   処理: [Tk variable値を読み取り, 安定したfeature ID付きFeatureSettingsへまとめる]
+    #   処理: [Tk variable値を読み取り, workflowをcapabilityに応じて選択し, 安定したfeature ID付きFeatureSettingsへまとめる]
     #   引数: [self: RandomImageTab instance]
     #   戻り値: [FeatureSettings: Random Imageの設定値]
     #   エラー: [ValueError: 入力値が不正な場合]
@@ -476,7 +490,10 @@ class RandomImageTab(ttk.Frame):
             "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get().strip(), "ollama_model": self.var_ollama_model.get().strip(),
             "sequential_loop": self.var_sequential_loop.get(), "sequential_reuse_wildcards": self.var_sequential_reuse_wildcards.get(), "output_format": self.var_output_format.get(),
             "api_timeout": self.var_api_timeout.get(),
-            "comfy_flow": self.var_comfy_flow.get().strip() if RUNTIME_BACKEND == "comfyui" else "",
+            "comfy_flow": (
+                self.var_comfy_flow.get().strip()
+                if self.backend_capabilities.supports("workflow") else ""
+            ),
             "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},
             "model_catalog": {
                 key: list(self.model_choices.get(key, []))

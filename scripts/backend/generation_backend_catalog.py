@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from .generation_capabilities import GenerationCapabilities
+
 ChoiceMap = dict[str, list[str]]
 RequestGet = Callable[..., Any]
 LocalRoots = dict[str, Any]
@@ -20,6 +22,15 @@ UniqueChoices = Callable[[list[str]], list[str]]
 # }
 class GenerationBackendCatalog(Protocol):
     """Common API for retrieving backend-specific generation choices."""
+
+    # {
+    #   責務: [capabilities: backendが対応する生成機能を呼び出し側へ公開する]
+    #   戻り値: [GenerationCapabilities: workflow等の機能対応情報]
+    # }
+    @property
+    def capabilities(self) -> GenerationCapabilities:
+        """Return the backend features used by generation UI and callers."""
+        ...
 
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         """Return API choices and non-fatal per-endpoint warnings."""

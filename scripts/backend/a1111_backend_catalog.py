@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .a1111_image_generation_backend import A1111ImageGenerationBackend
+from .generation_capabilities import GenerationCapabilities
 
 from .generation_backend_catalog import (
     ChoiceMap,
@@ -28,6 +30,14 @@ class A1111BackendCatalog:
         ("upscalers", "upscalers", ("name",)),
         ("samplers", "samplers", ("name",)),
     )
+
+    # {
+    #   責務: [capabilities: A1111 adapterが提供する生成機能を返す]
+    #   戻り値: [GenerationCapabilities: A1111の対応機能]
+    # }
+    @property
+    def capabilities(self) -> GenerationCapabilities:
+        return A1111ImageGenerationBackend.CAPABILITIES
 
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         normalized_url = base_url.strip().rstrip("/")

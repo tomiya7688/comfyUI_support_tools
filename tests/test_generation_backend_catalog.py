@@ -20,6 +20,24 @@ class FakeResponse:
 
 class GenerationBackendCatalogTests(unittest.TestCase):
     # {
+    #   責務: [GenerationBackendCatalogTests: backend catalog候補とcapabilityの共通契約を検証する]
+    # }
+
+    # {
+    #   責務: [test_capabilities_are_shared_with_generation_adapters: UI catalogと生成adapterが同じ機能宣言を公開することを検証する]
+    #   処理: [A1111とComfyUIのworkflow対応を各catalogのcapabilityから確認する]
+    #   戻り値: []
+    # }
+    def test_capabilities_are_shared_with_generation_adapters(self):
+        a1111 = create_generation_backend_catalog("a1111")
+        comfyui = create_generation_backend_catalog("comfyui")
+
+        self.assertFalse(a1111.capabilities.supports("workflow"))
+        self.assertTrue(comfyui.capabilities.supports("workflow"))
+        self.assertFalse(a1111.capabilities.supports("model_overrides"))
+        self.assertTrue(comfyui.capabilities.supports("model_overrides"))
+
+    # {
     #   責務: [test_primary_model_choices_are_backend_specific: 主モデル候補がbackend catalogごとに選ばれることを検証する]
     #   処理: [同じcheckpoint/UNet候補mappingを各catalogへ渡し, A1111とComfyUIの結果を比較する]
     #   引数: [self: test instance]

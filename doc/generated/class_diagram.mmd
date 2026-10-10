@@ -6,6 +6,7 @@ classDiagram
     }
     tk.Tk <|-- TabbedToolsApp
     class A1111BackendCatalog {
+        +capabilities()
         +query_choices()
         +local_choices()
         +primary_model_choices()
@@ -36,6 +37,7 @@ classDiagram
         +img2img()
     }
     class ComfyUIBackendCatalog {
+        +capabilities()
         +query_choices()
         +local_choices()
         +primary_model_choices()
@@ -94,6 +96,7 @@ classDiagram
         +_restart_webui()
     }
     class GenerationBackendCatalog {
+        +capabilities()
         +query_choices()
         +local_choices()
         +primary_model_choices()

@@ -6,6 +6,7 @@ from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
 )
+from ..backend.generation_backend_catalog_factory import create_generation_backend_catalog
 from ..backend.prompt_lora_compatibility import (
     assess_prompt_loras,
     format_prompt_lora_findings,
@@ -23,8 +24,15 @@ class PromptGenerateTab(ttk.Frame):
     # }
     settings_id = "generation.prompt_generate"
 
+    # {
+    #   責務: [__init__: Prompt Generateタブの状態を初期化し, 選択backendの機能宣言を取得する]
+    #   処理: [generation catalogからcapabilityを取得し, 入力変数とUIを構築する]
+    #   引数: [self: PromptGenerateTab instance, master: 親Tk widget]
+    #   戻り値: []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
+        self.backend_capabilities = create_generation_backend_catalog(RUNTIME_BACKEND).capabilities
         self.generator = EmbeddedRandomImage()
         self.generator._log = self._log_from_worker
         self.wildcard_root = tk.StringVar(value=str(WILDCARDS_DIR))
@@ -43,6 +51,11 @@ class PromptGenerateTab(ttk.Frame):
         self._build()
         self._load_backend_choices()
 
+    # {
+    #   責務: [_build: Prompt Generateの共通UIを構築し, workflow対応時だけフロー欄を表示する]
+    #   引数: [self: PromptGenerateTab instance]
+    #   戻り値: []
+    # }
     def _build(self):
         LabeledPathRow(self, "wildcard root", self.wildcard_root, mode="dir").pack(fill="x", pady=3)
         LabeledPathRow(self, "出力先", self.output_dir, mode="dir").pack(fill="x", pady=3)
@@ -84,7 +97,7 @@ class PromptGenerateTab(ttk.Frame):
             row=4, column=0, columnspan=6, sticky="w", pady=(2, 0)
         )
         self.checkpoint.trace_add("write", self._update_model_classification)
-        if RUNTIME_BACKEND == "comfyui":
+        if self.backend_capabilities.supports("workflow"):
             ttk.Label(settings, text="Comfyフロー").grid(row=3, column=0, sticky="w", pady=(4, 0))
             self.flow_combo = ttk.Combobox(settings, textvariable=self.comfy_flow, width=42)
             self.flow_combo.grid(row=3, column=1, columnspan=5, sticky="we", pady=(4, 0))
@@ -116,11 +129,27 @@ class PromptGenerateTab(ttk.Frame):
         widget.delete("1.0", "end")
         widget.insert("1.0", value)
 
+    # {
+    #   責務: [_workflow_value: backend capabilityに応じてworkflow設定値を返す]
+    #   引数: [self: PromptGenerateTab instance]
+    #   戻り値: [str: 対応backendのworkflow名, 非対応backendでは空文字列]
+    # }
+    def _workflow_value(self):
+        if not self.backend_capabilities.supports("workflow"):
+            return ""
+        return self.comfy_flow.get().strip()
+
+    # {
+    #   責務: [_preset_values: 現在のPrompt Generate設定を保存用mappingへ変換する]
+    #   処理: [GUI状態を読み取り, workflowはcapability適合値のみ保存する]
+    #   引数: [self: PromptGenerateTab instance]
+    #   戻り値: [dict: プリセット保存値]
+    # }
     def _preset_values(self):
         return {
             "wildcard_root": self.wildcard_root.get(), "output_dir": self.output_dir.get(), "api_url": self.api_url.get(),
             "prompt": self._prompt_text(), "negative": self._negative_text(), "width": self.width.get(), "height": self.height.get(),
-            "steps": self.steps.get(), "sampler": self.sampler.get(), "checkpoint": self.checkpoint.get(), "vae_name": self.vae_name.get(), "comfy_flow": self.comfy_flow.get(),
+            "steps": self.steps.get(), "sampler": self.sampler.get(), "checkpoint": self.checkpoint.get(), "vae_name": self.vae_name.get(), "comfy_flow": self._workflow_value(),
         }
 
     def _refresh_preset_choices(self):
@@ -212,6 +241,13 @@ class PromptGenerateTab(ttk.Frame):
     def start(self):
         _safe_thread(self.logbox, self.run)
 
+    # {
+    #   責務: [run: 入力Promptを展開し, backend capabilityに適合する設定で画像を1枚生成する]
+    #   処理: [入力を検証し, generatorへ共通設定とworkflow設定を渡して生成する]
+    #   引数: [self: PromptGenerateTab instance]
+    #   戻り値: []
+    #   エラー: [ValueError: wildcard rootまたはPromptが不正な場合]
+    # }
     def run(self):
         root = Path(self.wildcard_root.get().strip())
         if not root.is_dir():
@@ -233,7 +269,7 @@ class PromptGenerateTab(ttk.Frame):
             key: list(self.model_choices.get(key, []))
             for key in ("checkpoints", "unets", "loras", "vaes")
         }
-        self.generator.comfy_flow = self.comfy_flow.get()
+        self.generator.comfy_flow = self._workflow_value()
         cache = {}
         prompt = self.generator._expand_text(source_prompt, self.generator.root_dir, wildcard_cache=cache)
         negative = self.generator._expand_text(self._negative_text(), self.generator.root_dir, wildcard_cache=cache)

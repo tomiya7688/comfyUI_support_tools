@@ -11,11 +11,27 @@ from .generation_capabilities import GenerationCapabilities
 from .text_to_image_request import TextToImageRequest
 
 
+# {
+#   責務: [A1111ImageGenerationBackend: A1111 API経由で画像生成要求を実行する]
+#   フィールド: [CAPABILITIES: A1111 adapterが提供する機能一覧]
+#   処理: [A1111 APIのtxt2img/img2img等を共通interfaceで提供する]
+# }
 class A1111ImageGenerationBackend:
-    CAPABILITIES = GenerationCapabilities(frozenset({
-        "txt2img", "img2img", "interrupt", "hires_fix", "model_catalog",
-        "sampler_catalog", "upscaler_catalog", "vae_override",
-    }))
+    CAPABILITIES = GenerationCapabilities(
+        frozenset(
+            {
+                "txt2img",
+                "img2img",
+                "interrupt",
+                "hires_fix",
+                "model_catalog",
+                "sampler_catalog",
+                "upscaler_catalog",
+                "vae_override",
+                "nudenet_mosaic",
+            }
+        )
+    )
 
     def __init__(self, api_url: str, timeout: int, request_post: Callable[..., Any]) -> None:
         self.api_url = api_url

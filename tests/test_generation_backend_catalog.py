@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import Mock
 
 from scripts.backend.a1111_backend_catalog import A1111BackendCatalog
 from scripts.backend.comfyui_backend_catalog import ComfyUIBackendCatalog
@@ -36,6 +37,24 @@ class GenerationBackendCatalogTests(unittest.TestCase):
         self.assertTrue(comfyui.capabilities.supports("workflow"))
         self.assertFalse(a1111.capabilities.supports("model_overrides"))
         self.assertTrue(comfyui.capabilities.supports("model_overrides"))
+
+    # {
+    #   責務: [test_prompt_generate_workflow_value_uses_capability: Prompt Generateがworkflow値をcapabilityに応じて保持または除外することを検証する]
+    #   処理: [同じworkflow入力に対しA1111では空値, ComfyUIでは選択値を返すことを確認する]
+    #   戻り値: []
+    # }
+    def test_prompt_generate_workflow_value_uses_capability(self):
+        from scripts.tabs.prompt_generate import PromptGenerateTab
+
+        tab = PromptGenerateTab.__new__(PromptGenerateTab)
+        tab.comfy_flow = Mock()
+        tab.comfy_flow.get.return_value = " default.json "
+
+        tab.backend_capabilities = create_generation_backend_catalog("a1111").capabilities
+        self.assertEqual(tab._workflow_value(), "")
+
+        tab.backend_capabilities = create_generation_backend_catalog("comfyui").capabilities
+        self.assertEqual(tab._workflow_value(), "default.json")
 
     # {
     #   責務: [test_primary_model_choices_are_backend_specific: 主モデル候補がbackend catalogごとに選ばれることを検証する]

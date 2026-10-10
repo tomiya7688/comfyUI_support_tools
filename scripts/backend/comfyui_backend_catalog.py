@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from .comfyui_image_generation_backend import ComfyUIImageGenerationBackend
+from .generation_capabilities import GenerationCapabilities
+
 from .generation_backend_catalog import (
     ChoiceMap,
     LocalRoots,
@@ -28,6 +31,14 @@ class ComfyUIBackendCatalog:
         ("upscalers", "UpscaleModelLoader", "model_name"),
         ("samplers", "KSampler", "sampler_name"),
     )
+
+    # {
+    #   責務: [capabilities: ComfyUI adapterが提供する生成機能を返す]
+    #   戻り値: [GenerationCapabilities: ComfyUIの対応機能]
+    # }
+    @property
+    def capabilities(self) -> GenerationCapabilities:
+        return ComfyUIImageGenerationBackend.CAPABILITIES
 
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         normalized_url = base_url.strip().rstrip("/")

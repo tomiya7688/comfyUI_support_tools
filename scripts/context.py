@@ -297,6 +297,25 @@ def base_model_choices(choices):
 
 
 # {
+#   責務: [image_to_image_profile: 選択backend用のImg2Img既定値を構成して返す]
+#   処理: [共通パス設定とbackend設定をprofile factoryへ渡す]
+#   引数: []
+#   戻り値: [ImageToImageProfile: Img2Imgタブの既定値]
+# }
+def image_to_image_profile():
+    from .backend.image_to_image_profile import create_image_to_image_profile
+
+    return create_image_to_image_profile(
+        RUNTIME_BACKEND,
+        USER_PATHS["webui_api_url"],
+        USER_PATHS["comfyui_api_url"],
+        A1111_DIR,
+        RUNTIME_DIR,
+        PIXAI_TAGGER_API_URL,
+    )
+
+
+# {
 #   責務: [_local_backend_choices: 選択中backend catalogからローカル候補を取得する]
 #   処理: [1: 共通パス設定をcatalog用ルートmappingへまとめる, 2: 選択中catalogへ走査関数とともに渡す]
 #   引数: []

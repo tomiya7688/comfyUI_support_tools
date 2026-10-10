@@ -11,34 +11,34 @@ from ..backend.model_choice_classification import (
 from ..backend.prompt_lora_compatibility import validate_prompt_loras
 
 class RandomImg2ImgTab(ttk.Frame):
-    TAGGER_PRESETS = {
-        "A1111 standard": "http://127.0.0.1:7860/sdapi/v1/interrogate",
-        "PixAI v0.9": PIXAI_TAGGER_API_URL,
-    }
     DEFAULT_INPUT_DIR = USER_PATHS["random_img2img_input_dir"]
-    DEFAULT_OUTPUT_DIR = str(
-        (RUNTIME_DIR / "output" / "KadokaTools_img2img")
-        if RUNTIME_BACKEND == "comfyui"
-        else (A1111_DIR / "outputs" / "img2img-images" / "amahane_yukiko_img2img")
-    )
+
+    # {
+    #   責務: [__init__: Random Img2Imgタブの初期状態とUIを構築する]
+    #   処理: [1: backend設定profileから既定値を受け取る, 2: 入力状態とUIを初期化する]
+    #   引数: [self: RandomImg2ImgTab instance, master: 親Tk widget]
+    #   戻り値: []
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.stop_event=threading.Event()
         self._active_backend=None
+        self.profile = image_to_image_profile()
+        self.tagger_presets = dict(self.profile.tagger_presets)
         self.model_choices = {"checkpoints": [], "unets": [], "loras": [], "vaes": []}
         self.preset_store=PresetStore("random_img2img"); self.preset_name=tk.StringVar()
-        self.input_dir=tk.StringVar(value=self.DEFAULT_INPUT_DIR); self.output_dir=tk.StringVar(value=self.DEFAULT_OUTPUT_DIR)
-        default_tagger="PixAI v0.9" if RUNTIME_BACKEND == "comfyui" else "A1111 standard"
+        self.input_dir=tk.StringVar(value=self.DEFAULT_INPUT_DIR); self.output_dir=tk.StringVar(value=str(self.profile.output_dir))
+        default_tagger=self.profile.default_tagger_name
         self.tagger_kind=tk.StringVar(value=default_tagger)
         self.use_tagger=tk.BooleanVar(value=True)
-        self.api_interrogate=tk.StringVar(value=self.TAGGER_PRESETS[default_tagger])
-        self.api_img2img=tk.StringVar(value="http://127.0.0.1:8188" if RUNTIME_BACKEND == "comfyui" else "http://127.0.0.1:7860/sdapi/v1/img2img")
+        self.api_interrogate=tk.StringVar(value=self.profile.default_tagger_url)
+        self.api_img2img=tk.StringVar(value=self.profile.api_url)
         self.threshold=tk.StringVar(value="0.35"); self.character_threshold=tk.StringVar(value="0.85"); self.additional=tk.StringVar(value="best quality"); self.manual_prompt=tk.StringVar()
         self.exclude=tk.StringVar(value="worst quality, low quality, normal quality, lowres, blurry, jpeg artifacts, bad anatomy, bad hands, extra fingers, missing fingers, poorly drawn hands, bad feet, missing arms, missing legs, extra limbs, fused fingers, deformed hands, text, error, signature, watermark, username, artist name, long neck, extra eyes, disfigured, mutation, mutated, ugly, extra arms, bad proportions, missing body parts, malformed limbs, poorly drawn face, poorly drawn eyes, cross-eye, wrong fingers, animal ears, virtual youtuber, animal face, beast face, monster girl, wrong proportions, deformed, furry, halo, kemomimi, realistic, futanari, censored, sfw")
         self.negative=tk.StringVar(value="(worst quality, low quality:1.4), (normal quality:1.1), lowres, blurry, jpeg artifacts, bad anatomy, bad hands, extra fingers, missing fingers, poorly drawn hands, bad feet, missing arms, missing legs, extra limbs, fused fingers, deformed hands, text, error, signature, watermark, username, artist name, long neck, extra limbs, extra eyes, disfigured, mutation, mutated, ugly, extra arms, bad proportions, missing body parts, malformed limbs, poorly drawn face, poorly drawn eyes, cross-eye, wrong fingers,animal ears,animal face,beast face,monster girl,wrong proportions,deformed,furry,text,halo, kemomimi,realistic,futanari")
-        self.steps=tk.StringVar(value="25"); self.cfg=tk.StringVar(value="6.5"); self.width=tk.StringVar(value="960"); self.height=tk.StringVar(value="1280"); self.denoise=tk.StringVar(value="0.75"); self.sampler=tk.StringVar(value="Euler a"); self.checkpoint=tk.StringVar(value="shiitakeMix_v20.safetensors" if RUNTIME_BACKEND == "comfyui" else "rinIllusionRNSFW_v20"); self.vae_name=tk.StringVar(); self.loops=tk.StringVar(value="100000")
+        self.steps=tk.StringVar(value="25"); self.cfg=tk.StringVar(value="6.5"); self.width=tk.StringVar(value="960"); self.height=tk.StringVar(value="1280"); self.denoise=tk.StringVar(value="0.75"); self.sampler=tk.StringVar(value="Euler a"); self.checkpoint=tk.StringVar(value=self.profile.default_checkpoint); self.vae_name=tk.StringVar(); self.loops=tk.StringVar(value="100000")
         LabeledPathRow(self,"INPUT_DIR",self.input_dir,mode="dir").pack(fill="x",pady=2); LabeledPathRow(self,"OUTPUT_DIR",self.output_dir,mode="dir").pack(fill="x",pady=2)
-        tagger_row=ttk.Frame(self); tagger_row.pack(fill="x",pady=2); ttk.Checkbutton(tagger_row,text="Taggerで入力画像からタグを取得",variable=self.use_tagger).pack(side="left"); ttk.Label(tagger_row,text="TAGGER",width=12).pack(side="left"); tagger_combo=ttk.Combobox(tagger_row,textvariable=self.tagger_kind,values=list(self.TAGGER_PRESETS),state="readonly",width=24); tagger_combo.pack(side="left"); tagger_combo.bind("<<ComboboxSelected>>",self._apply_tagger_preset); ttk.Button(tagger_row,text="PixAI API起動",command=self.start_pixai_api).pack(side="left",padx=(12,4)); ttk.Button(tagger_row,text="PixAI API停止",command=self.stop_pixai_api).pack(side="left",padx=4)
+        tagger_row=ttk.Frame(self); tagger_row.pack(fill="x",pady=2); ttk.Checkbutton(tagger_row,text="Taggerで入力画像からタグを取得",variable=self.use_tagger).pack(side="left"); ttk.Label(tagger_row,text="TAGGER",width=12).pack(side="left"); tagger_combo=ttk.Combobox(tagger_row,textvariable=self.tagger_kind,values=list(self.tagger_presets),state="readonly",width=24); tagger_combo.pack(side="left"); tagger_combo.bind("<<ComboboxSelected>>",self._apply_tagger_preset); ttk.Button(tagger_row,text="PixAI API起動",command=self.start_pixai_api).pack(side="left",padx=(12,4)); ttk.Button(tagger_row,text="PixAI API停止",command=self.stop_pixai_api).pack(side="left",padx=4)
         for label,var in [("API_INTERROGATE",self.api_interrogate),("API_IMG2IMG",self.api_img2img),("手動プロンプト（Taggerなし時）",self.manual_prompt),("ADDITIONAL_TAGS",self.additional)]:
             r=ttk.Frame(self); r.pack(fill="x",pady=2); ttk.Label(r,text=label,width=22).pack(side="left"); ttk.Entry(r,textvariable=var).pack(side="left",fill="x",expand=True)
         grid=ttk.Frame(self); grid.pack(fill="x",pady=4)
@@ -57,8 +57,8 @@ class RandomImg2ImgTab(ttk.Frame):
         btn=ttk.Frame(self); btn.pack(fill="x"); ttk.Button(btn,text="開始",command=self.start).pack(side="left",padx=4); ttk.Button(btn,text="停止",command=self.stop).pack(side="left",padx=4); ttk.Button(btn,text="モデル候補更新",command=self.refresh_backend_choices).pack(side="left",padx=12); ttk.Label(btn,text="preset").pack(side="left",padx=(16,4)); self.preset_combo=ttk.Combobox(btn,textvariable=self.preset_name,width=18); self.preset_combo.pack(side="left"); ttk.Button(btn,text="保存",command=self.save_preset).pack(side="left",padx=4); ttk.Button(btn,text="読込",command=self.load_preset).pack(side="left",padx=4)
         self.logbox=LogBox(self); self.logbox.pack(fill="both",expand=True)
         self.logbox.log("※ 生成中にAPIエラーが出てもGUIは継続します。")
-        if RUNTIME_BACKEND == "comfyui":
-            self.logbox.log("※ タグ取得にはPixAI API（7861）、生成にはComfyUI API（8188）を使います。")
+        if self.profile.usage_note:
+            self.logbox.log(self.profile.usage_note)
         self._load_local_backend_choices()
         self._refresh_preset_choices()
 
@@ -83,8 +83,13 @@ class RandomImg2ImgTab(ttk.Frame):
             self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [_apply_tagger_preset: 選択されたTaggerのAPI URLを入力欄に反映する]
+    #   引数: [self: RandomImg2ImgTab instance, _event: TkイベントまたはNone]
+    #   戻り値: []
+    # }
     def _apply_tagger_preset(self, _event=None):
-        self.api_interrogate.set(self.TAGGER_PRESETS[self.tagger_kind.get()])
+        self.api_interrogate.set(self.tagger_presets[self.tagger_kind.get()])
 
     def start_pixai_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.start, self.logbox.log)

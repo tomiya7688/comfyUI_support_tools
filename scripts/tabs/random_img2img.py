@@ -3,7 +3,6 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..backend.image_to_image_request import ImageToImageRequest
-from ..backend.image_generation_backend_factory import create_image_generation_backend
 from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
@@ -150,6 +149,12 @@ class RandomImg2ImgTab(ttk.Frame):
         if backend is not None and backend.capabilities.supports("interrupt"):
             _safe_thread(self.logbox,backend.interrupt)
         self.logbox.log("停止要求を送信しました")
+    # {
+    #   責務: [run: 画像を選び, Tagger結果と設定からImg2Img要求を実行する]
+    #   処理: [入力画像ごとに共通adapterを生成し, backend非依存requestを渡す]
+    #   引数: [self: RandomImg2ImgTab instance]
+    #   戻り値: []
+    # }
     def run(self):
         import base64, secrets, requests
         root=Path(self.input_dir.get().strip()); out=Path(self.output_dir.get().strip()); out.mkdir(parents=True,exist_ok=True)
@@ -172,11 +177,9 @@ class RandomImg2ImgTab(ttk.Frame):
                 if not prompt: raise ValueError("Taggerをオフにする場合は手動プロンプトまたは追加タグを入力してください")
                 self.logbox.log(f"Prompt: {prompt}")
                 validate_prompt_loras(prompt, self.checkpoint.get(), self.model_choices, self.logbox.log)
-                backend = create_image_generation_backend(
-                    RUNTIME_BACKEND,
+                backend = create_configured_image_generation_backend(
                     self.api_img2img.get(),
                     10000,
-                    request_post=requests.post,
                 )
                 self._active_backend=backend
                 try:

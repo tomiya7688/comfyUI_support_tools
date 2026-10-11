@@ -4,7 +4,6 @@ import json
 from PIL import Image
 
 from ..context import *
-from .image_generation_backend_factory import create_image_generation_backend
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from .text_to_image_request import TextToImageRequest
 from .image_failure_inspector import ImageFailureInspector
@@ -354,12 +353,7 @@ class EmbeddedRandomImage:
         prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
         prompt = self._correct_prompt(prompt)
         workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
-        backend = create_image_generation_backend(
-            RUNTIME_BACKEND,
-            self.api_url,
-            self.api_timeout,
-            request_post=requests.post,
-        )
+        backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
         workflow_has_model_overrides = (
             backend.capabilities.supports("model_overrides")
             and bool(self.comfy_model_overrides)

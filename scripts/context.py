@@ -316,6 +316,27 @@ def image_to_image_profile():
 
 
 # {
+#   責務: [create_configured_image_generation_backend: 選択済みbackendの画像生成adapterを生成する]
+#   処理: [実行時backend設定とHTTP接続関数をbackend factoryへ渡す]
+#   引数: [api_url: 生成API URL, timeout: API timeout秒]
+#   戻り値: [ImageGenerationBackend: 選択済みbackend adapter]
+#   エラー: [RuntimeError: requestsが利用できない場合]
+# }
+def create_configured_image_generation_backend(api_url, timeout):
+    if requests is None:
+        raise RuntimeError("requests がインストールされていません")
+
+    from .backend.image_generation_backend_factory import create_image_generation_backend
+
+    return create_image_generation_backend(
+        RUNTIME_BACKEND,
+        api_url,
+        timeout,
+        request_post=requests.post,
+    )
+
+
+# {
 #   責務: [_local_backend_choices: 選択中backend catalogからローカル候補を取得する]
 #   処理: [1: 共通パス設定をcatalog用ルートmappingへまとめる, 2: 選択中catalogへ走査関数とともに渡す]
 #   引数: []

@@ -53,7 +53,7 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
         generator._log = messages.append
 
         with patch(
-            "scripts.backend.embedded_random_image.create_image_generation_backend"
+            "scripts.backend.embedded_random_image.create_configured_image_generation_backend"
         ) as create_backend:
             with self.assertRaisesRegex(ValueError, "生成を中止"):
                 generator._generate(prompt="<lora:flux/detail:1>", negative="")
@@ -95,7 +95,7 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
                     with (
                         patch("scripts.backend.embedded_random_image.RUNTIME_BACKEND", runtime_backend),
                         patch(
-                            "scripts.backend.embedded_random_image.create_image_generation_backend",
+                            "scripts.backend.embedded_random_image.create_configured_image_generation_backend",
                             return_value=backend,
                         ),
                         patch("scripts.backend.embedded_random_image.validate_prompt_loras") as validate_loras,
@@ -131,7 +131,7 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
             generator._log = messages.append
 
             with patch(
-                "scripts.backend.embedded_random_image.create_image_generation_backend",
+                "scripts.backend.embedded_random_image.create_configured_image_generation_backend",
                 return_value=backend,
             ):
                 generator._generate(prompt="a simple test prompt", negative="")

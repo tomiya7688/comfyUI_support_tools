@@ -5,7 +5,9 @@ from pathlib import Path
 import tempfile
 import unittest
 from threading import Event
+from unittest.mock import Mock, patch
 
+from scripts.context import create_configured_image_generation_backend
 from scripts.backend.a1111_image_generation_backend import A1111ImageGenerationBackend
 from scripts.backend.comfyui_image_generation_backend import ComfyUIImageGenerationBackend
 from scripts.backend.comfy_ui_client import ComfyUIClient
@@ -42,6 +44,43 @@ def request(**overrides):
 
 
 class TextToImageBackendTests(unittest.TestCase):
+    # {
+    #   責務: [test_configured_backend_provider_hides_backend_selection: 設定境界が選択backendをadapterへ解決することを検証する]
+    #   処理: [選択backend名とHTTP関数がadapter factoryへ渡り, adapterが返されることを確認する]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_configured_backend_provider_hides_backend_selection(self):
+        adapter = object()
+        request_module = Mock()
+        with (
+            patch("scripts.context.RUNTIME_BACKEND", "comfyui"),
+            patch("scripts.context.requests", request_module),
+            patch(
+                "scripts.backend.image_generation_backend_factory.create_image_generation_backend",
+                return_value=adapter,
+            ) as factory,
+        ):
+            result = create_configured_image_generation_backend("http://localhost:8188", 45)
+
+        self.assertIs(result, adapter)
+        factory.assert_called_once_with(
+            "comfyui",
+            "http://localhost:8188",
+            45,
+            request_post=request_module.post,
+        )
+
+    # {
+    #   責務: [test_configured_backend_provider_reports_missing_requests: HTTP client依存がない場合のエラーを検証する]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_configured_backend_provider_reports_missing_requests(self):
+        with patch("scripts.context.requests", None):
+            with self.assertRaisesRegex(RuntimeError, "requests"):
+                create_configured_image_generation_backend("http://localhost:8188", 45)
+
     def test_a1111_maps_common_request_and_decodes_first_image(self):
         image = b"image-bytes"
         response = FakeResponse({"images": [base64.b64encode(image).decode("ascii"), "ignored"]})

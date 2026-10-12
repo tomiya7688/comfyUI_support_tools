@@ -5,7 +5,6 @@ from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
 )
-from ..backend.generation_backend_catalog_factory import create_generation_backend_catalog
 from ..backend.ollama_prompt_corrector import OllamaPromptCorrector
 from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from ..services import *
@@ -22,7 +21,7 @@ class RandomImageTab(ttk.Frame):
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.mod = EMBEDDED_RANDOM_IMAGE
-        self.backend_capabilities = create_generation_backend_catalog(RUNTIME_BACKEND).capabilities
+        self.backend_capabilities = create_configured_generation_backend_catalog().capabilities
         self.preset_store = PresetStore("random_image")
         self._queue: queue.Queue[str] = queue.Queue()
         self._build()

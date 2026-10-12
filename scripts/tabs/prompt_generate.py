@@ -6,7 +6,6 @@ from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
 )
-from ..backend.generation_backend_catalog_factory import create_generation_backend_catalog
 from ..backend.prompt_lora_compatibility import (
     assess_prompt_loras,
     format_prompt_lora_findings,
@@ -32,7 +31,7 @@ class PromptGenerateTab(ttk.Frame):
     # }
     def __init__(self, master):
         super().__init__(master, padding=10)
-        self.backend_capabilities = create_generation_backend_catalog(RUNTIME_BACKEND).capabilities
+        self.backend_capabilities = create_configured_generation_backend_catalog().capabilities
         self.generator = EmbeddedRandomImage()
         self.generator._log = self._log_from_worker
         self.wildcard_root = tk.StringVar(value=str(WILDCARDS_DIR))

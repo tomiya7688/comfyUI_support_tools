@@ -337,6 +337,18 @@ def create_configured_image_generation_backend(api_url, timeout):
 
 
 # {
+#   責務: [create_configured_generation_backend_catalog: 選択済みbackendの生成候補catalogを生成する]
+#   処理: [実行時backend設定をgeneration catalog factoryへ渡して共通契約を返す]
+#   引数: []
+#   戻り値: [GenerationBackendCatalog: 選択済みbackendの候補取得・capability契約]
+# }
+def create_configured_generation_backend_catalog():
+    from .backend.generation_backend_catalog_factory import create_generation_backend_catalog
+
+    return create_generation_backend_catalog(RUNTIME_BACKEND)
+
+
+# {
 #   責務: [_local_backend_choices: 選択中backend catalogからローカル候補を取得する]
 #   処理: [1: 共通パス設定をcatalog用ルートmappingへまとめる, 2: 選択中catalogへ走査関数とともに渡す]
 #   引数: []

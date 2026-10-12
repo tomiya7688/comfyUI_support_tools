@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
+from scripts import context
 from scripts.backend.a1111_backend_catalog import A1111BackendCatalog
 from scripts.backend.comfyui_backend_catalog import ComfyUIBackendCatalog
 from scripts.backend.generation_backend_catalog_factory import create_generation_backend_catalog
@@ -46,6 +47,20 @@ class GenerationBackendCatalogTests(unittest.TestCase):
     def test_runtime_checkpoint_folders_are_backend_specific(self):
         self.assertEqual(A1111BackendCatalog().runtime_checkpoint_folders, ("Stable-diffusion",))
         self.assertEqual(ComfyUIBackendCatalog().runtime_checkpoint_folders, ("checkpoints",))
+
+    # {
+    #   責務: [test_configured_catalog_is_selected_at_context_boundary: context境界が実行時設定に対応するcatalogを返すことを検証する]
+    #   処理: [A1111とComfyUIの設定を順に適用し, 対応catalogのcapabilityを確認する]
+    #   戻り値: []
+    # }
+    def test_configured_catalog_is_selected_at_context_boundary(self):
+        with patch.object(context, "RUNTIME_BACKEND", "a1111"):
+            a1111 = context.create_configured_generation_backend_catalog()
+        with patch.object(context, "RUNTIME_BACKEND", "comfyui"):
+            comfyui = context.create_configured_generation_backend_catalog()
+
+        self.assertFalse(a1111.capabilities.supports("workflow"))
+        self.assertTrue(comfyui.capabilities.supports("workflow"))
 
     # {
     #   責務: [test_prompt_generate_workflow_value_uses_capability: Prompt Generateがworkflow値をcapabilityに応じて保持または除外することを検証する]

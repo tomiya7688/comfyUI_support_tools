@@ -76,6 +76,24 @@ class LocalModelEvidenceTests(unittest.TestCase):
         self.assertEqual(result.family, ModelFamily.SDXL)
         self.assertIn("metadata ss_base_model_version", result.family_reason)
 
+    # {
+    #   責務: [test_checkpoint_roots_follow_selected_catalog: checkpoint分類が選択中catalogのruntime配置先を使うことを検証する]
+    #   処理: [各backend設定でruntime checkpoint rootがcatalogの宣言と一致することを確認する]
+    #   戻り値: []
+    # }
+    def test_checkpoint_roots_follow_selected_catalog(self):
+        runtime = self.root / "runtime"
+        with patch.object(context, "RUNTIME_DIR", runtime):
+            with patch.object(context, "RUNTIME_BACKEND", "a1111"):
+                a1111_roots = _model_roots(ModelKind.CHECKPOINT)
+            with patch.object(context, "RUNTIME_BACKEND", "comfyui"):
+                comfyui_roots = _model_roots(ModelKind.CHECKPOINT)
+
+        self.assertIn(runtime / "models" / "Stable-diffusion", a1111_roots)
+        self.assertNotIn(runtime / "models" / "checkpoints", a1111_roots)
+        self.assertIn(runtime / "models" / "checkpoints", comfyui_roots)
+        self.assertNotIn(runtime / "models" / "Stable-diffusion", comfyui_roots)
+
     def test_a1111_checkpoint_display_hash_resolves_local_header(self):
         _write_header(self.root / "base.safetensors", "sdxl")
         name = "base.safetensors [012345abcd]"

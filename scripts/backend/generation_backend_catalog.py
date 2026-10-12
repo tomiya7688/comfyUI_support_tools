@@ -24,6 +24,15 @@ class GenerationBackendCatalog(Protocol):
     """Common API for retrieving backend-specific generation choices."""
 
     # {
+    #   責務: [runtime_checkpoint_folders: backend runtime内でcheckpointが配置されるフォルダ名を公開する]
+    #   戻り値: [tuple[str, ...]: checkpoint検索対象フォルダ名]
+    # }
+    @property
+    def runtime_checkpoint_folders(self) -> tuple[str, ...]:
+        """Return checkpoint folders used by this backend runtime."""
+        ...
+
+    # {
     #   責務: [capabilities: backendが対応する生成機能を呼び出し側へ公開する]
     #   戻り値: [GenerationCapabilities: workflow等の機能対応情報]
     # }

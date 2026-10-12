@@ -23,6 +23,14 @@ from .generation_backend_catalog import (
 class A1111BackendCatalog:
     """Query model, upscaler, and sampler names from the A1111 API."""
 
+    # {
+    #   責務: [runtime_checkpoint_folders: A1111 runtimeのcheckpoint配置先を返す]
+    #   戻り値: [tuple[str, ...]: A1111のcheckpointフォルダ名]
+    # }
+    @property
+    def runtime_checkpoint_folders(self) -> tuple[str, ...]:
+        return ("Stable-diffusion",)
+
     _ENDPOINTS = (
         ("checkpoints", "sd-models", ("title", "model_name", "filename")),
         ("loras", "loras", ("name",)),

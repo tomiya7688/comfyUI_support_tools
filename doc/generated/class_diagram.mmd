@@ -6,6 +6,7 @@ classDiagram
     }
     tk.Tk <|-- TabbedToolsApp
     class A1111BackendCatalog {
+        +runtime_checkpoint_folders()
         +capabilities()
         +query_choices()
         +local_choices()
@@ -37,6 +38,7 @@ classDiagram
         +img2img()
     }
     class ComfyUIBackendCatalog {
+        +runtime_checkpoint_folders()
         +capabilities()
         +query_choices()
         +local_choices()
@@ -96,6 +98,7 @@ classDiagram
         +_restart_webui()
     }
     class GenerationBackendCatalog {
+        +runtime_checkpoint_folders()
         +capabilities()
         +query_choices()
         +local_choices()

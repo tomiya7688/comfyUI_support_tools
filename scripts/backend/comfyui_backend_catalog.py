@@ -23,6 +23,14 @@ from .generation_backend_catalog import (
 class ComfyUIBackendCatalog:
     """Query registered loader and sampler names from ComfyUI object info."""
 
+    # {
+    #   責務: [runtime_checkpoint_folders: ComfyUI runtimeのcheckpoint配置先を返す]
+    #   戻り値: [tuple[str, ...]: ComfyUIのcheckpointフォルダ名]
+    # }
+    @property
+    def runtime_checkpoint_folders(self) -> tuple[str, ...]:
+        return ("checkpoints",)
+
     _ENDPOINTS = (
         ("checkpoints", "CheckpointLoaderSimple", "ckpt_name"),
         ("unets", "UNETLoader", "unet_name"),

@@ -39,6 +39,15 @@ class GenerationBackendCatalogTests(unittest.TestCase):
         self.assertTrue(comfyui.capabilities.supports("model_overrides"))
 
     # {
+    #   責務: [test_runtime_checkpoint_folders_are_backend_specific: 各catalogが従来のruntime checkpoint配置先を公開することを検証する]
+    #   処理: [A1111とComfyUIのcatalogが異なるcheckpoint folder名を返すことを確認する]
+    #   戻り値: []
+    # }
+    def test_runtime_checkpoint_folders_are_backend_specific(self):
+        self.assertEqual(A1111BackendCatalog().runtime_checkpoint_folders, ("Stable-diffusion",))
+        self.assertEqual(ComfyUIBackendCatalog().runtime_checkpoint_folders, ("checkpoints",))
+
+    # {
     #   責務: [test_prompt_generate_workflow_value_uses_capability: Prompt Generateがworkflow値をcapabilityに応じて保持または除外することを検証する]
     #   処理: [同じworkflow入力に対しA1111では空値, ComfyUIでは選択値を返すことを確認する]
     #   戻り値: []

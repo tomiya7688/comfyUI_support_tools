@@ -16,12 +16,14 @@ from src.comfyui_support_tools.shared.safetensors_metadata import (
 
 def _model_roots(kind: ModelKind) -> list[Path]:
     from scripts import context
+    from .generation_backend_catalog_factory import create_generation_backend_catalog
 
     shared = [context.MODELS_DIR, context.LEGACY_MODELS_DIR]
     runtime = context.RUNTIME_DIR / "models"
     if kind is ModelKind.CHECKPOINT:
-        backend_folder = "checkpoints" if context.RUNTIME_BACKEND == "comfyui" else "Stable-diffusion"
-        return [context.CHECKPOINTS_DIR, *context.LEGACY_CHECKPOINTS_DIRS, runtime / backend_folder]
+        catalog = create_generation_backend_catalog(context.RUNTIME_BACKEND)
+        runtime_roots = [runtime / folder for folder in catalog.runtime_checkpoint_folders]
+        return [context.CHECKPOINTS_DIR, *context.LEGACY_CHECKPOINTS_DIRS, *runtime_roots]
     folders = {
         ModelKind.UNET: ("diffusion_models", "unet"),
         ModelKind.LORA: ("Lora", "loras"),

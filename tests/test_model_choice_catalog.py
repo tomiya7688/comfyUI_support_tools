@@ -71,10 +71,7 @@ class ModelChoiceCatalogTests(unittest.TestCase):
             patch.object(app_context, "_local_backend_choices", return_value=local),
             patch.object(app_context, "RUNTIME_BACKEND", "comfyui"),
             patch.object(app_context, "requests", SimpleNamespace(get=lambda *_a, **_kw: None)),
-            patch(
-                "scripts.backend.generation_backend_catalog_factory.create_generation_backend_catalog",
-                return_value=_Catalog(),
-            ),
+            patch.object(app_context, "create_configured_generation_backend_catalog", return_value=_Catalog()),
         ):
             choices, warnings = app_context.load_backend_choices("http://localhost:8188", query_api=True)
 

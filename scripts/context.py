@@ -290,9 +290,7 @@ def flow_checkpoint_choices(flow_name):
 #   戻り値: [list[str]: 選択中backendで主モデルとして利用可能な候補]
 # }
 def base_model_choices(choices):
-    from .backend.generation_backend_catalog_factory import create_generation_backend_catalog
-
-    catalog = create_generation_backend_catalog(RUNTIME_BACKEND)
+    catalog = create_configured_generation_backend_catalog()
     return catalog.primary_model_choices(choices)
 
 
@@ -355,9 +353,7 @@ def create_configured_generation_backend_catalog():
 #   戻り値: [ChoiceMap: 選択中backendのローカル生成候補]
 # }
 def _local_backend_choices():
-    from .backend.generation_backend_catalog_factory import create_generation_backend_catalog
-
-    catalog = create_generation_backend_catalog(RUNTIME_BACKEND)
+    catalog = create_configured_generation_backend_catalog()
     roots = {
         "checkpoints": CHECKPOINTS_DIR,
         "legacy_checkpoints": LEGACY_CHECKPOINTS_DIRS,
@@ -383,9 +379,7 @@ def load_backend_choices(api_url="", query_api=False):
             if not base_url:
                 warnings.append("API URLが空です")
             else:
-                from .backend.generation_backend_catalog_factory import create_generation_backend_catalog
-
-                catalog = create_generation_backend_catalog(RUNTIME_BACKEND)
+                catalog = create_configured_generation_backend_catalog()
                 queried_choices, query_warnings = catalog.query_choices(base_url, requests.get)
                 for key in ("checkpoints", "unets", "loras", "vaes", "upscalers", "samplers"):
                     api_choices[key].extend(queried_choices[key])

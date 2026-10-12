@@ -1,6 +1,5 @@
 from ..context import *
 from ..runtime_python import venv_python
-from .backend_launch_spec import create_backend_launch_spec
 
 # {
 #   責務: [EmbeddedStartWebUI: ローカル画像生成backendのプロセス起動と停止を管理する]
@@ -21,13 +20,7 @@ class EmbeddedStartWebUI:
     #   戻り値: []
     # }
     def __init__(self):
-        self.launch_spec = create_backend_launch_spec(
-            RUNTIME_BACKEND,
-            str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
-            str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
-            CHECKPOINTS_DIR,
-            MODELS_DIR,
-        )
+        self.launch_spec = create_configured_backend_launch_spec()
         self.DEFAULT_FLAGS = list(self.launch_spec.default_flags)
         self.API_URL = self.launch_spec.health_url
         self.PORT = self.launch_spec.port

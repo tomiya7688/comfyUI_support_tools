@@ -347,6 +347,24 @@ def create_configured_generation_backend_catalog():
 
 
 # {
+#   責務: [create_configured_backend_launch_spec: 選択済みbackendのローカル起動設定を構築する]
+#   処理: [実行時backend, API URL, checkpoint directory, shared models directoryを起動設定factoryへ渡す]
+#   引数: []
+#   戻り値: [BackendLaunchSpec: 起動script・health URL・port・flags]
+# }
+def create_configured_backend_launch_spec():
+    from .backend.backend_launch_spec import create_backend_launch_spec
+
+    return create_backend_launch_spec(
+        RUNTIME_BACKEND,
+        str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
+        str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
+        CHECKPOINTS_DIR,
+        MODELS_DIR,
+    )
+
+
+# {
 #   責務: [_local_backend_choices: 選択中backend catalogからローカル候補を取得する]
 #   処理: [1: 共通パス設定をcatalog用ルートmappingへまとめる, 2: 選択中catalogへ走査関数とともに渡す]
 #   引数: []

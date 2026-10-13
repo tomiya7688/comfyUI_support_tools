@@ -24,6 +24,16 @@ class GenerationBackendCatalog(Protocol):
     """Common API for retrieving backend-specific generation choices."""
 
     # {
+    #   責務: [workflow_model_inputs: workflowからbackend固有のモデル入力を取得する]
+    #   処理: [workflow対応backendがモデル入力を抽出し, 非対応backendは空候補を返す]
+    #   引数: [self: catalog instance, workflow_path: workflowファイルのパス]
+    #   戻り値: [list[dict[str, Any]]: node ID, 入力名, 値を含むモデル入力]
+    # }
+    def workflow_model_inputs(self, workflow_path: Any) -> list[dict[str, Any]]:
+        """Return model selector inputs declared by a backend workflow."""
+        ...
+
+    # {
     #   責務: [runtime_checkpoint_folders: backend runtime内でcheckpointが配置されるフォルダ名を公開する]
     #   戻り値: [tuple[str, ...]: checkpoint検索対象フォルダ名]
     # }

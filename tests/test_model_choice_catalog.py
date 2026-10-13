@@ -42,8 +42,15 @@ class ModelChoiceCatalogTests(unittest.TestCase):
             ):
                 self.assertEqual(app_context.resolve_comfy_flow_path("old.json"), legacy)
                 self.assertEqual(app_context.flow_checkpoint_choices("old.json"), ["anima/model.safetensors"])
-                from scripts.backend.comfy_ui_client import ComfyUIClient
-                self.assertEqual(ComfyUIClient.model_inputs(app_context.resolve_comfy_flow_path("old.json"))[0]["value"], "anima/model.safetensors")
+                with patch.object(app_context, "RUNTIME_BACKEND", "comfyui"):
+                    fields = app_context.create_configured_generation_backend_catalog().workflow_model_inputs(legacy)
+                self.assertEqual(fields[0]["value"], "anima/model.safetensors")
+
+    def test_a1111_workflow_catalog_returns_no_model_inputs(self):
+        with patch.object(app_context, "RUNTIME_BACKEND", "a1111"):
+            catalog = app_context.create_configured_generation_backend_catalog()
+
+        self.assertEqual(catalog.workflow_model_inputs(Path("unused.json")), [])
 
     def test_configured_workflow_takes_precedence_over_legacy_copy(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

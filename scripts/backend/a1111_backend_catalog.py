@@ -47,6 +47,15 @@ class A1111BackendCatalog:
     def capabilities(self) -> GenerationCapabilities:
         return A1111ImageGenerationBackend.CAPABILITIES
 
+    # {
+    #   責務: [workflow_model_inputs: workflow非対応のA1111 catalogから空候補を返す]
+    #   処理: [A1111にはComfyUI workflowモデル入力がないため何も解析しない]
+    #   引数: [self: catalog instance, workflow_path: 共通契約のworkflowパス]
+    #   戻り値: [list[dict]: 空のモデル入力]
+    # }
+    def workflow_model_inputs(self, workflow_path):
+        return []
+
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         normalized_url = base_url.strip().rstrip("/")
         if "/sdapi/" in normalized_url:

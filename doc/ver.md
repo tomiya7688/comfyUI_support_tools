@@ -1027,3 +1027,13 @@
         doc/model_structure.md
         doc/model_catalog.md
         doc/ver.md
+# 121. workflowモデル入力のbackend catalog化
+    Random ImageのGUIからComfyUI clientの直接呼び出しをなくし、workflow内モデル入力の抽出をgeneration backend catalog契約へ移した。A1111は非対応として空候補を返す。
+    追加・変更したファイル
+        scripts/backend/generation_backend_catalog.py
+        scripts/backend/comfyui_backend_catalog.py
+        scripts/backend/a1111_backend_catalog.py
+        scripts/tabs/random_image.py
+        tests/test_model_choice_catalog.py
+        doc/generated/class_diagram.mmd
+        doc/ver.md

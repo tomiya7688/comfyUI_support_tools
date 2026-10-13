@@ -41,7 +41,6 @@ from .tabs.prompt_generate import PromptGenerateTab
 from .tabs.tag_to_prompt import TagToPromptTab
 from .tabs.movie_to_text import MovieToTextTab
 from .widgets.scrollable_tab_container import ScrollableTabContainer
-from .widgets.last_settings_store import LastSettingsStore
 from .widgets.tk_tab_settings_adapter import TkTabSettingsAdapter
 from .widgets.tab_navigation import TabNavigation
 from .widgets.dark_theme import DarkTheme
@@ -122,7 +121,7 @@ class TabbedToolsApp(tk.Tk):
         self.minsize(900, 600)
         settings_path = USER_INPUT_DIR / "config" / "common" / "last_settings.json"
         self.last_settings_store = TkTabSettingsAdapter(
-            LastSettingsStore(RUNTIME_BACKEND, settings_path)
+            create_configured_last_settings_store(settings_path)
         )
 
         tab_titles = [

@@ -333,6 +333,18 @@ def create_configured_image_generation_profile(date_folder):
 
 
 # {
+#   責務: [create_configured_last_settings_store: 選択中backend用の設定保存storeを構築する]
+#   処理: [実行時backendと注入された設定JSON pathをLastSettingsStoreへ渡す]
+#   引数: [path: versioned設定documentの保存先]
+#   戻り値: [LastSettingsStore: backend別設定を扱う純Python store]
+# }
+def create_configured_last_settings_store(path):
+    from .widgets.last_settings_store import LastSettingsStore
+
+    return LastSettingsStore(RUNTIME_BACKEND, path)
+
+
+# {
 #   責務: [create_configured_image_generation_backend: 選択済みbackendの画像生成adapterを生成する]
 #   処理: [実行時backend設定とHTTP接続関数をbackend factoryへ渡す]
 #   引数: [api_url: 生成API URL, timeout: API timeout秒]

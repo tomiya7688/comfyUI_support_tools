@@ -4,8 +4,10 @@ import tkinter as tk
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
 
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+from scripts import context
 from scripts.widgets.last_settings_store import LastSettingsStore
 from scripts.widgets.settings_document import (
     CURRENT_SCHEMA_VERSION,
@@ -21,6 +23,22 @@ from scripts.widgets.tk_tab_settings_adapter import STABLE_SETTINGS_IDS, TkTabSe
 #   処理: [legacy payloadの移行, versioned payloadの保存, 未対応schemaの拒否を確認する]
 # }
 class SettingsDocumentTests(TestCase):
+    # {
+    #   責務: [test_context_builds_backend_scoped_settings_store: contextがbackend別settings storeを構築することを検証する]
+    #   処理: [runtime backendを切り替え, helperがbackendと設定pathをstoreへ渡すことを確認する]
+    #   引数: [self: test instance]
+    #   戻り値: []
+    # }
+    def test_context_builds_backend_scoped_settings_store(self):
+        settings_path = Path("user_data/config/common/last_settings.json")
+        for backend in ("a1111", "comfyui"):
+            with self.subTest(backend=backend), patch.object(context, "RUNTIME_BACKEND", backend):
+                store = context.create_configured_last_settings_store(settings_path)
+
+            self.assertIsInstance(store, LastSettingsStore)
+            self.assertEqual(store.backend, backend)
+            self.assertEqual(store.path, settings_path)
+
     # {
     #   責務: [test_registered_tabs_have_stable_settings_ids: app内の全tabがclass名に依存しないsettings IDを持つことを検証する]
     #   処理: [appが登録するtab class名とstable ID registryのkeyが一致することを確認する]

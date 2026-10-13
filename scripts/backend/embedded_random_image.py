@@ -10,16 +10,8 @@ from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
 from .generation_parameter_resolver import GenerationParameterResolver
 from .prompt_lora_compatibility import validate_prompt_loras
-from .image_generation_profile import create_image_generation_profile
 
-_GENERATION_PROFILE = create_image_generation_profile(
-    RUNTIME_BACKEND,
-    str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
-    str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
-    A1111_DIR,
-    RUNTIME_DIR,
-    datetime.now().strftime("%Y%m%d"),
-)
+_GENERATION_PROFILE = create_configured_image_generation_profile(datetime.now().strftime("%Y%m%d"))
 
 # {
 #   責務: [EmbeddedRandomImage: wildcard promptから画像生成要求を組み立てて保存する]
@@ -259,7 +251,7 @@ class EmbeddedRandomImage:
         report_dir = USER_DATA_DIR / "output" / "image_generate" / "log" / "image_failure"
         report_dir.mkdir(parents=True, exist_ok=True)
         report = {
-            "output": str(output), "failure": failure, "backend": RUNTIME_BACKEND,
+            "output": str(output), "failure": failure, "backend": self.generation_profile.backend,
             "checkpoint": self.sd_model_checkpoint, "sampler": self.sampler_index,
             "width": self.width, "height": self.height, "steps": self.steps,
             "generation_parameters": parameters,
@@ -286,7 +278,7 @@ class EmbeddedRandomImage:
     def _save_generation_metadata(self, image_path, parameters):
         metadata_path = image_path.with_suffix(".generation.json")
         metadata = {
-            "backend": RUNTIME_BACKEND,
+            "backend": self.generation_profile.backend,
             "checkpoint": self.sd_model_checkpoint,
             **parameters,
         }

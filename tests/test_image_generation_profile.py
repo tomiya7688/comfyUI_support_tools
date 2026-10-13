@@ -2,7 +2,9 @@
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from scripts import context
 from scripts.backend.image_generation_profile import create_image_generation_profile
 from scripts.backend.image_to_image_profile import create_image_to_image_profile
 
@@ -13,6 +15,35 @@ from scripts.backend.image_to_image_profile import create_image_to_image_profile
 #   処理: [API URL・保存先・checkpointがbackendごとの既存仕様と一致することを確認する]
 # }
 class ImageGenerationProfileTests(unittest.TestCase):
+    # {
+    #   責務: [test_configured_profile_uses_context_backend_and_paths: contextが選択backendと共通pathをprofileへ集約することを検証する]
+    #   処理: [backendごとにcontext設定をpatchし, profileのbackend・API URL・保存先を確認する]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_configured_profile_uses_context_backend_and_paths(self):
+        cases = (
+            ("a1111", Path("external/A1111"), "http://localhost:7860/sdapi/v1/txt2img"),
+            ("comfyui", Path("external/ComfyUI"), "http://localhost:8188"),
+        )
+        for backend, runtime_dir, expected_api_url in cases:
+            with self.subTest(backend=backend):
+                user_paths = {
+                    "webui_api_url": "http://localhost:7860",
+                    "comfyui_api_url": "http://localhost:8188/",
+                }
+                with (
+                    patch.object(context, "RUNTIME_BACKEND", backend),
+                    patch.object(context, "USER_PATHS", user_paths),
+                    patch.object(context, "A1111_DIR", Path("external/A1111")),
+                    patch.object(context, "RUNTIME_DIR", runtime_dir),
+                ):
+                    profile = context.create_configured_image_generation_profile("20261010")
+
+                self.assertEqual(profile.backend, backend)
+                self.assertEqual(profile.api_url, expected_api_url)
+                self.assertIn("20261010", str(profile.output_dir))
+
     # {
     #   責務: [test_comfyui_defaults_use_configured_api_and_output_folder: ComfyUIの既定値を検証する]
     #   処理: [1: ComfyUI profileを作成する, 2: API URL・保存先・checkpointを確認する]

@@ -314,6 +314,25 @@ def image_to_image_profile():
 
 
 # {
+#   責務: [create_configured_image_generation_profile: 選択backend用のRandom Image既定値を構築する]
+#   処理: [backend・API URL・実行先・日付フォルダをprofile factoryへ渡す]
+#   引数: [date_folder: 生成画像の保存先に使う日付フォルダ名]
+#   戻り値: [ImageGenerationProfile: 選択済みbackendの生成既定値]
+# }
+def create_configured_image_generation_profile(date_folder):
+    from .backend.image_generation_profile import create_image_generation_profile
+
+    return create_image_generation_profile(
+        RUNTIME_BACKEND,
+        str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
+        str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
+        A1111_DIR,
+        RUNTIME_DIR,
+        date_folder,
+    )
+
+
+# {
 #   責務: [create_configured_image_generation_backend: 選択済みbackendの画像生成adapterを生成する]
 #   処理: [実行時backend設定とHTTP接続関数をbackend factoryへ渡す]
 #   引数: [api_url: 生成API URL, timeout: API timeout秒]

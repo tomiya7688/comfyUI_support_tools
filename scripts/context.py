@@ -396,6 +396,24 @@ def create_configured_backend_launch_spec():
 
 
 # {
+#   責務: [configured_backend_runtime_directory: 指定backendの外部runtime配置を解決する]
+#   処理: [backend IDを検証し, paths設定からA1111またはComfyUIの実行directoryを返す]
+#   引数: [backend: 起動するbackend ID]
+#   戻り値: [Path: backend runtimeのroot directory]
+#   エラー: [ValueError: 未対応backendが指定された場合]
+# }
+def configured_backend_runtime_directory(backend):
+    runtime_directories = {
+        "a1111": A1111_DIR,
+        "comfyui": COMFYUI_DIR,
+    }
+    try:
+        return runtime_directories[backend]
+    except KeyError as error:
+        raise ValueError(f"未対応のバックエンドです: {backend}") from error
+
+
+# {
 #   責務: [_local_backend_choices: 選択中backend catalogからローカル候補を取得する]
 #   処理: [1: 共通パス設定をcatalog用ルートmappingへまとめる, 2: 選択中catalogへ走査関数とともに渡す]
 #   引数: []

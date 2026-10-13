@@ -181,11 +181,7 @@ class RandomImageTab(ttk.Frame):
         ttk.Label(parameter_options, text="candidate例: Euler a|DPM++ 2M Karras（fixed時はsampler欄を使用）").grid(row=2, column=4, columnspan=2, sticky="w", padx=4, pady=2)
         ttk.Label(parameter_options, text="候補設定はRandom Imageプリセットに保存されます。各画像で一度だけ抽選し、値をメタデータへ記録します。", wraplength=1000).grid(row=3, column=0, columnspan=6, sticky="w", padx=4, pady=(4, 0))
 
-        mosaic = ttk.LabelFrame(self, text="NSFWモザイク（WebUI1111）", padding=8)
-        mosaic.pack(fill="x", pady=6)
-        ttk.Checkbutton(mosaic, text="NudeNetで検出した領域にモザイクを適用", variable=self.var_enable_nsfw_mosaic).pack(side="left")
-        ttk.Label(mosaic, text="強度").pack(side="left", padx=(18, 4))
-        ttk.Spinbox(mosaic, from_=1, to=10, textvariable=self.var_nsfw_mosaic_factor, width=5).pack(side="left")
+        self._build_nsfw_mosaic_controls()
 
         isolation = ttk.LabelFrame(self, text="画像破綻隔離（保守的な単色化検出）", padding=8)
         isolation.pack(fill="x", pady=6)
@@ -207,6 +203,22 @@ class RandomImageTab(ttk.Frame):
 
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
+
+    # {
+    #   責務: [_build_nsfw_mosaic_controls: NudeNet設定UIをbackend capabilityに応じて構築する]
+    #   処理: [1: capability非対応なら設定を表示せず終了する, 2: 対応backend用モザイク設定を描画する]
+    #   引数: [self: Random Image tab]
+    #   戻り値: []
+    # }
+    def _build_nsfw_mosaic_controls(self):
+        if not self.backend_capabilities.supports("nudenet_mosaic"):
+            return
+
+        mosaic = ttk.LabelFrame(self, text="NSFWモザイク", padding=8)
+        mosaic.pack(fill="x", pady=6)
+        ttk.Checkbutton(mosaic, text="NudeNetで検出した領域にモザイクを適用", variable=self.var_enable_nsfw_mosaic).pack(side="left")
+        ttk.Label(mosaic, text="強度").pack(side="left", padx=(18, 4))
+        ttk.Spinbox(mosaic, from_=1, to=10, textvariable=self.var_nsfw_mosaic_factor, width=5).pack(side="left")
 
     def _load_defaults(self):
         if isinstance(self.mod, Exception):

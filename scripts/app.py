@@ -47,9 +47,7 @@ from .widgets.dark_theme import DarkTheme
 from .runtime_python import venv_python
 
 def _launch_backend_gui(backend):
-    if backend not in {"a1111", "comfyui"}:
-        raise ValueError(f"未対応のバックエンドです: {backend}")
-    runtime_directory = COMFYUI_DIR if backend == "comfyui" else A1111_DIR
+    runtime_directory = configured_backend_runtime_directory(backend)
     python_path = venv_python(runtime_directory / "venv")
     if python_path is None:
         raise FileNotFoundError(f"GUI起動用Pythonがありません: {runtime_directory}")

@@ -15,6 +15,24 @@ from scripts.backend.backend_launch_spec import create_backend_launch_spec
 # }
 class BackendLaunchSpecTests(unittest.TestCase):
     # {
+    #   責務: [test_context_resolves_configured_runtime_directory: contextがbackendごとのruntime配置を解決することを検証する]
+    #   処理: [runtime directory設定をpatchし, A1111・ComfyUIの対応と未知backend拒否を確認する]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_context_resolves_configured_runtime_directory(self):
+        a1111_directory = Path("external/A1111")
+        comfyui_directory = Path("external/ComfyUI")
+        with (
+            patch.object(context, "A1111_DIR", a1111_directory),
+            patch.object(context, "COMFYUI_DIR", comfyui_directory),
+        ):
+            self.assertEqual(context.configured_backend_runtime_directory("a1111"), a1111_directory)
+            self.assertEqual(context.configured_backend_runtime_directory("comfyui"), comfyui_directory)
+            with self.assertRaises(ValueError):
+                context.configured_backend_runtime_directory("unknown")
+
+    # {
     #   責務: [test_comfyui_spec_keeps_low_vram_launch_defaults: ComfyUI既定設定を検証する]
     #   処理: [1: ComfyUI設定を作る, 2: script・API・port・flagsを確認する]
     #   引数: [self: test case]

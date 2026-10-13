@@ -62,18 +62,15 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
         self.assertTrue(any("[incompatible]" in message for message in messages))
 
     # {
-    #   責務: [test_model_override_ambiguity_uses_backend_capability: model override判定をruntime名でなくadapter capabilityから行う]
-    #   処理: [矛盾するruntime名とcapabilityで生成し, LoRA検証へ渡るbase model情報を確認する]
+    #   責務: [test_model_override_ambiguity_uses_backend_capability: model override判定をadapter capabilityから行う]
+    #   処理: [異なるcapabilityで生成し, LoRA検証へ渡るbase model情報を確認する]
     #   戻り値: []
     # }
     def test_model_override_ambiguity_uses_backend_capability(self):
-        cases = (
-            ("a1111", {"model_overrides"}, None),
-            ("comfyui", set(), "sdxl/base.safetensors"),
-        )
+        cases = (({"model_overrides"}, None), (set(), "sdxl/base.safetensors"))
         with tempfile.TemporaryDirectory() as temporary_directory:
-            for runtime_backend, features, expected_checkpoint in cases:
-                with self.subTest(runtime_backend=runtime_backend, features=features):
+            for features, expected_checkpoint in cases:
+                with self.subTest(features=features):
                     backend = _Backend()
                     backend.capabilities = GenerationCapabilities(frozenset(features))
                     generator = EmbeddedRandomImage()
@@ -93,7 +90,6 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
                     generator._log = lambda _message: None
 
                     with (
-                        patch("scripts.backend.embedded_random_image.RUNTIME_BACKEND", runtime_backend),
                         patch(
                             "scripts.backend.embedded_random_image.create_configured_image_generation_backend",
                             return_value=backend,
@@ -144,6 +140,7 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
             self.assertEqual(len(images), 1)
             metadata = json.loads(images[0].with_suffix(".generation.json").read_text(encoding="utf-8"))
             self.assertEqual(metadata["cfg"], 5.5)
+            self.assertEqual(metadata["backend"], generator.generation_profile.backend)
             self.assertEqual(metadata["steps"], 18)
             self.assertEqual(metadata["resolution"], {"width": 512, "height": 768})
             self.assertEqual(metadata["sampler"], "DPM++ 2M Karras")

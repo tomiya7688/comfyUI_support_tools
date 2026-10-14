@@ -1050,3 +1050,11 @@
         scripts/tabs/dependency_status.py
         tests/test_backend_launch_spec.py
         doc/ver.md
+# 124. generation backendのruntime profileを共通化
+    backend IDごとのruntime directoryとUI表示名の選択をBackendRuntimeProfileへ集約し、context内にあったA1111／ComfyUI分岐を除去。従来の不明ID時A1111 fallbackとruntime directory overrideは維持。
+    English: Centralized backend-specific runtime-directory and display-name selection in BackendRuntimeProfile, removing the A1111/ComfyUI branch from context while preserving the A1111 fallback for unknown IDs and runtime-directory overrides.
+    追加・変更したファイル
+        scripts/backend/backend_runtime_profile.py
+        scripts/context.py
+        tests/test_backend_runtime_profile.py
+        doc/ver.md

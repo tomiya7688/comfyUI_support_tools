@@ -15,6 +15,31 @@ from scripts.backend.backend_launch_spec import create_backend_launch_spec
 # }
 class BackendLaunchSpecTests(unittest.TestCase):
     # {
+    #   責務: [test_context_returns_api_health_urls_from_backend_specs: API疎通候補がlaunch specから作られることを検証する]
+    #   処理: [1: 異なるbackend API URLを設定する, 2: 表示名とhealth URLの組を確認する]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_context_returns_api_health_urls_from_backend_specs(self):
+        with patch.object(
+            context,
+            "USER_PATHS",
+            {
+                "webui_api_url": "http://a1111.local/sdapi/v1",
+                "comfyui_api_url": "http://comfy.local/",
+            },
+        ):
+            checks = context.configured_backend_api_health_checks()
+
+        self.assertEqual(
+            checks,
+            [
+                ("WebUI1111 API", "http://a1111.local/sdapi/v1/progress"),
+                ("ComfyUI API", "http://comfy.local/system_stats"),
+            ],
+        )
+
+    # {
     #   責務: [test_context_resolves_configured_runtime_directory: contextがbackendごとのruntime配置を解決することを検証する]
     #   処理: [runtime directory設定をpatchし, A1111・ComfyUIの対応と未知backend拒否を確認する]
     #   引数: [self: test case]

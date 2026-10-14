@@ -1037,3 +1037,9 @@
         tests/test_model_choice_catalog.py
         doc/generated/class_diagram.mmd
         doc/ver.md
+# 122. Prompt Generateのworkflowモデル候補をcatalogへ集約
+    Prompt Generateのcheckpoint／UNet候補取得を共通generation catalogへ移し、context内のComfyUI workflow形式解析を除去。既存の旧workflow配置解決とモデル候補表示を維持。
+    追加・変更したファイル
+        scripts/context.py
+        tests/test_model_choice_catalog.py
+        doc/ver.md

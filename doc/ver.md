@@ -1067,3 +1067,11 @@
         tests/test_backend_runtime_profile.py
         tests/test_backend_launch_spec.py
         doc/ver.md
+# 126. backend API疎通確認の一覧をlaunch契約へ集約
+    API疎通確認対象backendの列挙とhealth URL構築をBackendLaunchSpec側へ移し、context側のbackend ID一覧を除去。
+    English: Moved backend enumeration and health URL construction for API checks into the launch-spec boundary, removing the backend ID list from context.
+    追加・変更したファイル
+        scripts/backend/backend_launch_spec.py
+        scripts/context.py
+        tests/test_backend_launch_spec.py
+        doc/ver.md

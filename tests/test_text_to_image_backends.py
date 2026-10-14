@@ -15,7 +15,10 @@ from scripts.backend.image_to_image_request import ImageToImageRequest
 from scripts.backend.image_generation_backend_factory import create_image_generation_backend
 from scripts.backend.generation_backend_registry import (
     SUPPORTED_GENERATION_BACKENDS,
+    SUPPORTED_LAUNCH_BACKENDS,
     generation_backend_factories,
+    generation_backend_launch_spec_factory,
+    generation_backend_profile_factory,
 )
 from scripts.backend.generation_backend_catalog_factory import create_generation_backend_catalog
 from scripts.backend.text_to_image_request import TextToImageRequest
@@ -50,8 +53,8 @@ def request(**overrides):
 
 class TextToImageBackendTests(unittest.TestCase):
     # {
-    #   責務: [test_registered_factories_create_matching_catalogs_and_adapters: 共通registryがbackend adapterとcatalogを対応づけることを検証する]
-    #   処理: [1: 各登録backendのcatalogと生成adapterを作る, 2: capability宣言が一致することを確認する]
+    #   責務: [test_registered_factories_create_matching_catalogs_and_adapters: 共通registryがbackendごとの生成機能一式を対応づけることを検証する]
+    #   処理: [1: catalogと生成adapterを作りcapability一致を確認する, 2: profile factoryと起動対応backendのlaunch specを確認する]
     #   引数: [self: test case]
     #   戻り値: []
     # }
@@ -72,6 +75,20 @@ class TextToImageBackendTests(unittest.TestCase):
 
                 self.assertIsInstance(catalog, catalog_factory)
                 self.assertEqual(catalog.capabilities, adapter.capabilities)
+
+                for profile_kind in ("image_generation", "image_to_image"):
+                    self.assertTrue(
+                        callable(generation_backend_profile_factory(backend_id, profile_kind))
+                    )
+
+                if backend_id in SUPPORTED_LAUNCH_BACKENDS:
+                    launch_spec = generation_backend_launch_spec_factory(backend_id)(
+                        "http://127.0.0.1:7860",
+                        "http://127.0.0.1:8188",
+                        Path("models/checkpoints"),
+                        Path("models"),
+                    )
+                    self.assertEqual(launch_spec.backend, backend_id)
 
     # {
     #   責務: [test_configured_backend_provider_hides_backend_selection: 設定境界が選択backendをadapterへ解決することを検証する]

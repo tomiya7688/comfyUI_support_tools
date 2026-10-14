@@ -35,6 +35,8 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
+from .backend.backend_runtime_profile import create_backend_runtime_profile
+
 try:
     import psutil
     _HAS_PSUTIL = True
@@ -155,16 +157,17 @@ _backend_environment = os.environ.get("KADOKA_TOOLS_BACKEND", "").strip().lower(
 _backend_argument = _backend_from_command_line()
 API_ONLY_MODE = _api_only_from_command_line() or os.environ.get("KADOKA_TOOLS_API_ONLY", "").strip() == "1"
 BACKEND_SELECTION_REQUIRED = not (_backend_environment or _backend_argument)
-RUNTIME_BACKEND = _backend_argument or _backend_environment or "a1111"
-if RUNTIME_BACKEND not in {"a1111", "comfyui"}:
-    RUNTIME_BACKEND = "a1111"
 A1111_DIR = _configured_path("a1111_dir", "KADOKA_TOOLS_A1111_DIR", str(SD_ROOT / "external" / "stable-diffusion-webui"))
 COMFYUI_DIR = _configured_path("comfyui_dir", "KADOKA_TOOLS_COMFYUI_DIR", str(SD_ROOT / "external" / "ComfyUI"))
-RUNTIME_DIR = Path(os.environ.get(
-    "KADOKA_TOOLS_RUNTIME_DIR",
-    str(COMFYUI_DIR if RUNTIME_BACKEND == "comfyui" else A1111_DIR),
-)).resolve()
-BACKEND_DISPLAY_NAME = "ComfyUI" if RUNTIME_BACKEND == "comfyui" else "WebUI1111"
+_runtime_profile = create_backend_runtime_profile(
+    _backend_argument or _backend_environment,
+    A1111_DIR,
+    COMFYUI_DIR,
+    os.environ.get("KADOKA_TOOLS_RUNTIME_DIR"),
+)
+RUNTIME_BACKEND = _runtime_profile.backend
+RUNTIME_DIR = _runtime_profile.runtime_directory
+BACKEND_DISPLAY_NAME = _runtime_profile.display_name
 USER_INPUT_DIR = _configured_path("input_root", "KADOKA_TOOLS_INPUT_ROOT", str(USER_INPUT_DIR))
 INPUT_MODELS_DIR = _configured_path("input_models", "KADOKA_TOOLS_INPUT_MODELS", str(USER_INPUT_DIR / "models"))
 MODELS_DIR = _configured_path("models_root", "KADOKA_TOOLS_MODELS_ROOT", str(INPUT_MODELS_DIR))

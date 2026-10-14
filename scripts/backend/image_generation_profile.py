@@ -21,27 +21,6 @@ class ImageGenerationProfile:
 
 
 # {
-#   責務: [create_image_generation_profile: Random Image用backend profileを作成する]
-#   処理: [1: backendを検証する, 2: API URL・保存先・checkpointを選択する, 3: profileを返す]
-#   引数: [backend: 選択中backend, a1111_api_url: A1111のAPI base URL, comfyui_api_url: ComfyUI API base URL, a1111_dir: A1111 runtime root, runtime_dir: 選択backend runtime root, date_folder: 日付別保存フォルダー名]
-#   戻り値: [ImageGenerationProfile: Random Imageのbackend既定値]
-#   エラー: [ValueError: 未対応backendが渡された場合]
-# }
-def create_image_generation_profile(
-    backend: str,
-    a1111_api_url: str,
-    comfyui_api_url: str,
-    a1111_dir: Path,
-    runtime_dir: Path,
-    date_folder: str,
-) -> ImageGenerationProfile:
-    from .generation_backend_registry import generation_backend_profile_factory
-
-    factory = generation_backend_profile_factory(backend, "image_generation")
-    return factory(a1111_api_url, comfyui_api_url, a1111_dir, runtime_dir, date_folder)
-
-
-# {
 #   責務: [create_a1111_image_generation_profile: A1111向けRandom Image既定値を作る]
 #   処理: [A1111 API endpoint・保存先・既定checkpointをprofileへ設定する]
 #   引数: [a1111_api_url: A1111 API URL, comfyui_api_url: 未使用の共通互換引数, a1111_dir: A1111 runtime root, runtime_dir: 未使用の共通互換引数, date_folder: 日付別保存フォルダー名]

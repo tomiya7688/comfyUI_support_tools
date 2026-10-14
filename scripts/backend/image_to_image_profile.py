@@ -24,33 +24,6 @@ class ImageToImageProfile:
 
 
 # {
-#   責務: [create_image_to_image_profile: 選択backend向けのRandom Img2Img既定値を作成する]
-#   処理: [backend設定からAPI URL・出力先・既定モデルとTaggerを構成して返す]
-#   引数: [backend: backend識別子, a1111_api_url: WebUI API base URL, comfyui_api_url: ComfyUI API base URL, a1111_dir: WebUI runtime root, runtime_dir: 選択backend runtime root, pixai_tagger_url: PixAI Tagger URL]
-#   戻り値: [ImageToImageProfile: Random Img2Img既定値]
-#   エラー: [ValueError: 未対応backendが渡された場合]
-# }
-def create_image_to_image_profile(
-    backend: str,
-    a1111_api_url: str,
-    comfyui_api_url: str,
-    a1111_dir: Path,
-    runtime_dir: Path,
-    pixai_tagger_url: str,
-) -> ImageToImageProfile:
-    from .generation_backend_registry import generation_backend_profile_factory
-
-    factory = generation_backend_profile_factory(backend, "image_to_image")
-    return factory(
-        a1111_api_url,
-        comfyui_api_url,
-        a1111_dir,
-        runtime_dir,
-        pixai_tagger_url,
-    )
-
-
-# {
 #   責務: [create_a1111_image_to_image_profile: A1111向けImg2Img既定値を作る]
 #   処理: [A1111 API endpoint・保存先・既定checkpoint・taggerを設定する]
 #   引数: [a1111_api_url: A1111 API URL, comfyui_api_url: 未使用の共通互換引数, a1111_dir: A1111 runtime root, runtime_dir: 未使用の共通互換引数, pixai_tagger_url: PixAI Tagger URL]

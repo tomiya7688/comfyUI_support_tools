@@ -1098,6 +1098,7 @@
     Random ImageとRandom Img2Imgのbackend別既定値を既存の生成backend registryへ登録し、profile factory側のbackend ID分岐を除去。API URL・保存先・checkpoint・Tagger既定値は従来仕様を維持し、登録された全backendに両profile factoryがあることを検証。
     English: Registered Random Image and Random Img2Img defaults with the shared generation-backend registry, removing backend-ID branches from profile selection while preserving existing API URLs, output paths, checkpoints, and tagger defaults.
     追加・変更したファイル
+        scripts/context.py
         scripts/backend/generation_backend_registry.py
         scripts/backend/image_generation_profile.py
         scripts/backend/image_to_image_profile.py

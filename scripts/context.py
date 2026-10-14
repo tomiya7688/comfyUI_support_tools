@@ -294,10 +294,10 @@ def base_model_choices(choices):
 #   戻り値: [ImageToImageProfile: Img2Imgタブの既定値]
 # }
 def image_to_image_profile():
-    from .backend.image_to_image_profile import create_image_to_image_profile
+    from .backend.generation_backend_registry import generation_backend_profile_factory
 
-    return create_image_to_image_profile(
-        RUNTIME_BACKEND,
+    factory = generation_backend_profile_factory(RUNTIME_BACKEND, "image_to_image")
+    return factory(
         USER_PATHS["webui_api_url"],
         USER_PATHS["comfyui_api_url"],
         A1111_DIR,
@@ -313,10 +313,10 @@ def image_to_image_profile():
 #   戻り値: [ImageGenerationProfile: 選択済みbackendの生成既定値]
 # }
 def create_configured_image_generation_profile(date_folder):
-    from .backend.image_generation_profile import create_image_generation_profile
+    from .backend.generation_backend_registry import generation_backend_profile_factory
 
-    return create_image_generation_profile(
-        RUNTIME_BACKEND,
+    factory = generation_backend_profile_factory(RUNTIME_BACKEND, "image_generation")
+    return factory(
         str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
         str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
         A1111_DIR,

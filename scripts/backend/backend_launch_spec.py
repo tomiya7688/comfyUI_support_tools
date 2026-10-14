@@ -21,6 +21,13 @@ class BackendLaunchSpec:
 
 
 # {
+#   責務: [SUPPORTED_LAUNCH_BACKENDS: launch specを提供するbackend IDを列挙する]
+#   補足: [全backendの起動設定・疎通確認対象に使う]
+# }
+SUPPORTED_LAUNCH_BACKENDS = ("a1111", "comfyui")
+
+
+# {
 #   責務: [create_backend_launch_spec: 選択backend用のローカル起動設定を作る]
 #   処理: [1: backendを検証する, 2: backend固有のURL・script・flagをまとめる, 3: 不変な設定を返す]
 #   引数: [backend: 選択中backend, a1111_api_url: A1111 APIのbase URL, comfyui_api_url: ComfyUI APIのbase URL, checkpoints_dir: checkpoint共有ディレクトリ, models_dir: 共有モデルディレクトリ]
@@ -84,3 +91,28 @@ def create_backend_launch_spec(
             ),
         )
     raise ValueError(f"Unsupported launch backend: {backend}")
+
+
+# {
+#   責務: [create_backend_api_health_checks: 全launch backendの接続確認名とURLを作る]
+#   処理: [1: 対応backend IDを列挙する, 2: 各backendの共通launch specから表示名とhealth URLを返す]
+#   引数: [a1111_api_url: A1111 API URL, comfyui_api_url: ComfyUI API URL, checkpoints_dir: checkpoint共有ディレクトリ, models_dir: 共有モデルディレクトリ]
+#   戻り値: [list[tuple[str, str]]: API表示名と疎通確認URLの組]
+# }
+def create_backend_api_health_checks(
+    a1111_api_url: str,
+    comfyui_api_url: str,
+    checkpoints_dir: Path,
+    models_dir: Path,
+) -> list[tuple[str, str]]:
+    checks = []
+    for backend in SUPPORTED_LAUNCH_BACKENDS:
+        spec = create_backend_launch_spec(
+            backend,
+            a1111_api_url,
+            comfyui_api_url,
+            checkpoints_dir,
+            models_dir,
+        )
+        checks.append((f"{spec.display_name} API", spec.health_url))
+    return checks

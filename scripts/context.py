@@ -395,20 +395,14 @@ def create_configured_backend_launch_spec():
 #   戻り値: [list[tuple[str, str]]: API表示名と疎通確認URLの組]
 # }
 def configured_backend_api_health_checks():
-    from .backend.backend_launch_spec import create_backend_launch_spec
+    from .backend.backend_launch_spec import create_backend_api_health_checks
 
-    backends = ("a1111", "comfyui")
-    checks = []
-    for backend in backends:
-        spec = create_backend_launch_spec(
-            backend,
-            str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
-            str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
-            CHECKPOINTS_DIR,
-            MODELS_DIR,
-        )
-        checks.append((f"{spec.display_name} API", spec.health_url))
-    return checks
+    return create_backend_api_health_checks(
+        str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
+        str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
+        CHECKPOINTS_DIR,
+        MODELS_DIR,
+    )
 
 
 # {

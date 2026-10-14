@@ -5,7 +5,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts import context
-from scripts.backend.backend_launch_spec import create_backend_launch_spec
+from scripts.backend.backend_launch_spec import (
+    SUPPORTED_LAUNCH_BACKENDS,
+    create_backend_api_health_checks,
+    create_backend_launch_spec,
+)
 
 
 # {
@@ -14,6 +18,29 @@ from scripts.backend.backend_launch_spec import create_backend_launch_spec
 #   処理: [factoryが既存のA1111とComfyUI起動値を返し, 不正backendを拒否することを確認する]
 # }
 class BackendLaunchSpecTests(unittest.TestCase):
+    # {
+    #   責務: [test_health_checks_cover_each_supported_launch_backend: 疎通確認が全launch backendを網羅することを検証する]
+    #   処理: [1: 各backend API URLを渡す, 2: 対応backend一覧と同じ数と正しいhealth URLを確認する]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_health_checks_cover_each_supported_launch_backend(self):
+        checks = create_backend_api_health_checks(
+            "http://a1111.local/sdapi/v1",
+            "http://comfy.local/",
+            Path("checkpoints"),
+            Path("models"),
+        )
+
+        self.assertEqual(len(checks), len(SUPPORTED_LAUNCH_BACKENDS))
+        self.assertEqual(
+            checks,
+            [
+                ("WebUI1111 API", "http://a1111.local/sdapi/v1/progress"),
+                ("ComfyUI API", "http://comfy.local/system_stats"),
+            ],
+        )
+
     # {
     #   責務: [test_context_returns_api_health_urls_from_backend_specs: API疎通候補がlaunch specから作られることを検証する]
     #   処理: [1: 異なるbackend API URLを設定する, 2: 表示名とhealth URLの組を確認する]

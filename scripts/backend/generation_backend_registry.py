@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
 from .a1111_backend_catalog import A1111BackendCatalog
@@ -19,6 +21,19 @@ from .generation_backend_catalog import GenerationBackendCatalog
 from .image_generation_profile import create_a1111_image_generation_profile, create_comfyui_image_generation_profile
 from .image_generation_backend import ImageGenerationBackend
 from .image_to_image_profile import create_a1111_image_to_image_profile, create_comfyui_image_to_image_profile
+
+
+# {
+#   責務: [GenerationBackendRegistration: 1 backendが提供するcatalog・adapter・profile・起動spec factoryを保持する]
+#   フィールド: [catalog_factory: 共通候補catalog生成, adapter_factory: 画像生成adapter生成, profile_factories: 画面profile生成, launch_spec_factory: 任意のローカル起動spec生成]
+#   処理: [backend登録の役割を名前付きimmutable contractとして提供する]
+# }
+@dataclass(frozen=True, slots=True)
+class GenerationBackendRegistration:
+    catalog_factory: Callable[[], GenerationBackendCatalog]
+    adapter_factory: Callable[..., ImageGenerationBackend]
+    profile_factories: Mapping[str, Callable[..., Any]]
+    launch_spec_factory: Callable[..., BackendLaunchSpec] | None
 
 
 # {
@@ -56,38 +71,32 @@ def _create_comfyui_backend(
     return ComfyUIImageGenerationBackend(api_url, timeout, comfy_client_factory)
 
 
-_GENERATION_BACKENDS: dict[
-    str,
-    tuple[
-        Callable[[], GenerationBackendCatalog],
-        Callable[..., ImageGenerationBackend],
-        dict[str, Callable[..., Any]],
-        Callable[..., BackendLaunchSpec],
-    ],
-] = {
-    "a1111": (
-        A1111BackendCatalog,
-        _create_a1111_backend,
-        {
+_GENERATION_BACKENDS: dict[str, GenerationBackendRegistration] = {
+    "a1111": GenerationBackendRegistration(
+        catalog_factory=A1111BackendCatalog,
+        adapter_factory=_create_a1111_backend,
+        profile_factories=MappingProxyType({
             "image_generation": create_a1111_image_generation_profile,
             "image_to_image": create_a1111_image_to_image_profile,
-        },
-        _create_a1111_launch_spec,
+        }),
+        launch_spec_factory=_create_a1111_launch_spec,
     ),
-    "comfyui": (
-        ComfyUIBackendCatalog,
-        _create_comfyui_backend,
-        {
+    "comfyui": GenerationBackendRegistration(
+        catalog_factory=ComfyUIBackendCatalog,
+        adapter_factory=_create_comfyui_backend,
+        profile_factories=MappingProxyType({
             "image_generation": create_comfyui_image_generation_profile,
             "image_to_image": create_comfyui_image_to_image_profile,
-        },
-        _create_comfyui_launch_spec,
+        }),
+        launch_spec_factory=_create_comfyui_launch_spec,
     ),
 }
 
 SUPPORTED_GENERATION_BACKENDS = tuple(_GENERATION_BACKENDS)
 SUPPORTED_LAUNCH_BACKENDS = tuple(
-    backend for backend, registration in _GENERATION_BACKENDS.items() if registration[3]
+    backend
+    for backend, registration in _GENERATION_BACKENDS.items()
+    if registration.launch_spec_factory is not None
 )
 
 
@@ -106,7 +115,7 @@ def generation_backend_factories(
 ]:
     try:
         registration = _GENERATION_BACKENDS[backend]
-        return registration[0], registration[1]
+        return registration.catalog_factory, registration.adapter_factory
     except KeyError as error:
         raise ValueError(f"Unsupported generation backend: {backend}") from error
 
@@ -120,7 +129,7 @@ def generation_backend_factories(
 # }
 def generation_backend_profile_factory(backend: str, profile_kind: str) -> Callable[..., Any]:
     try:
-        return _GENERATION_BACKENDS[backend][2][profile_kind]
+        return _GENERATION_BACKENDS[backend].profile_factories[profile_kind]
     except KeyError as error:
         raise ValueError(
             f"Unsupported generation backend profile: {backend}/{profile_kind}"
@@ -136,6 +145,9 @@ def generation_backend_profile_factory(backend: str, profile_kind: str) -> Calla
 # }
 def generation_backend_launch_spec_factory(backend: str) -> Callable[..., BackendLaunchSpec]:
     try:
-        return _GENERATION_BACKENDS[backend][3]
+        factory = _GENERATION_BACKENDS[backend].launch_spec_factory
+        if factory is None:
+            raise ValueError(f"Unsupported launch backend: {backend}")
+        return factory
     except KeyError as error:
         raise ValueError(f"Unsupported launch backend: {backend}") from error

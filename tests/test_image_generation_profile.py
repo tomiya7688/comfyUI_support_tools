@@ -70,7 +70,12 @@ class ImageGenerationProfileTests(unittest.TestCase):
     #   戻り値: []
     # }
     def test_a1111_defaults_accept_base_or_api_url(self):
-        for configured_url in ("http://localhost:7860", "http://localhost:7860/sdapi/v1"):
+        for configured_url in (
+            "http://localhost:7860",
+            "http://localhost:7860/sdapi",
+            "http://localhost:7860/sdapi/v1",
+            "http://localhost:7860/sdapi/v1/txt2img",
+        ):
             with self.subTest(configured_url=configured_url):
                 profile = create_image_generation_profile(
                     "a1111",

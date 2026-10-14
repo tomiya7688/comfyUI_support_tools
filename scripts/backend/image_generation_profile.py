@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .a1111_api_url import normalize_a1111_api_root
+
 
 # {
 #   責務: [ImageGenerationProfile: Random Imageのbackend別起動既定値を保持する]
@@ -41,15 +43,8 @@ def create_image_generation_profile(
             default_checkpoint="shiitakeMix_v20.safetensors",
         )
     if backend == "a1111":
-        api_root = a1111_api_url.strip().rstrip("/")
-        if api_root.endswith("/sdapi/v1/txt2img"):
-            api_url = api_root
-        elif api_root.endswith("/sdapi/v1"):
-            api_url = f"{api_root}/txt2img"
-        elif api_root.endswith("/sdapi"):
-            api_url = f"{api_root}/v1/txt2img"
-        else:
-            api_url = f"{api_root}/sdapi/v1/txt2img"
+        api_root = normalize_a1111_api_root(a1111_api_url)
+        api_url = f"{api_root}/sdapi/v1/txt2img"
         return ImageGenerationProfile(
             backend=backend,
             api_url=api_url,

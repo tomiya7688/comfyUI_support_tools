@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .a1111_api_url import normalize_a1111_api_root
+
 
 # {
 #   責務: [ImageToImageProfile: Random Img2Imgタブに必要な起動既定値を保持する]
@@ -37,7 +39,7 @@ def create_image_to_image_profile(
     pixai_tagger_url: str,
 ) -> ImageToImageProfile:
     if backend == "comfyui":
-        a1111_root = _a1111_api_root(a1111_api_url)
+        a1111_root = normalize_a1111_api_root(a1111_api_url)
         return ImageToImageProfile(
             api_url=comfyui_api_url.strip().rstrip("/"),
             output_dir=runtime_dir / "output" / "KadokaTools_img2img",
@@ -51,7 +53,7 @@ def create_image_to_image_profile(
             usage_note="※ タグ取得にはPixAI API、生成にはComfyUI APIを使います。",
         )
     if backend == "a1111":
-        api_root = _a1111_api_root(a1111_api_url)
+        api_root = normalize_a1111_api_root(a1111_api_url)
         return ImageToImageProfile(
             api_url=f"{api_root}/sdapi/v1/img2img",
             output_dir=a1111_dir / "outputs" / "img2img-images" / "amahane_yukiko_img2img",
@@ -65,17 +67,3 @@ def create_image_to_image_profile(
             usage_note="",
         )
     raise ValueError(f"Unsupported image-to-image profile backend: {backend}")
-
-
-# {
-#   責務: [_a1111_api_root: A1111のbase URLまたはAPI endpointからAPI rootを取り出す]
-#   処理: [既知endpoint suffixを取り除き末尾slashを正規化する]
-#   引数: [api_url: 設定されたA1111 API URL]
-#   戻り値: [str: API root]
-# }
-def _a1111_api_root(api_url: str) -> str:
-    root = api_url.strip().rstrip("/")
-    for suffix in ("/sdapi/v1/img2img", "/sdapi/v1/txt2img", "/sdapi/v1", "/sdapi"):
-        if root.endswith(suffix):
-            return root[: -len(suffix)]
-    return root

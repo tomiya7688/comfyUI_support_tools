@@ -1075,3 +1075,13 @@
         scripts/context.py
         tests/test_backend_launch_spec.py
         doc/ver.md
+# 127. A1111 API URLのroot正規化を共通化
+    Random ImageとRandom Img2Imgで重複していたA1111 API URLのendpoint suffix処理を共通関数へ集約し、base URLと既知endpoint形式のテストを追加。
+    English: Centralized duplicated A1111 API root normalization used by Random Image and Random Img2Img, with coverage for base URLs and known endpoint forms.
+    追加・変更したファイル
+        scripts/backend/a1111_api_url.py
+        scripts/backend/image_generation_profile.py
+        scripts/backend/image_to_image_profile.py
+        tests/test_a1111_api_url.py
+        tests/test_image_generation_profile.py
+        doc/ver.md

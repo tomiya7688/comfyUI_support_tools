@@ -5,12 +5,18 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from .a1111_image_generation_backend import A1111ImageGenerationBackend
-from .comfyui_image_generation_backend import ComfyUIImageGenerationBackend
 from .comfy_ui_client import ComfyUIClient
+from .generation_backend_registry import generation_backend_factories
 from .image_generation_backend import ImageGenerationBackend
 
 
+# {
+#   責務: [create_image_generation_backend: registryから選択backendの画像生成adapterを作成する]
+#   処理: [1: 登録済みadapter factoryを取得する, 2: API URL・timeout・接続関数を渡す]
+#   引数: [backend: 生成backend ID, api_url: 生成API URL, timeout: API timeout秒, request_post: optional HTTP POST関数, comfy_client_factory: ComfyUI client factory]
+#   戻り値: [ImageGenerationBackend: backend中立な生成adapter]
+#   エラー: [ValueError: 未登録backendまたは必須接続関数が不足した場合]
+# }
 def create_image_generation_backend(
     backend: str,
     api_url: str,
@@ -19,10 +25,10 @@ def create_image_generation_backend(
     request_post: Callable[..., Any] | None = None,
     comfy_client_factory: Callable[..., ComfyUIClient] = ComfyUIClient,
 ) -> ImageGenerationBackend:
-    if backend == "a1111":
-        if request_post is None:
-            raise ValueError("A1111 API用のPOST関数が必要です")
-        return A1111ImageGenerationBackend(api_url, timeout, request_post)
-    if backend == "comfyui":
-        return ComfyUIImageGenerationBackend(api_url, timeout, comfy_client_factory)
-    raise ValueError(f"Unsupported generation backend: {backend}")
+    _, image_generation_factory = generation_backend_factories(backend)
+    return image_generation_factory(
+        api_url,
+        timeout,
+        request_post=request_post,
+        comfy_client_factory=comfy_client_factory,
+    )

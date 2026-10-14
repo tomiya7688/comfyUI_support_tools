@@ -51,6 +51,21 @@ class BackendRuntimeProfileTests(unittest.TestCase):
         self.assertEqual(profile.display_name, "WebUI1111")
         self.assertEqual(profile.runtime_directory, Path("custom/runtime").resolve())
 
+    # {
+    #   責務: [test_profile_can_reject_unknown_backend: strict modeが未知backendを拒否することを検証する]
+    #   処理: [fallback_backendを無効にしてprofile factoryがValueErrorを返すことを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_profile_can_reject_unknown_backend(self):
+        with self.assertRaises(ValueError):
+            create_backend_runtime_profile(
+                "unexpected",
+                Path("external/A1111"),
+                Path("external/ComfyUI"),
+                fallback_backend=None,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

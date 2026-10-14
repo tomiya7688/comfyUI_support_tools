@@ -413,19 +413,21 @@ def configured_backend_api_health_checks():
 
 # {
 #   責務: [configured_backend_runtime_directory: 指定backendの外部runtime配置を解決する]
-#   処理: [backend IDを検証し, paths設定からA1111またはComfyUIの実行directoryを返す]
+#   処理: [1: 共通runtime profileへbackend IDを渡す, 2: 解決されたruntime directoryを返す]
 #   引数: [backend: 起動するbackend ID]
 #   戻り値: [Path: backend runtimeのroot directory]
 #   エラー: [ValueError: 未対応backendが指定された場合]
 # }
 def configured_backend_runtime_directory(backend):
-    runtime_directories = {
-        "a1111": A1111_DIR,
-        "comfyui": COMFYUI_DIR,
-    }
     try:
-        return runtime_directories[backend]
-    except KeyError as error:
+        profile = create_backend_runtime_profile(
+            backend,
+            A1111_DIR,
+            COMFYUI_DIR,
+            fallback_backend=None,
+        )
+        return profile.runtime_directory
+    except ValueError as error:
         raise ValueError(f"未対応のバックエンドです: {backend}") from error
 
 

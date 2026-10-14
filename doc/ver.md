@@ -1058,3 +1058,12 @@
         scripts/context.py
         tests/test_backend_runtime_profile.py
         doc/ver.md
+# 125. runtime directory解決をprofileへ集約
+    contextのbackend別runtime directory対応表をBackendRuntimeProfileへ統合。既定runtime選択と指定backendのruntime解決を同じ契約で扱い、未知backend指定は従来どおりエラーとする。
+    English: Routed configured backend runtime-directory lookups through BackendRuntimeProfile, sharing the contract with default runtime selection while retaining strict errors for unsupported IDs.
+    追加・変更したファイル
+        scripts/backend/backend_runtime_profile.py
+        scripts/context.py
+        tests/test_backend_runtime_profile.py
+        tests/test_backend_launch_spec.py
+        doc/ver.md

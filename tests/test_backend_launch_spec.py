@@ -41,7 +41,7 @@ class BackendLaunchSpecTests(unittest.TestCase):
 
     # {
     #   責務: [test_context_resolves_configured_runtime_directory: contextがbackendごとのruntime配置を解決することを検証する]
-    #   処理: [runtime directory設定をpatchし, A1111・ComfyUIの対応と未知backend拒否を確認する]
+    #   処理: [runtime directory設定をpatchし, profile経由の正規化と未知backend拒否を確認する]
     #   引数: [self: test case]
     #   戻り値: []
     # }
@@ -52,8 +52,14 @@ class BackendLaunchSpecTests(unittest.TestCase):
             patch.object(context, "A1111_DIR", a1111_directory),
             patch.object(context, "COMFYUI_DIR", comfyui_directory),
         ):
-            self.assertEqual(context.configured_backend_runtime_directory("a1111"), a1111_directory)
-            self.assertEqual(context.configured_backend_runtime_directory("comfyui"), comfyui_directory)
+            self.assertEqual(
+                context.configured_backend_runtime_directory("a1111"),
+                a1111_directory.resolve(),
+            )
+            self.assertEqual(
+                context.configured_backend_runtime_directory("comfyui"),
+                comfyui_directory.resolve(),
+            )
             with self.assertRaises(ValueError):
                 context.configured_backend_runtime_directory("unknown")
 

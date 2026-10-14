@@ -27,6 +27,12 @@ def _write_file(path: Path) -> None:
 
 
 class ModelChoiceCatalogTests(unittest.TestCase):
+    # {
+    #   責務: [test_legacy_workflow_is_loadable_after_root_change: 旧workflow配置からモデル候補をcatalog経由で読み込めることを検証する]
+    #   処理: [1: 旧配置のworkflowを作る, 2: flow解決とcatalogモデル入力取得の互換性を確認する]
+    #   引数: [self: ModelChoiceCatalogTests instance]
+    #   戻り値: []
+    # }
     def test_legacy_workflow_is_loadable_after_root_change(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -39,11 +45,11 @@ class ModelChoiceCatalogTests(unittest.TestCase):
             with (
                 patch.object(app_context, "COMFY_FLOWS_DIR", root / "shared" / "flows"),
                 patch.object(app_context, "LEGACY_MODELS_DIR", root / "models"),
+                patch.object(app_context, "RUNTIME_BACKEND", "comfyui"),
             ):
                 self.assertEqual(app_context.resolve_comfy_flow_path("old.json"), legacy)
                 self.assertEqual(app_context.flow_checkpoint_choices("old.json"), ["anima/model.safetensors"])
-                with patch.object(app_context, "RUNTIME_BACKEND", "comfyui"):
-                    fields = app_context.create_configured_generation_backend_catalog().workflow_model_inputs(legacy)
+                fields = app_context.create_configured_generation_backend_catalog().workflow_model_inputs(legacy)
                 self.assertEqual(fields[0]["value"], "anima/model.safetensors")
 
     def test_a1111_workflow_catalog_returns_no_model_inputs(self):

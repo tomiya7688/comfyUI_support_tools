@@ -251,36 +251,26 @@ def resolve_comfy_flow_path(flow_name):
     return legacy if legacy.is_file() else configured
 
 
+# {
+#   責務: [flow_checkpoint_choices: 選択workflow内で指定された主モデル候補を返す]
+#   処理: [1: 設定済みbackend catalogからworkflowモデル入力を取得する, 2: checkpointとUNet入力だけを順序保持で返す]
+#   引数: [flow_name: 解決対象のworkflow名またはパス]
+#   戻り値: [list[str]: workflowに記載されたcheckpointとUNet名]
+# }
 def flow_checkpoint_choices(flow_name):
-    """選択中のComfyUI API workflowに記載されたcheckpoint／UNet候補を返す。"""
     if not flow_name:
         return []
     path = resolve_comfy_flow_path(flow_name)
     try:
-        with path.open(encoding="utf-8") as source:
-            workflow = json.load(source)
-    except (OSError, ValueError):
+        fields = create_configured_generation_backend_catalog().workflow_model_inputs(path)
+    except (OSError, ValueError, KeyError):
         return []
-    values = []
-    loader_inputs = {"CheckpointLoaderSimple": "ckpt_name", "UNETLoader": "unet_name"}
-    nodes = workflow.get("nodes", []) if isinstance(workflow.get("nodes"), list) else workflow.values()
-    for node in nodes:
-        if isinstance(node, dict):
-            input_name = loader_inputs.get(node.get("class_type") or node.get("type"))
-            raw_inputs = node.get("inputs", {})
-            value = raw_inputs.get(input_name) if input_name and isinstance(raw_inputs, dict) else None
-            if input_name and value is None and isinstance(node.get("widgets_values"), list):
-                widget_index = 0
-                for item in node.get("inputs", []):
-                    if "widget" not in item:
-                        continue
-                    if item.get("name") == input_name and widget_index < len(node["widgets_values"]):
-                        value = node["widgets_values"][widget_index]
-                        break
-                    widget_index += 1
-            if value and str(value).strip() and str(value).strip() not in values:
-                values.append(str(value).strip())
-    return values
+    return _unique_choices([
+        str(field.get("value", "")).strip()
+        for field in fields
+        if field.get("id", "").rsplit(":", 1)[-1] in {"ckpt_name", "unet_name"}
+        and str(field.get("value", "")).strip()
+    ])
 
 
 # {

@@ -1,4 +1,4 @@
-"""Shared registrations for image-generation adapters and their catalogs."""
+"""Shared registrations for generation backends and their capabilities."""
 
 from __future__ import annotations
 
@@ -7,6 +7,11 @@ from typing import Any
 
 from .a1111_backend_catalog import A1111BackendCatalog
 from .a1111_image_generation_backend import A1111ImageGenerationBackend
+from .backend_launch_spec import (
+    BackendLaunchSpec,
+    _create_a1111_launch_spec,
+    _create_comfyui_launch_spec,
+)
 from .comfy_ui_client import ComfyUIClient
 from .comfyui_backend_catalog import ComfyUIBackendCatalog
 from .comfyui_image_generation_backend import ComfyUIImageGenerationBackend
@@ -57,6 +62,7 @@ _GENERATION_BACKENDS: dict[
         Callable[[], GenerationBackendCatalog],
         Callable[..., ImageGenerationBackend],
         dict[str, Callable[..., Any]],
+        Callable[..., BackendLaunchSpec],
     ],
 ] = {
     "a1111": (
@@ -66,6 +72,7 @@ _GENERATION_BACKENDS: dict[
             "image_generation": create_a1111_image_generation_profile,
             "image_to_image": create_a1111_image_to_image_profile,
         },
+        _create_a1111_launch_spec,
     ),
     "comfyui": (
         ComfyUIBackendCatalog,
@@ -74,10 +81,14 @@ _GENERATION_BACKENDS: dict[
             "image_generation": create_comfyui_image_generation_profile,
             "image_to_image": create_comfyui_image_to_image_profile,
         },
+        _create_comfyui_launch_spec,
     ),
 }
 
 SUPPORTED_GENERATION_BACKENDS = tuple(_GENERATION_BACKENDS)
+SUPPORTED_LAUNCH_BACKENDS = tuple(
+    backend for backend, registration in _GENERATION_BACKENDS.items() if registration[3]
+)
 
 
 # {
@@ -114,3 +125,17 @@ def generation_backend_profile_factory(backend: str, profile_kind: str) -> Calla
         raise ValueError(
             f"Unsupported generation backend profile: {backend}/{profile_kind}"
         ) from error
+
+
+# {
+#   責務: [generation_backend_launch_spec_factory: 登録済みbackendの起動設定factoryを返す]
+#   処理: [backend registryから起動spec factoryを検索して返す]
+#   引数: [backend: 起動対象backend ID]
+#   戻り値: [Callable: backend固有BackendLaunchSpec factory]
+#   エラー: [ValueError: 未登録backendが指定された場合]
+# }
+def generation_backend_launch_spec_factory(backend: str) -> Callable[..., BackendLaunchSpec]:
+    try:
+        return _GENERATION_BACKENDS[backend][3]
+    except KeyError as error:
+        raise ValueError(f"Unsupported launch backend: {backend}") from error

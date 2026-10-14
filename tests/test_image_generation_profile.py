@@ -7,6 +7,10 @@ from unittest.mock import patch
 from scripts import context
 from scripts.backend.image_generation_profile import create_image_generation_profile
 from scripts.backend.image_to_image_profile import create_image_to_image_profile
+from scripts.backend.generation_backend_registry import (
+    SUPPORTED_GENERATION_BACKENDS,
+    generation_backend_profile_factory,
+)
 
 
 # {
@@ -15,6 +19,21 @@ from scripts.backend.image_to_image_profile import create_image_to_image_profile
 #   処理: [API URL・保存先・checkpointがbackendごとの既存仕様と一致することを確認する]
 # }
 class ImageGenerationProfileTests(unittest.TestCase):
+    # {
+    #   責務: [test_registered_backends_expose_both_profile_factories: 登録backendが両生成画面のprofile factoryを持つことを検証する]
+    #   処理: [登録backendごとにimage-generationとimage-to-imageのfactory取得を確認する]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_registered_backends_expose_both_profile_factories(self):
+        for backend in SUPPORTED_GENERATION_BACKENDS:
+            with self.subTest(backend=backend):
+                self.assertTrue(callable(generation_backend_profile_factory(backend, "image_generation")))
+                self.assertTrue(callable(generation_backend_profile_factory(backend, "image_to_image")))
+
+        with self.assertRaisesRegex(ValueError, "profile"):
+            generation_backend_profile_factory("a1111", "unknown")
+
     # {
     #   責務: [test_configured_profile_uses_context_backend_and_paths: contextが選択backendと共通pathをprofileへ集約することを検証する]
     #   処理: [backendごとにcontext設定をpatchし, profileのbackend・API URL・保存先を確認する]

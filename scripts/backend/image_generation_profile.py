@@ -35,20 +35,52 @@ def create_image_generation_profile(
     runtime_dir: Path,
     date_folder: str,
 ) -> ImageGenerationProfile:
-    if backend == "comfyui":
-        return ImageGenerationProfile(
-            backend=backend,
-            api_url=comfyui_api_url.strip().rstrip("/"),
-            output_dir=runtime_dir / "output" / "KadokaTools" / date_folder,
-            default_checkpoint="shiitakeMix_v20.safetensors",
-        )
-    if backend == "a1111":
-        api_root = normalize_a1111_api_root(a1111_api_url)
-        api_url = f"{api_root}/sdapi/v1/txt2img"
-        return ImageGenerationProfile(
-            backend=backend,
-            api_url=api_url,
-            output_dir=a1111_dir / "outputs" / "txt2img-images" / date_folder,
-            default_checkpoint="rinIllusionRNSFW_v30",
-        )
-    raise ValueError(f"Unsupported generation profile backend: {backend}")
+    from .generation_backend_registry import generation_backend_profile_factory
+
+    factory = generation_backend_profile_factory(backend, "image_generation")
+    return factory(a1111_api_url, comfyui_api_url, a1111_dir, runtime_dir, date_folder)
+
+
+# {
+#   責務: [create_a1111_image_generation_profile: A1111向けRandom Image既定値を作る]
+#   処理: [A1111 API endpoint・保存先・既定checkpointをprofileへ設定する]
+#   引数: [a1111_api_url: A1111 API URL, comfyui_api_url: 未使用の共通互換引数, a1111_dir: A1111 runtime root, runtime_dir: 未使用の共通互換引数, date_folder: 日付別保存フォルダー名]
+#   戻り値: [ImageGenerationProfile: A1111の生成既定値]
+# }
+def create_a1111_image_generation_profile(
+    a1111_api_url: str,
+    comfyui_api_url: str,
+    a1111_dir: Path,
+    runtime_dir: Path,
+    date_folder: str,
+) -> ImageGenerationProfile:
+    del comfyui_api_url, runtime_dir
+    api_root = normalize_a1111_api_root(a1111_api_url)
+    return ImageGenerationProfile(
+        backend="a1111",
+        api_url=f"{api_root}/sdapi/v1/txt2img",
+        output_dir=a1111_dir / "outputs" / "txt2img-images" / date_folder,
+        default_checkpoint="rinIllusionRNSFW_v30",
+    )
+
+
+# {
+#   責務: [create_comfyui_image_generation_profile: ComfyUI向けRandom Image既定値を作る]
+#   処理: [ComfyUI API・保存先・既定checkpointをprofileへ設定する]
+#   引数: [a1111_api_url: 未使用の共通互換引数, comfyui_api_url: ComfyUI API URL, a1111_dir: 未使用の共通互換引数, runtime_dir: ComfyUI runtime root, date_folder: 日付別保存フォルダー名]
+#   戻り値: [ImageGenerationProfile: ComfyUIの生成既定値]
+# }
+def create_comfyui_image_generation_profile(
+    a1111_api_url: str,
+    comfyui_api_url: str,
+    a1111_dir: Path,
+    runtime_dir: Path,
+    date_folder: str,
+) -> ImageGenerationProfile:
+    del a1111_api_url, a1111_dir
+    return ImageGenerationProfile(
+        backend="comfyui",
+        api_url=comfyui_api_url.strip().rstrip("/"),
+        output_dir=runtime_dir / "output" / "KadokaTools" / date_folder,
+        default_checkpoint="shiitakeMix_v20.safetensors",
+    )

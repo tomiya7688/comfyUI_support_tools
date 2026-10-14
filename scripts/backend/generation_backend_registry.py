@@ -11,7 +11,9 @@ from .comfy_ui_client import ComfyUIClient
 from .comfyui_backend_catalog import ComfyUIBackendCatalog
 from .comfyui_image_generation_backend import ComfyUIImageGenerationBackend
 from .generation_backend_catalog import GenerationBackendCatalog
+from .image_generation_profile import create_a1111_image_generation_profile, create_comfyui_image_generation_profile
 from .image_generation_backend import ImageGenerationBackend
+from .image_to_image_profile import create_a1111_image_to_image_profile, create_comfyui_image_to_image_profile
 
 
 # {
@@ -54,10 +56,25 @@ _GENERATION_BACKENDS: dict[
     tuple[
         Callable[[], GenerationBackendCatalog],
         Callable[..., ImageGenerationBackend],
+        dict[str, Callable[..., Any]],
     ],
 ] = {
-    "a1111": (A1111BackendCatalog, _create_a1111_backend),
-    "comfyui": (ComfyUIBackendCatalog, _create_comfyui_backend),
+    "a1111": (
+        A1111BackendCatalog,
+        _create_a1111_backend,
+        {
+            "image_generation": create_a1111_image_generation_profile,
+            "image_to_image": create_a1111_image_to_image_profile,
+        },
+    ),
+    "comfyui": (
+        ComfyUIBackendCatalog,
+        _create_comfyui_backend,
+        {
+            "image_generation": create_comfyui_image_generation_profile,
+            "image_to_image": create_comfyui_image_to_image_profile,
+        },
+    ),
 }
 
 SUPPORTED_GENERATION_BACKENDS = tuple(_GENERATION_BACKENDS)
@@ -77,6 +94,23 @@ def generation_backend_factories(
     Callable[..., ImageGenerationBackend],
 ]:
     try:
-        return _GENERATION_BACKENDS[backend]
+        registration = _GENERATION_BACKENDS[backend]
+        return registration[0], registration[1]
     except KeyError as error:
         raise ValueError(f"Unsupported generation backend: {backend}") from error
+
+
+# {
+#   責務: [generation_backend_profile_factory: 登録済みbackendの画面既定値factoryを返す]
+#   処理: [1: backendとprofile種別をregistryから検索する, 2: 対応するfactoryを返す]
+#   引数: [backend: 生成backend ID, profile_kind: image_generationまたはimage_to_image]
+#   戻り値: [Callable: backend固有profile factory]
+#   エラー: [ValueError: 未登録backendまたはprofile種別が指定された場合]
+# }
+def generation_backend_profile_factory(backend: str, profile_kind: str) -> Callable[..., Any]:
+    try:
+        return _GENERATION_BACKENDS[backend][2][profile_kind]
+    except KeyError as error:
+        raise ValueError(
+            f"Unsupported generation backend profile: {backend}/{profile_kind}"
+        ) from error

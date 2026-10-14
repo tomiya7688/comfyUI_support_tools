@@ -386,6 +386,29 @@ def create_configured_backend_launch_spec():
 
 
 # {
+#   責務: [configured_backend_api_health_checks: API疎通確認に使う全generation backend URLを返す]
+#   処理: [1: A1111とComfyUIの起動specを構築する, 2: 表示名とbackend固有health URLを返す]
+#   引数: []
+#   戻り値: [list[tuple[str, str]]: API表示名と疎通確認URLの組]
+# }
+def configured_backend_api_health_checks():
+    from .backend.backend_launch_spec import create_backend_launch_spec
+
+    backends = ("a1111", "comfyui")
+    checks = []
+    for backend in backends:
+        spec = create_backend_launch_spec(
+            backend,
+            str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
+            str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
+            CHECKPOINTS_DIR,
+            MODELS_DIR,
+        )
+        checks.append((f"{spec.display_name} API", spec.health_url))
+    return checks
+
+
+# {
 #   責務: [configured_backend_runtime_directory: 指定backendの外部runtime配置を解決する]
 #   処理: [backend IDを検証し, paths設定からA1111またはComfyUIの実行directoryを返す]
 #   引数: [backend: 起動するbackend ID]

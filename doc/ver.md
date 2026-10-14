@@ -1043,3 +1043,10 @@
         scripts/context.py
         tests/test_model_choice_catalog.py
         doc/ver.md
+# 123. 依存状態タブの生成backend API URLをlaunch契約へ集約
+    依存状態タブからA1111／ComfyUI固有のAPI endpoint直書きを除き、共通BackendLaunchSpecが返す疎通URLを利用するよう変更。PixAI APIの確認は維持。
+    追加・変更したファイル
+        scripts/context.py
+        scripts/tabs/dependency_status.py
+        tests/test_backend_launch_spec.py
+        doc/ver.md

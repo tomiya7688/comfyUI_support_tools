@@ -5,8 +5,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts import context
-from scripts.backend.image_generation_profile import create_image_generation_profile
-from scripts.backend.image_to_image_profile import create_image_to_image_profile
+from scripts.backend.image_generation_profile import (
+    create_a1111_image_generation_profile,
+    create_comfyui_image_generation_profile,
+)
+from scripts.backend.image_to_image_profile import (
+    create_a1111_image_to_image_profile,
+    create_comfyui_image_to_image_profile,
+)
+from scripts.backend.generation_backend_registry import (
+    SUPPORTED_GENERATION_BACKENDS,
+    generation_backend_profile_factory,
+)
 
 
 # {
@@ -15,6 +25,21 @@ from scripts.backend.image_to_image_profile import create_image_to_image_profile
 #   処理: [API URL・保存先・checkpointがbackendごとの既存仕様と一致することを確認する]
 # }
 class ImageGenerationProfileTests(unittest.TestCase):
+    # {
+    #   責務: [test_registered_backends_expose_both_profile_factories: 登録backendが両生成画面のprofile factoryを持つことを検証する]
+    #   処理: [登録backendごとにimage-generationとimage-to-imageのfactory取得を確認する]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_registered_backends_expose_both_profile_factories(self):
+        for backend in SUPPORTED_GENERATION_BACKENDS:
+            with self.subTest(backend=backend):
+                self.assertTrue(callable(generation_backend_profile_factory(backend, "image_generation")))
+                self.assertTrue(callable(generation_backend_profile_factory(backend, "image_to_image")))
+
+        with self.assertRaisesRegex(ValueError, "profile"):
+            generation_backend_profile_factory("a1111", "unknown")
+
     # {
     #   責務: [test_configured_profile_uses_context_backend_and_paths: contextが選択backendと共通pathをprofileへ集約することを検証する]
     #   処理: [backendごとにcontext設定をpatchし, profileのbackend・API URL・保存先を確認する]
@@ -51,8 +76,7 @@ class ImageGenerationProfileTests(unittest.TestCase):
     #   戻り値: []
     # }
     def test_comfyui_defaults_use_configured_api_and_output_folder(self):
-        profile = create_image_generation_profile(
-            "comfyui",
+        profile = create_comfyui_image_generation_profile(
             "http://127.0.0.1:7860",
             "http://localhost:8188/",
             Path("external/A1111"),
@@ -77,8 +101,7 @@ class ImageGenerationProfileTests(unittest.TestCase):
             "http://localhost:7860/sdapi/v1/txt2img",
         ):
             with self.subTest(configured_url=configured_url):
-                profile = create_image_generation_profile(
-                    "a1111",
+                profile = create_a1111_image_generation_profile(
                     configured_url,
                     "http://127.0.0.1:8188",
                     Path("external/A1111"),
@@ -99,8 +122,8 @@ class ImageGenerationProfileTests(unittest.TestCase):
     # }
     def test_unknown_backend_is_rejected(self):
         with self.assertRaises(ValueError):
-            create_image_generation_profile(
-                "unknown", "", "", Path("a1111"), Path("runtime"), "today"
+            generation_backend_profile_factory(
+                "unknown", "image_generation"
             )
 
     # {
@@ -110,16 +133,14 @@ class ImageGenerationProfileTests(unittest.TestCase):
     #   戻り値: []
     # }
     def test_img2img_profiles_preserve_backend_defaults(self):
-        a1111 = create_image_to_image_profile(
-            "a1111",
+        a1111 = create_a1111_image_to_image_profile(
             "http://localhost:7860/sdapi/v1",
             "http://127.0.0.1:8188",
             Path("external/A1111"),
             Path("external/A1111"),
             "http://localhost:7861/pixai/v1/interrogate",
         )
-        comfyui = create_image_to_image_profile(
-            "comfyui",
+        comfyui = create_comfyui_image_to_image_profile(
             "http://localhost:7860",
             "http://localhost:8188/",
             Path("external/A1111"),
@@ -153,8 +174,8 @@ class ImageGenerationProfileTests(unittest.TestCase):
     # }
     def test_img2img_profile_rejects_unknown_backend(self):
         with self.assertRaises(ValueError):
-            create_image_to_image_profile(
-                "unknown", "", "", Path("a1111"), Path("runtime"), ""
+            generation_backend_profile_factory(
+                "unknown", "image_to_image"
             )
 
 

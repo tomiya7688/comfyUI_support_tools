@@ -1085,3 +1085,12 @@
         tests/test_a1111_api_url.py
         tests/test_image_generation_profile.py
         doc/ver.md
+# 128. 生成adapterとcatalogのbackend登録を共通化
+    生成adapter factoryと候補catalog factoryが別々に保持していたbackend分岐を共通registryへ集約し、両factoryが同じ登録から生成されることをテスト。
+    English: Centralized backend registrations shared by the image-generation adapter factory and the model-catalog factory, with a test that their capabilities stay paired.
+    追加・変更したファイル
+        scripts/backend/generation_backend_registry.py
+        scripts/backend/generation_backend_catalog_factory.py
+        scripts/backend/image_generation_backend_factory.py
+        tests/test_text_to_image_backends.py
+        doc/ver.md

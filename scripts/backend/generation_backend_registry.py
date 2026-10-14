@@ -7,9 +7,9 @@ from typing import Any
 
 from .a1111_backend_catalog import A1111BackendCatalog
 from .a1111_image_generation_backend import A1111ImageGenerationBackend
+from .comfy_ui_client import ComfyUIClient
 from .comfyui_backend_catalog import ComfyUIBackendCatalog
 from .comfyui_image_generation_backend import ComfyUIImageGenerationBackend
-from .comfy_ui_client import ComfyUIClient
 from .generation_backend_catalog import GenerationBackendCatalog
 from .image_generation_backend import ImageGenerationBackend
 

@@ -8,7 +8,7 @@ from .generation_capabilities import GenerationCapabilities
 
 from .generation_backend_catalog import (
     ChoiceMap,
-    LocalRoots,
+    GenerationModelRoots,
     RequestGet,
     ScanFlowFiles,
     ScanModelFiles,
@@ -78,21 +78,21 @@ class ComfyUIBackendCatalog:
     # {
     #   責務: [local_choices: ComfyUI用のローカル候補をルート設定から収集する]
     #   処理: [1: checkpoint, UNet, LoRA, VAEを共有先とruntime配置から走査する, 2: upscaler, sampler, workflow候補を追加する]
-    #   引数: [self: catalog instance, roots: モデルとruntimeのルート, scan_model_files: モデルファイル走査関数, scan_flow_files: workflow走査関数, unique_choices: 候補の重複除去関数]
+    #   引数: [self: catalog instance, roots: GenerationModelRoots, scan_model_files: モデルファイル走査関数, scan_flow_files: workflow走査関数, unique_choices: 候補の重複除去関数]
     #   戻り値: [ChoiceMap: ComfyUIで利用できるローカル候補]
     # }
     def local_choices(
         self,
-        roots: LocalRoots,
+        roots: GenerationModelRoots,
         scan_model_files: ScanModelFiles,
         scan_flow_files: ScanFlowFiles,
         unique_choices: UniqueChoices,
     ) -> ChoiceMap:
-        models = roots["models"]
-        legacy_models = roots["legacy_models"]
-        runtime_models = roots["runtime"] / "models"
-        checkpoint_groups = [scan_model_files(roots["checkpoints"])]
-        checkpoint_groups.extend(scan_model_files(path) for path in roots["legacy_checkpoints"])
+        models = roots.models
+        legacy_models = roots.legacy_models
+        runtime_models = roots.runtime / "models"
+        checkpoint_groups = [scan_model_files(roots.checkpoints)]
+        checkpoint_groups.extend(scan_model_files(path) for path in roots.legacy_checkpoints)
         checkpoint_groups.append(scan_model_files(runtime_models / "checkpoints"))
         unet_roots = [
             models / "diffusion_models",
@@ -120,7 +120,7 @@ class ComfyUIBackendCatalog:
             "upscalers": scan_model_files(runtime_models / "upscale_models"),
             "samplers": list(_COMFYUI_SAMPLER_CHOICES),
             "flows": unique_choices(
-                scan_flow_files(roots["comfy_flows"])
+                scan_flow_files(roots.comfy_flows)
                 + scan_flow_files(legacy_models / "flows")
             ),
         }

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 # A1111の既知endpoint形式をrootへ戻すためのsuffix一覧
 _A1111_ENDPOINT_SUFFIXES = (
     "/sdapi/v1/txt2img",

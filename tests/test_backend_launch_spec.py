@@ -6,10 +6,10 @@ from unittest.mock import patch
 
 from scripts import context
 from scripts.backend.backend_launch_spec import (
-    SUPPORTED_LAUNCH_BACKENDS,
     create_backend_api_health_checks,
     create_backend_launch_spec,
 )
+from scripts.backend.generation_backend_registry import SUPPORTED_LAUNCH_BACKENDS
 
 
 # {

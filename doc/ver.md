@@ -1104,3 +1104,11 @@
         scripts/backend/image_to_image_profile.py
         tests/test_image_generation_profile.py
         doc/ver.md
+# 130. ローカル起動設定をgeneration backend registryへ集約
+    A1111 / ComfyUIの起動spec factoryを共通generation registryへ登録し、launch設定選択のbackend名分岐と対応backend一覧の重複を除去。API疎通確認一覧も起動specを提供するbackend登録から生成する。
+    English: Registered A1111 and ComfyUI launch-spec factories in the shared generation registry, removing backend-ID branching and duplicate backend enumeration; API health checks now use the registered launch-capable backends.
+    追加・変更したファイル
+        scripts/backend/backend_launch_spec.py
+        scripts/backend/generation_backend_registry.py
+        tests/test_backend_launch_spec.py
+        doc/ver.md

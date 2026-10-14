@@ -7,7 +7,7 @@ from .generation_capabilities import GenerationCapabilities
 
 from .generation_backend_catalog import (
     ChoiceMap,
-    LocalRoots,
+    GenerationModelRoots,
     RequestGet,
     ScanFlowFiles,
     ScanModelFiles,
@@ -79,37 +79,37 @@ class A1111BackendCatalog:
     # {
     #   責務: [local_choices: A1111用のローカル候補をルート設定から収集する]
     #   処理: [1: checkpoint, LoRA, VAEを共有先とA1111配置から走査する, 2: A1111用upscalerとsampler候補を加える]
-    #   引数: [self: catalog instance, roots: モデルとruntimeのルート, scan_model_files: モデルファイル走査関数, scan_flow_files: 未使用の共通契約引数, unique_choices: 候補の重複除去関数]
+    #   引数: [self: catalog instance, roots: GenerationModelRoots, scan_model_files: モデルファイル走査関数, scan_flow_files: 未使用の共通契約引数, unique_choices: 候補の重複除去関数]
     #   戻り値: [ChoiceMap: A1111で利用できるローカル候補]
     # }
     def local_choices(
         self,
-        roots: LocalRoots,
+        roots: GenerationModelRoots,
         scan_model_files: ScanModelFiles,
         scan_flow_files: ScanFlowFiles,
         unique_choices: UniqueChoices,
     ) -> ChoiceMap:
-        models = roots["models"]
-        legacy_models = roots["legacy_models"]
-        checkpoints = [scan_model_files(roots["checkpoints"])]
-        checkpoints.extend(scan_model_files(path) for path in roots["legacy_checkpoints"])
+        models = roots.models
+        legacy_models = roots.legacy_models
+        checkpoints = [scan_model_files(roots.checkpoints)]
+        checkpoints.extend(scan_model_files(path) for path in roots.legacy_checkpoints)
         loras = [
             scan_model_files(models / "Lora"),
             scan_model_files(models / "loras"),
             scan_model_files(legacy_models / "Lora"),
             scan_model_files(legacy_models / "loras"),
-            scan_model_files(roots["a1111"] / "models" / "Lora"),
+            scan_model_files(roots.a1111_runtime / "models" / "Lora"),
         ]
         vaes = [
             scan_model_files(models / "VAE"),
             scan_model_files(models / "vae"),
             scan_model_files(legacy_models / "VAE"),
             scan_model_files(legacy_models / "vae"),
-            scan_model_files(roots["a1111"] / "models" / "VAE"),
-            scan_model_files(roots["runtime"] / "models" / "VAE"),
+            scan_model_files(roots.a1111_runtime / "models" / "VAE"),
+            scan_model_files(roots.runtime / "models" / "VAE"),
         ]
         upscalers = list(_A1111_UPSCALER_CHOICES)
-        model_root = roots["runtime"] / "models"
+        model_root = roots.runtime / "models"
         for folder_name in ("ESRGAN", "RealESRGAN", "SwinIR", "LDSR", "ScuNET", "BSRGAN"):
             upscalers.extend(scan_model_files(model_root / folder_name, keep_suffix=False))
         return {

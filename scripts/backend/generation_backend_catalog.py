@@ -3,16 +3,33 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from .generation_capabilities import GenerationCapabilities
 
 ChoiceMap = dict[str, list[str]]
 RequestGet = Callable[..., Any]
-LocalRoots = dict[str, Any]
 ScanModelFiles = Callable[..., list[str]]
 ScanFlowFiles = Callable[..., list[str]]
 UniqueChoices = Callable[[list[str]], list[str]]
+
+
+# {
+#   責務: [GenerationModelRoots: generation catalogへ渡すモデル・runtime配置を表す]
+#   フィールド: [checkpoints: 共有checkpoint, legacy_checkpoints: 旧checkpoint配置, models: 共有models, legacy_models: 旧models, runtime: 選択runtime, a1111_runtime: A1111旧runtime配置, comfy_flows: 共有workflow]
+#   処理: [候補取得に必要なpathを名前付きのimmutable contractとして保持する]
+# }
+@dataclass(frozen=True, slots=True)
+class GenerationModelRoots:
+    checkpoints: Path
+    legacy_checkpoints: tuple[Path, ...]
+    models: Path
+    legacy_models: Path
+    runtime: Path
+    a1111_runtime: Path
+    comfy_flows: Path
 
 
 # {
@@ -58,12 +75,12 @@ class GenerationBackendCatalog(Protocol):
     # {
     #   責務: [local_choices: backend固有のローカル候補を共通形式で返す]
     #   処理: [1: 共通ルート情報と走査関数からモデル候補を集める, 2: backend既定候補を加えて重複を除く]
-    #   引数: [self: catalog instance, roots: モデルとruntimeのルート, scan_model_files: モデルファイル走査関数, scan_flow_files: flow走査関数, unique_choices: 候補の重複除去関数]
+    #   引数: [self: catalog instance, roots: GenerationModelRoots, scan_model_files: モデルファイル走査関数, scan_flow_files: flow走査関数, unique_choices: 候補の重複除去関数]
     #   戻り値: [ChoiceMap: ローカルのcheckpoint等の候補]
     # }
     def local_choices(
         self,
-        roots: LocalRoots,
+        roots: GenerationModelRoots,
         scan_model_files: ScanModelFiles,
         scan_flow_files: ScanFlowFiles,
         unique_choices: UniqueChoices,

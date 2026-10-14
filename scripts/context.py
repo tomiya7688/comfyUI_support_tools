@@ -36,6 +36,7 @@ from tkinter import filedialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from .backend.backend_runtime_profile import create_backend_runtime_profile
+from .backend.generation_backend_catalog import GenerationModelRoots
 
 try:
     import psutil
@@ -427,21 +428,21 @@ def configured_backend_runtime_directory(backend):
 
 # {
 #   責務: [_local_backend_choices: 選択中backend catalogからローカル候補を取得する]
-#   処理: [1: 共通パス設定をcatalog用ルートmappingへまとめる, 2: 選択中catalogへ走査関数とともに渡す]
+#   処理: [1: 共通パス設定をGenerationModelRoots contractへまとめる, 2: 選択中catalogへ走査関数とともに渡す]
 #   引数: []
 #   戻り値: [ChoiceMap: 選択中backendのローカル生成候補]
 # }
 def _local_backend_choices():
     catalog = create_configured_generation_backend_catalog()
-    roots = {
-        "checkpoints": CHECKPOINTS_DIR,
-        "legacy_checkpoints": LEGACY_CHECKPOINTS_DIRS,
-        "models": MODELS_DIR,
-        "legacy_models": LEGACY_MODELS_DIR,
-        "runtime": RUNTIME_DIR,
-        "a1111": A1111_DIR,
-        "comfy_flows": COMFY_FLOWS_DIR,
-    }
+    roots = GenerationModelRoots(
+        checkpoints=CHECKPOINTS_DIR,
+        legacy_checkpoints=LEGACY_CHECKPOINTS_DIRS,
+        models=MODELS_DIR,
+        legacy_models=LEGACY_MODELS_DIR,
+        runtime=RUNTIME_DIR,
+        a1111_runtime=A1111_DIR,
+        comfy_flows=COMFY_FLOWS_DIR,
+    )
     return catalog.local_choices(roots, _scan_model_files, _scan_flow_files, _unique_choices)
 
 

@@ -53,8 +53,8 @@ def request(**overrides):
 
 class TextToImageBackendTests(unittest.TestCase):
     # {
-    #   責務: [test_registered_factories_create_matching_catalogs_and_adapters: 共通registryがbackend adapterとcatalogを対応づけることを検証する]
-    #   処理: [1: 各登録backendのcatalogと生成adapterを作る, 2: capability宣言が一致することを確認する]
+    #   責務: [test_registered_factories_create_matching_catalogs_and_adapters: 共通registryがbackendごとの生成機能一式を対応づけることを検証する]
+    #   処理: [1: catalogと生成adapterを作りcapability一致を確認する, 2: profile factoryと起動対応backendのlaunch specを確認する]
     #   引数: [self: test case]
     #   戻り値: []
     # }

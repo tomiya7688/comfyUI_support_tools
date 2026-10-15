@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
+
+from .generation_backend_types import GenerationBackendId
 
 
 # {
@@ -12,7 +15,7 @@ from pathlib import Path
 # }
 @dataclass(frozen=True)
 class BackendRuntimeProfile:
-    backend: str
+    backend: GenerationBackendId
     display_name: str
     runtime_directory: Path
 
@@ -29,7 +32,7 @@ def create_backend_runtime_profile(
     a1111_directory: Path,
     comfyui_directory: Path,
     runtime_directory_override: str | Path | None = None,
-    fallback_backend: str | None = "a1111",
+    fallback_backend: GenerationBackendId | None = "a1111",
 ) -> BackendRuntimeProfile:
     normalized_backend = backend.strip().lower()
     backend_options = {
@@ -43,10 +46,11 @@ def create_backend_runtime_profile(
         selected_backend = fallback_backend
     if selected_backend not in backend_options:
         raise ValueError(f"Unsupported fallback runtime backend: {selected_backend}")
-    display_name, default_directory = backend_options[selected_backend]
+    selected_backend_id = cast(GenerationBackendId, selected_backend)
+    display_name, default_directory = backend_options[selected_backend_id]
     runtime_directory = (
         Path(runtime_directory_override).expanduser().resolve()
         if runtime_directory_override is not None
         else default_directory.resolve()
     )
-    return BackendRuntimeProfile(selected_backend, display_name, runtime_directory)
+    return BackendRuntimeProfile(selected_backend_id, display_name, runtime_directory)

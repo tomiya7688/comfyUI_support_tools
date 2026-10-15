@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .generation_backend_types import GenerationBackendId
+
 
 # {
 #   責務: [BackendLaunchSpec: ローカルbackendの起動に必要な差分設定を保持する]
@@ -12,7 +14,7 @@ from pathlib import Path
 # }
 @dataclass(frozen=True)
 class BackendLaunchSpec:
-    backend: str
+    backend: GenerationBackendId
     display_name: str
     health_url: str
     port: int
@@ -28,7 +30,7 @@ class BackendLaunchSpec:
 #   エラー: [ValueError: 未対応backendが渡された場合]
 # }
 def create_backend_launch_spec(
-    backend: str,
+    backend: GenerationBackendId,
     a1111_api_url: str,
     comfyui_api_url: str,
     checkpoints_dir: Path,

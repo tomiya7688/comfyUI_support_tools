@@ -7,6 +7,7 @@ from typing import Any
 
 from .comfy_ui_client import ComfyUIClient
 from .generation_backend_registry import generation_backend_factories
+from .generation_backend_types import GenerationBackendId
 from .image_generation_backend import ImageGenerationBackend
 
 
@@ -18,7 +19,7 @@ from .image_generation_backend import ImageGenerationBackend
 #   エラー: [ValueError: 未登録backendまたは必須接続関数が不足した場合]
 # }
 def create_image_generation_backend(
-    backend: str,
+    backend: GenerationBackendId,
     api_url: str,
     timeout: int,
     *,

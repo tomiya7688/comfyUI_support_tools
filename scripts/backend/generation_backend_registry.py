@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
 from .a1111_backend_catalog import A1111BackendCatalog
 from .a1111_image_generation_backend import A1111ImageGenerationBackend
@@ -22,6 +22,8 @@ from .image_generation_profile import create_a1111_image_generation_profile, cre
 from .image_generation_backend import ImageGenerationBackend
 from .image_to_image_profile import create_a1111_image_to_image_profile, create_comfyui_image_to_image_profile
 
+GenerationProfileKind = Literal["image_generation", "image_to_image"]
+
 
 # {
 #   責務: [GenerationBackendRegistration: 1 backendが提供するcatalog・adapter・profile・起動spec factoryを保持する]
@@ -32,7 +34,7 @@ from .image_to_image_profile import create_a1111_image_to_image_profile, create_
 class GenerationBackendRegistration:
     catalog_factory: Callable[[], GenerationBackendCatalog]
     adapter_factory: Callable[..., ImageGenerationBackend]
-    profile_factories: Mapping[str, Callable[..., Any]]
+    profile_factories: Mapping[GenerationProfileKind, Callable[..., Any]]
     launch_spec_factory: Callable[..., BackendLaunchSpec] | None
 
 
@@ -127,7 +129,10 @@ def generation_backend_factories(
 #   戻り値: [Callable: backend固有profile factory]
 #   エラー: [ValueError: 未登録backendまたはprofile種別が指定された場合]
 # }
-def generation_backend_profile_factory(backend: str, profile_kind: str) -> Callable[..., Any]:
+def generation_backend_profile_factory(
+    backend: str,
+    profile_kind: GenerationProfileKind,
+) -> Callable[..., Any]:
     try:
         return _GENERATION_BACKENDS[backend].profile_factories[profile_kind]
     except KeyError as error:

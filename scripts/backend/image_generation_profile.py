@@ -6,15 +6,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .a1111_api_url import normalize_a1111_api_root
+from .generation_backend_types import GenerationBackendId
 
 
 # {
 #   責務: [ImageGenerationProfile: Random Imageのbackend別起動既定値を保持する]
-#   フィールド: [backend: backend識別子, api_url: 生成API URL, output_dir: 既定保存先, default_checkpoint: 既定checkpoint]
+#   フィールド: [backend: GenerationBackendId, api_url: 生成API URL, output_dir: 既定保存先, default_checkpoint: 既定checkpoint]
 # }
 @dataclass(frozen=True)
 class ImageGenerationProfile:
-    backend: str
+    backend: GenerationBackendId
     api_url: str
     output_dir: Path
     default_checkpoint: str

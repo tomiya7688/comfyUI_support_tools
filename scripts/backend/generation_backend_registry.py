@@ -19,6 +19,7 @@ from .comfy_ui_client import ComfyUIClient
 from .comfyui_backend_catalog import ComfyUIBackendCatalog
 from .comfyui_image_generation_backend import ComfyUIImageGenerationBackend
 from .generation_backend_catalog import GenerationBackendCatalog
+from .generation_backend_types import GenerationBackendId
 from .image_generation_profile import (
     ImageGenerationProfile,
     create_a1111_image_generation_profile,
@@ -87,7 +88,7 @@ def _create_comfyui_backend(
     return ComfyUIImageGenerationBackend(api_url, timeout, comfy_client_factory)
 
 
-_GENERATION_BACKENDS: dict[str, GenerationBackendRegistration] = {
+_GENERATION_BACKENDS: dict[GenerationBackendId, GenerationBackendRegistration] = {
     "a1111": GenerationBackendRegistration(
         catalog_factory=A1111BackendCatalog,
         adapter_factory=_create_a1111_backend,
@@ -108,8 +109,8 @@ _GENERATION_BACKENDS: dict[str, GenerationBackendRegistration] = {
     ),
 }
 
-SUPPORTED_GENERATION_BACKENDS = tuple(_GENERATION_BACKENDS)
-SUPPORTED_LAUNCH_BACKENDS = tuple(
+SUPPORTED_GENERATION_BACKENDS: tuple[GenerationBackendId, ...] = tuple(_GENERATION_BACKENDS)
+SUPPORTED_LAUNCH_BACKENDS: tuple[GenerationBackendId, ...] = tuple(
     backend
     for backend, registration in _GENERATION_BACKENDS.items()
     if registration.launch_spec_factory is not None
@@ -124,7 +125,7 @@ SUPPORTED_LAUNCH_BACKENDS = tuple(
 #   エラー: [ValueError: 未登録backendが指定された場合]
 # }
 def generation_backend_factories(
-    backend: str,
+    backend: GenerationBackendId,
 ) -> tuple[
     Callable[[], GenerationBackendCatalog],
     Callable[..., ImageGenerationBackend],
@@ -144,7 +145,7 @@ def generation_backend_factories(
 #   エラー: [ValueError: 未登録backendまたはprofile種別が指定された場合]
 # }
 def generation_backend_profile_factory(
-    backend: str,
+    backend: GenerationBackendId,
     profile_kind: GenerationProfileKind,
 ) -> GenerationProfileFactory:
     try:
@@ -162,7 +163,9 @@ def generation_backend_profile_factory(
 #   戻り値: [Callable: backend固有BackendLaunchSpec factory]
 #   エラー: [ValueError: 未登録backendが指定された場合]
 # }
-def generation_backend_launch_spec_factory(backend: str) -> Callable[..., BackendLaunchSpec]:
+def generation_backend_launch_spec_factory(
+    backend: GenerationBackendId,
+) -> Callable[..., BackendLaunchSpec]:
     try:
         factory = _GENERATION_BACKENDS[backend].launch_spec_factory
         if factory is None:

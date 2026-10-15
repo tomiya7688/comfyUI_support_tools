@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .generation_backend_catalog import GenerationBackendCatalog
+from .generation_backend_types import GenerationBackendId
 from .generation_backend_registry import generation_backend_factories
 
 
@@ -13,6 +14,6 @@ from .generation_backend_registry import generation_backend_factories
 #   戻り値: [GenerationBackendCatalog: backend別候補取得契約]
 #   エラー: [ValueError: 未登録backendが指定された場合]
 # }
-def create_generation_backend_catalog(backend: str) -> GenerationBackendCatalog:
+def create_generation_backend_catalog(backend: GenerationBackendId) -> GenerationBackendCatalog:
     catalog_factory, _ = generation_backend_factories(backend)
     return catalog_factory()

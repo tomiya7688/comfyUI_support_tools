@@ -20,6 +20,7 @@ from .comfyui_backend_catalog import ComfyUIBackendCatalog
 from .comfyui_image_generation_backend import ComfyUIImageGenerationBackend
 from .generation_backend_catalog import GenerationBackendCatalog
 from .generation_backend_types import GenerationBackendId
+from .generation_profile_inputs import GenerationProfileInputs
 from .image_generation_profile import (
     ImageGenerationProfile,
     create_a1111_image_generation_profile,
@@ -34,10 +35,7 @@ from .image_to_image_profile import (
 
 GenerationProfileKind = Literal["image_generation", "image_to_image"]
 GenerationProfile = ImageGenerationProfile | ImageToImageProfile
-GenerationProfileFactory = Callable[
-    [str, str, Path, Path, str],
-    GenerationProfile,
-]
+GenerationProfileFactory = Callable[[GenerationProfileInputs], GenerationProfile]
 
 
 # {

@@ -13,6 +13,7 @@ from scripts.backend.image_to_image_profile import (
     create_a1111_image_to_image_profile,
     create_comfyui_image_to_image_profile,
 )
+from scripts.backend.generation_profile_inputs import GenerationProfileInputs
 from scripts.backend.generation_backend_registry import (
     SUPPORTED_GENERATION_BACKENDS,
     generation_backend_profile_factory,
@@ -77,11 +78,14 @@ class ImageGenerationProfileTests(unittest.TestCase):
     # }
     def test_comfyui_defaults_use_configured_api_and_output_folder(self):
         profile = create_comfyui_image_generation_profile(
-            "http://127.0.0.1:7860",
-            "http://localhost:8188/",
-            Path("external/A1111"),
-            Path("external/ComfyUI"),
-            "20261010",
+            GenerationProfileInputs(
+                a1111_api_url="http://127.0.0.1:7860",
+                comfyui_api_url="http://localhost:8188/",
+                a1111_directory=Path("external/A1111"),
+                runtime_directory=Path("external/ComfyUI"),
+                date_folder="20261010",
+                pixai_tagger_url="http://localhost:7861/pixai/v1/interrogate",
+            )
         )
         self.assertEqual(profile.api_url, "http://localhost:8188")
         self.assertEqual(profile.output_dir, Path("external/ComfyUI/output/KadokaTools/20261010"))
@@ -102,11 +106,14 @@ class ImageGenerationProfileTests(unittest.TestCase):
         ):
             with self.subTest(configured_url=configured_url):
                 profile = create_a1111_image_generation_profile(
-                    configured_url,
-                    "http://127.0.0.1:8188",
-                    Path("external/A1111"),
-                    Path("external/ComfyUI"),
-                    "20261010",
+                    GenerationProfileInputs(
+                        a1111_api_url=configured_url,
+                        comfyui_api_url="http://127.0.0.1:8188",
+                        a1111_directory=Path("external/A1111"),
+                        runtime_directory=Path("external/ComfyUI"),
+                        date_folder="20261010",
+                        pixai_tagger_url="http://localhost:7861/pixai/v1/interrogate",
+                    )
                 )
                 self.assertEqual(profile.api_url, "http://localhost:7860/sdapi/v1/txt2img")
                 self.assertEqual(
@@ -134,18 +141,24 @@ class ImageGenerationProfileTests(unittest.TestCase):
     # }
     def test_img2img_profiles_preserve_backend_defaults(self):
         a1111 = create_a1111_image_to_image_profile(
-            "http://localhost:7860/sdapi/v1",
-            "http://127.0.0.1:8188",
-            Path("external/A1111"),
-            Path("external/A1111"),
-            "http://localhost:7861/pixai/v1/interrogate",
+            GenerationProfileInputs(
+                a1111_api_url="http://localhost:7860/sdapi/v1",
+                comfyui_api_url="http://127.0.0.1:8188",
+                a1111_directory=Path("external/A1111"),
+                runtime_directory=Path("external/A1111"),
+                date_folder="",
+                pixai_tagger_url="http://localhost:7861/pixai/v1/interrogate",
+            )
         )
         comfyui = create_comfyui_image_to_image_profile(
-            "http://localhost:7860",
-            "http://localhost:8188/",
-            Path("external/A1111"),
-            Path("external/ComfyUI"),
-            "http://localhost:7861/pixai/v1/interrogate",
+            GenerationProfileInputs(
+                a1111_api_url="http://localhost:7860",
+                comfyui_api_url="http://localhost:8188/",
+                a1111_directory=Path("external/A1111"),
+                runtime_directory=Path("external/ComfyUI"),
+                date_folder="",
+                pixai_tagger_url="http://localhost:7861/pixai/v1/interrogate",
+            )
         )
 
         self.assertEqual(a1111.api_url, "http://localhost:7860/sdapi/v1/img2img")

@@ -1,5 +1,6 @@
 """Keep generation-backend API details out of Tkinter tabs."""
 
+import ast
 import unittest
 from pathlib import Path
 
@@ -15,6 +16,20 @@ GENERATION_API_ENDPOINTS = (
     "/system_stats",
     "/object_info/",
 )
+GENERATION_UI_TAB_FILES = (
+    "random_image.py",
+    "random_img2img.py",
+    "prompt_generate.py",
+)
+BACKEND_IMPLEMENTATION_MODULES = (
+    "a1111_image_generation_backend",
+    "comfyui_image_generation_backend",
+    "comfy_ui_client",
+    "generation_backend_registry",
+    "generation_backend_catalog_factory",
+    "image_generation_backend_factory",
+)
+GENERATION_BACKEND_IDS = {"a1111", "comfyui"}
 
 
 # {
@@ -38,6 +53,35 @@ class GenerationBackendUiBoundaryTests(unittest.TestCase):
             for endpoint in GENERATION_API_ENDPOINTS:
                 if endpoint in source:
                     violations.append(f"{source_path.relative_to(REPOSITORY_ROOT)}: {endpoint}")
+
+        self.assertEqual(violations, [])
+
+    # {
+    #   責務: [test_generation_tabs_do_not_select_or_import_backend_details: 生成tabがbackend IDやadapter実装を直接参照しないことを検証する]
+    #   処理: [生成tabのASTを走査し, runtime backend名・backend固有module・backend ID literalの使用を検出する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_generation_tabs_do_not_select_or_import_backend_details(self):
+        tab_root = REPOSITORY_ROOT / "scripts" / "tabs"
+        violations = []
+
+        for filename in GENERATION_UI_TAB_FILES:
+            source_path = tab_root / filename
+            source = source_path.read_text(encoding="utf-8")
+            syntax_tree = ast.parse(source, filename=str(source_path))
+            for node in ast.walk(syntax_tree):
+                if isinstance(node, ast.Name) and node.id == "RUNTIME_BACKEND":
+                    violations.append(f"{filename}:{node.lineno}: RUNTIME_BACKEND")
+                if isinstance(node, ast.Constant) and node.value in GENERATION_BACKEND_IDS:
+                    violations.append(f"{filename}:{node.lineno}: {node.value}")
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    if any(node.module.endswith(name) for name in BACKEND_IMPLEMENTATION_MODULES):
+                        violations.append(f"{filename}:{node.lineno}: {node.module}")
+                if isinstance(node, ast.Import):
+                    for imported_module in node.names:
+                        if any(imported_module.name.endswith(name) for name in BACKEND_IMPLEMENTATION_MODULES):
+                            violations.append(f"{filename}:{node.lineno}: {imported_module.name}")
 
         self.assertEqual(violations, [])
 

@@ -2,22 +2,23 @@ from pathlib import Path
 
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 
+from ..backend.generation_backend_types import GenerationBackendId
 from .settings_document import load_settings_document, save_settings_document
 
 
 # {
 #   責務: [LastSettingsStore: FeatureSettingsをversioned JSON documentへ保存・復元する]
-#   フィールド: [backend: 設定を分離するbackend key, path: 設定JSONの保存先]
+#   フィールド: [backend: GenerationBackendId形式の設定分離key, path: 設定JSONの保存先]
 #   処理: [Tk変数やTab classを知らずにfeature ID単位の設定mappingを永続化する]
 # }
 class LastSettingsStore:
     # {
     #   責務: [__init__: backend用settings storeを初期化する]
     #   処理: [backend識別子と注入されたsettings JSON pathを保持する]
-    #   引数: [self: store instance, backend: backend識別子, path: 設定JSONの保存先]
+    #   引数: [self: store instance, backend: GenerationBackendId, path: 設定JSONの保存先]
     #   戻り値: []
     # }
-    def __init__(self, backend: str, path: Path):
+    def __init__(self, backend: GenerationBackendId, path: Path) -> None:
         self.backend = backend
         self.path = Path(path)
 

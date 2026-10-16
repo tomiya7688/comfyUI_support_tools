@@ -296,14 +296,18 @@ def base_model_choices(choices):
 # }
 def image_to_image_profile():
     from .backend.generation_backend_registry import generation_backend_profile_factory
+    from .backend.generation_profile_inputs import GenerationProfileInputs
 
     factory = generation_backend_profile_factory(RUNTIME_BACKEND, "image_to_image")
     return factory(
-        USER_PATHS["webui_api_url"],
-        USER_PATHS["comfyui_api_url"],
-        A1111_DIR,
-        RUNTIME_DIR,
-        PIXAI_TAGGER_API_URL,
+        GenerationProfileInputs(
+            a1111_api_url=str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
+            comfyui_api_url=str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
+            a1111_directory=A1111_DIR,
+            runtime_directory=RUNTIME_DIR,
+            date_folder="",
+            pixai_tagger_url=PIXAI_TAGGER_API_URL,
+        )
     )
 
 
@@ -315,14 +319,18 @@ def image_to_image_profile():
 # }
 def create_configured_image_generation_profile(date_folder):
     from .backend.generation_backend_registry import generation_backend_profile_factory
+    from .backend.generation_profile_inputs import GenerationProfileInputs
 
     factory = generation_backend_profile_factory(RUNTIME_BACKEND, "image_generation")
     return factory(
-        str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
-        str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
-        A1111_DIR,
-        RUNTIME_DIR,
-        date_folder,
+        GenerationProfileInputs(
+            a1111_api_url=str(USER_PATHS.get("webui_api_url", "http://127.0.0.1:7860")),
+            comfyui_api_url=str(USER_PATHS.get("comfyui_api_url", "http://127.0.0.1:8188")),
+            a1111_directory=A1111_DIR,
+            runtime_directory=RUNTIME_DIR,
+            date_folder=date_folder,
+            pixai_tagger_url=PIXAI_TAGGER_API_URL,
+        )
     )
 
 

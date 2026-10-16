@@ -25,9 +25,20 @@ GenerationFeature: TypeAlias = Literal[
 ]
 
 
+# {
+#   責務: [GenerationCapabilities: generation backendが提供する機能一覧を保持する]
+#   フィールド: [features: 対応するGenerationFeatureのimmutable set]
+#   処理: [backend adapterと利用側で共通の機能契約を共有する]
+# }
 @dataclass(frozen=True)
 class GenerationCapabilities:
     features: frozenset[GenerationFeature]
 
+    # {
+    #   責務: [supports: 指定されたgeneration機能に対応するか判定する]
+    #   処理: [featuresに指定機能が含まれるか確認して結果を返す]
+    #   引数: [self: capability宣言, feature: 確認するGenerationFeature]
+    #   戻り値: [bool: 機能が提供される場合true]
+    # }
     def supports(self, feature: GenerationFeature) -> bool:
         return feature in self.features

@@ -35,6 +35,22 @@ class BackendRuntimeProfileTests(unittest.TestCase):
                 self.assertEqual(profile.runtime_directory, runtime_directory.resolve())
 
     # {
+    #   責務: [test_profile_normalizes_backend_identifier: 外部backend文字列の空白と大小文字を正規化する]
+    #   処理: [1: 空白と大文字を含むComfyUI IDでprofileを作る, 2: 正規化後のbackendとruntimeを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_profile_normalizes_backend_identifier(self):
+        profile = create_backend_runtime_profile(
+            "  COMFYUI  ",
+            Path("external/A1111"),
+            Path("external/ComfyUI"),
+        )
+        self.assertEqual(profile.backend, "comfyui")
+        self.assertEqual(profile.display_name, "ComfyUI")
+        self.assertEqual(profile.runtime_directory, Path("external/ComfyUI").resolve())
+
+    # {
     #   責務: [test_profile_preserves_fallback_and_runtime_override: 従来fallbackとruntime overrideを確認する]
     #   処理: [1: 不明backendとoverride指定でprofileを作る, 2: A1111 fallbackとoverride pathを確認する]
     #   引数: [self: unittest test case]

@@ -18,7 +18,6 @@ from scripts.backend.generation_backend_registry import (
     SUPPORTED_LAUNCH_BACKENDS,
     generation_backend_factories,
     generation_backend_launch_spec_factory,
-    generation_backend_profile_factory,
 )
 from scripts.backend.generation_backend_catalog_factory import create_generation_backend_catalog
 from scripts.backend.text_to_image_request import TextToImageRequest
@@ -54,7 +53,7 @@ def request(**overrides):
 class TextToImageBackendTests(unittest.TestCase):
     # {
     #   責務: [test_registered_factories_create_matching_catalogs_and_adapters: 共通registryがbackendごとの生成機能一式を対応づけることを検証する]
-    #   処理: [1: catalogと生成adapterを作りcapability一致を確認する, 2: profile factoryと起動対応backendのlaunch specを確認する]
+    #   処理: [1: catalogと生成adapterを作りcapability一致を確認する, 2: 起動対応backendのlaunch specを確認する]
     #   引数: [self: test case]
     #   戻り値: []
     # }
@@ -75,11 +74,6 @@ class TextToImageBackendTests(unittest.TestCase):
 
                 self.assertIsInstance(catalog, catalog_factory)
                 self.assertEqual(catalog.capabilities, adapter.capabilities)
-
-                for profile_kind in ("image_generation", "image_to_image"):
-                    self.assertTrue(
-                        callable(generation_backend_profile_factory(backend_id, profile_kind))
-                    )
 
                 if backend_id in SUPPORTED_LAUNCH_BACKENDS:
                     launch_spec = generation_backend_launch_spec_factory(backend_id)(

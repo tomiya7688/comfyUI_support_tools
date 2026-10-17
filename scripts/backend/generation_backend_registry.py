@@ -136,27 +136,8 @@ def generation_backend_factories(
 
 
 # {
-#   責務: [generation_backend_profile_factory: 登録済みbackendの画面既定値factoryを返す]
-#   処理: [1: backendとprofile種別をregistryから検索する, 2: 対応するfactoryを返す]
-#   引数: [backend: 生成backend ID, profile_kind: image_generationまたはimage_to_image]
-#   戻り値: [GenerationProfileFactory: typed backend profile factory]
-#   エラー: [ValueError: 未登録backendまたはprofile種別が指定された場合]
-# }
-def generation_backend_profile_factory(
-    backend: GenerationBackendId,
-    profile_kind: GenerationProfileKind,
-) -> GenerationProfileFactory:
-    try:
-        return _GENERATION_BACKENDS[backend].profile_factories[profile_kind]
-    except KeyError as error:
-        raise ValueError(
-            f"Unsupported generation backend profile: {backend}/{profile_kind}"
-        ) from error
-
-
-# {
 #   責務: [create_generation_profile: 登録backendと用途から共通生成profileを構築する]
-#   処理: [1: 対応profile factoryをregistryから選択する, 2: 名前付き入力を渡してprofileを返す]
+#   処理: [1: 登録済みbackendの対応profile factoryを検索する, 2: 名前付き入力を渡してprofileを返す]
 #   引数: [backend: 生成backend ID, profile_kind: profile用途, inputs: 共通生成設定入力]
 #   戻り値: [GenerationProfile: 画像生成またはImg2Imgのbackend-neutral profile]
 #   エラー: [ValueError: 未登録backendまたはprofile用途が指定された場合]
@@ -166,7 +147,12 @@ def create_generation_profile(
     profile_kind: GenerationProfileKind,
     inputs: GenerationProfileInputs,
 ) -> GenerationProfile:
-    factory = generation_backend_profile_factory(backend, profile_kind)
+    try:
+        factory = _GENERATION_BACKENDS[backend].profile_factories[profile_kind]
+    except KeyError as error:
+        raise ValueError(
+            f"Unsupported generation backend profile: {backend}/{profile_kind}"
+        ) from error
     return factory(inputs)
 
 

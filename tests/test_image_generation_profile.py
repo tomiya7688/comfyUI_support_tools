@@ -17,7 +17,6 @@ from scripts.backend.generation_profile_inputs import GenerationProfileInputs
 from scripts.backend.generation_backend_registry import (
     SUPPORTED_GENERATION_BACKENDS,
     create_generation_profile,
-    generation_backend_profile_factory,
 )
 
 
@@ -28,12 +27,12 @@ from scripts.backend.generation_backend_registry import (
 # }
 class ImageGenerationProfileTests(unittest.TestCase):
     # {
-    #   責務: [test_registered_backends_expose_both_profile_factories: 登録backendが両生成画面のprofile factoryを持つことを検証する]
-    #   処理: [登録backendごとにimage-generationとimage-to-imageのfactory取得を確認する]
+    #   責務: [test_registered_backends_create_both_profiles: 登録backendが両生成画面の共通profileを構築できることを検証する]
+    #   処理: [登録backendごとにimage-generationとimage-to-image profileのAPI URLを確認する]
     #   引数: [self: test case]
     #   戻り値: []
     # }
-    def test_registered_backends_expose_both_profile_factories(self):
+    def test_registered_backends_create_both_profiles(self):
         inputs = GenerationProfileInputs(
             a1111_api_url="http://127.0.0.1:7860",
             comfyui_api_url="http://127.0.0.1:8188",
@@ -44,8 +43,6 @@ class ImageGenerationProfileTests(unittest.TestCase):
         )
         for backend in SUPPORTED_GENERATION_BACKENDS:
             with self.subTest(backend=backend):
-                self.assertTrue(callable(generation_backend_profile_factory(backend, "image_generation")))
-                self.assertTrue(callable(generation_backend_profile_factory(backend, "image_to_image")))
                 for profile_kind in ("image_generation", "image_to_image"):
                     profile = create_generation_profile(backend, profile_kind, inputs)
                     expected_api_url = (
@@ -55,9 +52,6 @@ class ImageGenerationProfileTests(unittest.TestCase):
                         else "http://127.0.0.1:8188"
                     )
                     self.assertEqual(profile.api_url, expected_api_url)
-
-        with self.assertRaisesRegex(ValueError, "profile"):
-            generation_backend_profile_factory("a1111", "unknown")
 
         with self.assertRaisesRegex(ValueError, "profile"):
             create_generation_profile("a1111", "unknown", inputs)
@@ -150,8 +144,17 @@ class ImageGenerationProfileTests(unittest.TestCase):
     # }
     def test_unknown_backend_is_rejected(self):
         with self.assertRaises(ValueError):
-            generation_backend_profile_factory(
-                "unknown", "image_generation"
+            create_generation_profile(
+                "unknown",
+                "image_generation",
+                GenerationProfileInputs(
+                    a1111_api_url="http://127.0.0.1:7860",
+                    comfyui_api_url="http://127.0.0.1:8188",
+                    a1111_directory=Path("external/A1111"),
+                    runtime_directory=Path("external/ComfyUI"),
+                    date_folder="20261017",
+                    pixai_tagger_url="http://127.0.0.1:7861/pixai/v1/interrogate",
+                ),
             )
 
     # {
@@ -208,8 +211,17 @@ class ImageGenerationProfileTests(unittest.TestCase):
     # }
     def test_img2img_profile_rejects_unknown_backend(self):
         with self.assertRaises(ValueError):
-            generation_backend_profile_factory(
-                "unknown", "image_to_image"
+            create_generation_profile(
+                "unknown",
+                "image_to_image",
+                GenerationProfileInputs(
+                    a1111_api_url="http://127.0.0.1:7860",
+                    comfyui_api_url="http://127.0.0.1:8188",
+                    a1111_directory=Path("external/A1111"),
+                    runtime_directory=Path("external/ComfyUI"),
+                    date_folder="",
+                    pixai_tagger_url="http://127.0.0.1:7861/pixai/v1/interrogate",
+                ),
             )
 
 

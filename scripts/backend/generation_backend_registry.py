@@ -155,6 +155,22 @@ def generation_backend_profile_factory(
 
 
 # {
+#   責務: [create_generation_profile: 登録backendと用途から共通生成profileを構築する]
+#   処理: [1: 対応profile factoryをregistryから選択する, 2: 名前付き入力を渡してprofileを返す]
+#   引数: [backend: 生成backend ID, profile_kind: profile用途, inputs: 共通生成設定入力]
+#   戻り値: [GenerationProfile: 画像生成またはImg2Imgのbackend-neutral profile]
+#   エラー: [ValueError: 未登録backendまたはprofile用途が指定された場合]
+# }
+def create_generation_profile(
+    backend: GenerationBackendId,
+    profile_kind: GenerationProfileKind,
+    inputs: GenerationProfileInputs,
+) -> GenerationProfile:
+    factory = generation_backend_profile_factory(backend, profile_kind)
+    return factory(inputs)
+
+
+# {
 #   責務: [generation_backend_launch_spec_factory: 登録済みbackendの起動設定factoryを返す]
 #   処理: [backend registryから起動spec factoryを検索して返す]
 #   引数: [backend: 起動対象backend ID]

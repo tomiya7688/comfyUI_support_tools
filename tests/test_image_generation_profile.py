@@ -16,6 +16,7 @@ from scripts.backend.image_to_image_profile import (
 from scripts.backend.generation_profile_inputs import GenerationProfileInputs
 from scripts.backend.generation_backend_registry import (
     SUPPORTED_GENERATION_BACKENDS,
+    create_generation_profile,
     generation_backend_profile_factory,
 )
 
@@ -33,13 +34,33 @@ class ImageGenerationProfileTests(unittest.TestCase):
     #   戻り値: []
     # }
     def test_registered_backends_expose_both_profile_factories(self):
+        inputs = GenerationProfileInputs(
+            a1111_api_url="http://127.0.0.1:7860",
+            comfyui_api_url="http://127.0.0.1:8188",
+            a1111_directory=Path("external/A1111"),
+            runtime_directory=Path("external/runtime"),
+            date_folder="20261017",
+            pixai_tagger_url="http://127.0.0.1:7861/pixai/v1/interrogate",
+        )
         for backend in SUPPORTED_GENERATION_BACKENDS:
             with self.subTest(backend=backend):
                 self.assertTrue(callable(generation_backend_profile_factory(backend, "image_generation")))
                 self.assertTrue(callable(generation_backend_profile_factory(backend, "image_to_image")))
+                for profile_kind in ("image_generation", "image_to_image"):
+                    profile = create_generation_profile(backend, profile_kind, inputs)
+                    expected_api_url = (
+                        "http://127.0.0.1:7860/sdapi/v1/"
+                        + ("txt2img" if profile_kind == "image_generation" else "img2img")
+                        if backend == "a1111"
+                        else "http://127.0.0.1:8188"
+                    )
+                    self.assertEqual(profile.api_url, expected_api_url)
 
         with self.assertRaisesRegex(ValueError, "profile"):
             generation_backend_profile_factory("a1111", "unknown")
+
+        with self.assertRaisesRegex(ValueError, "profile"):
+            create_generation_profile("a1111", "unknown", inputs)
 
     # {
     #   責務: [test_configured_profile_uses_context_backend_and_paths: contextが選択backendと共通pathをprofileへ集約することを検証する]

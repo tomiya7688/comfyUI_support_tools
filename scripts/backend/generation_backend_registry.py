@@ -116,23 +116,46 @@ SUPPORTED_LAUNCH_BACKENDS: tuple[GenerationBackendId, ...] = tuple(
 
 
 # {
-#   責務: [generation_backend_factories: backend共通catalogと生成adapterのfactoryを返す]
-#   処理: [1: 登録済みbackendを検索する, 2: 共通factory組を返す]
+#   責務: [create_registered_generation_backend_catalog: 登録backendの共通catalogを生成する]
+#   処理: [1: 登録済みbackendを検索する, 2: 内部catalog factoryを呼び出して返す]
 #   引数: [backend: 生成backend ID]
-#   戻り値: [tuple: catalog factoryとimage-generation adapter factory]
+#   戻り値: [GenerationBackendCatalog: backend別候補取得契約]
 #   エラー: [ValueError: 未登録backendが指定された場合]
 # }
-def generation_backend_factories(
+def create_registered_generation_backend_catalog(
     backend: GenerationBackendId,
-) -> tuple[
-    Callable[[], GenerationBackendCatalog],
-    Callable[..., ImageGenerationBackend],
-]:
+) -> GenerationBackendCatalog:
     try:
-        registration = _GENERATION_BACKENDS[backend]
-        return registration.catalog_factory, registration.adapter_factory
+        return _GENERATION_BACKENDS[backend].catalog_factory()
     except KeyError as error:
         raise ValueError(f"Unsupported generation backend: {backend}") from error
+
+
+# {
+#   責務: [create_registered_image_generation_backend: 登録backendの画像生成adapterを生成する]
+#   処理: [1: 登録済みbackendを検索する, 2: 内部adapter factoryへ共通引数を渡す]
+#   引数: [backend: 生成backend ID, api_url: 生成API URL, timeout: API timeout秒, request_post: optional HTTP POST関数, comfy_client_factory: ComfyUI client factory]
+#   戻り値: [ImageGenerationBackend: backend中立な生成adapter]
+#   エラー: [ValueError: 未登録backendまたは必須接続関数が不足した場合]
+# }
+def create_registered_image_generation_backend(
+    backend: GenerationBackendId,
+    api_url: str,
+    timeout: int,
+    *,
+    request_post: Callable[..., Any] | None = None,
+    comfy_client_factory: Callable[..., ComfyUIClient] = ComfyUIClient,
+) -> ImageGenerationBackend:
+    try:
+        factory = _GENERATION_BACKENDS[backend].adapter_factory
+    except KeyError as error:
+        raise ValueError(f"Unsupported generation backend: {backend}") from error
+    return factory(
+        api_url,
+        timeout,
+        request_post=request_post,
+        comfy_client_factory=comfy_client_factory,
+    )
 
 
 # {

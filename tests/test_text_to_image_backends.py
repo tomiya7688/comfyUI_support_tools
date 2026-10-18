@@ -17,7 +17,6 @@ from scripts.backend.backend_launch_spec import create_backend_launch_spec
 from scripts.backend.generation_backend_registry import (
     SUPPORTED_GENERATION_BACKENDS,
     SUPPORTED_LAUNCH_BACKENDS,
-    generation_backend_factories,
 )
 from scripts.backend.generation_backend_catalog_factory import create_generation_backend_catalog
 from scripts.backend.text_to_image_request import TextToImageRequest
@@ -52,17 +51,16 @@ def request(**overrides):
 
 class TextToImageBackendTests(unittest.TestCase):
     # {
-    #   責務: [test_registered_factories_create_matching_catalogs_and_adapters: 共通registryがbackendごとの生成機能一式を対応づけることを検証する]
+    #   責務: [test_registered_backend_apis_create_matching_catalogs_and_adapters: 共通registry APIがbackendごとの生成機能一式を対応づけることを検証する]
     #   処理: [1: catalogと生成adapterを作りcapability一致を確認する, 2: 起動対応backendのlaunch specを確認する]
     #   引数: [self: test case]
     #   戻り値: []
     # }
-    def test_registered_factories_create_matching_catalogs_and_adapters(self):
+    def test_registered_backend_apis_create_matching_catalogs_and_adapters(self):
         post = lambda *args, **kwargs: FakeResponse({"images": []})
 
         for backend_id in SUPPORTED_GENERATION_BACKENDS:
             with self.subTest(backend=backend_id):
-                catalog_factory, _ = generation_backend_factories(backend_id)
                 catalog = create_generation_backend_catalog(backend_id)
                 adapter = create_image_generation_backend(
                     backend_id,
@@ -72,7 +70,6 @@ class TextToImageBackendTests(unittest.TestCase):
                     comfy_client_factory=Mock(),
                 )
 
-                self.assertIsInstance(catalog, catalog_factory)
                 self.assertEqual(catalog.capabilities, adapter.capabilities)
 
                 if backend_id in SUPPORTED_LAUNCH_BACKENDS:

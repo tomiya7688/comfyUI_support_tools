@@ -157,19 +157,23 @@ def create_generation_profile(
 
 
 # {
-#   責務: [generation_backend_launch_spec_factory: 登録済みbackendの起動設定factoryを返す]
-#   処理: [backend registryから起動spec factoryを検索して返す]
-#   引数: [backend: 起動対象backend ID]
-#   戻り値: [Callable: backend固有BackendLaunchSpec factory]
-#   エラー: [ValueError: 未登録backendが指定された場合]
+#   責務: [create_registered_backend_launch_spec: 登録backendの起動設定を生成する]
+#   処理: [1: 起動可能なbackend登録を検索する, 2: 内部factoryへ共通設定を渡しspecを返す]
+#   引数: [backend: 起動対象backend ID, a1111_api_url: A1111 API URL, comfyui_api_url: ComfyUI API URL, checkpoints_dir: checkpoint共有directory, models_dir: 共有model directory]
+#   戻り値: [BackendLaunchSpec: 起動に必要なbackend固有設定]
+#   エラー: [ValueError: 未登録または起動非対応backendが指定された場合]
 # }
-def generation_backend_launch_spec_factory(
+def create_registered_backend_launch_spec(
     backend: GenerationBackendId,
-) -> Callable[..., BackendLaunchSpec]:
+    a1111_api_url: str,
+    comfyui_api_url: str,
+    checkpoints_dir: Path,
+    models_dir: Path,
+) -> BackendLaunchSpec:
     try:
         factory = _GENERATION_BACKENDS[backend].launch_spec_factory
         if factory is None:
             raise ValueError(f"Unsupported launch backend: {backend}")
-        return factory
+        return factory(a1111_api_url, comfyui_api_url, checkpoints_dir, models_dir)
     except KeyError as error:
         raise ValueError(f"Unsupported launch backend: {backend}") from error

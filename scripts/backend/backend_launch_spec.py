@@ -24,7 +24,7 @@ class BackendLaunchSpec:
 
 # {
 #   責務: [create_backend_launch_spec: 選択backend用のローカル起動設定を作る]
-#   処理: [1: 共通registryからbackend固有factoryを解決する, 2: 設定値を渡して起動specを返す]
+#   処理: [共通registryに設定値を渡し, 選択backendの起動specを受け取る]
 #   引数: [backend: 選択中backend, a1111_api_url: A1111 APIのbase URL, comfyui_api_url: ComfyUI APIのbase URL, checkpoints_dir: checkpoint共有ディレクトリ, models_dir: 共有モデルディレクトリ]
 #   戻り値: [BackendLaunchSpec: 起動に必要なbackend固有設定]
 #   エラー: [ValueError: 未対応backendが渡された場合]
@@ -36,10 +36,15 @@ def create_backend_launch_spec(
     checkpoints_dir: Path,
     models_dir: Path,
 ) -> BackendLaunchSpec:
-    from .generation_backend_registry import generation_backend_launch_spec_factory
+    from .generation_backend_registry import create_registered_backend_launch_spec
 
-    factory = generation_backend_launch_spec_factory(backend)
-    return factory(a1111_api_url, comfyui_api_url, checkpoints_dir, models_dir)
+    return create_registered_backend_launch_spec(
+        backend,
+        a1111_api_url,
+        comfyui_api_url,
+        checkpoints_dir,
+        models_dir,
+    )
 
 
 # {

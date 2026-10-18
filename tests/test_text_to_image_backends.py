@@ -13,11 +13,11 @@ from scripts.backend.comfyui_image_generation_backend import ComfyUIImageGenerat
 from scripts.backend.comfy_ui_client import ComfyUIClient
 from scripts.backend.image_to_image_request import ImageToImageRequest
 from scripts.backend.image_generation_backend_factory import create_image_generation_backend
+from scripts.backend.backend_launch_spec import create_backend_launch_spec
 from scripts.backend.generation_backend_registry import (
     SUPPORTED_GENERATION_BACKENDS,
     SUPPORTED_LAUNCH_BACKENDS,
     generation_backend_factories,
-    generation_backend_launch_spec_factory,
 )
 from scripts.backend.generation_backend_catalog_factory import create_generation_backend_catalog
 from scripts.backend.text_to_image_request import TextToImageRequest
@@ -76,7 +76,8 @@ class TextToImageBackendTests(unittest.TestCase):
                 self.assertEqual(catalog.capabilities, adapter.capabilities)
 
                 if backend_id in SUPPORTED_LAUNCH_BACKENDS:
-                    launch_spec = generation_backend_launch_spec_factory(backend_id)(
+                    launch_spec = create_backend_launch_spec(
+                        backend_id,
                         "http://127.0.0.1:7860",
                         "http://127.0.0.1:8188",
                         Path("models/checkpoints"),

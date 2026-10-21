@@ -36,7 +36,7 @@ from tkinter import filedialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from .backend.backend_runtime_profile import create_backend_runtime_profile
-from .backend.generation_backend_catalog import GenerationModelRoots
+from .backend.generation_backend_catalog import ChoiceMap, GenerationModelRoots
 
 try:
     import psutil
@@ -456,7 +456,13 @@ def _local_backend_choices():
     return catalog.local_choices(roots, _scan_model_files, _scan_flow_files, _unique_choices)
 
 
-def load_backend_choices(api_url="", query_api=False):
+# {
+#   責務: [load_backend_choices: 現在のgeneration catalogから共通候補一覧を返す]
+#   処理: [ローカル候補を取得し, 必要ならAPI候補と警告を統合する]
+#   引数: [api_url: API候補の取得先, query_api: 起動中APIを問い合わせるか]
+#   戻り値: [tuple[ChoiceMap, list[str]]: 統合候補とAPI取得時の警告]
+# }
+def load_backend_choices(api_url: str = "", query_api: bool = False) -> tuple[ChoiceMap, list[str]]:
     """ローカルのモデル候補に、起動中APIの正確な登録名を統合する。"""
     local = _local_backend_choices()
     api_choices = {"checkpoints": [], "unets": [], "loras": [], "vaes": [], "upscalers": [], "samplers": [], "flows": []}

@@ -42,3 +42,14 @@ class GenerationCapabilities:
     # }
     def supports(self, feature: GenerationFeature) -> bool:
         return feature in self.features
+
+    # {
+    #   責務: [require: 呼び出しに必要なgeneration機能があることを検証する]
+    #   処理: [未対応機能の場合は共通のValueErrorを送出する]
+    #   引数: [self: capability宣言, feature: 必須のGenerationFeature]
+    #   戻り値: []
+    #   エラー: [ValueError: backendが必須機能に対応していない場合]
+    # }
+    def require(self, feature: GenerationFeature) -> None:
+        if not self.supports(feature):
+            raise ValueError(f"Generation backend does not support required capability: {feature}")

@@ -22,7 +22,7 @@ class _Backend:
     # }
     def __init__(self):
         self.request = None
-        self.capabilities = GenerationCapabilities(frozenset())
+        self.capabilities = GenerationCapabilities(frozenset({"txt2img"}))
 
     def generate(self, request, stop_event=None):
         self.request = request
@@ -37,6 +37,19 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
     # {
     #   責務: [EmbeddedRandomImageGenerationParameterTests: generation parameterとbackend capability routingを検証する]
     # }
+
+    # {
+    #   責務: [test_generation_capabilities_require_declared_features: 必須機能が未宣言なら共通エラーになることを確認する]
+    #   処理: [対応機能は通し, 未対応機能をrequireするとValueErrorになることを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_generation_capabilities_require_declared_features(self):
+        capabilities = GenerationCapabilities(frozenset({"txt2img"}))
+
+        self.assertIsNone(capabilities.require("txt2img"))
+        with self.assertRaisesRegex(ValueError, "img2img"):
+            capabilities.require("img2img")
 
     # {
     #   責務: [test_incompatible_lora_stops_before_backend_request: 非互換LoRAで生成APIを呼ばずに中止する]
@@ -67,7 +80,7 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
     #   戻り値: []
     # }
     def test_model_override_ambiguity_uses_backend_capability(self):
-        cases = (({"model_overrides"}, None), (set(), "sdxl/base.safetensors"))
+        cases = (({"txt2img", "model_overrides"}, None), ({"txt2img"}, "sdxl/base.safetensors"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             for features, expected_checkpoint in cases:
                 with self.subTest(features=features):

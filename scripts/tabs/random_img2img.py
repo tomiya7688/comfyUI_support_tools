@@ -162,6 +162,15 @@ class RandomImg2ImgTab(ttk.Frame):
         if not images: self.logbox.log(f"画像が見つかりません: {root}"); return
         add=self._split(self.additional.get()); exc=set(self._split(self.exclude.get()))
         self.logbox.log(f"Found {len(images)} image(s)")
+        try:
+            backend = create_configured_image_generation_backend(
+                self.api_img2img.get(),
+                10000,
+            )
+            backend.capabilities.require("img2img")
+        except Exception as error:
+            self.logbox.log(f"❌ 画像生成バックエンドを利用できません: {error}")
+            return
         for i in range(int(self.loops.get())):
             if self.stop_event.is_set(): break
             try:
@@ -181,6 +190,7 @@ class RandomImg2ImgTab(ttk.Frame):
                     self.api_img2img.get(),
                     10000,
                 )
+                backend.capabilities.require("img2img")
                 self._active_backend=backend
                 try:
                     image_bytes = backend.generate_from_image(

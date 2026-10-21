@@ -346,6 +346,7 @@ class EmbeddedRandomImage:
         prompt = self._correct_prompt(prompt)
         workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
         backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
+        backend.capabilities.require("txt2img")
         workflow_has_model_overrides = (
             backend.capabilities.supports("model_overrides")
             and bool(self.comfy_model_overrides)
@@ -470,6 +471,12 @@ class EmbeddedRandomImage:
             return
         self._stop_event.clear()
         def worker():
+            try:
+                backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
+                backend.capabilities.require("txt2img")
+            except Exception as error:
+                self._log(f"❌ 生成バックエンドを利用できません: {error}")
+                return
             if mode == "sequential":
                 self._generate_sequential()
                 return

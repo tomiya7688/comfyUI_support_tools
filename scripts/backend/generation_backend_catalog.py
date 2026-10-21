@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, TypedDict
 
 from .generation_capabilities import GenerationCapabilities
 
@@ -14,6 +14,17 @@ RequestGet = Callable[..., Any]
 ScanModelFiles = Callable[..., list[str]]
 ScanFlowFiles = Callable[..., list[str]]
 UniqueChoices = Callable[[list[str]], list[str]]
+
+
+# {
+#   責務: [WorkflowModelInput: workflow内で選択できるモデル入力の形を定義する]
+#   フィールド: [id: node IDと入力名, label: UI表示名, value: 現在のモデル名]
+#   処理: [各backendが同じキーと文字列型でworkflow入力を返せるようにする]
+# }
+class WorkflowModelInput(TypedDict):
+    id: str
+    label: str
+    value: str
 
 
 # {
@@ -44,9 +55,9 @@ class GenerationBackendCatalog(Protocol):
     #   責務: [workflow_model_inputs: workflowからbackend固有のモデル入力を取得する]
     #   処理: [workflow対応backendがモデル入力を抽出し, 非対応backendは空候補を返す]
     #   引数: [self: catalog instance, workflow_path: workflowファイルのパス]
-    #   戻り値: [list[dict[str, Any]]: node ID, 入力名, 値を含むモデル入力]
+    #   戻り値: [list[WorkflowModelInput]: node ID, 表示名, 値を含むモデル入力]
     # }
-    def workflow_model_inputs(self, workflow_path: Any) -> list[dict[str, Any]]:
+    def workflow_model_inputs(self, workflow_path: str | Path) -> list[WorkflowModelInput]:
         """Return model selector inputs declared by a backend workflow."""
         ...
 

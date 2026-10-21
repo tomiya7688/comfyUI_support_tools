@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from .comfyui_image_generation_backend import ComfyUIImageGenerationBackend
 from .comfy_ui_client import ComfyUIClient
 from .generation_capabilities import GenerationCapabilities
@@ -13,6 +15,7 @@ from .generation_backend_catalog import (
     ScanFlowFiles,
     ScanModelFiles,
     UniqueChoices,
+    WorkflowModelInput,
 )
 
 
@@ -53,9 +56,9 @@ class ComfyUIBackendCatalog:
     #   責務: [workflow_model_inputs: ComfyUI workflowのモデル選択入力を抽出する]
     #   処理: [ComfyUI API形式のworkflowをComfyUI clientで解析する]
     #   引数: [self: catalog instance, workflow_path: workflowファイルのパス]
-    #   戻り値: [list[dict[str, Any]]: workflow内のモデル入力]
+    #   戻り値: [list[WorkflowModelInput]: workflow内のモデル入力]
     # }
-    def workflow_model_inputs(self, workflow_path):
+    def workflow_model_inputs(self, workflow_path: str | Path) -> list[WorkflowModelInput]:
         return ComfyUIClient.model_inputs(workflow_path)
 
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:

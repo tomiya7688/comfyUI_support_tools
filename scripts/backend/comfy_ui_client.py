@@ -1,5 +1,8 @@
-from ..context import *
 import copy
+from pathlib import Path
+
+from ..context import *
+from .generation_backend_catalog import WorkflowModelInput
 
 class ComfyUIClient:
     DEFAULT_WORKFLOW_PATH = resolve_comfy_flow_path("default.json")
@@ -185,11 +188,17 @@ class ComfyUIClient:
             converted[node_id] = {"class_type": node["type"], "inputs": inputs, "_meta": {"title": node.get("title", "")}}
         return converted
 
+    # {
+    #   責務: [model_inputs: ComfyUI workflowからモデル選択入力を取り出す]
+    #   処理: [1: workflowを読み込む, 2: モデル名入力をid・label・value形式で返す]
+    #   引数: [cls: ComfyUIClient, workflow_path: workflowファイルのパス]
+    #   戻り値: [list[WorkflowModelInput]: workflow内のモデル入力]
+    # }
     @classmethod
-    def model_inputs(cls, workflow_path):
+    def model_inputs(cls, workflow_path: str | Path) -> list[WorkflowModelInput]:
         """フローにあるモデル選択入力を、ノードIDつきで返す。"""
         workflow = cls._load_workflow(workflow_path)
-        result = []
+        result: list[WorkflowModelInput] = []
         pattern = re.compile(r"(?:ckpt|unet|vae|clip|model)_name(?:_\d+)?$", re.IGNORECASE)
         for node_id, node in workflow.items():
             if not isinstance(node, dict):

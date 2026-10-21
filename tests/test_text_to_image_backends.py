@@ -71,6 +71,8 @@ class TextToImageBackendTests(unittest.TestCase):
                 )
 
                 self.assertEqual(catalog.capabilities, adapter.capabilities)
+                adapter.capabilities.require("txt2img")
+                adapter.capabilities.require("img2img")
 
                 if backend_id in SUPPORTED_LAUNCH_BACKENDS:
                     launch_spec = create_backend_launch_spec(

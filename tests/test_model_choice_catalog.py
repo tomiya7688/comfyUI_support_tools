@@ -50,7 +50,11 @@ class ModelChoiceCatalogTests(unittest.TestCase):
                 self.assertEqual(app_context.resolve_comfy_flow_path("old.json"), legacy)
                 self.assertEqual(app_context.flow_checkpoint_choices("old.json"), ["anima/model.safetensors"])
                 fields = app_context.create_configured_generation_backend_catalog().workflow_model_inputs(legacy)
-                self.assertEqual(fields[0]["value"], "anima/model.safetensors")
+                self.assertEqual(fields, [{
+                    "id": "1:unet_name",
+                    "label": "UNETLoader / unet_name",
+                    "value": "anima/model.safetensors",
+                }])
 
     def test_a1111_workflow_catalog_returns_no_model_inputs(self):
         with patch.object(app_context, "RUNTIME_BACKEND", "a1111"):

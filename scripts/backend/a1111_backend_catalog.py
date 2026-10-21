@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from .a1111_image_generation_backend import A1111ImageGenerationBackend
 from .generation_capabilities import GenerationCapabilities
 
@@ -12,6 +14,7 @@ from .generation_backend_catalog import (
     ScanFlowFiles,
     ScanModelFiles,
     UniqueChoices,
+    WorkflowModelInput,
 )
 
 
@@ -51,9 +54,9 @@ class A1111BackendCatalog:
     #   責務: [workflow_model_inputs: workflow非対応のA1111 catalogから空候補を返す]
     #   処理: [A1111にはComfyUI workflowモデル入力がないため何も解析しない]
     #   引数: [self: catalog instance, workflow_path: 共通契約のworkflowパス]
-    #   戻り値: [list[dict]: 空のモデル入力]
+    #   戻り値: [list[WorkflowModelInput]: 空のモデル入力]
     # }
-    def workflow_model_inputs(self, workflow_path):
+    def workflow_model_inputs(self, workflow_path: str | Path) -> list[WorkflowModelInput]:
         return []
 
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:

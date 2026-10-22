@@ -11,6 +11,7 @@ ComfyUI と関連するローカル画像生成ワークフローを支援する
 - [ドキュメント索引 / Documentation index](doc/README.md)
 - [コーディング規約（日本語）](doc/コーディング規約.md)
 - [Coding Standards (English)](doc/coding-standards.md)
+- [共同開発ワークフロー](doc/ワークフロー/ワークフロー.md) / [Development workflow](doc/ワークフロー/workflow.md)
 
 README とプロジェクト管理下のドキュメントは、日本語・英語の両方を維持します。
 新規文書と実質的に変更する文書は、同じ変更内で両言語を更新します。
@@ -34,6 +35,7 @@ A collection of support tools for ComfyUI and related local image-generation wor
 - [Documentation index / ドキュメント索引](doc/README.md)
 - [Coding Standards (English)](doc/coding-standards.md)
 - [コーディング規約（日本語）](doc/コーディング規約.md)
+- [Development workflow](doc/ワークフロー/workflow.md) / [共同開発ワークフロー](doc/ワークフロー/ワークフロー.md)
 
 The README and project-owned documentation are maintained in both Japanese and English.
 New documents and documents that are substantively modified must update both languages in the same change.

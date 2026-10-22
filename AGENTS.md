@@ -2,8 +2,10 @@
 
 Keep initial context small.
 
-1. If an Issue number is explicitly given, read only that Issue first.
-2. Otherwise run `python tools/context/select_task.py` and start from the single returned Issue.
+Every work session starts with `git fetch origin`. Verify the repository and worktree, then inspect relevant open PRs before choosing an Issue or implementation step. If fetching fails, mark remote freshness unverified and do not make a stale-state decision. For the one-cycle procedure and shared/individual roles, follow [the development workflow](doc/ワークフロー/workflow.md) ([日本語](doc/ワークフロー/ワークフロー.md)). Codex can load the shared [development-workflow skill](.agents/skills/development-workflow/SKILL.md); Claude uses `CLAUDE.md` and its thin skill adapter.
+
+1. After the shared remote/PR preflight, if an Issue number is explicitly given, read only that Issue first.
+2. Otherwise inspect relevant open PRs first; if none needs this task, run `python tools/context/select_task.py` and start from the single returned Issue.
 3. Run `python tools/context/task_packet.py <issue-number>` to create a compact local task packet.
 4. Search before reading full files. Prefer target source plus matching tests.
 5. If structure is unclear, run `python tools/context/repo_map.py` and inspect `.codex/repo_map.json` instead of scanning the repository.

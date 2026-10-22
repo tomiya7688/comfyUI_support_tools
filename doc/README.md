@@ -20,6 +20,7 @@
 | 日本語 | English |
 | --- | --- |
 | [コーディング規約](コーディング規約.md) | [Coding Standards](coding-standards.md) |
+| [1回分の開発ワークフロー](ワークフロー/ワークフロー.md) | [One-cycle development workflow](ワークフロー/workflow.md) |
 
 ### 既存文書の移行
 
@@ -46,6 +47,7 @@ Project-owned README files and documentation are maintained in both Japanese and
 | Japanese | English |
 | --- | --- |
 | [コーディング規約](コーディング規約.md) | [Coding Standards](coding-standards.md) |
+| [1回分の開発ワークフロー](ワークフロー/ワークフロー.md) | [One-cycle development workflow](ワークフロー/workflow.md) |
 
 ### Legacy migration
 

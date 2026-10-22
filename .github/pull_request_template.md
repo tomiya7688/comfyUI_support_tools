@@ -1,19 +1,22 @@
-## Related task
+## 対象Issue
 
 - Issue: #
 
-## Scope
+## 変更範囲
 
-Describe what this PR changes and why it belongs in **comfyUI_support_tools**.
+このPRで変更した内容と、**comfyUI_support_tools** の対象Issueに属する理由を記載してください。
 
-## Validation
+## 検証
 
-- [ ] `python tools/completion/completion_gate.py` passes
-- [ ] Required GitHub Actions checks pass
-- [ ] Diff contains only changes for this task
-- [ ] No implementation copied from another project unless this task explicitly requests a port
-- [ ] No direct `main`/`master` work was used; this PR comes from a task branch
+- [ ] `python tools/completion/completion_gate.py` が成功した
+- [ ] 必須GitHub Actionsが最新headで成功した
+- [ ] 差分はこのIssueの範囲のみ
+- [ ] 他プロジェクトからのコード移植はIssueで明示されている場合のみ
+- [ ] 専用ブランチからのPRで、`main`/`master` を直接編集していない
+- [ ] 自己レビュー済み（独立レビューの有無も記録）
 
-## Notes
+実行した検証コマンドと結果、GUI/API/GPU等の未検証事項を記載してください。
 
-List intentionally deferred work or known limitations here.
+## 保留・既知の制限
+
+意図的に残した作業と理由を記載してください。

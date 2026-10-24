@@ -26,6 +26,14 @@ if not exist "%PYTHON%" (
     exit /b 1
 )
 
+"%PYTHON%" "%~dp0tools\security\check_python_ca.py"
+if errorlevel 1 (
+    call "%~dp0setup_kadoka_tools.bat"
+    if errorlevel 1 exit /b 1
+    "%PYTHON%" "%~dp0tools\security\check_python_ca.py"
+    if errorlevel 1 exit /b 1
+)
+
 "%PYTHON%" "%~dp0tabbed_tools_gui.py" %*
 set "EXIT_CODE=%ERRORLEVEL%"
 if not "%EXIT_CODE%"=="0" (

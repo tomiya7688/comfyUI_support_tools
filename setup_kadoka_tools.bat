@@ -23,7 +23,14 @@ if errorlevel 1 goto setup_failed
 
 :install_requirements
 echo Checking Tabbed Tools dependencies...
+REM Python 3.10 ensurepip can seed a CA bundle with the affected emSign root.
+"%VENV_PY%" -m pip install --disable-pip-version-check "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+if errorlevel 1 goto setup_failed
+
 "%VENV_PY%" -m pip install --disable-pip-version-check -r "%REQUIREMENTS%"
+if errorlevel 1 goto setup_failed
+
+"%VENV_PY%" "%~dp0tools\security\check_python_ca.py"
 if errorlevel 1 goto setup_failed
 
 echo.

@@ -24,11 +24,15 @@ if not exist "%VENV_PY%" (
 if "%INSTALL_REQUIRED%"=="0" (
   "%VENV_PY%" -c "import numpy, PIL; assert numpy.__version__ == '1.26.4' and PIL.__version__ == '10.4.0'" >nul 2>&1
   if errorlevel 1 set "INSTALL_REQUIRED=1"
+  "%VENV_PY%" -c "import pip; assert tuple(map(int, pip.__version__.split('.'))) >= (26, 2, 2)" >nul 2>&1
+  if errorlevel 1 set "INSTALL_REQUIRED=1"
 )
 
 if "%INSTALL_REQUIRED%"=="1" (
   echo Installing the pinned Pillow and NumPy versions ...
-  "%VENV_PY%" -m pip install --disable-pip-version-check --upgrade pip >nul 2>&1
+  REM Upgrade the bootstrap pip with the Python.org SHA-256 pinned wheel first.
+  "%VENV_PY%" -m pip install --disable-pip-version-check "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+  if errorlevel 1 exit /b 1
   "%VENV_PY%" -m pip install --disable-pip-version-check --no-input --only-binary=:all: -r "%REQ_FILE%"
   if errorlevel 1 (
     echo Dependency installation failed. Check your internet connection and run this file again.

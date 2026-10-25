@@ -79,7 +79,11 @@ class ResourceLifetimeTests(unittest.TestCase):
                 if any(part in {"external", "__pycache__", ".venv"} for part in path.parts):
                     continue
                 tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-                containers = [tree, *[node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]]
+                containers = [
+                    node
+                    for node in ast.walk(tree)
+                    if isinstance(getattr(node, "body", None), list)
+                ]
                 for container in containers:
                     body = getattr(container, "body", [])
                     for index, statement in enumerate(body):

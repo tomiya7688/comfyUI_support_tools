@@ -296,138 +296,144 @@ def process_video(source, target, profile="balanced", object_preset="generic", p
         target = target.with_suffix(".mp4")
     target.parent.mkdir(parents=True, exist_ok=True)
     cap = cv2.VideoCapture(str(source))
-    if not cap.isOpened(): raise ValueError(f"動画を開けません: {source}")
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0; width=int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); height=int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)); preview_start_seconds = max(0.0, float(preview_start_seconds)); max_frames = int(fps * preview_seconds) if preview_seconds else 0
-    if preview_start_seconds:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(fps * preview_start_seconds))
-    temp = target.with_name(target.stem + "_video_only.mp4"); writer=cv2.VideoWriter(str(temp), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width,height))
-    settings = settings_for(profile)
-    object_mask = None; mask_preview_path = target.with_name(target.stem + "_mask.png"); previous_mask_array = None; previous_histogram = None; surface_clusters = reference_clusters; surface_alpha = surface_alpha_for(reference_alpha if reference_alpha is not None else 0.16, surface_preset); previous_gray = None; previous_analysis_rgb = None; observed_color_map = None; track_points = None; camera_points = None; tracking_confidence = 0.0; previous_output = None; previous_enhanced = None; flicker_sum = 0.0; information_gain = 0.0; edge_gain = 0.0; clipping = 0.0; deviation = 0.0; component_count = 0.0; component_area = 0.0; elongated_count = 0.0; hole_count = 0.0; symmetry_sum = 0.0; skeleton_length = 0.0; skeleton_endpoints = 0.0; skeleton_samples = 0; noise_sum = 0.0; halo_sum = 0.0; temporal_shape_sum = 0.0; scene_change_count = 0; mask_reinitialize_count = 0; track_reacquire_count = 0; tracking_confidence_sum = 0.0; camera_motion_sum = 0.0; target_motion_sum = 0.0; temporal_fusion_frames = 0; temporal_fusion_weight_sum = 0.0; observed_color_frames = 0
-    count=0
-    while True:
-        ok, frame = cap.read()
-        if not ok: break
-        if max_frames and count >= max_frames: break
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        if count == 0 and surface_clusters is None:
-            surface_clusters = estimate_surface_color(rgb); surface_alpha = surface_alpha_for(estimate_surface_alpha(rgb), surface_preset); print(f"surface_color_clusters={surface_clusters} surface_alpha={surface_alpha:.3f} preset={surface_preset}", flush=True)
-        elif count % max(1, int(fps)) == 0:
-            measured_alpha = surface_alpha_for(estimate_surface_alpha(rgb), surface_preset)
-            surface_alpha = surface_alpha * 0.80 + measured_alpha * 0.20
-        if surface_clusters:
-            rgb = weaken_surface_component(rgb, surface_clusters, surface_alpha)
-        rgb = reduce_low_frequency_shading(rgb, 0.30 if profile == "conservative" else 0.45)
-        rgb = enhance_local_contrast(rgb)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        histogram = cv2.calcHist([gray], [0], None, [32], [0, 256]); cv2.normalize(histogram, histogram)
-        if previous_histogram is not None and cv2.compareHist(previous_histogram, histogram, cv2.HISTCMP_BHATTACHARYYA) > 0.45:
-            object_mask = None; track_points = None; camera_points = None; previous_enhanced = None; previous_analysis_rgb = None; observed_color_map = None
-            scene_change_count += 1
-            print(f"scene_change_reinitialize frame={count}", flush=True)
-        previous_histogram = histogram
-        frame_transform = None; frame_camera_motion = 0.0; frame_target_motion = 0.0
-        analysis_rgb = rgb
-        if object_mask is None:
-            mask_reinitialize_count += 1
-            seg = np.zeros((height, width), np.uint8); bgd=np.zeros((1,65),np.float64); fgd=np.zeros((1,65),np.float64)
-            margin, blur = OBJECT_PRESETS[object_preset]
-            rect = (int(roi[0]*width), int(roi[1]*height), max(2, int(roi[2]*width)), max(2, int(roi[3]*height))) if roi else (width*margin//100,height*margin//100,width*(100-margin*2)//100,height*(100-margin*2)//100)
-            cv2.grabCut(rgb, seg, rect, bgd, fgd, 2, cv2.GC_INIT_WITH_RECT)
-            raw_mask = np.where((seg==1)|(seg==3),255,0).astype("uint8")
-            if object_preset == "generic":
-                object_preset = recommend_object_preset(raw_mask)
+    writer = None
+    try:
+        if not cap.isOpened(): raise ValueError(f"動画を開けません: {source}")
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0; width=int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); height=int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)); preview_start_seconds = max(0.0, float(preview_start_seconds)); max_frames = int(fps * preview_seconds) if preview_seconds else 0
+        if preview_start_seconds:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(fps * preview_start_seconds))
+        temp = target.with_name(target.stem + "_video_only.mp4"); writer=cv2.VideoWriter(str(temp), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width,height))
+        if not writer.isOpened(): raise RuntimeError(f"動画出力を開けません: {temp}")
+        settings = settings_for(profile)
+        object_mask = None; mask_preview_path = target.with_name(target.stem + "_mask.png"); previous_mask_array = None; previous_histogram = None; surface_clusters = reference_clusters; surface_alpha = surface_alpha_for(reference_alpha if reference_alpha is not None else 0.16, surface_preset); previous_gray = None; previous_analysis_rgb = None; observed_color_map = None; track_points = None; camera_points = None; tracking_confidence = 0.0; previous_output = None; previous_enhanced = None; flicker_sum = 0.0; information_gain = 0.0; edge_gain = 0.0; clipping = 0.0; deviation = 0.0; component_count = 0.0; component_area = 0.0; elongated_count = 0.0; hole_count = 0.0; symmetry_sum = 0.0; skeleton_length = 0.0; skeleton_endpoints = 0.0; skeleton_samples = 0; noise_sum = 0.0; halo_sum = 0.0; temporal_shape_sum = 0.0; scene_change_count = 0; mask_reinitialize_count = 0; track_reacquire_count = 0; tracking_confidence_sum = 0.0; camera_motion_sum = 0.0; target_motion_sum = 0.0; temporal_fusion_frames = 0; temporal_fusion_weight_sum = 0.0; observed_color_frames = 0
+        count=0
+        while True:
+            ok, frame = cap.read()
+            if not ok: break
+            if max_frames and count >= max_frames: break
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            if count == 0 and surface_clusters is None:
+                surface_clusters = estimate_surface_color(rgb); surface_alpha = surface_alpha_for(estimate_surface_alpha(rgb), surface_preset); print(f"surface_color_clusters={surface_clusters} surface_alpha={surface_alpha:.3f} preset={surface_preset}", flush=True)
+            elif count % max(1, int(fps)) == 0:
+                measured_alpha = surface_alpha_for(estimate_surface_alpha(rgb), surface_preset)
+                surface_alpha = surface_alpha * 0.80 + measured_alpha * 0.20
+            if surface_clusters:
+                rgb = weaken_surface_component(rgb, surface_clusters, surface_alpha)
+            rgb = reduce_low_frequency_shading(rgb, 0.30 if profile == "conservative" else 0.45)
+            rgb = enhance_local_contrast(rgb)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            histogram = cv2.calcHist([gray], [0], None, [32], [0, 256]); cv2.normalize(histogram, histogram)
+            if previous_histogram is not None and cv2.compareHist(previous_histogram, histogram, cv2.HISTCMP_BHATTACHARYYA) > 0.45:
+                object_mask = None; track_points = None; camera_points = None; previous_enhanced = None; previous_analysis_rgb = None; observed_color_map = None
+                scene_change_count += 1
+                print(f"scene_change_reinitialize frame={count}", flush=True)
+            previous_histogram = histogram
+            frame_transform = None; frame_camera_motion = 0.0; frame_target_motion = 0.0
+            analysis_rgb = rgb
+            if object_mask is None:
+                mask_reinitialize_count += 1
+                seg = np.zeros((height, width), np.uint8); bgd=np.zeros((1,65),np.float64); fgd=np.zeros((1,65),np.float64)
                 margin, blur = OBJECT_PRESETS[object_preset]
-                print(f"auto_object_preset={object_preset}", flush=True)
-            mask_array = refine_object_mask(raw_mask, object_preset); object_mask = Image.fromarray(mask_array)
-            preview = rgb.copy(); preview[mask_array == 0] = (preview[mask_array == 0] * 0.25).astype("uint8"); cv2.imwrite(str(mask_preview_path), cv2.cvtColor(preview, cv2.COLOR_RGB2BGR))
-            track_points = cv2.goodFeaturesToTrack(gray, maxCorners=120, qualityLevel=0.01, minDistance=8, mask=mask_array); camera_points = cv2.goodFeaturesToTrack(gray, maxCorners=180, qualityLevel=0.01, minDistance=8); tracking_confidence = 1.0 if track_points is not None else 0.0
-        elif previous_gray is not None and track_points is not None and len(track_points) >= 3:
-            cam_matrix = None
-            if camera_points is not None and len(camera_points) >= 3:
-                cam_new, cam_status, _ = cv2.calcOpticalFlowPyrLK(previous_gray, gray, camera_points, None)
-                old_cam = camera_points[cam_status.ravel() == 1]; new_cam = cam_new[cam_status.ravel() == 1]
-                if len(new_cam) >= 3:
-                    cam_matrix, _ = cv2.estimateAffinePartial2D(old_cam, new_cam, method=cv2.RANSAC)
-                    if cam_matrix is not None: frame_camera_motion = float(np.linalg.norm(cam_matrix[:, 2]))
-                    camera_points = new_cam.reshape(-1,1,2)
-            new_points, status, _ = cv2.calcOpticalFlowPyrLK(previous_gray, gray, track_points, None)
-            good_old = track_points[status.ravel() == 1]; good_new = new_points[status.ravel() == 1]
-            if len(good_new) >= 3:
-                backward, backward_status, _ = cv2.calcOpticalFlowPyrLK(gray, previous_gray, good_new.reshape(-1, 1, 2), None)
-                if backward is not None:
-                    round_trip_error = np.linalg.norm(backward.reshape(-1, 2) - good_old.reshape(-1, 2), axis=1)
-                    reliable = (backward_status.ravel() == 1) & (round_trip_error <= 1.5)
-                    good_old = good_old[reliable]; good_new = good_new[reliable]
-            if len(good_new) >= 3:
-                matrix, _ = cv2.estimateAffinePartial2D(good_old, good_new, method=cv2.RANSAC)
-                if matrix is not None:
-                    frame_transform = matrix
-                    target_matrix = matrix.copy()
-                    if cam_matrix is not None:
-                        target_matrix[:, 2] -= cam_matrix[:, 2]
-                    frame_target_motion = float(np.linalg.norm(target_matrix[:, 2]))
-                    moved = cv2.warpAffine(np.asarray(object_mask), frame_transform, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-                    previous_mask = np.asarray(object_mask, dtype=np.float32)
-                    mask_array = (previous_mask * 0.70 + moved.astype(np.float32) * 0.30).clip(0,255).astype("uint8")
-                    object_mask = Image.fromarray(cv2.GaussianBlur(refine_object_mask(mask_array, object_preset), (0,0), blur)); tracking_confidence = min(1.0, len(good_new) / 40.0)
-                track_points = good_new.reshape(-1,1,2)
-            else: track_points = None; tracking_confidence = 0.0
-        if object_mask is not None and (track_points is None or len(track_points) < 12):
-            refreshed_mask = np.asarray(object_mask, dtype=np.uint8)
-            refreshed = cv2.goodFeaturesToTrack(gray, maxCorners=120, qualityLevel=0.01, minDistance=8, mask=refreshed_mask)
-            if refreshed is not None:
-                track_points = refreshed
-                track_reacquire_count += 1
-                tracking_confidence = max(tracking_confidence, min(0.8, len(refreshed) / 80.0))
-        tracking_confidence_sum += tracking_confidence; camera_motion_sum += frame_camera_motion; target_motion_sum += frame_target_motion
-        previous_gray = gray
-        processing_rgb = analysis_rgb
-        if observed_color_map is not None and frame_transform is not None and object_mask is not None:
-            aligned_observed = cv2.warpAffine(observed_color_map, frame_transform, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            accumulation_strength = 0.36 if profile == "observed_color" else 0.16 if profile == "observed_conservative" else 0.12
-            observed_mask = (np.asarray(object_mask, dtype=np.float32) / 255.0)[..., None] * accumulation_strength
-            observed_color_map = (analysis_rgb.astype(np.float32) * (1.0 - observed_mask) + aligned_observed.astype(np.float32) * observed_mask).clip(0, 255).astype("uint8")
-            observed_color_frames += 1
-        else:
-            observed_color_map = analysis_rgb.copy()
-        if profile in {"observed_color", "observed_conservative"}:
-            processing_rgb = observed_color_map
-        if previous_analysis_rgb is not None and frame_transform is not None and object_mask is not None:
-            aligned_source = cv2.warpAffine(previous_analysis_rgb, frame_transform, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            fusion_strength = 0.18 * min(1.0, tracking_confidence)
-            fusion_mask = (np.asarray(object_mask, dtype=np.float32) / 255.0)[..., None] * fusion_strength
-            if profile not in {"observed_color", "observed_conservative"}:
-                processing_rgb = (analysis_rgb.astype(np.float32) * (1.0 - fusion_mask) + aligned_source.astype(np.float32) * fusion_mask).clip(0, 255).astype("uint8")
-            temporal_fusion_frames += 1; temporal_fusion_weight_sum += fusion_strength
-        enhanced = process_image(Image.fromarray(processing_rgb), settings)
-        enhanced = Image.composite(enhanced, Image.fromarray(analysis_rgb), object_mask)
-        output_array = np.asarray(enhanced.convert("RGB"))
-        if previous_enhanced is not None and frame_transform is not None:
-            aligned = cv2.warpAffine(previous_enhanced, frame_transform, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-            mask_weight = (np.asarray(object_mask, dtype=np.float32) / 255.0)[..., None] * 0.20
-            output_array = (output_array.astype(np.float32) * (1.0 - mask_weight) + aligned.astype(np.float32) * mask_weight).clip(0, 255).astype("uint8")
-        previous_enhanced = output_array
-        current_mask_array = np.asarray(object_mask, dtype=np.float32) / 255.0
-        if count % max(1, int(fps // 5) or 1) == 0:
-            skeleton_pixels, endpoints = skeleton_features(np.asarray(object_mask)); skeleton_length += skeleton_pixels; skeleton_endpoints += endpoints; skeleton_samples += 1
-        if previous_mask_array is not None: temporal_shape_sum += 1.0 - float(np.mean(np.abs(current_mask_array - previous_mask_array)))
-        previous_mask_array = current_mask_array
-        previous_analysis_rgb = analysis_rgb
-        information_gain += float(np.mean(np.abs(output_array.astype(np.float32) - analysis_rgb.astype(np.float32))))
-        edge_gain += float(np.mean(cv2.Canny(cv2.cvtColor(output_array, cv2.COLOR_RGB2GRAY), 60, 150) > 0))
-        components, area, elongated, holes, symmetry = shape_features(output_array); component_count += components; component_area += area; elongated_count += elongated; hole_count += holes; symmetry_sum += symmetry
-        clipping += float(np.mean((output_array <= 2) | (output_array >= 253)))
-        deviation += float(np.mean(np.abs(output_array.astype(np.float32) - analysis_rgb.astype(np.float32))))
-        output_gray = cv2.cvtColor(output_array, cv2.COLOR_RGB2GRAY); source_gray = cv2.cvtColor(analysis_rgb, cv2.COLOR_RGB2GRAY)
-        noise_sum += max(0.0, float(cv2.Laplacian(output_gray, cv2.CV_32F).var() - cv2.Laplacian(source_gray, cv2.CV_32F).var()))
-        halo_sum += float(np.mean(np.abs(cv2.Laplacian(output_gray, cv2.CV_32F)))) / 255.0
-        if previous_output is not None: flicker_sum += float(np.mean(np.abs(output_array.astype(np.float32) - previous_output.astype(np.float32))))
-        previous_output = output_array
-        writer.write(cv2.cvtColor(output_array, cv2.COLOR_RGB2BGR)); count += 1
-        if count % 30 == 0:
-            flicker = flicker_sum / max(1, count - 1); stability = max(0.0, 1.0 - flicker / 255.0)
-            print(f"processed frames: {count} tracking_confidence={tracking_confidence:.2f} target_motion={frame_target_motion:.1f} camera_motion={frame_camera_motion:.1f} flicker={flicker:.2f} temporal_stability={stability:.3f}", flush=True)
-    cap.release(); writer.release()
+                rect = (int(roi[0]*width), int(roi[1]*height), max(2, int(roi[2]*width)), max(2, int(roi[3]*height))) if roi else (width*margin//100,height*margin//100,width*(100-margin*2)//100,height*(100-margin*2)//100)
+                cv2.grabCut(rgb, seg, rect, bgd, fgd, 2, cv2.GC_INIT_WITH_RECT)
+                raw_mask = np.where((seg==1)|(seg==3),255,0).astype("uint8")
+                if object_preset == "generic":
+                    object_preset = recommend_object_preset(raw_mask)
+                    margin, blur = OBJECT_PRESETS[object_preset]
+                    print(f"auto_object_preset={object_preset}", flush=True)
+                mask_array = refine_object_mask(raw_mask, object_preset); object_mask = Image.fromarray(mask_array)
+                preview = rgb.copy(); preview[mask_array == 0] = (preview[mask_array == 0] * 0.25).astype("uint8"); cv2.imwrite(str(mask_preview_path), cv2.cvtColor(preview, cv2.COLOR_RGB2BGR))
+                track_points = cv2.goodFeaturesToTrack(gray, maxCorners=120, qualityLevel=0.01, minDistance=8, mask=mask_array); camera_points = cv2.goodFeaturesToTrack(gray, maxCorners=180, qualityLevel=0.01, minDistance=8); tracking_confidence = 1.0 if track_points is not None else 0.0
+            elif previous_gray is not None and track_points is not None and len(track_points) >= 3:
+                cam_matrix = None
+                if camera_points is not None and len(camera_points) >= 3:
+                    cam_new, cam_status, _ = cv2.calcOpticalFlowPyrLK(previous_gray, gray, camera_points, None)
+                    old_cam = camera_points[cam_status.ravel() == 1]; new_cam = cam_new[cam_status.ravel() == 1]
+                    if len(new_cam) >= 3:
+                        cam_matrix, _ = cv2.estimateAffinePartial2D(old_cam, new_cam, method=cv2.RANSAC)
+                        if cam_matrix is not None: frame_camera_motion = float(np.linalg.norm(cam_matrix[:, 2]))
+                        camera_points = new_cam.reshape(-1,1,2)
+                new_points, status, _ = cv2.calcOpticalFlowPyrLK(previous_gray, gray, track_points, None)
+                good_old = track_points[status.ravel() == 1]; good_new = new_points[status.ravel() == 1]
+                if len(good_new) >= 3:
+                    backward, backward_status, _ = cv2.calcOpticalFlowPyrLK(gray, previous_gray, good_new.reshape(-1, 1, 2), None)
+                    if backward is not None:
+                        round_trip_error = np.linalg.norm(backward.reshape(-1, 2) - good_old.reshape(-1, 2), axis=1)
+                        reliable = (backward_status.ravel() == 1) & (round_trip_error <= 1.5)
+                        good_old = good_old[reliable]; good_new = good_new[reliable]
+                if len(good_new) >= 3:
+                    matrix, _ = cv2.estimateAffinePartial2D(good_old, good_new, method=cv2.RANSAC)
+                    if matrix is not None:
+                        frame_transform = matrix
+                        target_matrix = matrix.copy()
+                        if cam_matrix is not None:
+                            target_matrix[:, 2] -= cam_matrix[:, 2]
+                        frame_target_motion = float(np.linalg.norm(target_matrix[:, 2]))
+                        moved = cv2.warpAffine(np.asarray(object_mask), frame_transform, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
+                        previous_mask = np.asarray(object_mask, dtype=np.float32)
+                        mask_array = (previous_mask * 0.70 + moved.astype(np.float32) * 0.30).clip(0,255).astype("uint8")
+                        object_mask = Image.fromarray(cv2.GaussianBlur(refine_object_mask(mask_array, object_preset), (0,0), blur)); tracking_confidence = min(1.0, len(good_new) / 40.0)
+                    track_points = good_new.reshape(-1,1,2)
+                else: track_points = None; tracking_confidence = 0.0
+            if object_mask is not None and (track_points is None or len(track_points) < 12):
+                refreshed_mask = np.asarray(object_mask, dtype=np.uint8)
+                refreshed = cv2.goodFeaturesToTrack(gray, maxCorners=120, qualityLevel=0.01, minDistance=8, mask=refreshed_mask)
+                if refreshed is not None:
+                    track_points = refreshed
+                    track_reacquire_count += 1
+                    tracking_confidence = max(tracking_confidence, min(0.8, len(refreshed) / 80.0))
+            tracking_confidence_sum += tracking_confidence; camera_motion_sum += frame_camera_motion; target_motion_sum += frame_target_motion
+            previous_gray = gray
+            processing_rgb = analysis_rgb
+            if observed_color_map is not None and frame_transform is not None and object_mask is not None:
+                aligned_observed = cv2.warpAffine(observed_color_map, frame_transform, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                accumulation_strength = 0.36 if profile == "observed_color" else 0.16 if profile == "observed_conservative" else 0.12
+                observed_mask = (np.asarray(object_mask, dtype=np.float32) / 255.0)[..., None] * accumulation_strength
+                observed_color_map = (analysis_rgb.astype(np.float32) * (1.0 - observed_mask) + aligned_observed.astype(np.float32) * observed_mask).clip(0, 255).astype("uint8")
+                observed_color_frames += 1
+            else:
+                observed_color_map = analysis_rgb.copy()
+            if profile in {"observed_color", "observed_conservative"}:
+                processing_rgb = observed_color_map
+            if previous_analysis_rgb is not None and frame_transform is not None and object_mask is not None:
+                aligned_source = cv2.warpAffine(previous_analysis_rgb, frame_transform, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                fusion_strength = 0.18 * min(1.0, tracking_confidence)
+                fusion_mask = (np.asarray(object_mask, dtype=np.float32) / 255.0)[..., None] * fusion_strength
+                if profile not in {"observed_color", "observed_conservative"}:
+                    processing_rgb = (analysis_rgb.astype(np.float32) * (1.0 - fusion_mask) + aligned_source.astype(np.float32) * fusion_mask).clip(0, 255).astype("uint8")
+                temporal_fusion_frames += 1; temporal_fusion_weight_sum += fusion_strength
+            enhanced = process_image(Image.fromarray(processing_rgb), settings)
+            enhanced = Image.composite(enhanced, Image.fromarray(analysis_rgb), object_mask)
+            output_array = np.asarray(enhanced.convert("RGB"))
+            if previous_enhanced is not None and frame_transform is not None:
+                aligned = cv2.warpAffine(previous_enhanced, frame_transform, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                mask_weight = (np.asarray(object_mask, dtype=np.float32) / 255.0)[..., None] * 0.20
+                output_array = (output_array.astype(np.float32) * (1.0 - mask_weight) + aligned.astype(np.float32) * mask_weight).clip(0, 255).astype("uint8")
+            previous_enhanced = output_array
+            current_mask_array = np.asarray(object_mask, dtype=np.float32) / 255.0
+            if count % max(1, int(fps // 5) or 1) == 0:
+                skeleton_pixels, endpoints = skeleton_features(np.asarray(object_mask)); skeleton_length += skeleton_pixels; skeleton_endpoints += endpoints; skeleton_samples += 1
+            if previous_mask_array is not None: temporal_shape_sum += 1.0 - float(np.mean(np.abs(current_mask_array - previous_mask_array)))
+            previous_mask_array = current_mask_array
+            previous_analysis_rgb = analysis_rgb
+            information_gain += float(np.mean(np.abs(output_array.astype(np.float32) - analysis_rgb.astype(np.float32))))
+            edge_gain += float(np.mean(cv2.Canny(cv2.cvtColor(output_array, cv2.COLOR_RGB2GRAY), 60, 150) > 0))
+            components, area, elongated, holes, symmetry = shape_features(output_array); component_count += components; component_area += area; elongated_count += elongated; hole_count += holes; symmetry_sum += symmetry
+            clipping += float(np.mean((output_array <= 2) | (output_array >= 253)))
+            deviation += float(np.mean(np.abs(output_array.astype(np.float32) - analysis_rgb.astype(np.float32))))
+            output_gray = cv2.cvtColor(output_array, cv2.COLOR_RGB2GRAY); source_gray = cv2.cvtColor(analysis_rgb, cv2.COLOR_RGB2GRAY)
+            noise_sum += max(0.0, float(cv2.Laplacian(output_gray, cv2.CV_32F).var() - cv2.Laplacian(source_gray, cv2.CV_32F).var()))
+            halo_sum += float(np.mean(np.abs(cv2.Laplacian(output_gray, cv2.CV_32F)))) / 255.0
+            if previous_output is not None: flicker_sum += float(np.mean(np.abs(output_array.astype(np.float32) - previous_output.astype(np.float32))))
+            previous_output = output_array
+            writer.write(cv2.cvtColor(output_array, cv2.COLOR_RGB2BGR)); count += 1
+            if count % 30 == 0:
+                flicker = flicker_sum / max(1, count - 1); stability = max(0.0, 1.0 - flicker / 255.0)
+                print(f"processed frames: {count} tracking_confidence={tracking_confidence:.2f} target_motion={frame_target_motion:.1f} camera_motion={frame_camera_motion:.1f} flicker={flicker:.2f} temporal_stability={stability:.3f}", flush=True)
+    finally:
+        cap.release()
+        if writer is not None:
+            writer.release()
     avg_flicker = flicker_sum / max(1, count - 1); avg_gain = information_gain / max(1, count)
     avg_edge = edge_gain / max(1, count); avg_clip = clipping / max(1, count); avg_deviation = deviation / max(1, count)
     avg_components = component_count / max(1, count); avg_area = component_area / max(1, count); avg_elongated = elongated_count / max(1, count); avg_holes = hole_count / max(1, count); avg_symmetry = symmetry_sum / max(1, count); avg_skeleton_length = skeleton_length / max(1, skeleton_samples); avg_skeleton_endpoints = skeleton_endpoints / max(1, skeleton_samples)
@@ -467,7 +473,10 @@ def write_candidate_comparison(entries, output):
     tiles = []
     for index, item in enumerate(selected, 1):
         capture = cv2.VideoCapture(item["output"])
-        ok, frame = capture.read(); capture.release()
+        try:
+            ok, frame = capture.read()
+        finally:
+            capture.release()
         if not ok:
             continue
         image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))

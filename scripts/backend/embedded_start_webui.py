@@ -28,6 +28,7 @@ class EmbeddedStartWebUI:
         self._current_proc = None
         self._stop_event = threading.Event()
         self._health_check_stop = threading.Event()
+        self._lifecycle_lock = threading.Lock()
         self._api_status = "⚫ オフライン"
         self._log_msg = print
 
@@ -50,14 +51,15 @@ class EmbeddedStartWebUI:
         except Exception as e:
             return {"status": f"❓ エラー: {str(e)[:30]}", "online": False}
 
-    def _health_check_thread(self):
-        while not self._health_check_stop.is_set():
+    def _health_check_thread(self, stop_event):
+        while not stop_event.is_set():
             if self._current_proc is None:
                 self._api_status = "⚫ オフライン"
             else:
                 result = self._health_check_now()
                 self._api_status = result["status"]
-            time.sleep(100)
+            if stop_event.wait(100):
+                break
 
     # {
     #   責務: [_find_and_kill_webui_process: 指定ポートを待ち受ける外部プロセスを終了する]
@@ -88,26 +90,36 @@ class EmbeddedStartWebUI:
     #   戻り値: []
     # }
     def _start_webui_thread(self, flags, logical_cpu, ram_gb, low_prio, soft_stop_sec, hard_kill_sec):
-        python_path = venv_python(RUNTIME_DIR / "venv")
-        launch_py = RUNTIME_DIR / self.launch_spec.launch_script_name
-        if not launch_py.exists():
-            self._log_msg(f"❌ 起動スクリプトが見つかりません: {launch_py}")
-            return
-        creationflags = 0x00000200 if os.name == "nt" else 0
-        self._stop_event.clear()
-        cmd = [str(python_path), str(launch_py)] + flags
-        self._log_msg(f"🚀 起動中: {' '.join(cmd)}")
-        self._current_proc = subprocess.Popen(cmd, cwd=str(RUNTIME_DIR), creationflags=creationflags)
-        self._health_check_stop.clear()
-        threading.Thread(target=self._health_check_thread, daemon=True).start()
-        while self._current_proc and self._current_proc.poll() is None and not self._stop_event.is_set():
-            time.sleep(0.25)
-        if self._stop_event.is_set():
-            self._stop_webui(soft_stop_sec, hard_kill_sec)
-        elif self._current_proc:
-            self._log_msg(f"⚠️ {self.DISPLAY_NAME} は終了しました (コード: {self._current_proc.returncode})")
-        self._health_check_stop.set()
-        self._current_proc = None
+        with self._lifecycle_lock:
+            python_path = venv_python(RUNTIME_DIR / "venv")
+            launch_py = RUNTIME_DIR / self.launch_spec.launch_script_name
+            if not launch_py.exists():
+                self._log_msg(f"❌ 起動スクリプトが見つかりません: {launch_py}")
+                return
+            creationflags = 0x00000200 if os.name == "nt" else 0
+            self._stop_event.clear()
+            cmd = [str(python_path), str(launch_py)] + flags
+            self._log_msg(f"🚀 起動中: {' '.join(cmd)}")
+            self._current_proc = subprocess.Popen(cmd, cwd=str(RUNTIME_DIR), creationflags=creationflags)
+            health_check_stop = threading.Event()
+            self._health_check_stop = health_check_stop
+            health_thread = threading.Thread(
+                target=self._health_check_thread,
+                args=(health_check_stop,),
+                daemon=True,
+            )
+            health_thread.start()
+            try:
+                while self._current_proc and self._current_proc.poll() is None and not self._stop_event.is_set():
+                    time.sleep(0.25)
+                if self._stop_event.is_set():
+                    self._stop_webui(soft_stop_sec, hard_kill_sec)
+                elif self._current_proc:
+                    self._log_msg(f"⚠️ {self.DISPLAY_NAME} は終了しました (コード: {self._current_proc.returncode})")
+            finally:
+                health_check_stop.set()
+                health_thread.join(timeout=1.0)
+                self._current_proc = None
 
     def _stop_webui(self, soft_stop_sec, hard_kill_sec):
         proc = self._current_proc
@@ -128,6 +140,10 @@ class EmbeddedStartWebUI:
             time.sleep(0.1)
         if proc.poll() is None:
             proc.kill()
+        try:
+            proc.wait(timeout=max(1.0, hard_kill_sec))
+        except subprocess.TimeoutExpired:
+            self._log_msg(f"⚠️ {self.DISPLAY_NAME} の終了確認がタイムアウトしました")
 
     def _restart_webui(self, *args):
         self._stop_event.set()

@@ -64,6 +64,8 @@ class VideoReencoder:
     def run(self, command: list[str], cpu_cores: int | None, log) -> bool:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         ProcessCpuLimiter.apply(process.pid, cpu_cores)
-        output, _ = process.communicate()
-        if output: log(output)
-        return process.returncode == 0
+        for line in process.stdout or ():
+            line = line.rstrip()
+            if line:
+                log(line)
+        return process.wait() == 0

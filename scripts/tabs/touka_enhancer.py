@@ -180,7 +180,8 @@ class ToukaEnhancerTab(ttk.Frame):
                 raise TypeError("形状内訳が不正です")
             label = next(label for label, value in OBJECT_PRESET_LABELS.items() if value == preset)
         except (KeyError, StopIteration, TypeError, ValueError, json.JSONDecodeError) as error:
-            self.after(0, lambda: self.logbox.log(f"強調対象の提案解析エラー: {error}"))
+            message = f"強調対象の提案解析エラー: {error}"
+            self.after(0, lambda message=message: self.logbox.log(message))
             return
         self.after(0, lambda: self._apply_reference_suggestion(label, image_count, confidence, distribution, common_count, shape_consistency, outlier_count))
 

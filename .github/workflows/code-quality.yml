@@ -39,9 +39,12 @@ jobs:
       - name: Verify Python CA bundles
         run: python tools/security/check_python_ca.py
 
-      - name: Run quality-tool unit tests
+      - name: Run quality and resource-lifetime unit tests
         run: |
-          python -m unittest             tests.tools.quality.test_quality_gate             tests.tools.completion.test_completion_gate
+          python -m unittest \
+            tests.tools.quality.test_quality_gate \
+            tests.tools.completion.test_completion_gate \
+            tests.test_resource_lifetime
 
       - name: Run incremental quality gate
         shell: bash

@@ -173,7 +173,7 @@ class ZipperTab(ttk.Frame):
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
                 creationflags=creationflags
             )
@@ -187,11 +187,15 @@ class ZipperTab(ttk.Frame):
             elif isinstance(max_cpu_percent, int) and 1 <= max_cpu_percent <= 100 and not _HAS_PSUTIL:
                 self.logbox.log("⚠️ psutil が見つかりません。-mmt によるスレッド制限のみ行います。psutil を入れるとプロセスアフィニティも設定できます。")
 
-            stdout, stderr = proc.communicate()
-            if proc.returncode == 0:
+            for line in proc.stdout or ():
+                line = line.rstrip()
+                if line:
+                    self.logbox.log(line)
+            return_code = proc.wait()
+            if return_code == 0:
                 self.logbox.log(f"✅ 圧縮成功: {filename} -> {zip_path}")
             else:
-                self.logbox.log(f"❌ 圧縮失敗: {filename}\n{stderr}")
+                self.logbox.log(f"❌ 圧縮失敗: {filename} (code={return_code})")
 
     @staticmethod
     def compute_threads_from_percent(percent):

@@ -41,7 +41,13 @@ jobs:
 
       - name: Run quality-tool unit tests
         run: |
-          python -m unittest             tests.tools.quality.test_quality_gate             tests.tools.completion.test_completion_gate
+          python -m unittest \
+            tests.tools.quality.test_quality_gate \
+            tests.tools.quality.test_resource_leak_gate \
+            tests.tools.completion.test_completion_gate
+
+      - name: Run resource leak gate
+        run: python tools/quality/resource_leak_gate.py
 
       - name: Run incremental quality gate
         shell: bash

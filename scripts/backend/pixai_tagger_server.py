@@ -37,18 +37,6 @@ class PixAITaggerServer:
                 self._process = None
         self._write_log(log, f"PixAI Tagger API終了（コード: {return_code}）")
 
-    # {
-    # 責務: [ _terminate_process: 子プロセスを通常終了し、期限超過時は強制終了して必ずwaitする ]
-    # 処理: [ 1: 終了済みなら戻る, 2: terminateして待つ, 3: timeout時はkillしてwaitする ]
-    # 引数: [ process: 回収対象subprocess ]
-    # 戻り値: []
-    # }
-    @staticmethod
-    def _terminate_process(process):
-        if process.poll() is not None:
-            return
-        self._terminate_process(process)
-
     def start(self, log=None):
         if API_ONLY_MODE:
             self._write_log(log, "API専用モードではPixAI Taggerを起動せず、設定済みAPIへ接続します")
@@ -95,7 +83,13 @@ class PixAITaggerServer:
             if process.poll() is not None:
                 raise RuntimeError(f"PixAI Tagger APIが終了しました（コード: {process.returncode}）")
             time.sleep(0.5)
-        self._terminate_process(process)
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
         with self._lock:
             if self._process is process:
                 self._process = None

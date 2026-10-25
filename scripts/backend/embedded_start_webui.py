@@ -28,6 +28,7 @@ class EmbeddedStartWebUI:
         self._current_proc = None
         self._stop_event = threading.Event()
         self._health_check_stop = threading.Event()
+        self._health_thread = None
         self._api_status = "⚫ オフライン"
         self._log_msg = print
 
@@ -50,14 +51,15 @@ class EmbeddedStartWebUI:
         except Exception as e:
             return {"status": f"❓ エラー: {str(e)[:30]}", "online": False}
 
-    def _health_check_thread(self):
-        while not self._health_check_stop.is_set():
+    def _health_check_thread(self, stop_event):
+        while not stop_event.is_set():
             if self._current_proc is None:
                 self._api_status = "⚫ オフライン"
             else:
                 result = self._health_check_now()
                 self._api_status = result["status"]
-            time.sleep(100)
+            if stop_event.wait(100):
+                return
 
     # {
     #   責務: [_find_and_kill_webui_process: 指定ポートを待ち受ける外部プロセスを終了する]
@@ -98,15 +100,26 @@ class EmbeddedStartWebUI:
         cmd = [str(python_path), str(launch_py)] + flags
         self._log_msg(f"🚀 起動中: {' '.join(cmd)}")
         self._current_proc = subprocess.Popen(cmd, cwd=str(RUNTIME_DIR), creationflags=creationflags)
-        self._health_check_stop.clear()
-        threading.Thread(target=self._health_check_thread, daemon=True).start()
+        previous_stop = self._health_check_stop
+        previous_stop.set()
+        previous_thread = self._health_thread
+        if previous_thread is not None and previous_thread.is_alive():
+            previous_thread.join(timeout=4)
+        stop_event = threading.Event()
+        health_thread = threading.Thread(target=self._health_check_thread, args=(stop_event,), daemon=True)
+        self._health_check_stop = stop_event
+        self._health_thread = health_thread
+        health_thread.start()
         while self._current_proc and self._current_proc.poll() is None and not self._stop_event.is_set():
             time.sleep(0.25)
         if self._stop_event.is_set():
             self._stop_webui(soft_stop_sec, hard_kill_sec)
         elif self._current_proc:
             self._log_msg(f"⚠️ {self.DISPLAY_NAME} は終了しました (コード: {self._current_proc.returncode})")
-        self._health_check_stop.set()
+        stop_event.set()
+        health_thread.join(timeout=4)
+        if self._health_thread is health_thread:
+            self._health_thread = None
         self._current_proc = None
 
     def _stop_webui(self, soft_stop_sec, hard_kill_sec):

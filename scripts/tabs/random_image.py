@@ -23,7 +23,7 @@ class RandomImageTab(ttk.Frame):
         self.mod = EMBEDDED_RANDOM_IMAGE
         self.backend_capabilities = create_configured_generation_backend_catalog().capabilities
         self.preset_store = PresetStore("random_image")
-        self._queue: queue.Queue[str] = queue.Queue()
+        self._queue: queue.Queue[str] = queue.Queue(maxsize=1000)
         self._build()
         self._load_defaults()
         self._attach_backend_logger()
@@ -407,7 +407,15 @@ class RandomImageTab(ttk.Frame):
         if isinstance(self.mod, Exception):
             return
         def tab_log(msg: str):
-            self._queue.put(str(msg))
+            message = str(msg)
+            try:
+                self._queue.put_nowait(message)
+            except queue.Full:
+                try:
+                    self._queue.get_nowait()
+                except queue.Empty:
+                    pass
+                self._queue.put_nowait(message)
         self.mod._log = tab_log
         self.logbox.log("画像生成タブを起動しました")
 

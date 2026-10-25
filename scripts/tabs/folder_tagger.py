@@ -331,18 +331,20 @@ class FolderTaggerTab(ttk.Frame):
     def _interrogate_video(self, video_path, api_url, model, threshold, character_threshold, timeout, frame_count):
         import cv2
         capture = cv2.VideoCapture(str(video_path))
-        total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        if total < 1:
-            capture.release(); raise RuntimeError("動画を読めません")
-        indices = sorted({round((total - 1) * index / max(1, frame_count - 1)) for index in range(max(1, frame_count))})
-        scores = []
-        for index in indices:
-            if self.stop_event.is_set(): break
-            capture.set(cv2.CAP_PROP_POS_FRAMES, index); ok, frame = capture.read()
-            if not ok: continue
-            ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
-            if ok: scores.append(self._interrogate_bytes(encoded.tobytes(), api_url, model, threshold, character_threshold, timeout))
-        capture.release()
+        try:
+            total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            if total < 1:
+                raise RuntimeError("動画を読めません")
+            indices = sorted({round((total - 1) * index / max(1, frame_count - 1)) for index in range(max(1, frame_count))})
+            scores = []
+            for index in indices:
+                if self.stop_event.is_set(): break
+                capture.set(cv2.CAP_PROP_POS_FRAMES, index); ok, frame = capture.read()
+                if not ok: continue
+                ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                if ok: scores.append(self._interrogate_bytes(encoded.tobytes(), api_url, model, threshold, character_threshold, timeout))
+        finally:
+            capture.release()
         if not scores: raise RuntimeError("動画から処理可能なフレームを取得できませんでした")
         return self._average_gif_scores(scores), len(scores)
 

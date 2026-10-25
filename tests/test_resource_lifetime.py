@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import ast
 import queue
 import threading
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 from scripts.backend.embedded_start_webui import EmbeddedStartWebUI
@@ -55,6 +57,69 @@ class ResourceLifetimeTests(unittest.TestCase):
             [fake._pending_logs.get_nowait(), fake._pending_logs.get_nowait()],
             ["second", "third"],
         )
+
+    # {
+    # 責務: [ test_all_opencv_video_captures_are_exception_safe: productionのVideoCaptureがfinallyでreleaseされることを検証する ]
+    # 処理: [ 1: 対象Python sourceをAST解析する, 2: VideoCapture代入を探す, 3: 直後のtry-finallyで同じ変数をreleaseすることを確認する ]
+    # 引数: []
+    # 戻り値: []
+    # }
+    def test_all_opencv_video_captures_are_exception_safe(self):
+        root = Path(__file__).resolve().parents[1]
+        source_roots = (
+            root / "scripts",
+            root / "nuno",
+            root / "src",
+        )
+        failures = []
+        for source_root in source_roots:
+            if not source_root.exists():
+                continue
+            for path in source_root.rglob("*.py"):
+                if any(part in {"external", "__pycache__", ".venv"} for part in path.parts):
+                    continue
+                tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+                containers = [tree, *[node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]]
+                for container in containers:
+                    body = getattr(container, "body", [])
+                    for index, statement in enumerate(body):
+                        if not isinstance(statement, (ast.Assign, ast.AnnAssign)):
+                            continue
+                        value = statement.value
+                        if not (
+                            isinstance(value, ast.Call)
+                            and isinstance(value.func, ast.Attribute)
+                            and value.func.attr == "VideoCapture"
+                        ):
+                            continue
+                        targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+                        names = [target.id for target in targets if isinstance(target, ast.Name)]
+                        if len(names) != 1:
+                            failures.append(f"{path.relative_to(root)}:{statement.lineno}: capture must use one named owner")
+                            continue
+                        owner = names[0]
+                        try_statement = next(
+                            (
+                                candidate
+                                for candidate in body[index + 1 : index + 4]
+                                if isinstance(candidate, ast.Try)
+                            ),
+                            None,
+                        )
+                        released = try_statement is not None and any(
+                            isinstance(node, ast.Call)
+                            and isinstance(node.func, ast.Attribute)
+                            and node.func.attr == "release"
+                            and isinstance(node.func.value, ast.Name)
+                            and node.func.value.id == owner
+                            for final_statement in try_statement.finalbody
+                            for node in ast.walk(final_statement)
+                        )
+                        if not released:
+                            failures.append(
+                                f"{path.relative_to(root)}:{statement.lineno}: {owner}.release() must be in nearby finally"
+                            )
+        self.assertEqual(failures, [])
 
     # {
     # 責務: [ test_visible_log_trimming_keeps_configured_line_budget: 表示logが行数上限を超えた分だけ先頭から削除されることを確認する ]

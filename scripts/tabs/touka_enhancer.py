@@ -196,7 +196,11 @@ class ToukaEnhancerTab(ttk.Frame):
             source = Path(self.input_path.get())
             video = source if source.is_file() else next((path for path in source.rglob("*") if path.suffix.lower() in {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}), None)
             if video is None: raise ValueError("入力動画が見つかりません")
-            capture = cv2.VideoCapture(str(video)); ok, frame = capture.read(); capture.release()
+            capture = cv2.VideoCapture(str(video))
+            try:
+                ok, frame = capture.read()
+            finally:
+                capture.release()
             if not ok: raise ValueError(f"動画を読めません: {video}")
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB); original_h, original_w = rgb.shape[:2]
             image = Image.fromarray(rgb); image.thumbnail((900, 600)); preview_w, preview_h = image.size
@@ -226,7 +230,11 @@ class ToukaEnhancerTab(ttk.Frame):
             source = Path(self.input_path.get())
             video = source if source.is_file() else next((path for path in source.rglob("*") if path.suffix.lower() in {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}), None)
             if video is None: raise ValueError("入力動画が見つかりません")
-            capture = cv2.VideoCapture(str(video)); ok, frame = capture.read(); capture.release()
+            capture = cv2.VideoCapture(str(video))
+            try:
+                ok, frame = capture.read()
+            finally:
+                capture.release()
             if not ok: raise ValueError(f"動画を読めません: {video}")
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB); height, width = rgb.shape[:2]
             margin = max(2, min(width, height) * 8 // 100)

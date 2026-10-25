@@ -37,6 +37,12 @@ class PixAITaggerServer:
                 self._process = None
         self._write_log(log, f"PixAI Tagger API終了（コード: {return_code}）")
 
+    # {
+    # 責務: [ _terminate_process: 子プロセスを通常終了し、期限超過時は強制終了して必ずwaitする ]
+    # 処理: [ 1: 終了済みなら戻る, 2: terminateして待つ, 3: timeout時はkillしてwaitする ]
+    # 引数: [ process: 回収対象subprocess ]
+    # 戻り値: []
+    # }
     @staticmethod
     def _terminate_process(process):
         if process.poll() is not None:

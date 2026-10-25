@@ -2,6 +2,7 @@ import argparse
 import sys
 import json
 from pathlib import Path
+import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 from image_enhancer import EnhanceSettings, process_image
 

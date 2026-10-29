@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import tempfile
+import threading
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -18,6 +19,7 @@ AI_LABEL = "ai_generated"
 NON_AI_LABEL = "non_ai"
 UNCERTAIN_LABEL = "uncertain"
 CLUSTER_LABELS = {AI_LABEL, NON_AI_LABEL, UNCERTAIN_LABEL}
+_MANIFEST_LOCK = threading.Lock()
 
 
 # {
@@ -200,8 +202,7 @@ def _read_metadata(path: Path) -> tuple[str | None, str | None]:
                 signals.add(signal)
                 evidence.append("embedded_pixiv_metadata")
             if any(
-                key.casefold() in {"parameters", "workflow", "prompt"} and embedded[key]
-                for key in embedded
+                key.casefold() in {"parameters", "workflow"} and embedded[key] for key in embedded
             ):
                 signals.add(AI_LABEL)
                 evidence.append("embedded_generation_metadata")
@@ -305,48 +306,48 @@ def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output
     if _is_within(destination_root, source_root) or destination_root == source_root:
         raise ValueError("出力先は入力フォルダーの外に指定してください")
     copied = 0
-    for result in results:
-        if result.cluster not in CLUSTER_LABELS:
-            raise ValueError(f"不明なクラスタです: {result.cluster}")
-        relative_path = result.source_path.resolve(strict=True).relative_to(source_root)
-        destination = destination_root / result.cluster / relative_path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        final_path = _destination_for_source(result.source_path, destination)
-        if not _same_file_content(result.source_path, final_path):
-            _copy_file_atomically(result.source_path, final_path)
-            copied += 1
-        for extension in (".txt", ".json"):
-            sidecar = result.source_path.with_suffix(extension)
-            if sidecar.is_file() and not sidecar.is_symlink():
-                sidecar_destination = final_path.with_suffix(extension)
-                if not _same_file_content(sidecar, sidecar_destination):
-                    _copy_file_atomically(
-                        sidecar, _destination_for_source(sidecar, sidecar_destination)
-                    )
+    created_files: list[Path] = []
+    try:
+        for result in results:
+            if result.cluster not in CLUSTER_LABELS:
+                raise ValueError(f"不明なクラスタです: {result.cluster}")
+            if result.source_path.is_symlink():
+                raise ValueError(f"シンボリックリンクはコピーできません: {result.source_path}")
+            resolved_source = result.source_path.resolve(strict=True)
+            try:
+                relative_path = resolved_source.relative_to(source_root)
+            except ValueError as error:
+                raise ValueError(f"入力フォルダー外の画像です: {result.source_path}") from error
+            destination = destination_root / result.cluster / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            sidecars = [
+                result.source_path.with_suffix(extension).resolve(strict=True)
+                for extension in (".txt", ".json")
+                if result.source_path.with_suffix(extension).is_file()
+                and not result.source_path.with_suffix(extension).is_symlink()
+            ]
+            for sidecar in sidecars:
+                try:
+                    sidecar.relative_to(source_root)
+                except ValueError as error:
+                    raise ValueError(f"入力フォルダー外のsidecarです: {sidecar}") from error
+            final_path = _destination_for_source(resolved_source, destination, sidecars)
+            related_files = [
+                (resolved_source, final_path),
+                *[(sidecar, final_path.with_suffix(sidecar.suffix)) for sidecar in sidecars],
+            ]
+            for source_file, final_file in related_files:
+                if _same_file_content(source_file, final_file):
+                    continue
+                _copy_file_atomically(source_file, final_file)
+                created_files.append(final_file)
+                if source_file == result.source_path:
+                    copied += 1
+    except BaseException:
+        for created_file in reversed(created_files):
+            created_file.unlink(missing_ok=True)
+        raise
     return copied
-
-
-# {
-# 責務: [_non_overwriting_path: 既存ファイルを避ける保存先を決める]
-# 処理: [1: 既存ファイルを避ける保存先を決める]
-# 引数: [path]
-# 戻り値: [宣言の戻り値を返す]
-# }
-def _non_overwriting_path(path: Path) -> Path:
-    # {
-    #   責務: [_non_overwriting_path: 既存ファイルを避ける出力名を決める]
-    #   引数: [path: 希望する出力パス]
-    #   戻り値: [未使用パス。既存ファイルを変更しない]
-    # }
-    if not path.exists():
-        return path
-    digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:10]
-    candidate = path.with_name(f"{path.stem}_{digest}{path.suffix}")
-    index = 1
-    while candidate.exists():
-        candidate = path.with_name(f"{path.stem}_{digest}_{index}{path.suffix}")
-        index += 1
-    return candidate
 
 
 # {
@@ -355,16 +356,30 @@ def _non_overwriting_path(path: Path) -> Path:
 #   引数: [source: コピー元, destination: 希望する出力パス]
 #   戻り値: [未上書きで使用できる出力パス]
 # }
-def _destination_for_source(source: Path, destination: Path) -> Path:
-    candidate = destination
+def _destination_for_source(
+    source: Path, destination: Path, companion_sources: Iterable[Path] = ()
+) -> Path:
+    source_files = [source, *companion_sources]
     digest = hashlib.sha256(str(destination).encode("utf-8")).hexdigest()[:10]
     suffix_index = 0
-    while candidate.exists():
-        if _same_file_content(source, candidate):
+    while True:
+        if suffix_index == 0:
+            suffix = ""
+        elif suffix_index == 1:
+            suffix = f"_{digest}"
+        else:
+            suffix = f"_{digest}_{suffix_index - 1}"
+        candidate = destination.with_name(f"{destination.stem}{suffix}{destination.suffix}")
+        targets = [
+            candidate,
+            *[candidate.with_suffix(companion.suffix) for companion in companion_sources],
+        ]
+        if all(
+            not target.exists() or _same_file_content(source_file, target)
+            for source_file, target in zip(source_files, targets, strict=True)
+        ):
             return candidate
         suffix_index += 1
-        suffix = f"_{digest}" if suffix_index == 1 else f"_{digest}_{suffix_index - 1}"
-        candidate = destination.with_name(f"{destination.stem}{suffix}{destination.suffix}")
     return candidate
 
 
@@ -375,11 +390,25 @@ def _destination_for_source(source: Path, destination: Path) -> Path:
 #   戻り値: [内容一致ならTrue]
 # }
 def _same_file_content(left: Path, right: Path) -> bool:
-    if not right.is_file():
+    if right.is_symlink() or not right.is_file():
         return False
-    left_digest = hashlib.sha256(left.read_bytes()).digest()
-    right_digest = hashlib.sha256(right.read_bytes()).digest()
+    left_digest = _file_digest(left)
+    right_digest = _file_digest(right)
     return left_digest == right_digest
+
+
+# {
+#   責務: [_file_digest: ファイルを小分けに読んでSHA-256を計算する]
+#   処理: [1: 1 MiB単位で読みchecksumへ加える]
+#   引数: [path: checksum対象]
+#   戻り値: [SHA-256 digest bytes]
+# }
+def _file_digest(path: Path) -> bytes:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.digest()
 
 
 # {
@@ -411,12 +440,15 @@ def _copy_file_atomically(source: Path, destination: Path) -> None:
         except OSError as error:
             if not _hard_links_unsupported(error):
                 raise
+            created_destination = False
             try:
                 with temporary.open("rb") as source_handle, destination.open("xb") as target_handle:
+                    created_destination = True
                     shutil.copyfileobj(source_handle, target_handle)
                 shutil.copystat(temporary, destination)
             except OSError:
-                destination.unlink(missing_ok=True)
+                if created_destination:
+                    destination.unlink(missing_ok=True)
                 raise
     finally:
         temporary.unlink(missing_ok=True)
@@ -451,6 +483,22 @@ def _hard_links_unsupported(error: OSError) -> bool:
 # }
 def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) -> Path:
     # {
+    #   責務: [write_manifest: manifestの同時保存を直列化する]
+    #   引数: [results: 判定結果, manifest_path: 保存先]
+    #   戻り値: [一度だけ生成されたmanifestパス]
+    # }
+    with _MANIFEST_LOCK:
+        return _write_manifest_locked(results, manifest_path)
+
+
+# {
+#   責務: [_write_manifest_locked: manifestを衝突回避して保存する]
+#   処理: [1: 内容を一時ファイルに書く, 2: 同一内容を再利用または排他的に公開する]
+#   引数: [results: 判定結果, manifest_path: 保存先]
+#   戻り値: [保存したmanifestパス]
+# }
+def _write_manifest_locked(results: Iterable[ImageOriginResult], manifest_path: Path) -> Path:
+    # {
     #   責務: [write_manifest: 判定結果をJSON manifestとして保存する]
     #   引数: [results: 判定結果, manifest_path: 保存先]
     #   戻り値: [保存先。既存manifestを上書きしない]
@@ -467,19 +515,12 @@ def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) ->
     ]
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(rows, ensure_ascii=False, indent=2)
-    if manifest_path.is_file():
-        try:
-            if manifest_path.read_text(encoding="utf-8") == serialized:
-                return manifest_path
-        except OSError:
-            pass
-    final_path = _non_overwriting_path(manifest_path)
     handle = tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",
-        prefix=f".{final_path.name}.",
+        prefix=f".{manifest_path.name}.",
         suffix=".tmp",
-        dir=final_path.parent,
+        dir=manifest_path.parent,
         delete=False,
     )
     temporary = Path(handle.name)
@@ -488,6 +529,9 @@ def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) ->
             handle.write(serialized)
             handle.flush()
             os.fsync(handle.fileno())
+        final_path = _destination_for_source(temporary, manifest_path)
+        if _same_file_content(temporary, final_path):
+            return final_path
         _copy_file_atomically(temporary, final_path)
     finally:
         temporary.unlink(missing_ok=True)

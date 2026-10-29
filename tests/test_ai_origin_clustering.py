@@ -2,6 +2,7 @@ import errno
 import json
 import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -18,6 +19,7 @@ from scripts.backend.ai_origin_clustering import (
     discover_images,
     write_manifest,
 )
+from scripts.backend.ai_origin_detector import AnimeAIDetector
 
 
 # {
@@ -150,6 +152,12 @@ class AIOriginClusteringTests(unittest.TestCase):
         conflict_image.with_suffix(".json").write_text(json.dumps({"aiType": 1}), encoding="utf-8")
         conflict = classify_image(conflict_image, FakeScoreProvider(0.99), 0.1, 0.9)
         self.assertEqual(conflict.cluster, UNCERTAIN_LABEL)
+        ordinary_prompt = self.create_image(
+            self.root / "ordinary_prompt.png", {"prompt": "portrait"}
+        )
+        prompt_result = classify_image(ordinary_prompt, FakeScoreProvider(0.01), 0.1, 0.9)
+        self.assertEqual(prompt_result.cluster, NON_AI_LABEL)
+        self.assertEqual(prompt_result.evidence, ("oss_classifier",))
 
     # {
     # 責務: [test_classifier_thresholds_produce_three_clusters: 閾値による3分類を検証する]
@@ -239,18 +247,68 @@ class AIOriginClusteringTests(unittest.TestCase):
         output = self.root / "output"
         image_path = self.create_image(source / "nested" / "image.png")
         image_path.with_suffix(".txt").write_text("caption", encoding="utf-8")
+        image_path.with_suffix(".json").write_text('{"source":"expected"}', encoding="utf-8")
         result = ImageOriginResult(image_path, AI_LABEL, 0.99, ("oss_classifier",), "high")
         expected = output / AI_LABEL / "nested" / "image.png"
         expected.parent.mkdir(parents=True)
         expected.write_bytes(b"existing file")
+        expected.with_suffix(".json").write_text('{"source":"unrelated"}', encoding="utf-8")
         self.assertEqual(copy_clusters([result], source, output), 1)
         self.assertEqual(image_path.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
         sidecars = list((output / AI_LABEL / "nested").glob("image_*.txt"))
         self.assertEqual(len(sidecars), 1)
         self.assertEqual(sidecars[0].read_text(encoding="utf-8"), "caption")
+        copied_json = sidecars[0].with_suffix(".json")
+        self.assertTrue(copied_json.is_file())
+        self.assertEqual(json.loads(copied_json.read_text(encoding="utf-8"))["source"], "expected")
+        self.assertEqual(
+            json.loads(expected.with_suffix(".json").read_text(encoding="utf-8"))["source"],
+            "unrelated",
+        )
         self.assertEqual(len(list(expected.parent.glob("image_*.png"))), 1)
         self.assertEqual(copy_clusters([result], source, output), 0)
         self.assertEqual(len(list(expected.parent.glob("image_*.png"))), 1)
+
+    # {
+    # 責務: [test_copy_rolls_back_partial_output: コピー失敗時に今回作ったファイルを戻す]
+    # 処理: [1: 2枚目の公開を失敗させ先行出力が除去されることを確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_copy_rolls_back_partial_output(self):
+        source = self.root / "source"
+        output = self.root / "output"
+        first_image = self.create_image(source / "first.png")
+        second_image = self.create_image(source / "second.png")
+        results = [
+            ImageOriginResult(path, AI_LABEL, 0.99, ("oss_classifier",), "high")
+            for path in (first_image, second_image)
+        ]
+        from scripts.backend import ai_origin_clustering
+
+        original_copy = ai_origin_clustering._copy_file_atomically
+        calls = 0
+
+        # {
+        #   責務: [fail_second_copy: 2回目のファイル公開をテスト用に失敗させる]
+        #   処理: [1: 初回は元処理を呼び2回目にOSErrorを投げる]
+        #   引数: [source_path, destination_path]
+        #   戻り値: [初回の元処理結果]
+        # }
+        def fail_second_copy(source_path, destination_path):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("simulated copy failure")
+            return original_copy(source_path, destination_path)
+
+        with mock.patch(
+            "scripts.backend.ai_origin_clustering._copy_file_atomically",
+            side_effect=fail_second_copy,
+        ):
+            with self.assertRaisesRegex(OSError, "simulated copy failure"):
+                copy_clusters(results, source, output)
+        self.assertEqual(list(output.rglob("*.png")), [])
 
     # {
     # 責務: [test_copy_falls_back_when_hard_links_are_unsupported: hard link非対応先で安全コピーする]
@@ -295,6 +353,67 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(
             json.loads(manifest.read_text(encoding="utf-8"))[0]["cluster"], NON_AI_LABEL
         )
+
+    # {
+    # 責務: [test_concurrent_manifest_writes_reuse_one_result: 同時manifest保存の衝突を防ぐ]
+    # 処理: [1: 複数threadから保存し同一manifestパスへ直列化されることを確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_concurrent_manifest_writes_reuse_one_result(self):
+        image_path = self.create_image(self.root / "source" / "sample.png")
+        result = ImageOriginResult(image_path, NON_AI_LABEL, 0.01, ("oss_classifier",), "low")
+        manifest_path = self.root / "manifest.json"
+        results = []
+        errors = []
+
+        # {
+        #   責務: [write: manifest保存結果または例外を記録する]
+        #   処理: [1: manifest保存を呼び結果を共有listへ追加する]
+        #   引数: []
+        #   戻り値: []
+        # }
+        def write():
+            try:
+                results.append(write_manifest([result], manifest_path))
+            except Exception as error:
+                errors.append(error)
+
+        workers = [threading.Thread(target=write) for _ in range(2)]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(results, [manifest_path, manifest_path])
+        self.assertEqual(list(self.root.glob("manifest_*.json")), [])
+
+    # {
+    # 責務: [test_detector_caches_pipeline_errors: モデル起動失敗を画像ごとに繰り返さない]
+    # 処理: [1: 起動失敗を2度呼び出して生成処理が1回だけ行われることを確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_detector_caches_pipeline_errors(self):
+        detector = AnimeAIDetector("local-model", "cpu")
+        calls = 0
+
+        # {
+        #   責務: [fail_pipeline: テスト用モデル初期化を失敗させる]
+        #   処理: [1: 呼び出し回数を増やしOSErrorを投げる]
+        #   引数: []
+        #   戻り値: []
+        # }
+        def fail_pipeline():
+            nonlocal calls
+            calls += 1
+            raise OSError("model download failed")
+
+        detector._create_pipeline = fail_pipeline
+        for _ in range(2):
+            with self.assertRaises(RuntimeError):
+                detector._load_pipeline()
+        self.assertEqual(calls, 1)
 
 
 if __name__ == "__main__":

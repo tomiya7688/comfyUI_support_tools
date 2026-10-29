@@ -29,6 +29,7 @@ classDiagram
     class AnimeAIDetector {
         +__init__()
         +_load_pipeline()
+        +_create_pipeline()
         +ai_score()
     }
     class BackendLaunchSpec {
@@ -251,6 +252,7 @@ classDiagram
         +_classify_worker()
         +_show_results()
         +_set_idle()
+        +_set_action_states()
         +save_results()
         +override_selected()
         +copy_results()

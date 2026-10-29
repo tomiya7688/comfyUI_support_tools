@@ -45,6 +45,8 @@ class AIImageClusterTab(ttk.Frame):
         self.override_cluster = tk.StringVar(value="uncertain")
         self.recursive = tk.BooleanVar(value=True)
         self.results: list[ImageOriginResult] = []
+        self._source_root: Path | None = None
+        self._output_root: Path | None = None
         self.busy = False
         self._build()
 
@@ -102,10 +104,14 @@ class AIImageClusterTab(ttk.Frame):
         ttk.Button(buttons, text="解析してプレビュー", command=self.start_analysis).pack(
             side="left", padx=4
         )
-        ttk.Button(buttons, text="結果を保存", command=self.save_results).pack(side="left", padx=4)
-        ttk.Button(buttons, text="クラスタへコピー", command=self.copy_results).pack(
-            side="left", padx=4
+        self.save_button = ttk.Button(
+            buttons, text="結果を保存", command=self.save_results, state="disabled"
         )
+        self.save_button.pack(side="left", padx=4)
+        self.copy_button = ttk.Button(
+            buttons, text="クラスタへコピー", command=self.copy_results, state="disabled"
+        )
+        self.copy_button.pack(side="left", padx=4)
 
         columns = ("cluster", "confidence", "evidence", "reason", "path")
         self.result_table = ttk.Treeview(self, columns=columns, show="headings", height=12)
@@ -129,9 +135,10 @@ class AIImageClusterTab(ttk.Frame):
             state="readonly",
             width=16,
         ).pack(side="left", padx=4)
-        ttk.Button(review, text="選択行へ適用", command=self.override_selected).pack(
-            side="left", padx=4
+        self.override_button = ttk.Button(
+            review, text="選択行へ適用", command=self.override_selected, state="disabled"
         )
+        self.override_button.pack(side="left", padx=4)
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
 
@@ -150,6 +157,10 @@ class AIImageClusterTab(ttk.Frame):
         if self.busy:
             return
         try:
+            if not self.input_dir.get().strip():
+                raise ValueError("画像フォルダーを指定してください")
+            if not self.output_dir.get().strip():
+                raise ValueError("クラスタ出力先を指定してください")
             source = Path(self.input_dir.get()).expanduser().resolve(strict=True)
             output = Path(self.output_dir.get()).expanduser().resolve()
             low, high = float(self.low_threshold.get()), float(self.high_threshold.get())
@@ -164,6 +175,10 @@ class AIImageClusterTab(ttk.Frame):
             return
 
         self.busy = True
+        self.results = []
+        self._source_root = None
+        self._output_root = None
+        self._set_action_states(False)
         self.result_table.delete(*self.result_table.get_children())
         threading.Thread(
             target=self._classify_worker,
@@ -252,6 +267,7 @@ class AIImageClusterTab(ttk.Frame):
                 f"OSS判定器エラー {len(classifier_errors)}件: {classifier_errors[0].reason}"
             )
         self.busy = False
+        self._set_action_states(bool(results))
 
     # {
     # 責務: [_set_idle: 実行中状態を解除する]
@@ -266,6 +282,23 @@ class AIImageClusterTab(ttk.Frame):
         #   戻り値: []
         # }
         self.busy = False
+        self._set_action_states(bool(self.results))
+
+    # {
+    # 責務: [_set_action_states: 結果操作を状態に応じて有効化する]
+    # 処理: [1: 保存・コピー・手動修正ボタンを切り替える]
+    # 引数: [self, enabled: 操作可能ならTrue]
+    # 戻り値: []
+    # }
+    def _set_action_states(self, enabled):
+        # {
+        #   責務: [_set_action_states: 操作対象ボタンの有効状態を設定する]
+        #   引数: [self: tab, enabled: 操作可能ならTrue]
+        #   戻り値: []
+        # }
+        state = "normal" if enabled and not self.busy else "disabled"
+        for button in (self.save_button, self.copy_button, self.override_button):
+            button.configure(state=state)
 
     # {
     # 責務: [save_results: 分類結果をmanifestに保存する]
@@ -281,6 +314,8 @@ class AIImageClusterTab(ttk.Frame):
         # }
         if not self.results:
             self.logbox.log("先に画像を解析してください")
+            return
+        if self.busy:
             return
         try:
             manifest = write_manifest(self.results, self._output_root / "ai_origin_manifest.json")
@@ -300,6 +335,8 @@ class AIImageClusterTab(ttk.Frame):
         #   引数: [self: tab]
         #   戻り値: []
         # }
+        if self.busy:
+            return
         selection = self.result_table.selection()
         if not selection:
             self.logbox.log("手動修正する画像を選択してください")
@@ -342,6 +379,8 @@ class AIImageClusterTab(ttk.Frame):
         if not self.results:
             self.logbox.log("先に画像を解析してください")
             return
+        if self.busy:
+            return
         if not messagebox.askyesno(
             "クラスタへコピー",
             f"画像を次のフォルダーへコピーします。元画像は保持されます。\n\n{self._output_root}",
@@ -351,7 +390,15 @@ class AIImageClusterTab(ttk.Frame):
         if self.busy:
             return
         self.busy = True
-        threading.Thread(target=self._copy_worker, daemon=True).start()
+        self._set_action_states(False)
+        results_snapshot = tuple(self.results)
+        source_root = self._source_root
+        output_root = self._output_root
+        threading.Thread(
+            target=self._copy_worker,
+            args=(results_snapshot, source_root, output_root),
+            daemon=True,
+        ).start()
 
     # {
     # 責務: [_copy_worker: クラスタコピーをバックグラウンド実行する]
@@ -359,15 +406,15 @@ class AIImageClusterTab(ttk.Frame):
     # 引数: [self]
     # 戻り値: [宣言の戻り値を返す]
     # }
-    def _copy_worker(self):
+    def _copy_worker(self, results, source_root, output_root):
         # {
         #   責務: [_copy_worker: クラスタコピーとmanifest保存をGUI外で行う]
         #   引数: [self: tab]
         #   戻り値: []
         # }
         try:
-            count = copy_clusters(self.results, self._source_root, self._output_root)
-            manifest = write_manifest(self.results, self._output_root / "ai_origin_manifest.json")
+            count = copy_clusters(results, source_root, output_root)
+            manifest = write_manifest(results, output_root / "ai_origin_manifest.json")
             self.after(0, self.logbox.log, f"クラスタコピー完了: {count}枚。結果: {manifest}")
         except (OSError, ValueError) as error:
             self.after(0, self.logbox.log, f"コピーエラー: {error}")

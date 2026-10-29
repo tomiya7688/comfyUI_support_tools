@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 
@@ -30,6 +31,7 @@ class AnimeAIDetector:
             raise ValueError("モデルIDを指定してください")
         self.device = device
         self.pipeline = None
+        self.load_error = None
 
     # {
     # 責務: [_load_pipeline: 推論pipelineを遅延ロードする]
@@ -45,6 +47,24 @@ class AnimeAIDetector:
         # }
         if self.pipeline is not None:
             return self.pipeline
+        if self.load_error is not None:
+            raise RuntimeError(
+                f"判定モデルの初期化に失敗済みです: {self.load_error}"
+            ) from self.load_error
+        try:
+            self.pipeline = self._create_pipeline()
+        except Exception as error:
+            self.load_error = error
+            raise RuntimeError(f"判定モデルの初期化に失敗しました: {error}") from error
+        return self.pipeline
+
+    # {
+    # 責務: [_create_pipeline: モデル依存をロードして推論器を生成する]
+    # 処理: [1: 依存とdeviceを解決する, 2: Hugging Face pipelineを構築する]
+    # 引数: [self]
+    # 戻り値: [image-classification pipeline]
+    # }
+    def _create_pipeline(self):
         os.environ.setdefault(
             "HF_HOME",
             str(Path(__file__).resolve().parents[2] / "user_data" / "cache" / "ai_origin"),
@@ -53,10 +73,13 @@ class AnimeAIDetector:
             import torch
             from transformers import pipeline
         except ImportError as error:
-            raise RuntimeError(
-                "AI画像判定には PyTorch、Transformers、Pillow が必要です。"
+            message = (
+                "配布版にはAI判定用のPyTorch/Transformersが含まれていません。"
+                if getattr(sys, "frozen", False)
+                else "AI画像判定には PyTorch、Transformers、Pillow が必要です。"
                 "対応するPython環境へ追加してください。"
-            ) from error
+            )
+            raise RuntimeError(message) from error
         if self.device == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("CUDAが利用できません。CPUを選択してください。")
         selected_device = (
@@ -64,13 +87,12 @@ class AnimeAIDetector:
             if self.device == "cuda" or (self.device == "auto" and torch.cuda.is_available())
             else -1
         )
-        self.pipeline = pipeline(
+        return pipeline(
             "image-classification",
             model=self.model_id,
             device=selected_device,
             top_k=None,
         )
-        return self.pipeline
 
     # {
     # 責務: [ai_score: 推論対象画像のAI生成スコアを取得する]

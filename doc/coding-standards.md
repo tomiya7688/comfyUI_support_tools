@@ -527,3 +527,12 @@ README files and project-owned documentation are maintained in both Japanese and
 - Machine-generated output, third-party original text, and canonical license/legal text may be exempt when translation would harm source fidelity.
 - Preserve uncertain specialist terminology instead of guessing; include the original term when necessary.
 - A change is not complete if only one language has been updated.
+
+## No second inheritance step from a concrete class (mandatory)
+
+- **If class `B` inherits from a concrete class `A`, no class `C` may inherit from `B`** (`A → B → C` is forbidden), including when `B` is abstract.
+- One direct inheritance step (`A → B`) is not prohibited by this policy alone. Keep any existing stricter project restriction, such as a ban on inheriting concrete classes at all.
+- Do not count implicit language root types such as `Object`, `System.Object`, `java.lang.Object`, or interface implementation/extension.
+- Exceptions require explicit project architecture documentation identifying the intentional hierarchy and scope. Existing accidental code is not evidence of an exemption. Compiler/analyzer input examples and test fixtures are distinct from production implementation policy.
+- Prefer composition, delegation, or an abstract contract instead of the prohibited second step. This rule applies to new or modified production code; unrelated legacy code need not be mass-refactored.
+

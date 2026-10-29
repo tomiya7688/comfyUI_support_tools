@@ -20,6 +20,17 @@ classDiagram
         +generate()
         +generate_from_image()
     }
+    class ScoreProvider {
+        +ai_score()
+    }
+    Protocol <|-- ScoreProvider
+    class ImageOriginResult {
+    }
+    class AnimeAIDetector {
+        +__init__()
+        +_load_pipeline()
+        +ai_score()
+    }
     class BackendLaunchSpec {
     }
     class BackendRuntimeProfile {
@@ -233,6 +244,19 @@ classDiagram
         +build_segment_command()
         +run()
     }
+    class AIImageClusterTab {
+        +__init__()
+        +_build()
+        +start_analysis()
+        +_classify_worker()
+        +_show_results()
+        +_set_idle()
+        +save_results()
+        +override_selected()
+        +copy_results()
+        +_copy_worker()
+    }
+    ttk.Frame <|-- AIImageClusterTab
     class BodyPromptTab {
         +__init__()
         +_build()

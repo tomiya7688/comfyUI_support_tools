@@ -19,6 +19,7 @@ from .tabs.start_webui import StartWebUITab
 from .tabs.random_image import RandomImageTab
 from .tabs.random_img2img import RandomImg2ImgTab
 from .tabs.folder_tagger import FolderTaggerTab
+from .tabs.ai_image_cluster import AIImageClusterTab
 from .tabs.random_line_picker import RandomLinePickerTab
 from .tabs.body_prompt import BodyPromptTab
 from .tabs.check_braces import CheckBracesTab
@@ -45,6 +46,7 @@ from .widgets.tk_tab_settings_adapter import TkTabSettingsAdapter
 from .widgets.tab_navigation import TabNavigation
 from .widgets.dark_theme import DarkTheme
 from .runtime_python import venv_python
+
 
 def _launch_backend_gui(backend):
     runtime_directory = configured_backend_runtime_directory(backend)
@@ -103,7 +105,6 @@ def show_backend_selector():
     selector.mainloop()
 
 
-
 class TabbedToolsApp(tk.Tk):
     # {
     #   責務: [__init__: Tabbed Tools GUIと全tabを初期化する]
@@ -128,6 +129,7 @@ class TabbedToolsApp(tk.Tk):
             ("Prompt生成", PromptGenerateTab),
             ("Random img2img", RandomImg2ImgTab),
             ("Folder Tagger", FolderTaggerTab),
+            ("AI画像クラスタ", AIImageClusterTab),
             ("Random Line Picker", RandomLinePickerTab),
             ("Body Prompt", BodyPromptTab),
             ("Tag Deleter", TagDeleterTab),
@@ -151,8 +153,8 @@ class TabbedToolsApp(tk.Tk):
             ("Docstring検査", DocstringAuditTab),
             ("依存状態", DependencyStatusTab),
             ("Ollama Prompt", OllamaPromptTab),
-            ("半透明素材強調", ToukaEnhancerTab)
-            ,("Touka評価履歴", ToukaEvaluationReportTab)
+            ("半透明素材強調", ToukaEnhancerTab),
+            ("Touka評価履歴", ToukaEvaluationReportTab),
         ]
 
         self.tab_frames = []
@@ -176,7 +178,9 @@ class TabbedToolsApp(tk.Tk):
                 tab.pack(fill="both", expand=True)
             except Exception as e:
                 frame = ttk.Frame(content, padding=10)
-                ttk.Label(frame, text=f"{title} の初期化に失敗しました: {type(e).__name__}: {e}").pack(anchor="w")
+                ttk.Label(
+                    frame, text=f"{title} の初期化に失敗しました: {type(e).__name__}: {e}"
+                ).pack(anchor="w")
                 tab = None
             frame.grid(row=0, column=0, sticky="nsew")
             self.tab_frames.append(frame)
@@ -184,8 +188,15 @@ class TabbedToolsApp(tk.Tk):
                 self.tab_instances.append(tab)
 
             btn_parent = navigation.first_row if index < half else navigation.second_row
-            btn = tk.Button(btn_parent, text=title, relief="raised", width=16, padx=4, pady=4,
-                             command=lambda idx=index: self.show_tab(idx))
+            btn = tk.Button(
+                btn_parent,
+                text=title,
+                relief="raised",
+                width=16,
+                padx=4,
+                pady=4,
+                command=lambda idx=index: self.show_tab(idx),
+            )
             btn.pack(side="left", padx=2, pady=2)
             self.tab_buttons.append(btn)
 

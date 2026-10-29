@@ -1,8 +1,10 @@
+import errno
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from PIL import Image, PngImagePlugin
 
@@ -106,7 +108,11 @@ class AIOriginClusteringTests(unittest.TestCase):
         image_info = PngImagePlugin.PngInfo()
         for key, value in (metadata or {}).items():
             image_info.add_text(key, value)
-        Image.new("RGB", (2, 2), "white").save(path, pnginfo=image_info)
+        image = Image.new("RGB", (2, 2), "white")
+        if path.suffix.casefold() == ".png":
+            image.save(path, pnginfo=image_info)
+        else:
+            image.save(path)
         return path
 
     # {
@@ -125,7 +131,13 @@ class AIOriginClusteringTests(unittest.TestCase):
         ai_image.with_suffix(".json").write_text(json.dumps({"aiType": 2}), encoding="utf-8")
         result = classify_image(ai_image, FakeScoreProvider(0.01), 0.1, 0.9)
         self.assertEqual(result.cluster, AI_LABEL)
+        self.assertIsNone(result.confidence)
         self.assertEqual(result.evidence, ("pixiv_json_sidecar",))
+        non_ai_image = self.create_image(self.root / "non_ai.png")
+        non_ai_image.with_suffix(".json").write_text(json.dumps({"aiType": 1}), encoding="utf-8")
+        non_ai_result = classify_image(non_ai_image, FakeScoreProvider(0.99), 0.1, 0.9)
+        self.assertEqual(non_ai_result.cluster, NON_AI_LABEL)
+        self.assertIsNone(non_ai_result.confidence)
         boolean_image = self.create_image(self.root / "boolean.png")
         boolean_image.with_suffix(".json").write_text(
             json.dumps({"aiType": True}), encoding="utf-8"
@@ -180,6 +192,36 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(
             [path.relative_to(source).as_posix() for path in images], ["nested/image.png"]
         )
+        gif_image = self.create_image(source / "nested" / "animated.gif")
+        tiff_image = self.create_image(source / "nested" / "scan.tiff")
+        images = discover_images(source, recursive=True, excluded_root=source / "output")
+        self.assertIn(gif_image, images)
+        self.assertIn(tiff_image, images)
+
+    # {
+    # 責務: [test_discovery_reports_walk_errors: 読めないサブフォルダーを隠さず報告する]
+    # 処理: [1: os.walkのonerror callbackで例外が伝播することを検証する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_discovery_reports_walk_errors(self):
+        source = self.root / "source"
+        source.mkdir()
+
+        # {
+        #   責務: [fail_walk: テスト用にos.walkのエラー通知を発生させる]
+        #   処理: [1: onerrorへPermissionErrorを渡す]
+        #   引数: [_root, followlinks, onerror]
+        #   戻り値: [空のwalk iterator]
+        # }
+        def fail_walk(_root, *, followlinks, onerror):
+            self.assertFalse(followlinks)
+            onerror(PermissionError("inaccessible directory"))
+            return iter(())
+
+        with mock.patch("scripts.backend.ai_origin_clustering.os.walk", side_effect=fail_walk):
+            with self.assertRaisesRegex(PermissionError, "inaccessible directory"):
+                discover_images(source, recursive=True)
 
     # {
     # 責務: [test_copy_preserves_source_and_sidecar_without_overwriting: 元ファイル保全と上書き防止を検証する]
@@ -207,6 +249,28 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(len(sidecars), 1)
         self.assertEqual(sidecars[0].read_text(encoding="utf-8"), "caption")
         self.assertEqual(len(list(expected.parent.glob("image_*.png"))), 1)
+        self.assertEqual(copy_clusters([result], source, output), 0)
+        self.assertEqual(len(list(expected.parent.glob("image_*.png"))), 1)
+
+    # {
+    # 責務: [test_copy_falls_back_when_hard_links_are_unsupported: hard link非対応先で安全コピーする]
+    # 処理: [1: hard link作成を失敗させ画像とmanifestの代替コピーを確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_copy_falls_back_when_hard_links_are_unsupported(self):
+        source = self.root / "source"
+        output = self.root / "output"
+        image_path = self.create_image(source / "image.png")
+        result = ImageOriginResult(image_path, AI_LABEL, 0.99, ("oss_classifier",), "high")
+        with mock.patch(
+            "scripts.backend.ai_origin_clustering.os.link",
+            side_effect=OSError(errno.EPERM, "hard links unavailable"),
+        ):
+            self.assertEqual(copy_clusters([result], source, output), 1)
+            manifest = write_manifest([result], output / "manifest.json")
+        self.assertTrue((output / AI_LABEL / "image.png").is_file())
+        self.assertTrue(manifest.is_file())
 
     # {
     # 責務: [test_output_cannot_be_inside_input_and_manifest_is_not_overwritten: 出力root制約とmanifestの上書き防止を検証する]
@@ -227,7 +291,7 @@ class AIOriginClusteringTests(unittest.TestCase):
         manifest = self.root / "result.json"
         first = write_manifest([result], manifest)
         second = write_manifest([result], manifest)
-        self.assertNotEqual(first, second)
+        self.assertEqual(first, second)
         self.assertEqual(
             json.loads(manifest.read_text(encoding="utf-8"))[0]["cluster"], NON_AI_LABEL
         )

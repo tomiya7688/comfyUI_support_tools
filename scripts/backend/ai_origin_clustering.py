@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -12,7 +13,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
 
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 AI_LABEL = "ai_generated"
 NON_AI_LABEL = "non_ai"
 UNCERTAIN_LABEL = "uncertain"
@@ -73,7 +74,9 @@ def discover_images(
     excluded = excluded_root.resolve() if excluded_root else None
     discovered: list[Path] = []
     if recursive:
-        for current, directories, filenames in os.walk(root, followlinks=False):
+        for current, directories, filenames in os.walk(
+            root, followlinks=False, onerror=_raise_walk_error
+        ):
             current_path = Path(current)
             directories[:] = [
                 name
@@ -96,6 +99,16 @@ def discover_images(
             and path.suffix.casefold() in IMAGE_EXTENSIONS
         ]
     return sorted(discovered, key=lambda path: str(path).casefold())
+
+
+# {
+#   責務: [_raise_walk_error: 走査中に発生したディレクトリエラーを伝播する]
+#   処理: [1: os.walkの走査エラーを呼び出し元へ返す]
+#   引数: [error: 発生したファイルシステム例外]
+#   戻り値: []
+# }
+def _raise_walk_error(error: OSError) -> None:
+    raise error
 
 
 # {
@@ -230,7 +243,7 @@ def classify_image(
         return ImageOriginResult(
             path,
             metadata_label,
-            1.0,
+            None,
             (metadata_evidence or "source_metadata",),
             "explicit_metadata",
         )
@@ -298,14 +311,18 @@ def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output
         relative_path = result.source_path.resolve(strict=True).relative_to(source_root)
         destination = destination_root / result.cluster / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)
-        final_path = _non_overwriting_path(destination)
-        _copy_file_atomically(result.source_path, final_path)
-        copied += 1
+        final_path = _destination_for_source(result.source_path, destination)
+        if not _same_file_content(result.source_path, final_path):
+            _copy_file_atomically(result.source_path, final_path)
+            copied += 1
         for extension in (".txt", ".json"):
             sidecar = result.source_path.with_suffix(extension)
             if sidecar.is_file() and not sidecar.is_symlink():
                 sidecar_destination = final_path.with_suffix(extension)
-                _copy_file_atomically(sidecar, _non_overwriting_path(sidecar_destination))
+                if not _same_file_content(sidecar, sidecar_destination):
+                    _copy_file_atomically(
+                        sidecar, _destination_for_source(sidecar, sidecar_destination)
+                    )
     return copied
 
 
@@ -333,6 +350,39 @@ def _non_overwriting_path(path: Path) -> Path:
 
 
 # {
+#   責務: [_destination_for_source: 同一内容の既存出力を再利用する]
+#   処理: [1: 希望パスと衝突候補を確認する, 2: 既存内容または未使用パスを返す]
+#   引数: [source: コピー元, destination: 希望する出力パス]
+#   戻り値: [未上書きで使用できる出力パス]
+# }
+def _destination_for_source(source: Path, destination: Path) -> Path:
+    candidate = destination
+    digest = hashlib.sha256(str(destination).encode("utf-8")).hexdigest()[:10]
+    suffix_index = 0
+    while candidate.exists():
+        if _same_file_content(source, candidate):
+            return candidate
+        suffix_index += 1
+        suffix = f"_{digest}" if suffix_index == 1 else f"_{digest}_{suffix_index - 1}"
+        candidate = destination.with_name(f"{destination.stem}{suffix}{destination.suffix}")
+    return candidate
+
+
+# {
+#   責務: [_same_file_content: 2ファイルの内容が一致するか判定する]
+#   処理: [1: SHA-256を読み比べる]
+#   引数: [left: 先頭ファイル, right: 比較ファイル]
+#   戻り値: [内容一致ならTrue]
+# }
+def _same_file_content(left: Path, right: Path) -> bool:
+    if not right.is_file():
+        return False
+    left_digest = hashlib.sha256(left.read_bytes()).digest()
+    right_digest = hashlib.sha256(right.read_bytes()).digest()
+    return left_digest == right_digest
+
+
+# {
 # 責務: [_copy_file_atomically: 一時ファイル経由でコピーする]
 # 処理: [1: 一時ファイル経由でコピーする]
 # 引数: [source, destination]
@@ -356,9 +406,41 @@ def _copy_file_atomically(source: Path, destination: Path) -> None:
         shutil.copy2(source, temporary)
         if source.stat().st_size != temporary.stat().st_size:
             raise OSError(f"コピー検証に失敗しました: {source}")
-        os.link(temporary, destination)
+        try:
+            os.link(temporary, destination)
+        except OSError as error:
+            if not _hard_links_unsupported(error):
+                raise
+            try:
+                with temporary.open("rb") as source_handle, destination.open("xb") as target_handle:
+                    shutil.copyfileobj(source_handle, target_handle)
+                shutil.copystat(temporary, destination)
+            except OSError:
+                destination.unlink(missing_ok=True)
+                raise
     finally:
         temporary.unlink(missing_ok=True)
+
+
+# {
+#   責務: [_hard_links_unsupported: hard link非対応filesystemの例外を識別する]
+#   処理: [1: errnoとWindows error codeを確認する]
+#   引数: [error: hard link作成エラー]
+#   戻り値: [代替コピー可能ならTrue]
+# }
+def _hard_links_unsupported(error: OSError) -> bool:
+    unsupported_errnos = {
+        errno.EPERM,
+        errno.EXDEV,
+        errno.ENOTSUP,
+        errno.EOPNOTSUPP,
+        errno.ENOSYS,
+    }
+    return error.errno in unsupported_errnos or getattr(error, "winerror", None) in {
+        1,
+        17,
+        50,
+    }
 
 
 # {
@@ -384,6 +466,13 @@ def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) ->
         for result in results
     ]
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(rows, ensure_ascii=False, indent=2)
+    if manifest_path.is_file():
+        try:
+            if manifest_path.read_text(encoding="utf-8") == serialized:
+                return manifest_path
+        except OSError:
+            pass
     final_path = _non_overwriting_path(manifest_path)
     handle = tempfile.NamedTemporaryFile(
         mode="w",
@@ -396,10 +485,10 @@ def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) ->
     temporary = Path(handle.name)
     try:
         with handle:
-            handle.write(json.dumps(rows, ensure_ascii=False, indent=2))
+            handle.write(serialized)
             handle.flush()
             os.fsync(handle.fileno())
-        os.link(temporary, final_path)
+        _copy_file_atomically(temporary, final_path)
     finally:
         temporary.unlink(missing_ok=True)
     return final_path

@@ -18,12 +18,17 @@ from scripts.backend.ai_origin_clustering import (
 )
 
 
+# {
+# 責務: [FakeScoreProvider: テスト用AIスコア供給器を提供する]
+# フィールド: [状態: テスト用AIスコア供給器を提供する]
+# }
 class FakeScoreProvider:
     # {
-    #   責務: [FakeScoreProvider: テスト画像ごとの再現可能なスコアを返す]
-    #   概要: [ネットワーク・GPUなしで分類境界を検証する]
+    # 責務: [__init__: 依存と設定値を初期化する]
+    # 処理: [1: 依存と設定値を初期化する]
+    # 引数: [self, score]
+    # 戻り値: [宣言の戻り値を返す]
     # }
-
     def __init__(self, score):
         # {
         #   責務: [__init__: 固定スコアを設定する]
@@ -32,6 +37,12 @@ class FakeScoreProvider:
         # }
         self.score = score
 
+    # {
+    # 責務: [ai_score: 推論対象画像のAI生成スコアを取得する]
+    # 処理: [1: 推論対象画像のAI生成スコアを取得する]
+    # 引数: [self, _path]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def ai_score(self, _path):
         # {
         #   責務: [ai_score: テスト用スコアを返す]
@@ -41,12 +52,17 @@ class FakeScoreProvider:
         return self.score
 
 
+# {
+# 責務: [AIOriginClusteringTests: AI画像分類の境界条件と出力を検証する]
+# フィールド: [状態: AI画像分類の境界条件と出力を検証する]
+# }
 class AIOriginClusteringTests(unittest.TestCase):
     # {
-    #   責務: [AIOriginClusteringTests: 生成元判定と非破壊クラスタ出力を検証する]
-    #   概要: [一時画像のみ使い実データや外部モデルを変更・取得しない]
+    # 責務: [setUp: テスト用一時ディレクトリと入力画像を準備する]
+    # 処理: [1: テスト用一時ディレクトリと入力画像を準備する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
     # }
-
     def setUp(self):
         # {
         #   責務: [setUp: workspace内に破棄可能なテストディレクトリを作る]
@@ -60,6 +76,12 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(dir=scratch_root)
         self.root = Path(self.temporary.name)
 
+    # {
+    # 責務: [tearDown: テスト用一時ディレクトリを破棄する]
+    # 処理: [1: テスト用一時ディレクトリを破棄する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def tearDown(self):
         # {
         #   責務: [tearDown: テスト用一時ディレクトリを破棄する]
@@ -68,6 +90,12 @@ class AIOriginClusteringTests(unittest.TestCase):
         # }
         self.temporary.cleanup()
 
+    # {
+    # 責務: [create_image: テスト用画像を生成する]
+    # 処理: [1: テスト用画像を生成する]
+    # 引数: [self, path, metadata]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def create_image(self, path, metadata=None):
         # {
         #   責務: [create_image: 判定テスト向けの小さなPNGを生成する]
@@ -81,6 +109,12 @@ class AIOriginClusteringTests(unittest.TestCase):
         Image.new("RGB", (2, 2), "white").save(path, pnginfo=image_info)
         return path
 
+    # {
+    # 責務: [test_pixiv_metadata_precedes_classifier_and_conflict_is_uncertain: Pixiv metadata優先と矛盾時の保留分類を検証する]
+    # 処理: [1: Pixiv metadata優先と矛盾時の保留分類を検証する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def test_pixiv_metadata_precedes_classifier_and_conflict_is_uncertain(self):
         # {
         #   責務: [test_pixiv_metadata_precedes_classifier_and_conflict_is_uncertain: 明示metadata優先と矛盾時の保留を確認する]
@@ -105,6 +139,12 @@ class AIOriginClusteringTests(unittest.TestCase):
         conflict = classify_image(conflict_image, FakeScoreProvider(0.99), 0.1, 0.9)
         self.assertEqual(conflict.cluster, UNCERTAIN_LABEL)
 
+    # {
+    # 責務: [test_classifier_thresholds_produce_three_clusters: 閾値による3分類を検証する]
+    # 処理: [1: 閾値による3分類を検証する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def test_classifier_thresholds_produce_three_clusters(self):
         # {
         #   責務: [test_classifier_thresholds_produce_three_clusters: 閾値両側と中間値のクラスタを確認する]
@@ -120,6 +160,12 @@ class AIOriginClusteringTests(unittest.TestCase):
             classify_image(image, FakeScoreProvider(0.5), 0.1, 0.9).cluster, UNCERTAIN_LABEL
         )
 
+    # {
+    # 責務: [test_discovery_is_recursive_and_excludes_output: 再帰列挙と出力先除外を検証する]
+    # 処理: [1: 再帰列挙と出力先除外を検証する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def test_discovery_is_recursive_and_excludes_output(self):
         # {
         #   責務: [test_discovery_is_recursive_and_excludes_output: 再帰列挙と出力先除外を確認する]
@@ -135,6 +181,12 @@ class AIOriginClusteringTests(unittest.TestCase):
             [path.relative_to(source).as_posix() for path in images], ["nested/image.png"]
         )
 
+    # {
+    # 責務: [test_copy_preserves_source_and_sidecar_without_overwriting: 元ファイル保全と上書き防止を検証する]
+    # 処理: [1: 元ファイル保全と上書き防止を検証する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def test_copy_preserves_source_and_sidecar_without_overwriting(self):
         # {
         #   責務: [test_copy_preserves_source_and_sidecar_without_overwriting: 元画像を残してsidecarと衝突回避コピーを確認する]
@@ -156,6 +208,12 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(sidecars[0].read_text(encoding="utf-8"), "caption")
         self.assertEqual(len(list(expected.parent.glob("image_*.png"))), 1)
 
+    # {
+    # 責務: [test_output_cannot_be_inside_input_and_manifest_is_not_overwritten: 出力root制約とmanifestの上書き防止を検証する]
+    # 処理: [1: 出力root制約とmanifestの上書き防止を検証する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def test_output_cannot_be_inside_input_and_manifest_is_not_overwritten(self):
         # {
         #   責務: [test_output_cannot_be_inside_input_and_manifest_is_not_overwritten: 出力rootとmanifestの上書き保護を確認する]

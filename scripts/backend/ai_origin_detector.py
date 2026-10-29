@@ -6,10 +6,16 @@ import os
 from pathlib import Path
 
 
+# {
+# 責務: [AnimeAIDetector: OSSモデルによる画像判定を提供する]
+# フィールド: [状態: OSSモデルによる画像判定を提供する]
+# }
 class AnimeAIDetector:
     # {
-    #   責務: [AnimeAIDetector: OSSのアニメ画像判定モデルをローカル推論する]
-    #   概要: [Transformersの重い依存を機能使用時まで遅延ロードする]
+    # 責務: [__init__: 依存と設定値を初期化する]
+    # 処理: [1: 依存と設定値を初期化する]
+    # 引数: [self, model_id, device]
+    # 戻り値: [宣言の戻り値を返す]
     # }
     def __init__(self, model_id: str, device: str):
         # {
@@ -25,6 +31,12 @@ class AnimeAIDetector:
         self.device = device
         self.pipeline = None
 
+    # {
+    # 責務: [_load_pipeline: 推論pipelineを遅延ロードする]
+    # 処理: [1: 推論pipelineを遅延ロードする]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def _load_pipeline(self):
         # {
         #   責務: [_load_pipeline: 初回の画像推論時にモデル依存をロードする]
@@ -60,6 +72,12 @@ class AnimeAIDetector:
         )
         return self.pipeline
 
+    # {
+    # 責務: [ai_score: 推論対象画像のAI生成スコアを取得する]
+    # 処理: [1: 推論対象画像のAI生成スコアを取得する]
+    # 引数: [self, path]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def ai_score(self, path: Path) -> float:
         # {
         #   責務: [ai_score: 画像1枚のAI生成ラベル確率を返す]

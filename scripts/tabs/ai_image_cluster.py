@@ -1,6 +1,9 @@
-from ..context import *
+import threading
+import tkinter as tk
 from dataclasses import replace
-from tkinter import messagebox
+from pathlib import Path
+from tkinter import messagebox, ttk
+
 from ..backend.ai_origin_clustering import (
     ImageOriginResult,
     classify_images,
@@ -9,15 +12,23 @@ from ..backend.ai_origin_clustering import (
     write_manifest,
 )
 from ..backend.ai_origin_detector import AnimeAIDetector
+from ..widgets.labeled_path_row import LabeledPathRow
+from ..widgets.log_box import LogBox
 
 
+# {
+# 責務: [AIImageClusterTab: AI画像の分類と確認UIを提供する]
+# フィールド: [状態: AI画像の分類と確認UIを提供する]
+# }
 class AIImageClusterTab(ttk.Frame):
-    # {
-    #   責務: [AIImageClusterTab: OSS AI画像判定と結果確認、クラスタコピーを提供する]
-    #   概要: [metadata優先分類をバックグラウンド実行し、確認後にコピーする]
-    # }
     MODEL_ID = "saltacc/anime-ai-detect"
 
+    # {
+    # 責務: [__init__: 依存と設定値を初期化する]
+    # 処理: [1: 依存と設定値を初期化する]
+    # 引数: [self, master]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def __init__(self, master):
         # {
         #   責務: [__init__: 入出力、判定設定、結果一覧UIを初期化する]
@@ -37,6 +48,12 @@ class AIImageClusterTab(ttk.Frame):
         self.busy = False
         self._build()
 
+    # {
+    # 責務: [_build: 設定と結果表示UIを構築する]
+    # 処理: [1: 設定と結果表示UIを構築する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def _build(self):
         # {
         #   責務: [_build: 入出力設定、分類結果、実行操作を描画する]
@@ -118,6 +135,12 @@ class AIImageClusterTab(ttk.Frame):
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
 
+    # {
+    # 責務: [start_analysis: 入力を検証して解析を開始する]
+    # 処理: [1: 入力を検証して解析を開始する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def start_analysis(self):
         # {
         #   責務: [start_analysis: 入力を検証して分類workerを開始する]
@@ -156,6 +179,12 @@ class AIImageClusterTab(ttk.Frame):
             daemon=True,
         ).start()
 
+    # {
+    # 責務: [_classify_worker: 画像分類をバックグラウンド実行する]
+    # 処理: [1: 画像分類をバックグラウンド実行する]
+    # 引数: [self, source, output, low, high, model_id, device, recursive]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def _classify_worker(self, source, output, low, high, model_id, device, recursive):
         # {
         #   責務: [_classify_worker: モデル推論をGUI外で実行する]
@@ -181,6 +210,12 @@ class AIImageClusterTab(ttk.Frame):
             self.after(0, self.logbox.log, f"判定エラー: {type(error).__name__}: {error}")
             self.after(0, self._set_idle)
 
+    # {
+    # 責務: [_show_results: 分類結果を一覧へ表示する]
+    # 処理: [1: 分類結果を一覧へ表示する]
+    # 引数: [self, results, source, output]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def _show_results(self, results, source, output):
         # {
         #   責務: [_show_results: 分類結果を表へ表示して保留する]
@@ -218,6 +253,12 @@ class AIImageClusterTab(ttk.Frame):
             )
         self.busy = False
 
+    # {
+    # 責務: [_set_idle: 実行中状態を解除する]
+    # 処理: [1: 実行中状態を解除する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def _set_idle(self):
         # {
         #   責務: [_set_idle: worker終了後に実行状態を解除する]
@@ -226,6 +267,12 @@ class AIImageClusterTab(ttk.Frame):
         # }
         self.busy = False
 
+    # {
+    # 責務: [save_results: 分類結果をmanifestに保存する]
+    # 処理: [1: 分類結果をmanifestに保存する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def save_results(self):
         # {
         #   責務: [save_results: 判定結果を出力先のmanifestへ保存する]
@@ -241,6 +288,12 @@ class AIImageClusterTab(ttk.Frame):
         except OSError as error:
             self.logbox.log(f"保存エラー: {error}")
 
+    # {
+    # 責務: [override_selected: 選択行の分類を手動修正する]
+    # 処理: [1: 選択行の分類を手動修正する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def override_selected(self):
         # {
         #   責務: [override_selected: 選択結果のクラスタを手動で修正する]
@@ -274,6 +327,12 @@ class AIImageClusterTab(ttk.Frame):
         )
         self.logbox.log(f"分類を修正しました: {updated.source_path.name} → {updated.cluster}")
 
+    # {
+    # 責務: [copy_results: 確認済み画像をクラスタ先へコピーする]
+    # 処理: [1: 確認済み画像をクラスタ先へコピーする]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def copy_results(self):
         # {
         #   責務: [copy_results: 確認後に3クラスタへ画像とsidecarをコピーする]
@@ -294,6 +353,12 @@ class AIImageClusterTab(ttk.Frame):
         self.busy = True
         threading.Thread(target=self._copy_worker, daemon=True).start()
 
+    # {
+    # 責務: [_copy_worker: クラスタコピーをバックグラウンド実行する]
+    # 処理: [1: クラスタコピーをバックグラウンド実行する]
+    # 引数: [self]
+    # 戻り値: [宣言の戻り値を返す]
+    # }
     def _copy_worker(self):
         # {
         #   責務: [_copy_worker: クラスタコピーとmanifest保存をGUI外で行う]

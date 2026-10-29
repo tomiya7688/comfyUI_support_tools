@@ -7,9 +7,10 @@ import json
 import os
 import shutil
 import tempfile
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Protocol
+from typing import Protocol
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 AI_LABEL = "ai_generated"
@@ -18,12 +19,17 @@ UNCERTAIN_LABEL = "uncertain"
 CLUSTER_LABELS = {AI_LABEL, NON_AI_LABEL, UNCERTAIN_LABEL}
 
 
+# {
+# 責務: [ScoreProvider: 画像判定器のAIスコアAPIを表す]
+# フィールド: [状態: 画像判定器のAIスコアAPIを表す]
+# }
 class ScoreProvider(Protocol):
     # {
-    #   責務: [ScoreProvider: 画像判定器のAIスコアAPIを表す]
-    #   概要: [本番モデルとテスト用偽物を同じ処理へ注入する]
+    # 責務: [ai_score: 推論対象画像のAI生成スコアを取得する]
+    # 処理: [1: 推論対象画像のAI生成スコアを取得する]
+    # 引数: [self, path]
+    # 戻り値: [宣言の戻り値を返す]
     # }
-
     def ai_score(self, path: Path) -> float:
         # {
         #   責務: [ai_score: AI生成ラベルの確率を取得する]
@@ -33,13 +39,12 @@ class ScoreProvider(Protocol):
         ...
 
 
+# {
+# 責務: [ImageOriginResult: 画像単位の判定と証拠を保持する]
+# フィールド: [状態: 画像単位の判定と証拠を保持する]
+# }
 @dataclass(frozen=True)
 class ImageOriginResult:
-    # {
-    #   責務: [ImageOriginResult: 画像単位の判定と証拠を保持する]
-    #   概要: [出力クラスタとレビューに必要な情報をまとめる]
-    # }
-
     source_path: Path
     cluster: str
     confidence: float | None
@@ -48,6 +53,12 @@ class ImageOriginResult:
     user_override: bool = False
 
 
+# {
+# 責務: [discover_images: 入力root内の対応画像を列挙する]
+# 処理: [1: 入力root内の対応画像を列挙する]
+# 引数: [input_root, recursive, excluded_root]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def discover_images(
     input_root: Path, recursive: bool, excluded_root: Path | None = None
 ) -> list[Path]:
@@ -87,6 +98,12 @@ def discover_images(
     return sorted(discovered, key=lambda path: str(path).casefold())
 
 
+# {
+# 責務: [_is_within: pathが指定rootの配下か判定する]
+# 処理: [1: pathが指定rootの配下か判定する]
+# 引数: [path, parent]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def _is_within(path: Path, parent: Path | None) -> bool:
     # {
     #   責務: [_is_within: pathが指定rootの配下か判定する]
@@ -102,6 +119,12 @@ def _is_within(path: Path, parent: Path | None) -> bool:
         return False
 
 
+# {
+# 責務: [_metadata_signal: metadataからAI生成区分を読み取る]
+# 処理: [1: metadataからAI生成区分を読み取る]
+# 引数: [metadata]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def _metadata_signal(metadata: object) -> str | None:
     # {
     #   責務: [_metadata_signal: Pixiv形式metadataから明示的なAI区分を読む]
@@ -130,6 +153,12 @@ def _metadata_signal(metadata: object) -> str | None:
     return signal
 
 
+# {
+# 責務: [_read_metadata: 画像とsidecarの判定根拠を読む]
+# 処理: [1: 画像とsidecarの判定根拠を読む]
+# 引数: [path]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def _read_metadata(path: Path) -> tuple[str | None, str | None]:
     # {
     #   責務: [_read_metadata: sidecarと埋込metadataから判定根拠を読む]
@@ -171,6 +200,12 @@ def _read_metadata(path: Path) -> tuple[str | None, str | None]:
     return (next(iter(signals)), ",".join(evidence)) if signals else (None, None)
 
 
+# {
+# 責務: [classify_image: metadataと判定器から画像を分類する]
+# 処理: [1: metadataと判定器から画像を分類する]
+# 引数: [path, score_provider, low_threshold, high_threshold]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def classify_image(
     path: Path,
     score_provider: ScoreProvider,
@@ -210,6 +245,12 @@ def classify_image(
     return ImageOriginResult(path, label, score, ("oss_classifier",), reason)
 
 
+# {
+# 責務: [classify_images: 画像一覧を分類して結果をまとめる]
+# 処理: [1: 画像一覧を分類して結果をまとめる]
+# 引数: [image_paths, score_provider, low_threshold, high_threshold, progress]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def classify_images(
     image_paths: Iterable[Path],
     score_provider: ScoreProvider,
@@ -217,11 +258,6 @@ def classify_images(
     high_threshold: float = 0.9,
     progress: Callable[[int, int, Path], None] | None = None,
 ) -> list[ImageOriginResult]:
-    # {
-    #   責務: [classify_images: 画像一覧を順に判定して結果をまとめる]
-    #   引数: [image_paths: 入力画像, score_provider: 判定器, thresholds: 不確実範囲, progress: 進捗通知]
-    #   戻り値: [入力順の判定結果]
-    # }
     if not 0 <= low_threshold < high_threshold <= 1:
         raise ValueError("しきい値は 0 <= low < high <= 1 にしてください")
     paths = list(image_paths)
@@ -239,6 +275,12 @@ def classify_images(
     return results
 
 
+# {
+# 責務: [copy_clusters: 画像とsidecarを分類先へ安全にコピーする]
+# 処理: [1: 画像とsidecarを分類先へ安全にコピーする]
+# 引数: [results, input_root, output_root]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output_root: Path) -> int:
     # {
     #   責務: [copy_clusters: 判定結果を上書きなしでクラスタ別にコピーする]
@@ -267,6 +309,12 @@ def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output
     return copied
 
 
+# {
+# 責務: [_non_overwriting_path: 既存ファイルを避ける保存先を決める]
+# 処理: [1: 既存ファイルを避ける保存先を決める]
+# 引数: [path]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def _non_overwriting_path(path: Path) -> Path:
     # {
     #   責務: [_non_overwriting_path: 既存ファイルを避ける出力名を決める]
@@ -284,6 +332,12 @@ def _non_overwriting_path(path: Path) -> Path:
     return candidate
 
 
+# {
+# 責務: [_copy_file_atomically: 一時ファイル経由でコピーする]
+# 処理: [1: 一時ファイル経由でコピーする]
+# 引数: [source, destination]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def _copy_file_atomically(source: Path, destination: Path) -> None:
     # {
     #   責務: [_copy_file_atomically: 一時ファイル経由でコピーを完了する]
@@ -307,6 +361,12 @@ def _copy_file_atomically(source: Path, destination: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
+# {
+# 責務: [write_manifest: 判定結果をJSON manifestへ保存する]
+# 処理: [1: 判定結果をJSON manifestへ保存する]
+# 引数: [results, manifest_path]
+# 戻り値: [宣言の戻り値を返す]
+# }
 def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) -> Path:
     # {
     #   責務: [write_manifest: 判定結果をJSON manifestとして保存する]

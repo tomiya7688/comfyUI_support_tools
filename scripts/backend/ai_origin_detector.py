@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -29,7 +27,6 @@ class AnimeAIDetector:
         self.device = device
         self.pipeline = None
         self.load_error = None
-        self.external_process = None
 
     # {
     # 責務: [_load_pipeline: 推論pipelineを遅延ロードする]
@@ -65,7 +62,10 @@ class AnimeAIDetector:
         cache_directory = application_root / "user_data" / "cache" / "ai_origin"
         os.environ.setdefault("HF_HOME", str(cache_directory))
         if frozen:
-            return self._start_external_worker(cache_directory)
+            raise RuntimeError(
+                "凍結版にはPyTorch/Transformersが含まれていません。"
+                "ソース版の対応Python環境から判定してください。"
+            )
         try:
             import torch
             from transformers import pipeline
@@ -90,106 +90,13 @@ class AnimeAIDetector:
         )
 
     # {
-    # 責務: [_start_external_worker: 凍結アプリ用の外部Python推論workerを起動する]
-    # 処理: [1: 設定済みPythonでworkerを起動し初期化結果を確認する]
-    # 引数: [self]
-    # 戻り値: [worker初期化後にTrue]
-    # }
-    def _start_external_worker(self, cache_directory: Path) -> bool:
-        from ..runtime_python import preferred_python
-
-        configured = os.environ.get("KADOKA_AI_ORIGIN_PYTHON", "").strip()
-        python = Path(configured).expanduser() if configured else preferred_python()
-        if not python.is_file():
-            raise RuntimeError(f"AI判定用Pythonが見つかりません: {python}")
-        worker = subprocess.Popen(
-            [
-                str(python),
-                "-u",
-                "-c",
-                _EXTERNAL_WORKER_CODE,
-                self.model_id,
-                self.device,
-                str(cache_directory),
-            ],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        )
-        self.external_process = worker
-        response = worker.stdout.readline() if worker.stdout else ""
-        try:
-            ready = json.loads(response)
-        except json.JSONDecodeError as error:
-            worker.terminate()
-            worker.wait(timeout=5)
-            raise RuntimeError(
-                "外部PythonのAI判定workerから初期化結果を取得できません。"
-                "KADOKA_AI_ORIGIN_PYTHON環境の依存関係を確認してください。"
-            ) from error
-        if not isinstance(ready, dict) or ready.get("ready") is not True:
-            worker.wait(timeout=5)
-            detail = (
-                ready.get("error", "workerがreadyを返しませんでした")
-                if isinstance(ready, dict)
-                else "worker応答が不正です"
-            )
-            raise RuntimeError(f"外部PythonでAI判定器を初期化できません: {detail}")
-        return True
-
-    # {
-    # 責務: [_external_ai_score: 外部Python workerから画像のAIスコアを取得する]
-    # 処理: [1: 画像pathをworkerへ送りスコア応答を読む]
-    # 引数: [self, path]
-    # 戻り値: [0から1までのAI生成スコア]
-    # }
-    def _external_ai_score(self, path: Path) -> float:
-        worker = self.external_process
-        if worker is None or worker.stdin is None or worker.stdout is None:
-            raise RuntimeError("外部PythonのAI判定workerが起動していません")
-        worker.stdin.write(json.dumps({"path": str(path)}, ensure_ascii=False) + "\n")
-        worker.stdin.flush()
-        response = worker.stdout.readline()
-        if not response:
-            raise RuntimeError("外部PythonのAI判定workerが応答せず終了しました")
-        payload = json.loads(response)
-        if payload.get("error"):
-            raise RuntimeError(f"外部Pythonで画像を判定できません: {payload['error']}")
-        return float(payload["score"])
-
-    # {
-    # 責務: [_close_external_worker: 凍結アプリ用の推論workerを終了する]
-    # 処理: [1: 終了指示を送りプロセスを停止する]
-    # 引数: [self]
-    # 戻り値: []
-    # }
-    def _close_external_worker(self) -> None:
-        worker = self.external_process
-        self.external_process = None
-        if worker is None:
-            return
-        try:
-            if worker.stdin:
-                worker.stdin.write('{"command":"shutdown"}\n')
-                worker.stdin.flush()
-                worker.stdin.close()
-            worker.wait(timeout=5)
-        except (OSError, subprocess.TimeoutExpired):
-            worker.terminate()
-            worker.wait(timeout=5)
-
-    # {
-    # 責務: [close: 判定処理終了後に外部Python workerを閉じる]
-    # 処理: [1: 外部Python workerを安全に終了する]
+    # 責務: [close: 判定器のリソースを解放する]
+    # 処理: [1: pipeline参照を解放する]
     # 引数: [self]
     # 戻り値: []
     # }
     def close(self) -> None:
-        self._close_external_worker()
+        self.pipeline = None
 
     # {
     # 責務: [ai_score: 推論対象画像のAI生成スコアを取得する]
@@ -198,9 +105,6 @@ class AnimeAIDetector:
     # 戻り値: [宣言の戻り値を返す]
     # }
     def ai_score(self, path: Path) -> float:
-        if getattr(sys, "frozen", False):
-            self._load_pipeline()
-            return self._external_ai_score(path)
         from PIL import Image
 
         with Image.open(path) as image:
@@ -217,45 +121,3 @@ class AnimeAIDetector:
         if not 0 <= score <= 1:
             raise ValueError(f"モデルが範囲外のスコアを返しました: {score}")
         return score
-
-
-_EXTERNAL_WORKER_CODE = r"""import json
-import os
-import sys
-
-model_id, requested_device, cache_directory = sys.argv[1:4]
-os.environ["HF_HOME"] = cache_directory
-try:
-    import torch
-    from PIL import Image
-    from transformers import pipeline
-
-    if requested_device == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDAが利用できません。CPUを選択してください。")
-    device = 0 if requested_device == "cuda" or (requested_device == "auto" and torch.cuda.is_available()) else -1
-    detector = pipeline("image-classification", model=model_id, device=device, top_k=None)
-    print(json.dumps({"ready": True}, ensure_ascii=False), flush=True)
-except Exception as error:
-    print(json.dumps({"error": str(error)}, ensure_ascii=False), flush=True)
-    raise SystemExit(1)
-
-for line in sys.stdin:
-    request = json.loads(line)
-    if request.get("command") == "shutdown":
-        break
-    try:
-        with Image.open(request["path"]) as image:
-            predictions = detector(image.convert("RGB"))
-        ai_predictions = [
-            item for item in predictions
-            if item["label"].strip().casefold() in {"ai", "artificial", "generated", "ai-generated"}
-        ]
-        if len(ai_predictions) != 1:
-            raise ValueError("モデルのAIラベルを一意に特定できません")
-        score = float(ai_predictions[0]["score"])
-        if not 0 <= score <= 1:
-            raise ValueError("モデルが範囲外のスコアを返しました")
-        print(json.dumps({"score": score}), flush=True)
-    except Exception as error:
-        print(json.dumps({"error": str(error)}, ensure_ascii=False), flush=True)
-"""

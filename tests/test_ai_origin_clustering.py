@@ -1,5 +1,4 @@
 import errno
-import io
 import json
 import os
 import sys
@@ -371,34 +370,17 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(list(self.root.glob("manifest_*.json")), [])
 
     # {
-    # 責務: [test_frozen_detector_uses_external_python_worker: 凍結アプリから外部Python判定器を使う]
-    # 処理: [1: worker起動・スコア取得・終了を確認する]
+    # 責務: [test_frozen_detector_reports_missing_runtime: 凍結版の未対応runtimeを明示する]
+    # 処理: [1: 外部プロセスを起動せずruntime不足を通知する]
     # 引数: [self]
     # 戻り値: []
     # }
-    def test_frozen_detector_uses_external_python_worker(self):
-        from scripts.backend import ai_origin_detector
-
-        worker = mock.Mock()
-        worker.stdin = io.StringIO()
-        stdin_write = mock.Mock(wraps=worker.stdin.write)
-        worker.stdin.write = stdin_write
-        worker.stdout = io.StringIO('{"ready":true}\n{"score":0.73}\n')
-        worker.wait.return_value = 0
-        interpreter = Path(sys.executable)
-        with (
-            mock.patch.object(sys, "frozen", True, create=True),
-            mock.patch("scripts.runtime_python.preferred_python", return_value=interpreter),
-            mock.patch.object(ai_origin_detector.subprocess, "Popen", return_value=worker) as popen,
-        ):
+    def test_frozen_detector_reports_missing_runtime(self):
+        image_path = self.create_image(self.root / "sample.png")
+        with mock.patch.object(sys, "frozen", True, create=True):
             detector = AnimeAIDetector("saltacc/anime-ai-detect", "cpu")
-            self.assertEqual(detector.ai_score(self.root / "sample.png"), 0.73)
-            detector.close()
-
-        self.assertEqual(popen.call_args.args[0][0], str(interpreter))
-        written_requests = [call.args[0] for call in stdin_write.call_args_list]
-        self.assertIn('"path":', written_requests[0])
-        self.assertIn('"command":"shutdown"', written_requests[1])
+            with self.assertRaisesRegex(RuntimeError, "凍結版にはPyTorch/Transformers"):
+                detector.ai_score(image_path)
 
     # {
     # 責務: [test_detector_caches_pipeline_errors: モデル起動失敗を画像ごとに繰り返さない]

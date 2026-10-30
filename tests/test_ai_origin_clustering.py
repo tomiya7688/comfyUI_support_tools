@@ -248,15 +248,15 @@ class AIOriginClusteringTests(unittest.TestCase):
         # {
         #   責務: [fail_second_copy: 2個目のファイルをテスト用に失敗させる]
         #   処理: [1: 2個目のコピー時にOSErrorを投げる]
-        #   引数: [source_path, destination_path]
+        #   引数: [source_path, destination_path, allowed_root]
         #   戻り値: [最初のコピー結果]
         # }
-        def fail_second_copy(source_path, destination_path):
+        def fail_second_copy(source_path, destination_path, allowed_root=None):
             nonlocal calls
             calls += 1
             if calls == 2:
                 raise OSError("simulated copy failure")
-            return original_copy(source_path, destination_path)
+            return original_copy(source_path, destination_path, allowed_root)
 
         with mock.patch(
             "scripts.backend.ai_origin_clustering._copy_file_atomically",
@@ -334,6 +334,37 @@ class AIOriginClusteringTests(unittest.TestCase):
                 copy_clusters([result], source, output)
 
         self.assertFalse((cluster_directory / "sample.png").exists())
+
+    # {
+    # 責務: [test_copy_rejects_replaced_source: コピー直前に差し替えられた入力を拒否する]
+    # 処理: [1: 開いたsourceとpath上のfile identity不一致を検出する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_copy_rejects_replaced_source(self):
+        source = self.root / "source"
+        output = self.root / "output"
+        image_path = self.create_image(source / "sample.png")
+        external_path = self.create_image(self.root / "external.png")
+        result = ImageOriginResult(image_path, AI_LABEL, 0.99, ("oss_classifier",), "high")
+        original_lstat = Path.lstat
+
+        # {
+        #   責務: [report_replaced_source: sourceの差し替え状態をテストする]
+        #   処理: [1: sourceのlstatに外部ファイルのidentityを返す]
+        #   引数: [path: 検査するパス]
+        #   戻り値: [元pathまたは差し替え後pathのstat]
+        # }
+        def report_replaced_source(path):
+            if path == image_path:
+                return original_lstat(external_path)
+            return original_lstat(path)
+
+        with mock.patch.object(Path, "lstat", report_replaced_source):
+            with self.assertRaisesRegex(ValueError, "入力ファイルが差し替えられました"):
+                copy_clusters([result], source, output)
+
+        self.assertFalse((output / AI_LABEL / "sample.png").exists())
 
     # {
     # 責務: [test_concurrent_manifest_writes_reuse_one_result: 同時manifest保存の衝突を防ぐ]

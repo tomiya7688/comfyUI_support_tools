@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import tempfile
 import threading
 from collections.abc import Callable, Iterable
@@ -308,7 +309,7 @@ def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output
             for source_file, final_file in related_files:
                 if _same_file_content(source_file, final_file):
                     continue
-                _copy_file_atomically(source_file, final_file)
+                _copy_file_atomically(source_file, final_file, source_root)
                 created_files.append(final_file)
                 if source_file == result.source_path:
                     copied += 1
@@ -407,12 +408,14 @@ def _file_digest(path: Path) -> bytes:
 
 
 # {
-# 責務: [_copy_file_atomically: 一時ファイル経由でコピーする]
-# 処理: [1: 一時ファイル経由でコピーする]
-# 引数: [source, destination]
+# 責務: [_copy_file_atomically: 入力rootを検証して一時ファイル経由でコピーする]
+# 処理: [1: sourceを開いて実体とroot内の位置を検証する, 2: 開いたdescriptorから公開する]
+# 引数: [source: コピー元, destination: コピー先, allowed_root: コピーを許可するroot]
 # 戻り値: [宣言の戻り値を返す]
 # }
-def _copy_file_atomically(source: Path, destination: Path) -> None:
+def _copy_file_atomically(
+    source: Path, destination: Path, allowed_root: Path | None = None
+) -> None:
     handle = tempfile.NamedTemporaryFile(
         prefix=f".{destination.name}.",
         suffix=".copying",
@@ -422,9 +425,26 @@ def _copy_file_atomically(source: Path, destination: Path) -> None:
     temporary = Path(handle.name)
     handle.close()
     try:
-        shutil.copy2(source, temporary)
-        if source.stat().st_size != temporary.stat().st_size:
-            raise OSError(f"コピー検証に失敗しました: {source}")
+        with source.open("rb") as source_handle:
+            opened_stat = os.fstat(source_handle.fileno())
+            path_stat = source.lstat()
+            if stat.S_ISLNK(path_stat.st_mode) or (
+                opened_stat.st_dev,
+                opened_stat.st_ino,
+            ) != (path_stat.st_dev, path_stat.st_ino):
+                raise ValueError(f"コピー中に入力ファイルが差し替えられました: {source}")
+            resolved_source = source.resolve(strict=True)
+            if allowed_root is not None and not _is_within(resolved_source, allowed_root):
+                raise ValueError(f"入力root外のファイルはコピーできません: {source}")
+            with temporary.open("wb") as target_handle:
+                shutil.copyfileobj(source_handle, target_handle)
+            os.chmod(temporary, stat.S_IMODE(opened_stat.st_mode))
+            os.utime(
+                temporary,
+                ns=(opened_stat.st_atime_ns, opened_stat.st_mtime_ns),
+            )
+            if opened_stat.st_size != temporary.stat().st_size:
+                raise OSError(f"コピー検証に失敗しました: {source}")
         try:
             os.link(temporary, destination)
         except OSError as error:

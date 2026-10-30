@@ -527,3 +527,24 @@ README files and project-owned documentation are maintained in both Japanese and
 - Machine-generated output, third-party original text, and canonical license/legal text may be exempt when translation would harm source fidelity.
 - Preserve uncertain specialist terminology instead of guessing; include the original term when necessary.
 - A change is not complete if only one language has been updated.
+
+## Shared inheritance policy (mandatory and review criteria)
+
+### Prohibited: continued inheritance rooted in a concrete class
+
+- **If class B inherits from a concrete class A, class C must not inherit from B**: `concrete A → B → C` is forbidden even when B is abstract.
+- **`abstract A → concrete B → C` does not violate this prohibition.** It still requires a design/readability review.
+- A direct `concrete A → B` inheritance is not universally prohibited by this rule alone. An existing stricter project rule banning all inheritance from concrete classes continues to take precedence.
+- Implicit language root types such as `Object`, `System.Object`, `java.lang.Object`, and interface implementation/inheritance do not count for this prohibition.
+
+### Design principles before inheriting
+
+- **Avoid inheriting from classes that contain concrete behavior by default**, including abstract classes with concrete implementations. Prefer delegation/composition if inheritance has no intrinsic domain or type meaning and only reuses code.
+- Introduce inheritance only for a meaningful shared shape/contract that already exists or is reasonably expected to arise. Do not invent inheritance hierarchies solely for hypothetical reuse.
+- Even if formally permitted, reject inheritance during review when it harms readability, blurs responsibilities, increases change propagation unreasonably, or violates substitutability. Passing the strict prohibition is not design approval.
+
+### Applicability and exemptions
+
+- A project may explicitly document an intentional hierarchy, its rationale and exact scope as a design exception. Existing code alone is not enough evidence.
+- Do not conflate a compiler/analyzer's supported source-language inheritance, examples, or test fixtures with the project's own implementation rules.
+- Apply to new and modified project-owned implementation code. Do not mass-refactor unrelated legacy code.

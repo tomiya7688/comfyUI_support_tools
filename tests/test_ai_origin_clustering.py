@@ -226,6 +226,30 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(len(list(expected.parent.glob("image_*.png"))), 1)
 
     # {
+    # 責務: [test_copy_reserves_unmatched_existing_sidecars: 入力にないsidecarも候補名から除外する]
+    # 処理: [1: 既存jsonを保護し画像を別basenameへコピーする]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_copy_reserves_unmatched_existing_sidecars(self):
+        source = self.root / "source"
+        output = self.root / "output"
+        image_path = self.create_image(source / "sample.png")
+        result = ImageOriginResult(image_path, AI_LABEL, 0.99, ("oss_classifier",), "high")
+        output_cluster = output / AI_LABEL
+        output_cluster.mkdir(parents=True)
+        existing_sidecar = output_cluster / "sample.json"
+        existing_sidecar.write_text(json.dumps({"aiType": 1}), encoding="utf-8")
+
+        self.assertEqual(copy_clusters([result], source, output), 1)
+
+        self.assertEqual(json.loads(existing_sidecar.read_text(encoding="utf-8"))["aiType"], 1)
+        self.assertFalse((output_cluster / "sample.png").exists())
+        copied_images = list(output_cluster.glob("sample_*.png"))
+        self.assertEqual(len(copied_images), 1)
+        self.assertFalse(copied_images[0].with_suffix(".json").exists())
+
+    # {
     # 責務: [test_copy_rolls_back_partial_output: コピー失敗時に今回作ったファイルを戻す]
     # 処理: [1: 2枚目の公開を失敗させ先行出力が除去されることを確認する]
     # 引数: [self]

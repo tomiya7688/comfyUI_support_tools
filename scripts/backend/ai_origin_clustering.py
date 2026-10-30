@@ -355,7 +355,9 @@ def _ensure_output_directory(output_root: Path, target_parent: Path) -> None:
 def _destination_for_source(
     source: Path, destination: Path, companion_sources: Iterable[Path] = ()
 ) -> Path:
-    source_files = [source, *companion_sources]
+    companions_by_extension = {
+        companion.suffix.casefold(): companion for companion in companion_sources
+    }
     digest = hashlib.sha256(str(destination).encode("utf-8")).hexdigest()[:10]
     suffix_index = 0
     while True:
@@ -366,17 +368,32 @@ def _destination_for_source(
         else:
             suffix = f"_{digest}_{suffix_index - 1}"
         candidate = destination.with_name(f"{destination.stem}{suffix}{destination.suffix}")
-        targets = [
-            candidate,
-            *[candidate.with_suffix(companion.suffix) for companion in companion_sources],
-        ]
-        if all(
-            not target.exists() or _same_file_content(source_file, target)
-            for source_file, target in zip(source_files, targets, strict=True)
-        ):
-            return candidate
-        suffix_index += 1
-    return candidate
+        if candidate.exists() and not _same_file_content(source, candidate):
+            suffix_index += 1
+            continue
+        if _has_conflicting_sidecars(candidate, companions_by_extension):
+            suffix_index += 1
+            continue
+        return candidate
+
+
+# {
+#   責務: [_has_conflicting_sidecars: 既存sidecarと出力候補が衝突するか判定する]
+#   処理: [1: source側にないsidecarと内容が異なるsidecarを検出する]
+#   引数: [candidate: 画像候補, companions_by_extension: source側sidecar一覧]
+#   戻り値: [sidecar衝突があればTrue]
+# }
+def _has_conflicting_sidecars(candidate: Path, companions_by_extension: dict[str, Path]) -> bool:
+    for extension in (".txt", ".json"):
+        target = candidate.with_suffix(extension)
+        if target == candidate:
+            continue
+        source = companions_by_extension.get(extension)
+        if not target.exists():
+            continue
+        if source is None or not _same_file_content(source, target):
+            return True
+    return False
 
 
 # {

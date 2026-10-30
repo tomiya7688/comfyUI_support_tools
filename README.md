@@ -30,7 +30,7 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 判定器を使うにはGUIのPython環境に `requirements-ai-image-clustering.txt` と対応するPyTorchを導入します。初回推論ではモデルウェイトがHugging Faceからダウンロードされ、既定では `user_data/cache/ai_origin` に保存されます。モデルはアニメ画像向けで、閾値は未校正です。画像だけのAI判定を確定的な証明として扱わず、迷う結果は `uncertain` に残してください。画像データは外部へ送信しません。モデルウェイトはApache-2.0ライセンスで、アプリへ同梱しません。
 
-現在のPyInstaller onedir版にはPyTorch/Transformersを同梱していません。AI判定にはソース版を起動するPython環境が必要です。凍結実行ファイルから呼び出した場合は不足を明示し、画像を誤って非AI扱いせず `uncertain` にします。
+現在のPyInstaller onedir版にはPyTorch/Transformersを同梱しません。凍結実行ファイルから使う場合は、互換性のあるPython環境へ同じ依存関係を導入し、`KADOKA_AI_ORIGIN_PYTHON` にその `python.exe` を設定してください。未設定なら `KADOKA_PYTHON_ROOT` のPython 3.10を使います。モデル推論は外部Python workerで行い、モデルウェイトは `user_data/cache/ai_origin` に保存されます。依存環境を利用できない画像は `uncertain` に残します。
 
 ---
 
@@ -62,4 +62,4 @@ The `AI画像クラスタ` tab analyzes an image folder and previews three group
 
 To use the detector, install `requirements-ai-image-clustering.txt` and a compatible PyTorch build into the GUI's Python environment. The model weights are downloaded from Hugging Face on first inference and stored under `user_data/cache/ai_origin` by default. The model targets anime images and its score thresholds are uncalibrated. Treat image-only results as estimates and keep ambiguous results in `uncertain`. Images are not sent to an external service. The model weights are Apache-2.0 licensed and are not bundled with the application.
 
-The current PyInstaller onedir build does not include PyTorch or Transformers. AI classification therefore requires the Python environment that launches the source version. The frozen executable reports the missing runtime and leaves affected images in `uncertain`.
+The PyInstaller onedir build does not bundle PyTorch or Transformers. To classify images from the frozen executable, install the same dependencies into a compatible Python environment and set `KADOKA_AI_ORIGIN_PYTHON` to that `python.exe`. If unset, the app uses Python 3.10 from `KADOKA_PYTHON_ROOT`. Inference runs in an external Python worker and model weights are cached under `user_data/cache/ai_origin`. Images that cannot use the configured runtime remain `uncertain`.

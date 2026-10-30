@@ -33,13 +33,7 @@ class ScoreProvider(Protocol):
     # 引数: [self, path]
     # 戻り値: [宣言の戻り値を返す]
     # }
-    def ai_score(self, path: Path) -> float:
-        # {
-        #   責務: [ai_score: AI生成ラベルの確率を取得する]
-        #   引数: [self: provider, path: 推論対象画像]
-        #   戻り値: [0から1までのAI生成スコア]
-        # }
-        ...
+    def ai_score(self, path: Path) -> float: ...
 
 
 # {
@@ -65,11 +59,6 @@ class ImageOriginResult:
 def discover_images(
     input_root: Path, recursive: bool, excluded_root: Path | None = None
 ) -> list[Path]:
-    # {
-    #   責務: [discover_images: 入力root内の対応画像を列挙する]
-    #   引数: [input_root: 選択root, recursive: サブフォルダ走査, excluded_root: 出力先]
-    #   戻り値: [安定ソートされた画像パス]
-    # }
     root = input_root.resolve(strict=True)
     if not root.is_dir():
         raise ValueError("入力元はフォルダーを指定してください")
@@ -120,11 +109,6 @@ def _raise_walk_error(error: OSError) -> None:
 # 戻り値: [宣言の戻り値を返す]
 # }
 def _is_within(path: Path, parent: Path | None) -> bool:
-    # {
-    #   責務: [_is_within: pathが指定rootの配下か判定する]
-    #   引数: [path: 検査パス, parent: 親rootまたはNone]
-    #   戻り値: [配下ならTrue]
-    # }
     if parent is None:
         return False
     try:
@@ -141,11 +125,6 @@ def _is_within(path: Path, parent: Path | None) -> bool:
 # 戻り値: [宣言の戻り値を返す]
 # }
 def _metadata_signal(metadata: object) -> str | None:
-    # {
-    #   責務: [_metadata_signal: Pixiv形式metadataから明示的なAI区分を読む]
-    #   引数: [metadata: JSON相当の外部値]
-    #   戻り値: [ai_generated/non_ai/conflictまたはNone]
-    # }
     if not isinstance(metadata, dict):
         return None
     value = metadata.get("aiType", metadata.get("ai_type"))
@@ -175,11 +154,6 @@ def _metadata_signal(metadata: object) -> str | None:
 # 戻り値: [宣言の戻り値を返す]
 # }
 def _read_metadata(path: Path) -> tuple[str | None, str | None]:
-    # {
-    #   責務: [_read_metadata: sidecarと埋込metadataから判定根拠を読む]
-    #   引数: [path: 画像ファイル]
-    #   戻り値: [明示信号と根拠名]
-    # }
     signals: set[str] = set()
     evidence: list[str] = []
     sidecar = path.with_suffix(".json")
@@ -226,11 +200,6 @@ def classify_image(
     low_threshold: float,
     high_threshold: float,
 ) -> ImageOriginResult:
-    # {
-    #   責務: [classify_image: 出所metadataを優先して画像を3区分する]
-    #   引数: [path: 画像, score_provider: OSS判定器, low_threshold/high_threshold: 判定境界]
-    #   戻り値: [判定クラスタ、信頼度、証拠、理由]
-    # }
     metadata_label, metadata_evidence = _read_metadata(path)
     if metadata_label == "conflict":
         return ImageOriginResult(
@@ -276,16 +245,21 @@ def classify_images(
         raise ValueError("しきい値は 0 <= low < high <= 1 にしてください")
     paths = list(image_paths)
     results: list[ImageOriginResult] = []
-    for index, path in enumerate(paths, start=1):
-        try:
-            result = classify_image(path, score_provider, low_threshold, high_threshold)
-        except (OSError, ValueError, RuntimeError) as error:
-            result = ImageOriginResult(
-                path, UNCERTAIN_LABEL, None, ("classifier_error",), str(error)
-            )
-        results.append(result)
-        if progress:
-            progress(index, len(paths), path)
+    try:
+        for index, path in enumerate(paths, start=1):
+            try:
+                result = classify_image(path, score_provider, low_threshold, high_threshold)
+            except (OSError, ValueError, RuntimeError) as error:
+                result = ImageOriginResult(
+                    path, UNCERTAIN_LABEL, None, ("classifier_error",), str(error)
+                )
+            results.append(result)
+            if progress:
+                progress(index, len(paths), path)
+    finally:
+        close = getattr(score_provider, "close", None)
+        if callable(close):
+            close()
     return results
 
 
@@ -296,11 +270,6 @@ def classify_images(
 # 戻り値: [宣言の戻り値を返す]
 # }
 def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output_root: Path) -> int:
-    # {
-    #   責務: [copy_clusters: 判定結果を上書きなしでクラスタ別にコピーする]
-    #   引数: [results: 承認済み結果, input_root: 相対パス基準, output_root: 出力先root]
-    #   戻り値: [コピーした画像数]
-    # }
     source_root = input_root.resolve(strict=True)
     destination_root = output_root.resolve()
     if _is_within(destination_root, source_root) or destination_root == source_root:
@@ -319,7 +288,7 @@ def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output
             except ValueError as error:
                 raise ValueError(f"入力フォルダー外の画像です: {result.source_path}") from error
             destination = destination_root / result.cluster / relative_path
-            destination.parent.mkdir(parents=True, exist_ok=True)
+            _ensure_output_directory(destination_root, destination.parent)
             sidecars = [
                 result.source_path.with_suffix(extension).resolve(strict=True)
                 for extension in (".txt", ".json")
@@ -348,6 +317,32 @@ def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output
             created_file.unlink(missing_ok=True)
         raise
     return copied
+
+
+# {
+#   責務: [_ensure_output_directory: 出力先の親ディレクトリをroot内に安全に作成する]
+#   処理: [1: 出力先の各階層にsymlinkがないことを確認して作成する]
+#   引数: [output_root: 出力root, target_parent: ファイルの親ディレクトリ]
+#   戻り値: []
+# }
+def _ensure_output_directory(output_root: Path, target_parent: Path) -> None:
+    output_root.mkdir(parents=True, exist_ok=True)
+    if output_root.is_symlink():
+        raise ValueError(f"出力rootにシンボリックリンクは使えません: {output_root}")
+    root = output_root.resolve(strict=True)
+    try:
+        relative_parent = target_parent.relative_to(output_root)
+    except ValueError as error:
+        raise ValueError(f"出力先が出力rootの外です: {target_parent}") from error
+
+    current = root
+    for part in relative_parent.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"出力先の親にシンボリックリンクは使えません: {current}")
+        current.mkdir(exist_ok=True)
+        if current.is_symlink() or not _is_within(current.resolve(strict=True), root):
+            raise ValueError(f"出力先の親が出力root外を指しています: {current}")
 
 
 # {
@@ -418,11 +413,6 @@ def _file_digest(path: Path) -> bytes:
 # 戻り値: [宣言の戻り値を返す]
 # }
 def _copy_file_atomically(source: Path, destination: Path) -> None:
-    # {
-    #   責務: [_copy_file_atomically: 一時ファイル経由でコピーを完了する]
-    #   引数: [source: コピー元, destination: 上書き禁止のコピー先]
-    #   戻り値: []
-    # }
     handle = tempfile.NamedTemporaryFile(
         prefix=f".{destination.name}.",
         suffix=".copying",
@@ -482,11 +472,6 @@ def _hard_links_unsupported(error: OSError) -> bool:
 # 戻り値: [宣言の戻り値を返す]
 # }
 def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) -> Path:
-    # {
-    #   責務: [write_manifest: manifestの同時保存を直列化する]
-    #   引数: [results: 判定結果, manifest_path: 保存先]
-    #   戻り値: [一度だけ生成されたmanifestパス]
-    # }
     with _MANIFEST_LOCK:
         return _write_manifest_locked(results, manifest_path)
 
@@ -498,11 +483,6 @@ def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) ->
 #   戻り値: [保存したmanifestパス]
 # }
 def _write_manifest_locked(results: Iterable[ImageOriginResult], manifest_path: Path) -> Path:
-    # {
-    #   責務: [write_manifest: 判定結果をJSON manifestとして保存する]
-    #   引数: [results: 判定結果, manifest_path: 保存先]
-    #   戻り値: [保存先。既存manifestを上書きしない]
-    # }
     rows = [
         {
             **{

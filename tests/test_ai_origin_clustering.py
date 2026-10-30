@@ -1,6 +1,8 @@
 import errno
+import io
 import json
 import os
+import sys
 import tempfile
 import threading
 import unittest
@@ -34,11 +36,6 @@ class FakeScoreProvider:
     # 戻り値: [宣言の戻り値を返す]
     # }
     def __init__(self, score):
-        # {
-        #   責務: [__init__: 固定スコアを設定する]
-        #   引数: [self: provider, score: AI生成スコア]
-        #   戻り値: []
-        # }
         self.score = score
 
     # {
@@ -48,11 +45,6 @@ class FakeScoreProvider:
     # 戻り値: [宣言の戻り値を返す]
     # }
     def ai_score(self, _path):
-        # {
-        #   責務: [ai_score: テスト用スコアを返す]
-        #   引数: [self: provider, _path: 推論対象画像]
-        #   戻り値: [設定されたAI生成スコア]
-        # }
         return self.score
 
 
@@ -68,11 +60,6 @@ class AIOriginClusteringTests(unittest.TestCase):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def setUp(self):
-        # {
-        #   責務: [setUp: workspace内に破棄可能なテストディレクトリを作る]
-        #   引数: [self: test case]
-        #   戻り値: []
-        # }
         scratch_root = Path(
             os.environ.get("KADOKA_TOOLS_TEST_TEMP_ROOT", Path.cwd() / ".tmp-tests")
         )
@@ -87,11 +74,6 @@ class AIOriginClusteringTests(unittest.TestCase):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def tearDown(self):
-        # {
-        #   責務: [tearDown: テスト用一時ディレクトリを破棄する]
-        #   引数: [self: test case]
-        #   戻り値: []
-        # }
         self.temporary.cleanup()
 
     # {
@@ -101,11 +83,6 @@ class AIOriginClusteringTests(unittest.TestCase):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def create_image(self, path, metadata=None):
-        # {
-        #   責務: [create_image: 判定テスト向けの小さなPNGを生成する]
-        #   引数: [self: test case, path: 保存先, metadata: 任意PNG text metadata]
-        #   戻り値: [保存先画像]
-        # }
         path.parent.mkdir(parents=True, exist_ok=True)
         image_info = PngImagePlugin.PngInfo()
         for key, value in (metadata or {}).items():
@@ -124,11 +101,6 @@ class AIOriginClusteringTests(unittest.TestCase):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def test_pixiv_metadata_precedes_classifier_and_conflict_is_uncertain(self):
-        # {
-        #   責務: [test_pixiv_metadata_precedes_classifier_and_conflict_is_uncertain: 明示metadata優先と矛盾時の保留を確認する]
-        #   引数: [self: test case]
-        #   戻り値: []
-        # }
         ai_image = self.create_image(self.root / "ai.png")
         ai_image.with_suffix(".json").write_text(json.dumps({"aiType": 2}), encoding="utf-8")
         result = classify_image(ai_image, FakeScoreProvider(0.01), 0.1, 0.9)
@@ -166,11 +138,6 @@ class AIOriginClusteringTests(unittest.TestCase):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def test_classifier_thresholds_produce_three_clusters(self):
-        # {
-        #   責務: [test_classifier_thresholds_produce_three_clusters: 閾値両側と中間値のクラスタを確認する]
-        #   引数: [self: test case]
-        #   戻り値: []
-        # }
         image = self.create_image(self.root / "sample.png")
         self.assertEqual(
             classify_image(image, FakeScoreProvider(0.1), 0.1, 0.9).cluster, NON_AI_LABEL
@@ -187,11 +154,6 @@ class AIOriginClusteringTests(unittest.TestCase):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def test_discovery_is_recursive_and_excludes_output(self):
-        # {
-        #   責務: [test_discovery_is_recursive_and_excludes_output: 再帰列挙と出力先除外を確認する]
-        #   引数: [self: test case]
-        #   戻り値: []
-        # }
         source = self.root / "source"
         self.create_image(source / "nested" / "image.png")
         self.create_image(source / "output" / "old.png")
@@ -238,11 +200,6 @@ class AIOriginClusteringTests(unittest.TestCase):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def test_copy_preserves_source_and_sidecar_without_overwriting(self):
-        # {
-        #   責務: [test_copy_preserves_source_and_sidecar_without_overwriting: 元画像を残してsidecarと衝突回避コピーを確認する]
-        #   引数: [self: test case]
-        #   戻り値: []
-        # }
         source = self.root / "source"
         output = self.root / "output"
         image_path = self.create_image(source / "nested" / "image.png")
@@ -290,10 +247,10 @@ class AIOriginClusteringTests(unittest.TestCase):
         calls = 0
 
         # {
-        #   責務: [fail_second_copy: 2回目のファイル公開をテスト用に失敗させる]
-        #   処理: [1: 初回は元処理を呼び2回目にOSErrorを投げる]
+        #   責務: [fail_second_copy: 2個目のファイルをテスト用に失敗させる]
+        #   処理: [1: 2個目のコピー時にOSErrorを投げる]
         #   引数: [source_path, destination_path]
-        #   戻り値: [初回の元処理結果]
+        #   戻り値: [最初のコピー結果]
         # }
         def fail_second_copy(source_path, destination_path):
             nonlocal calls
@@ -337,11 +294,6 @@ class AIOriginClusteringTests(unittest.TestCase):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def test_output_cannot_be_inside_input_and_manifest_is_not_overwritten(self):
-        # {
-        #   責務: [test_output_cannot_be_inside_input_and_manifest_is_not_overwritten: 出力rootとmanifestの上書き保護を確認する]
-        #   引数: [self: test case]
-        #   戻り値: []
-        # }
         image_path = self.create_image(self.root / "source" / "sample.png")
         result = ImageOriginResult(image_path, NON_AI_LABEL, 0.01, ("oss_classifier",), "low")
         with self.assertRaises(ValueError):
@@ -353,6 +305,36 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(
             json.loads(manifest.read_text(encoding="utf-8"))[0]["cluster"], NON_AI_LABEL
         )
+
+    # {
+    # 責務: [test_copy_rejects_symlinked_cluster_directory: symlink出力先による入力外書き込みを防ぐ]
+    # 処理: [1: 出力クラスタディレクトリのsymlink検出後にコピーを拒否する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_copy_rejects_symlinked_cluster_directory(self):
+        source = self.root / "source"
+        output = self.root / "output"
+        image_path = self.create_image(source / "sample.png")
+        result = ImageOriginResult(image_path, AI_LABEL, 0.99, ("oss_classifier",), "high")
+        cluster_directory = output / AI_LABEL
+        cluster_directory.mkdir(parents=True)
+        original_is_symlink = Path.is_symlink
+
+        # {
+        #   責務: [report_cluster_symlink: 出力clusterをsymlinkとして報告する]
+        #   処理: [1: 指定cluster pathのみsymlinkと判定する]
+        #   引数: [path: 検査するパス]
+        #   戻り値: [symlink判定]
+        # }
+        def report_cluster_symlink(path):
+            return path == cluster_directory or original_is_symlink(path)
+
+        with mock.patch.object(Path, "is_symlink", report_cluster_symlink):
+            with self.assertRaisesRegex(ValueError, "シンボリックリンク"):
+                copy_clusters([result], source, output)
+
+        self.assertFalse((cluster_directory / "sample.png").exists())
 
     # {
     # 責務: [test_concurrent_manifest_writes_reuse_one_result: 同時manifest保存の衝突を防ぐ]
@@ -368,8 +350,8 @@ class AIOriginClusteringTests(unittest.TestCase):
         errors = []
 
         # {
-        #   責務: [write: manifest保存結果または例外を記録する]
-        #   処理: [1: manifest保存を呼び結果を共有listへ追加する]
+        #   責務: [write: 1件のmanifest保存workerを実行する]
+        #   処理: [1: manifest保存結果または例外を共有リストへ記録する]
         #   引数: []
         #   戻り値: []
         # }
@@ -389,6 +371,36 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(list(self.root.glob("manifest_*.json")), [])
 
     # {
+    # 責務: [test_frozen_detector_uses_external_python_worker: 凍結アプリから外部Python判定器を使う]
+    # 処理: [1: worker起動・スコア取得・終了を確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_frozen_detector_uses_external_python_worker(self):
+        from scripts.backend import ai_origin_detector
+
+        worker = mock.Mock()
+        worker.stdin = io.StringIO()
+        stdin_write = mock.Mock(wraps=worker.stdin.write)
+        worker.stdin.write = stdin_write
+        worker.stdout = io.StringIO('{"ready":true}\n{"score":0.73}\n')
+        worker.wait.return_value = 0
+        interpreter = Path(sys.executable)
+        with (
+            mock.patch.object(sys, "frozen", True, create=True),
+            mock.patch("scripts.runtime_python.preferred_python", return_value=interpreter),
+            mock.patch.object(ai_origin_detector.subprocess, "Popen", return_value=worker) as popen,
+        ):
+            detector = AnimeAIDetector("saltacc/anime-ai-detect", "cpu")
+            self.assertEqual(detector.ai_score(self.root / "sample.png"), 0.73)
+            detector.close()
+
+        self.assertEqual(popen.call_args.args[0][0], str(interpreter))
+        written_requests = [call.args[0] for call in stdin_write.call_args_list]
+        self.assertIn('"path":', written_requests[0])
+        self.assertIn('"command":"shutdown"', written_requests[1])
+
+    # {
     # 責務: [test_detector_caches_pipeline_errors: モデル起動失敗を画像ごとに繰り返さない]
     # 処理: [1: 起動失敗を2度呼び出して生成処理が1回だけ行われることを確認する]
     # 引数: [self]
@@ -399,10 +411,10 @@ class AIOriginClusteringTests(unittest.TestCase):
         calls = 0
 
         # {
-        #   責務: [fail_pipeline: テスト用モデル初期化を失敗させる]
-        #   処理: [1: 呼び出し回数を増やしOSErrorを投げる]
+        #   責務: [fail_pipeline: 判定モデル初期化失敗をテストする]
+        #   処理: [1: RuntimeErrorを送出する]
         #   引数: []
-        #   戻り値: []
+        #   戻り値: [到達しない]
         # }
         def fail_pipeline():
             nonlocal calls

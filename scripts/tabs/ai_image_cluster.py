@@ -30,11 +30,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def __init__(self, master):
-        # {
-        #   責務: [__init__: 入出力、判定設定、結果一覧UIを初期化する]
-        #   引数: [self: tab, master: 親widget]
-        #   戻り値: []
-        # }
         super().__init__(master, padding=10)
         self.input_dir = tk.StringVar()
         self.output_dir = tk.StringVar()
@@ -57,11 +52,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def _build(self):
-        # {
-        #   責務: [_build: 入出力設定、分類結果、実行操作を描画する]
-        #   引数: [self: tab]
-        #   戻り値: []
-        # }
         paths = ttk.LabelFrame(self, text="入出力", padding=8)
         paths.pack(fill="x")
         LabeledPathRow(paths, "画像フォルダー", self.input_dir, mode="dir").pack(fill="x", pady=3)
@@ -149,11 +139,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def start_analysis(self):
-        # {
-        #   責務: [start_analysis: 入力を検証して分類workerを開始する]
-        #   引数: [self: tab]
-        #   戻り値: []
-        # }
         if self.busy:
             return
         try:
@@ -201,11 +186,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def _classify_worker(self, source, output, low, high, model_id, device, recursive):
-        # {
-        #   責務: [_classify_worker: モデル推論をGUI外で実行する]
-        #   引数: [self: tab, source/output: 入出力root, low/high: 判定境界, model/device/recursive: 推論設定]
-        #   戻り値: []
-        # }
         try:
             images = discover_images(source, recursive, output)
             if not images:
@@ -232,11 +212,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def _show_results(self, results, source, output):
-        # {
-        #   責務: [_show_results: 分類結果を表へ表示して保留する]
-        #   引数: [self: tab, results: 判定結果, source/output: 保存対象root]
-        #   戻り値: []
-        # }
         self.results = results
         self._source_root = source
         self._output_root = output
@@ -276,11 +251,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def _set_idle(self):
-        # {
-        #   責務: [_set_idle: worker終了後に実行状態を解除する]
-        #   引数: [self: tab]
-        #   戻り値: []
-        # }
         self.busy = False
         self._set_action_states(bool(self.results))
 
@@ -291,11 +261,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: []
     # }
     def _set_action_states(self, enabled):
-        # {
-        #   責務: [_set_action_states: 操作対象ボタンの有効状態を設定する]
-        #   引数: [self: tab, enabled: 操作可能ならTrue]
-        #   戻り値: []
-        # }
         state = "normal" if enabled and not self.busy else "disabled"
         for button in (self.save_button, self.copy_button, self.override_button):
             button.configure(state=state)
@@ -307,11 +272,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def save_results(self):
-        # {
-        #   責務: [save_results: 判定結果を出力先のmanifestへ保存する]
-        #   引数: [self: tab]
-        #   戻り値: []
-        # }
         if not self.results:
             self.logbox.log("先に画像を解析してください")
             return
@@ -330,11 +290,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def override_selected(self):
-        # {
-        #   責務: [override_selected: 選択結果のクラスタを手動で修正する]
-        #   引数: [self: tab]
-        #   戻り値: []
-        # }
         if self.busy:
             return
         selection = self.result_table.selection()
@@ -371,11 +326,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def copy_results(self):
-        # {
-        #   責務: [copy_results: 確認後に3クラスタへ画像とsidecarをコピーする]
-        #   引数: [self: tab]
-        #   戻り値: []
-        # }
         if not self.results:
             self.logbox.log("先に画像を解析してください")
             return
@@ -407,11 +357,6 @@ class AIImageClusterTab(ttk.Frame):
     # 戻り値: [宣言の戻り値を返す]
     # }
     def _copy_worker(self, results, source_root, output_root):
-        # {
-        #   責務: [_copy_worker: クラスタコピーとmanifest保存をGUI外で行う]
-        #   引数: [self: tab]
-        #   戻り値: []
-        # }
         try:
             count = copy_clusters(results, source_root, output_root)
             manifest = write_manifest(results, output_root / "ai_origin_manifest.json")

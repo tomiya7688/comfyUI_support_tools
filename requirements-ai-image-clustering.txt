@@ -1,0 +1,4 @@
+# Optional model runtime for the AI image-origin clustering tab.
+# Install this into the Python environment that launches the GUI.
+# Install a compatible CPU/CUDA PyTorch build separately from pytorch.org.
+transformers==4.57.6

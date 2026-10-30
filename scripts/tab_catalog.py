@@ -3,6 +3,7 @@
 The shell receives metadata, never legacy widget classes. The parity test prevents
 opening a different tab after the legacy UI changes its order.
 """
+
 # Stable class-name ID, display label, category; no imports or process startup.
 TAB_CATALOG = (
     ("StartWebUITab", "Backend起動", "生成"),
@@ -10,6 +11,7 @@ TAB_CATALOG = (
     ("PromptGenerateTab", "Prompt生成", "生成"),
     ("RandomImg2ImgTab", "Random img2img", "生成"),
     ("FolderTaggerTab", "Folder Tagger", "Prompt・Tag"),
+    ("AIImageClusterTab", "AI画像クラスタ", "Image・Video"),
     ("RandomLinePickerTab", "Random Line Picker", "Prompt・Tag"),
     ("BodyPromptTab", "Body Prompt", "Prompt・Tag"),
     ("TagDeleterTab", "Tag Deleter", "Prompt・Tag"),

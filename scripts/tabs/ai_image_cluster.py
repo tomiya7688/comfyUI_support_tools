@@ -7,7 +7,7 @@ from tkinter import messagebox, ttk
 from ..backend.ai_origin_clustering import (
     ImageOriginResult,
     classify_images,
-    copy_clusters,
+    copy_clusters_with_manifest,
     discover_images,
     write_manifest,
 )
@@ -358,8 +358,12 @@ class AIImageClusterTab(ttk.Frame):
     # }
     def _copy_worker(self, results, source_root, output_root):
         try:
-            count = copy_clusters(results, source_root, output_root)
-            manifest = write_manifest(results, output_root / "ai_origin_manifest.json")
+            count, manifest = copy_clusters_with_manifest(
+                results,
+                source_root,
+                output_root,
+                output_root / "ai_origin_manifest.json",
+            )
             self.after(0, self.logbox.log, f"クラスタコピー完了: {count}枚。結果: {manifest}")
         except (OSError, ValueError) as error:
             self.after(0, self.logbox.log, f"コピーエラー: {error}")

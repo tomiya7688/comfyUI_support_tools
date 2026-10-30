@@ -1,9 +1,11 @@
 import errno
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,8 +17,10 @@ from scripts.backend.ai_origin_clustering import (
     NON_AI_LABEL,
     UNCERTAIN_LABEL,
     ImageOriginResult,
+    _output_operation_lock,
     classify_image,
     copy_clusters,
+    copy_clusters_with_manifest,
     discover_images,
     write_manifest,
 )
@@ -226,6 +230,84 @@ class AIOriginClusteringTests(unittest.TestCase):
         self.assertEqual(len(list(expected.parent.glob("image_*.png"))), 1)
 
     # {
+    # 責務: [test_copy_reads_and_preserves_uppercase_sidecar_extensions: 大文字sidecarの判定とコピーを検証する]
+    # 処理: [1: uppercase JSONをmetadataとして読み、同じsuffixでコピーする]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_copy_reads_and_preserves_uppercase_sidecar_extensions(self):
+        source = self.root / "source"
+        output = self.root / "output"
+        image_path = self.create_image(source / "sample.png")
+        image_path.with_suffix(".JSON").write_text('{"aiType": 2}', encoding="utf-8")
+        result = classify_image(image_path, FakeScoreProvider(0.0), 0.2, 0.8)
+
+        self.assertEqual(result.cluster, AI_LABEL)
+        self.assertEqual(copy_clusters([result], source, output), 1)
+        copied_sidecar = output / AI_LABEL / "sample.JSON"
+        self.assertEqual(json.loads(copied_sidecar.read_text(encoding="utf-8"))["aiType"], 2)
+
+    # {
+    # 責務: [test_manifest_failure_rolls_back_new_cluster_files: manifest失敗時に同一操作の出力を戻す]
+    # 処理: [1: manifest保存失敗を注入して新規画像のrollbackを検証する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_manifest_failure_rolls_back_new_cluster_files(self):
+        source = self.root / "source"
+        output = self.root / "output"
+        image_path = self.create_image(source / "sample.png")
+        result = ImageOriginResult(image_path, AI_LABEL, 0.99, ("oss_classifier",), "high")
+        with mock.patch(
+            "scripts.backend.ai_origin_clustering._write_manifest_locked",
+            side_effect=OSError("manifest unavailable"),
+        ):
+            with self.assertRaisesRegex(OSError, "manifest unavailable"):
+                copy_clusters_with_manifest(
+                    [result], source, output, output / "ai_origin_manifest.json"
+                )
+        self.assertFalse((output / AI_LABEL / "sample.png").exists())
+
+    # {
+    # 責務: [test_output_lock_serializes_separate_processes: 出力先file lockが別processを直列化する]
+    # 処理: [1: 子processが保持する出力lockを親processが待機することを確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_output_lock_serializes_separate_processes(self):
+        output = self.root / "output"
+        marker = self.root / "lock-held"
+        worker = "\n".join(
+            (
+                "from pathlib import Path",
+                "import sys, time",
+                "from scripts.backend.ai_origin_clustering import _output_operation_lock",
+                "root = Path(sys.argv[1])",
+                "marker = Path(sys.argv[2])",
+                "with _output_operation_lock(root):",
+                "    marker.touch()",
+                "    time.sleep(0.4)",
+            )
+        )
+        process = subprocess.Popen(
+            [sys.executable, "-c", worker, str(output), str(marker)],
+            cwd=Path.cwd(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while not marker.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(marker.exists(), "子processが出力lockを取得できませんでした")
+            started = time.monotonic()
+            with _output_operation_lock(output):
+                elapsed = time.monotonic() - started
+            self.assertGreaterEqual(elapsed, 0.2)
+        finally:
+            process.wait(timeout=5)
+
+    # {
     # 責務: [test_copy_reserves_unmatched_existing_sidecars: 入力にないsidecarも候補名から除外する]
     # 処理: [1: 既存jsonを保護し画像を別basenameへコピーする]
     # 引数: [self]
@@ -322,12 +404,13 @@ class AIOriginClusteringTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             copy_clusters([result], self.root / "source", self.root / "source" / "clusters")
         manifest = self.root / "result.json"
+        manifest.write_text('{"preserve": true}', encoding="utf-8")
         first = write_manifest([result], manifest)
         second = write_manifest([result], manifest)
         self.assertEqual(first, second)
-        self.assertEqual(
-            json.loads(manifest.read_text(encoding="utf-8"))[0]["cluster"], NON_AI_LABEL
-        )
+        self.assertNotEqual(first, manifest)
+        self.assertEqual(json.loads(manifest.read_text(encoding="utf-8")), {"preserve": True})
+        self.assertEqual(json.loads(first.read_text(encoding="utf-8"))[0]["cluster"], NON_AI_LABEL)
 
     # {
     # 責務: [test_copy_rejects_symlinked_cluster_directory: symlink出力先による入力外書き込みを防ぐ]

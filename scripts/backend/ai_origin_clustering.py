@@ -10,7 +10,9 @@ import shutil
 import stat
 import tempfile
 import threading
+import time
 from collections.abc import Callable, Iterable
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
@@ -157,8 +159,8 @@ def _metadata_signal(metadata: object) -> str | None:
 def _read_metadata(path: Path) -> tuple[str | None, str | None]:
     signals: set[str] = set()
     evidence: list[str] = []
-    sidecar = path.with_suffix(".json")
-    if sidecar.is_file() and not sidecar.is_symlink():
+    sidecar = _find_sidecar(path, ".json")
+    if sidecar is not None:
         try:
             signal = _metadata_signal(json.loads(sidecar.read_text(encoding="utf-8-sig")))
         except (OSError, ValueError):
@@ -273,6 +275,59 @@ def classify_images(
 def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output_root: Path) -> int:
     source_root = input_root.resolve(strict=True)
     destination_root = output_root.resolve()
+    if destination_root == source_root or _is_within(destination_root, source_root):
+        raise ValueError("出力先は入力フォルダーの外に指定してください")
+    with _output_operation_lock(destination_root):
+        copied, _created_files = _copy_clusters_locked(results, input_root, destination_root)
+    return copied
+
+
+# {
+# 責務: [copy_clusters_with_manifest: クラスタファイルとmanifestを1操作として保存する]
+# 処理: [1: 排他ロック下でコピーとmanifest保存を行い、manifest失敗時に新規コピーを戻す]
+# 引数: [results, input_root, output_root, manifest_path]
+# 戻り値: [コピーした画像数とmanifest path]
+# }
+def copy_clusters_with_manifest(
+    results: Iterable[ImageOriginResult],
+    input_root: Path,
+    output_root: Path,
+    manifest_path: Path,
+) -> tuple[int, Path]:
+    results_snapshot = tuple(results)
+    source_root = input_root.resolve(strict=True)
+    destination_root = output_root.resolve()
+    manifest_directory = manifest_path.parent.resolve()
+    if destination_root == source_root or _is_within(destination_root, source_root):
+        raise ValueError("出力先は入力フォルダーの外に指定してください")
+    if manifest_directory != destination_root and not _is_within(
+        manifest_directory, destination_root
+    ):
+        raise ValueError("manifestはクラスタ出力フォルダー内に指定してください")
+    with _output_operation_lock(destination_root):
+        copied, created_files = _copy_clusters_locked(
+            results_snapshot, input_root, destination_root
+        )
+        try:
+            manifest = _write_manifest_locked(results_snapshot, manifest_path)
+        except BaseException:
+            for created_file in reversed(created_files):
+                created_file.unlink(missing_ok=True)
+            raise
+    return copied, manifest
+
+
+# {
+# 責務: [_copy_clusters_locked: 出力操作ロック内でクラスタファイルをコピーする]
+# 処理: [1: 入力を検証し画像とsidecarを衝突回避して公開する]
+# 引数: [results, input_root, output_root]
+# 戻り値: [コピー数と今回作成したファイル]
+# }
+def _copy_clusters_locked(
+    results: Iterable[ImageOriginResult], input_root: Path, output_root: Path
+) -> tuple[int, list[Path]]:
+    source_root = input_root.resolve(strict=True)
+    destination_root = output_root.resolve()
     if _is_within(destination_root, source_root) or destination_root == source_root:
         raise ValueError("出力先は入力フォルダーの外に指定してください")
     copied = 0
@@ -291,10 +346,9 @@ def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output
             destination = destination_root / result.cluster / relative_path
             _ensure_output_directory(destination_root, destination.parent)
             sidecars = [
-                result.source_path.with_suffix(extension).resolve(strict=True)
+                sidecar.resolve(strict=True)
                 for extension in (".txt", ".json")
-                if result.source_path.with_suffix(extension).is_file()
-                and not result.source_path.with_suffix(extension).is_symlink()
+                if (sidecar := _find_sidecar(result.source_path, extension)) is not None
             ]
             for sidecar in sidecars:
                 try:
@@ -317,7 +371,68 @@ def copy_clusters(results: Iterable[ImageOriginResult], input_root: Path, output
         for created_file in reversed(created_files):
             created_file.unlink(missing_ok=True)
         raise
-    return copied
+    return copied, created_files
+
+
+# {
+# 責務: [_find_sidecar: 拡張子の大文字小文字を無視して隣接sidecarを探す]
+# 処理: [1: 同じbasenameのファイルから指定suffixをcase-insensitiveで選ぶ]
+# 引数: [image_path, extension]
+# 戻り値: [安全なsidecar path、存在しない場合None]
+# }
+def _find_sidecar(image_path: Path, extension: str) -> Path | None:
+    if not image_path.parent.is_dir():
+        return None
+    expected_extension = extension.casefold()
+    for candidate in image_path.parent.iterdir():
+        if (
+            candidate.stem == image_path.stem
+            and candidate.suffix.casefold() == expected_extension
+            and candidate.is_file()
+            and not candidate.is_symlink()
+        ):
+            return candidate
+    return None
+
+
+# {
+# 責務: [_output_operation_lock: 同じ出力先をthread/process間で排他する]
+# 処理: [1: 出力rootの隠しlock fileをOS file lockで占有する]
+# 引数: [output_root]
+# 戻り値: [排他区間]
+# }
+@contextmanager
+def _output_operation_lock(output_root: Path):
+    output_root.mkdir(parents=True, exist_ok=True)
+    lock_path = output_root / ".ai_origin_clustering.lock"
+    with _MANIFEST_LOCK, lock_path.open("a+b") as lock_file:
+        lock_file.seek(0, os.SEEK_END)
+        if lock_file.tell() == 0:
+            lock_file.write(b"0")
+            lock_file.flush()
+        lock_file.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            while True:
+                try:
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 # {
@@ -385,13 +500,19 @@ def _destination_for_source(
 # }
 def _has_conflicting_sidecars(candidate: Path, companions_by_extension: dict[str, Path]) -> bool:
     for extension in (".txt", ".json"):
-        target = candidate.with_suffix(extension)
-        if target == candidate:
+        if candidate.suffix.casefold() == extension:
             continue
         source = companions_by_extension.get(extension)
-        if not target.exists():
+        matching_targets = [
+            item
+            for item in candidate.parent.iterdir()
+            if item.stem == candidate.stem and item.suffix.casefold() == extension
+        ]
+        if not matching_targets:
             continue
-        if source is None or not _same_file_content(source, target):
+        if source is None or any(
+            not _same_file_content(source, target) for target in matching_targets
+        ):
             return True
     return False
 
@@ -509,7 +630,7 @@ def _hard_links_unsupported(error: OSError) -> bool:
 # 戻り値: [宣言の戻り値を返す]
 # }
 def write_manifest(results: Iterable[ImageOriginResult], manifest_path: Path) -> Path:
-    with _MANIFEST_LOCK:
+    with _output_operation_lock(manifest_path.parent.resolve()):
         return _write_manifest_locked(results, manifest_path)
 
 

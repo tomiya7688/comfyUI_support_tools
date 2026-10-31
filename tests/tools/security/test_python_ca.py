@@ -8,6 +8,7 @@ from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
+from comfyui_support_tools.shared.python_tls import create_certifi_context
 from tools.security.check_python_ca import (
     AFFECTED_INTERMEDIATES,
     AFFECTED_ROOTS,
@@ -24,6 +25,21 @@ from tools.security.check_python_ca import (
 #   処理: [1: バージョン境界を検証する, 2: CA bundle内の対象証明書判定を検証する]
 # }
 class PythonCaTests(unittest.TestCase):
+    # {
+    #   責務: [test_certifi_context_excludes_affected_roots: 専用TLS contextから問題対象ルートを除外する]
+    #   処理: [1: contextが信頼するDER証明書を取得する, 2: 問題対象の指紋が含まれないことを確認する]
+    #   引数: [self: テストインスタンス]
+    #   戻り値: []
+    # }
+    def test_certifi_context_excludes_affected_roots(self) -> None:
+        context = create_certifi_context()
+        trusted_fingerprints = {
+            sha256(certificate).hexdigest()
+            for certificate in context.get_ca_certs(binary_form=True)
+        }
+        self.assertTrue(trusted_fingerprints)
+        self.assertFalse(trusted_fingerprints & set(AFFECTED_ROOTS))
+
     # {
     #   責務: [test_version_boundaries: 必須値未満と以上を区別できることを確認する]
     #   処理: [1: pipとcertifiの境界値を比較する]

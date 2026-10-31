@@ -1,4 +1,6 @@
 import unittest
+from io import BytesIO
+from unittest.mock import patch
 
 from tools.context import select_task
 
@@ -36,6 +38,22 @@ class SelectTaskTests(unittest.TestCase):
         )
         packet = select_task.compact_packet(issue)
         self.assertEqual(packet["acceptance"], ["alpha", "beta"])
+
+    # {
+    #   責務: [test_request_uses_managed_ca_bundle: GitHub API通信で管理対象CA bundleを使う]
+    #   処理: [1: API応答を模擬する, 2: urlopenへ渡されたTLS contextを確認する]
+    #   引数: [self: テストインスタンス]
+    #   戻り値: []
+    # }
+    def test_request_uses_managed_ca_bundle(self):
+        with patch(
+            "tools.context.select_task.urllib.request.urlopen",
+            return_value=BytesIO(b"{}"),
+        ) as urlopen:
+            select_task._request_json("https://api.github.com/test")
+
+        context = urlopen.call_args.kwargs["context"]
+        self.assertIsNotNone(context)
 
 
 if __name__ == "__main__":

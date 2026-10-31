@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
+from io import BytesIO
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from unittest.mock import patch
 
 from comfyui_support_tools.applications.sequence.data.processing.ollama_prompt_command import (
     OllamaPromptCommand,
 )
+from tools.security.check_python_ca import AFFECTED_ROOTS
 from comfyui_support_tools.applications.sequence.process.processing.sequence_runner import (
     SequenceRunner,
 )
@@ -111,6 +115,26 @@ class OllamaPromptCommandTests(unittest.TestCase):
                 },
                 {},
             )
+
+    # {
+    #   責務: [test_https_uses_managed_ca_bundle: HTTPS通信で管理対象CA bundleのcontextを使う]
+    #   処理: [1: HTTPS応答を模擬する, 2: urlopenへ渡されたcontextから問題CAがないことを確認する]
+    #   引数: [self: テストインスタンス]
+    #   戻り値: []
+    # }
+    def test_https_uses_managed_ca_bundle(self) -> None:
+        with patch(
+            "comfyui_support_tools.applications.sequence.data.processing.ollama_prompt_command.urlopen",
+            return_value=BytesIO(b'{"response":"ok"}'),
+        ) as urlopen:
+            OllamaPromptCommand(timeout=2)._post_json("https://example.com", {})
+
+        context = urlopen.call_args.kwargs["context"]
+        fingerprints = {
+            sha256(certificate).hexdigest()
+            for certificate in context.get_ca_certs(binary_form=True)
+        }
+        self.assertFalse(fingerprints & set(AFFECTED_ROOTS))
 
 
 if __name__ == "__main__":

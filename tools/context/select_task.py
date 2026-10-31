@@ -4,10 +4,13 @@ import argparse
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+
+import certifi
 
 DEFAULT_REPOSITORY = "tomiya7688/comfyUI_support_tools"
 PRIORITY_ORDER = ("P0", "P1", "P2", "P3")
@@ -32,6 +35,13 @@ class Issue:
         return not any(marker.lower() in title for marker in NON_TASK_TITLES)
 
 
+# {
+#   責務: [_request_json: 管理対象CA bundleで検証しながらGitHub JSONを取得する]
+#   処理: [1: 認証要求を組み立てる, 2: certifiでTLS検証する, 3: JSON応答をdecodeする]
+#   引数: [url: GitHub API URL, token: Optional API token]
+#   戻り値: [payload: decode済みJSON応答]
+#   エラー: [RuntimeError: GitHub APIエラーまたは接続不可]
+# }
 def _request_json(url: str, token: str | None = None) -> object:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -43,7 +53,11 @@ def _request_json(url: str, token: str | None = None) -> object:
 
     request = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with urllib.request.urlopen(
+            request,
+            timeout=15,
+            context=ssl.create_default_context(cafile=certifi.where()),
+        ) as response:
             return json.load(response)
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"GitHub API error: HTTP {exc.code}") from exc

@@ -8,7 +8,6 @@ from io import BytesIO
 import ipaddress
 import json
 from pathlib import Path
-import ssl
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -26,6 +25,7 @@ from comfyui_support_tools.applications.sequence.data.processing.tagger_result_w
     TaggerResultWriter,
 )
 from comfyui_support_tools.shared.contracts.tagger_backend import resolve_backend
+from comfyui_support_tools.shared.python_tls import create_certifi_context
 from comfyui_support_tools.shared.tag_result_normalizer import parse_tag_result
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -42,6 +42,12 @@ class _NoRedirect(HTTPRedirectHandler):
 class TaggerCommand:
     """Send one image to a compatible Tagger service running on this machine."""
 
+    # {
+    #   Responsibility: [__init__: Prepare the loopback Tagger client with the filtered CA bundle]
+    #   Processing: [1: Validate request timeout, 2: Build a direct opener with filtered HTTPS trust]
+    #   Arguments: [self: TaggerCommand instance, timeout: Request timeout in seconds]
+    #   Returns: []
+    # }
     def __init__(self, timeout: float = 60.0) -> None:
         self._result_writer = TaggerResultWriter()
         self._validate_timeout(timeout)
@@ -49,7 +55,7 @@ class TaggerCommand:
         self._opener = build_opener(
             ProxyHandler({}),
             _NoRedirect(),
-            HTTPSHandler(context=ssl.create_default_context()),
+            HTTPSHandler(context=create_certifi_context()),
         )
 
     def __call__(self, inputs: Mapping[str, Any], _context: Mapping[str, Any]) -> Mapping[str, Any]:

@@ -186,7 +186,10 @@ class StartWebUITab(ttk.Frame):
             return
         if isinstance(self.mod, Exception):
             return
-        if getattr(self.mod, "_current_proc", None):
+        if any(
+            getattr(self.mod, attribute, False)
+            for attribute in ("_current_proc", "_lifecycle_active", "_desired_running")
+        ):
             self.logbox.log(
                 f"⚠️ {getattr(self.mod, 'DISPLAY_NAME', 'WebUI')} はすでに起動しています"
             )
@@ -196,7 +199,18 @@ class StartWebUITab(ttk.Frame):
         except ValueError as e:
             self.logbox.log(f"❌ 入力エラー: {e}")
             return
-        threading.Thread(target=self.mod._start_webui_thread, args=args, daemon=True).start()
+        generation = self.mod.request_start()
+        if generation is None:
+            self.logbox.log(
+                f"⚠️ {getattr(self.mod, 'DISPLAY_NAME', 'WebUI')} はすでに起動しています"
+            )
+            return
+        threading.Thread(
+            target=self.mod._start_webui_thread,
+            args=args,
+            kwargs={"_generation": generation},
+            daemon=True,
+        ).start()
 
     # {
     # 責務: [stop: 起動中または開始中のbackend lifecycleを停止する]

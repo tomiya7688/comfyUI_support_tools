@@ -116,6 +116,34 @@ class ResourceLifetimeTests(unittest.TestCase):
         fake._start_webui_thread.assert_not_called()
 
     # {
+    # 責務: [test_stop_cancels_start_worker_before_it_runs: worker開始前のstopが予約済みstartを取り消すことを確認する]
+    # 処理: [1: 開始generationを予約する, 2: worker起動前にstopする, 3: 古いgenerationがbackendを起動しないことを確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_stop_cancels_start_worker_before_it_runs(self):
+        fake = SimpleNamespace(
+            _lifecycle_lock=threading.Lock(),
+            _lifecycle_generation=0,
+            _lifecycle_active=False,
+            _lifecycle_done=threading.Event(),
+            _desired_running=False,
+            _current_proc=None,
+            _stop_event=threading.Event(),
+        )
+
+        generation = EmbeddedStartWebUI.request_start(fake)
+        self.assertEqual(generation, 1)
+        EmbeddedStartWebUI.request_stop(fake)
+        EmbeddedStartWebUI._start_webui_thread(
+            fake, [], 1, None, True, 0.1, 0.1, _generation=generation
+        )
+
+        self.assertFalse(fake._desired_running)
+        self.assertFalse(fake._lifecycle_active)
+        self.assertTrue(fake._stop_event.is_set())
+
+    # {
     # 責務: [test_concurrent_restarts_coalesce_to_latest_request: 複数restart workerが最新要求1件へ集約されることを確認する]
     # 処理: [1: 完了待ち中に2件restartを送る, 2: 先行workerを無効化して1回だけ起動する]
     # 引数: [self]

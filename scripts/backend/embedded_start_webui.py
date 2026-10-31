@@ -257,3 +257,20 @@ class EmbeddedStartWebUI:
             self._lifecycle_generation += 1
             self._desired_running = False
             self._stop_event.set()
+
+    # {
+    #   責務: [request_start: GUI起動workerより先に開始要求を予約する]
+    #   処理: [1: 起動中や別の開始要求があれば拒否する, 2: generationを払い出して停止要求との競合を防ぐ]
+    #   引数: [self: backend lifecycleを保持する起動管理]
+    #   戻り値: [予約generation、開始できない場合はNone]
+    # }
+    def request_start(self):
+        with self._lifecycle_lock:
+            if self._lifecycle_active or self._desired_running:
+                return None
+            if self._current_proc is not None and self._current_proc.poll() is None:
+                return None
+            self._lifecycle_generation += 1
+            self._desired_running = True
+            self._stop_event.clear()
+            return self._lifecycle_generation

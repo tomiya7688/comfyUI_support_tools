@@ -10,6 +10,7 @@ set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 set "LEGACY_VENV=%~dp0.venv-python-pre-31118"
 set "REQUIREMENTS=%~dp0requirements-kadoka-tools.txt"
 set "PYTHON31118=%KADOKA_PYTHON31118%"
+set "PYTHON_LAUNCHER="
 
 if exist "%VENV_PY%" goto validate_environment
 goto create_environment
@@ -19,7 +20,7 @@ call :verify_creation_python
 if errorlevel 1 goto python_not_found
 echo Creating the Tabbed Tools Python 3.11.18 environment...
 if defined PYTHON31118 goto create_with_configured_python
-py -3 -m venv "%VENV_DIR%"
+%PYTHON_LAUNCHER% -m venv "%VENV_DIR%"
 if errorlevel 1 goto creation_failed
 goto validate_environment
 
@@ -29,7 +30,7 @@ if errorlevel 1 goto creation_failed
 goto validate_environment
 
 :validate_environment
-"%VENV_PY%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)"
+"%VENV_PY%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)"
 if errorlevel 1 goto migrate_unsupported_environment
 
 :install_requirements
@@ -57,7 +58,7 @@ exit /b 0
 :setup_failed
 echo.
 echo Failed to prepare the Tabbed Tools environment.
-echo Use CPython 3.11.18 or newer with venv and pip, then run this file again.
+echo Use CPython 3.11.18 through 3.12 with venv and pip, then run this file again.
 if exist "%LEGACY_VENV%" echo The previous .venv remains at "%LEGACY_VENV%".
 exit /b 1
 
@@ -66,7 +67,7 @@ echo Python launcher not found. Set KADOKA_PYTHON31118 to the supported python.e
 exit /b 1
 
 :migrate_unsupported_environment
-echo The existing .venv is not CPython 3.11.18 or newer.
+echo The existing .venv is not CPython 3.11.18 through 3.12.
 if exist "%LEGACY_VENV%" goto backup_already_exists
 call :verify_creation_python
 if errorlevel 1 goto python_not_found
@@ -102,7 +103,11 @@ goto setup_failed
 if defined PYTHON31118 goto verify_configured_python
 where py >nul 2>nul
 if errorlevel 1 exit /b 1
-py -3 -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
+set "PYTHON_LAUNCHER=py -3.12"
+%PYTHON_LAUNCHER% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>nul
+if not errorlevel 1 exit /b 0
+set "PYTHON_LAUNCHER=py -3.11"
+%PYTHON_LAUNCHER% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>nul
 if errorlevel 1 exit /b 1
 exit /b 0
 
@@ -113,6 +118,6 @@ if errorlevel 1 exit /b 0
 exit /b %ERRORLEVEL%
 
 :verify_configured_python
-"%PYTHON31118%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
+"%PYTHON31118%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>nul
 if errorlevel 1 exit /b 1
 exit /b 0

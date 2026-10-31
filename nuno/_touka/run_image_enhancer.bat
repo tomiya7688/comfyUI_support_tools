@@ -8,11 +8,12 @@ set "LEGACY_VENV=%~dp0.venv-python-pre-31118"
 set "REQ_FILE=%~dp0requirements.txt"
 set "INSTALL_REQUIRED=0"
 set "PYTHON31118=%KADOKA_PYTHON31118%"
+set "PYTHON_LAUNCHER="
 
 if not exist "%VENV_PY%" goto create_environment
 
 :validate_environment
-"%VENV_PY%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>&1
+"%VENV_PY%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>&1
 if errorlevel 1 goto migrate_unsupported_environment
 goto check_dependencies
 
@@ -21,7 +22,7 @@ call :verify_creation_python
 if errorlevel 1 goto python_not_found
 echo Creating the local Python 3.11.18 environment in .venv ...
 if defined PYTHON31118 goto create_with_configured_python
-py -3 -m venv "%VENV_DIR%"
+%PYTHON_LAUNCHER% -m venv "%VENV_DIR%"
 if errorlevel 1 goto creation_failed
 goto validate_environment
 
@@ -80,7 +81,7 @@ set "EXIT_CODE=%ERRORLEVEL%"
 endlocal & exit /b %EXIT_CODE%
 
 :migrate_unsupported_environment
-echo The existing .venv is not CPython 3.11.18 or newer.
+echo The existing .venv is not CPython 3.11.18 through 3.12.
 if exist "%LEGACY_VENV%" goto backup_already_exists
 call :verify_creation_python
 if errorlevel 1 goto python_not_found
@@ -113,7 +114,7 @@ echo Restore it manually after moving any incomplete .venv out of the way.
 goto setup_failed
 
 :python_not_found
-echo CPython 3.11.18 or newer was not found. Set KADOKA_PYTHON31118 to python.exe or install it with the py launcher.
+echo CPython 3.11.18 through 3.12 was not found. Set KADOKA_PYTHON31118 to a compatible python.exe or install it with the py launcher.
 exit /b 1
 
 :setup_failed
@@ -125,12 +126,16 @@ exit /b 1
 if defined PYTHON31118 goto verify_configured_python
 where py >nul 2>nul
 if errorlevel 1 exit /b 1
-py -3 -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>&1
+set "PYTHON_LAUNCHER=py -3.12"
+%PYTHON_LAUNCHER% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>&1
+if not errorlevel 1 exit /b 0
+set "PYTHON_LAUNCHER=py -3.11"
+%PYTHON_LAUNCHER% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>&1
 if errorlevel 1 exit /b 1
 exit /b 0
 
 :verify_configured_python
 if not exist "%PYTHON31118%" exit /b 1
-"%PYTHON31118%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>&1
+"%PYTHON31118%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>&1
 if errorlevel 1 exit /b 1
 exit /b 0

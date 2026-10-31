@@ -18,16 +18,28 @@ from license_inventory import collect_license_inventory
 APP_NAME = "KadokaTools"
 EXCLUDED_MODULES = ("torch", "torchvision", "torchaudio")
 MINIMUM_PYTHON = (3, 11, 18)
+MAXIMUM_PYTHON_EXCLUSIVE = (3, 13)
 
 
+# {
+#   責務: [_require_supported_python: 配布ビルドで使うCPythonの対応範囲を検証する]
+#   処理: [1: 実装名を確認する, 2: 最低版と上限版を検証する]
+#   引数: [version: 検証対象のPython版, implementation: Python実装名]
+#   戻り値: []
+# }
 def _require_supported_python(
     version: tuple[int, ...] = sys.version_info,
     implementation: str = sys.implementation.name,
 ) -> None:
     """Reject unsupported or non-CPython build interpreters before packaging."""
-    if implementation != "cpython" or version[:3] < MINIMUM_PYTHON:
-        required = ".".join(map(str, MINIMUM_PYTHON))
-        raise RuntimeError(f"The one-dir build requires CPython {required} or newer.")
+    if (
+        implementation != "cpython"
+        or version[:3] < MINIMUM_PYTHON
+        or version[:2] >= MAXIMUM_PYTHON_EXCLUSIVE
+    ):
+        minimum = ".".join(map(str, MINIMUM_PYTHON))
+        maximum = MAXIMUM_PYTHON_EXCLUSIVE[1] - 1
+        raise RuntimeError(f"The one-dir build requires CPython {minimum} through 3.{maximum}.")
 
 
 def executable_path(output: Path) -> Path:

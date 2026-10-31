@@ -18,12 +18,22 @@ spec.loader.exec_module(builder)
 
 
 class WorkspaceBuildTests(unittest.TestCase):
+    # {
+    #   責務: [test_one_dir_build_requires_supported_cpython: 対応Python範囲外をビルドが拒否することを検証する]
+    #   処理: [1: 許容版を通す, 2: 古い版・新しすぎる版・別実装を拒否する]
+    #   引数: []
+    #   戻り値: []
+    # }
     def test_one_dir_build_requires_supported_cpython(self):
         builder._require_supported_python((3, 11, 18), "cpython")
         builder._require_supported_python((3, 12, 0), "cpython")
-        for version, implementation in (((3, 11, 17), "cpython"), ((3, 12, 0), "pypy")):
+        for version, implementation in (
+            ((3, 11, 17), "cpython"),
+            ((3, 13, 0), "cpython"),
+            ((3, 12, 0), "pypy"),
+        ):
             with self.subTest(version=version, implementation=implementation):
-                with self.assertRaisesRegex(RuntimeError, "CPython 3.11.18 or newer"):
+                with self.assertRaisesRegex(RuntimeError, "CPython 3.11.18 through 3.12"):
                     builder._require_supported_python(version, implementation)
 
     def test_build_discovers_own_src_package(self):

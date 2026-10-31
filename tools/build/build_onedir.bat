@@ -7,15 +7,18 @@ set "PYTHONIOENCODING=utf-8"
 set "PYTHON_CMD=python"
 if exist ".venv\Scripts\python.exe" set "PYTHON_CMD=.venv\Scripts\python.exe"
 
-%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
+%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>nul
 if errorlevel 1 goto try_python_launcher
 goto runtime_selected
 
 :try_python_launcher
 where py >nul 2>nul
 if errorlevel 1 goto unsupported_runtime
-set "PYTHON_CMD=py -3"
-%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
+set "PYTHON_CMD=py -3.12"
+%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>nul
+if not errorlevel 1 goto runtime_selected
+set "PYTHON_CMD=py -3.11"
+%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>nul
 if errorlevel 1 goto unsupported_runtime
 
 :runtime_selected
@@ -60,7 +63,7 @@ echo KadokaTools one-dir build failed.
 exit /b 1
 
 :unsupported_runtime
-echo CPython 3.11.18 or newer is required. Recreate .venv or install the runtime with the py launcher.
+echo CPython 3.11.18 through 3.12 is required. Recreate .venv or install the runtime with the py launcher.
 goto build_failed
 
 :configure_bootstrap_trust

@@ -7,11 +7,18 @@ set "PYTHONIOENCODING=utf-8"
 set "PYTHON_CMD=python"
 if exist ".venv\Scripts\python.exe" set "PYTHON_CMD=.venv\Scripts\python.exe"
 
-%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11, 18) else 1)"
-if errorlevel 1 (
-    echo Python 3.11.18 or newer is required. Recreate .venv with the supported runtime.
-    goto build_failed
-)
+%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
+if errorlevel 1 goto try_python_launcher
+goto runtime_selected
+
+:try_python_launcher
+where py >nul 2>nul
+if errorlevel 1 goto unsupported_runtime
+set "PYTHON_CMD=py -3.11.18"
+%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
+if errorlevel 1 goto unsupported_runtime
+
+:runtime_selected
 
 echo Installing Kadoka Tools runtime dependencies...
 REM Upgrade bootstrap pip via the SHA-256 URL published by Python.org.
@@ -46,3 +53,7 @@ exit /b 0
 echo.
 echo KadokaTools one-dir build failed.
 exit /b 1
+
+:unsupported_runtime
+echo CPython 3.11.18 or newer is required. Recreate .venv or install the runtime with the py launcher.
+goto build_failed

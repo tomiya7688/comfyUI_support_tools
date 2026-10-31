@@ -1,4 +1,5 @@
 """Build the Kadoka Tools one-dir distribution with PyInstaller."""
+
 from __future__ import annotations
 
 import argparse
@@ -16,6 +17,17 @@ from license_inventory import collect_license_inventory
 
 APP_NAME = "KadokaTools"
 EXCLUDED_MODULES = ("torch", "torchvision", "torchaudio")
+MINIMUM_PYTHON = (3, 11, 18)
+
+
+def _require_supported_python(
+    version: tuple[int, ...] = sys.version_info,
+    implementation: str = sys.implementation.name,
+) -> None:
+    """Reject unsupported or non-CPython build interpreters before packaging."""
+    if implementation != "cpython" or version[:3] < MINIMUM_PYTHON:
+        required = ".".join(map(str, MINIMUM_PYTHON))
+        raise RuntimeError(f"The one-dir build requires CPython {required} or newer.")
 
 
 def executable_path(output: Path) -> Path:
@@ -43,6 +55,7 @@ def _build_environment() -> dict[str, str]:
 
 
 def build(root: Path, output: Path) -> Path:
+    _require_supported_python()
     work_dir = root / "build" / "pyinstaller"
     work_dir.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
@@ -103,8 +116,11 @@ def run_smoke_test(executable: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="Kadoka smoke 日本語 ") as cwd:
         for flags in (("--smoke-test",), ("--new-ui", "--smoke-test"), ("--shell-smoke-test",)):
             subprocess.run(
-                [str(executable), *flags], cwd=cwd, env=environment,
-                check=True, timeout=60,
+                [str(executable), *flags],
+                cwd=cwd,
+                env=environment,
+                check=True,
+                timeout=60,
             )
 
 

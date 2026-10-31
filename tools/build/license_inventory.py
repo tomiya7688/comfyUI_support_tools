@@ -1,4 +1,5 @@
 """Collect the license texts for the exact runtime dependency closure in a build."""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +11,7 @@ from pathlib import Path, PurePosixPath
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
+
 try:
     from .native_artifact_inventory import collect_native_artifact_inventory
 except ImportError:  # Support direct script execution from tools/build.
@@ -27,6 +29,20 @@ _CPYTHON_LIBFFI_PINS = {
         "version": "3.4.4",
         "source_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
         "source_script_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/get_externals.bat",
+    },
+}
+_CPYTHON_OPENSSL_PINS = {
+    "3.10.11": {
+        "version": "1.1.1t",
+        "source_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+        "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
+        "upstream_source_url": "https://github.com/openssl/openssl/releases/tag/openssl-1.1.1t",
+    },
+    "3.11.18": {
+        "version": "3.0.15",
+        "source_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+        "source_script_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/get_externals.bat",
+        "upstream_source_url": "https://github.com/openssl/openssl/releases/tag/openssl-3.0.15",
     },
 }
 _CPYTHON_BZIP2_PINS = {
@@ -150,7 +166,9 @@ def _license_files(item: Distribution, site_packages: Path) -> list[Path]:
         if source.is_file():
             result.append(source)
     if not result:
-        raise RuntimeError(f"No license or notice files found for {item.metadata['Name']} {item.version}")
+        raise RuntimeError(
+            f"No license or notice files found for {item.metadata['Name']} {item.version}"
+        )
     return result
 
 
@@ -165,7 +183,9 @@ def _license_metadata(item: Distribution) -> dict:
     return {"metadata": label or None, "classifiers": classifiers}
 
 
-def _copy_python_package_licenses(item: Distribution, site_packages: Path, target: Path) -> list[str]:
+def _copy_python_package_licenses(
+    item: Distribution, site_packages: Path, target: Path
+) -> list[str]:
     package_name = canonicalize_name(item.metadata["Name"])
     copied = []
     for source in _license_files(item, site_packages):
@@ -186,7 +206,9 @@ def _pyinstaller_components(site_packages: Path, distribution_dir: Path) -> list
     try:
         pyinstaller = distribution("pyinstaller")
     except PackageNotFoundError as error:
-        raise RuntimeError("PyInstaller is required to audit the onedir bootloader license") from error
+        raise RuntimeError(
+            "PyInstaller is required to audit the onedir bootloader license"
+        ) from error
     license_files = _copy_python_package_licenses(pyinstaller, site_packages, distribution_dir)
     project_urls = _project_urls(pyinstaller)
     common = {
@@ -226,7 +248,10 @@ def _python_native_components(
 
         fields = ssl.OPENSSL_VERSION.split()
         version = fields[1] if len(fields) > 1 and fields[0] == "OpenSSL" else None
-        components.append({
+        pinned_build = _CPYTHON_OPENSSL_PINS.get(python_version or sys.version.split()[0])
+        if pinned_build:
+            version = pinned_build["version"]
+        openssl = {
             "name": "OpenSSL",
             "component_type": "native-runtime-library",
             "distribution_status": "bundled",
@@ -234,8 +259,16 @@ def _python_native_components(
             "license_metadata": "OpenSSL License AND Original SSLeay License",
             "source_urls": ["https://www.openssl.org/"],
             "license_files": license_files,
-            **({"audit_status": "upstream-version-unresolved"} if version is None else {}),
-        })
+        }
+        if pinned_build:
+            openssl["version_source_urls"] = [
+                pinned_build["source_url"],
+                pinned_build["source_script_url"],
+                pinned_build["upstream_source_url"],
+            ]
+        elif version is None:
+            openssl["audit_status"] = "upstream-version-unresolved"
+        components.append(openssl)
 
     if any(name.startswith("libffi-") and name.endswith(".dll") for name in names):
         pinned_build = _CPYTHON_LIBFFI_PINS.get(python_version or sys.version.split()[0])
@@ -249,7 +282,10 @@ def _python_native_components(
             "license_files": license_files,
         }
         if pinned_build:
-            libffi["version_source_urls"] = [pinned_build["source_url"], pinned_build["source_script_url"]]
+            libffi["version_source_urls"] = [
+                pinned_build["source_url"],
+                pinned_build["source_script_url"],
+            ]
         else:
             libffi["audit_status"] = "upstream-version-unresolved"
         components.append(libffi)
@@ -266,7 +302,10 @@ def _python_native_components(
             "license_files": license_files,
         }
         if pinned_build:
-            bzip2["version_source_urls"] = [pinned_build["source_url"], pinned_build["source_script_url"]]
+            bzip2["version_source_urls"] = [
+                pinned_build["source_url"],
+                pinned_build["source_script_url"],
+            ]
         else:
             bzip2["audit_status"] = "upstream-version-unresolved"
         components.append(bzip2)
@@ -283,9 +322,16 @@ def _python_native_components(
             "license_files": [],
         }
         if pinned_build:
-            liblzma["license_metadata"] = "Public domain for upstream liblzma source (compiled binary scope review required)"
-            liblzma["license_reference_urls"] = ["https://raw.githubusercontent.com/tukaani-project/xz/v5.2.5/COPYING"]
-            liblzma["version_source_urls"] = [pinned_build["source_url"], pinned_build["source_script_url"]]
+            liblzma["license_metadata"] = (
+                "Public domain for upstream liblzma source (compiled binary scope review required)"
+            )
+            liblzma["license_reference_urls"] = [
+                "https://raw.githubusercontent.com/tukaani-project/xz/v5.2.5/COPYING"
+            ]
+            liblzma["version_source_urls"] = [
+                pinned_build["source_url"],
+                pinned_build["source_script_url"],
+            ]
             liblzma["audit_status"] = "compiled-binary-toolchain-scope-review-required"
         else:
             liblzma["audit_status"] = "upstream-version-unresolved"
@@ -300,10 +346,15 @@ def _python_native_components(
             "version": pinned_build["version"] if pinned_build else None,
             "license_metadata": "Python Software Foundation License Agreement AND BSD-2-Clause (libmpdec)",
             "source_urls": ["https://www.bytereef.org/mpdecimal/"],
-            "license_files": ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"] if pinned_build else [],
+            "license_files": ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"]
+            if pinned_build
+            else [],
         }
         if pinned_build:
-            libmpdec["version_source_urls"] = [pinned_build["source_url"], pinned_build["source_file_url"]]
+            libmpdec["version_source_urls"] = [
+                pinned_build["source_url"],
+                pinned_build["source_file_url"],
+            ]
             libmpdec["license_reference_urls"] = [pinned_build["license_url"]]
         else:
             libmpdec["license_metadata"] = None
@@ -319,7 +370,9 @@ def _python_native_components(
             "version": pinned_build["version"] if pinned_build else None,
             "license_metadata": "Python Software Foundation License Agreement AND MIT (Expat)",
             "source_urls": ["https://libexpat.github.io/"],
-            "license_files": ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"] if pinned_build else [],
+            "license_files": ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"]
+            if pinned_build
+            else [],
         }
         if pinned_build:
             expat["version_source_urls"] = [pinned_build["source_url"]]
@@ -330,23 +383,27 @@ def _python_native_components(
         components.append(expat)
 
     if any(name.startswith(("vcruntime", "msvcp")) and name.endswith(".dll") for name in names):
-        components.append({
-            "name": "Microsoft Visual C++ Runtime",
-            "component_type": "native-runtime-library",
-            "distribution_status": "bundled",
-            "version": None,
-            "license_metadata": None,
-            "source_urls": [
-                "https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files"
-            ],
-            "license_files": [],
-            "audit_status": "redistribution-terms-review-required",
-        })
+        components.append(
+            {
+                "name": "Microsoft Visual C++ Runtime",
+                "component_type": "native-runtime-library",
+                "distribution_status": "bundled",
+                "version": None,
+                "license_metadata": None,
+                "source_urls": [
+                    "https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files"
+                ],
+                "license_files": [],
+                "audit_status": "redistribution-terms-review-required",
+            }
+        )
 
     return components
 
 
-def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Path | None = None) -> dict:
+def collect_license_inventory(
+    root: Path, distribution_dir: Path, build_toc: Path | None = None
+) -> dict:
     """Copy Python/Tcl and runtime package licenses and emit resolved metadata."""
     root = root.resolve()
     distribution_dir = distribution_dir.resolve()
@@ -359,14 +416,16 @@ def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Pat
     python_target = distribution_dir / "licenses" / "Python" / "LICENSE.txt"
     python_target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(python_license, python_target)
-    components.append({
-        "name": "Python",
-        "distribution_status": "bundled",
-        "version": sys.version.split()[0],
-        "license_metadata": "Python Software Foundation License Agreement",
-        "source_urls": ["https://www.python.org/"],
-        "license_files": [python_target.relative_to(distribution_dir).as_posix()],
-    })
+    components.append(
+        {
+            "name": "Python",
+            "distribution_status": "bundled",
+            "version": sys.version.split()[0],
+            "license_metadata": "Python Software Foundation License Agreement",
+            "source_urls": ["https://www.python.org/"],
+            "license_files": [python_target.relative_to(distribution_dir).as_posix()],
+        }
+    )
 
     python_version = sys.version.split()[0]
     if (distribution_dir / "_decimal.pyd").is_file() and python_version in _CPYTHON_LIBMPDEC_PINS:
@@ -392,14 +451,17 @@ def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Pat
     tcl_target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(tcl_license, tcl_target)
     import tkinter
-    components.append({
-        "name": "Tcl/Tk",
-        "distribution_status": "bundled",
-        "version": f"Tcl {tkinter.TclVersion} / Tk {tkinter.TkVersion}",
-        "license_metadata": "TCL",
-        "source_urls": ["https://www.tcl-lang.org/"],
-        "license_files": [tcl_target.relative_to(distribution_dir).as_posix()],
-    })
+
+    components.append(
+        {
+            "name": "Tcl/Tk",
+            "distribution_status": "bundled",
+            "version": f"Tcl {tkinter.TclVersion} / Tk {tkinter.TkVersion}",
+            "license_metadata": "TCL",
+            "source_urls": ["https://www.tcl-lang.org/"],
+            "license_files": [tcl_target.relative_to(distribution_dir).as_posix()],
+        }
+    )
 
     components.extend(
         _python_native_components(
@@ -411,14 +473,18 @@ def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Pat
     components.extend(_pyinstaller_components(site_packages, distribution_dir))
 
     for item in _runtime_dependency_names(root):
-        components.append({
-            "name": item.metadata["Name"],
-            "distribution_status": "bundled",
-            "version": item.version,
-            "license_metadata": _license_metadata(item),
-            "source_urls": _project_urls(item),
-            "license_files": _copy_python_package_licenses(item, site_packages, distribution_dir),
-        })
+        components.append(
+            {
+                "name": item.metadata["Name"],
+                "distribution_status": "bundled",
+                "version": item.version,
+                "license_metadata": _license_metadata(item),
+                "source_urls": _project_urls(item),
+                "license_files": _copy_python_package_licenses(
+                    item, site_packages, distribution_dir
+                ),
+            }
+        )
 
     manifest = {
         "schema_version": 2,
@@ -436,5 +502,7 @@ def collect_license_inventory(root: Path, distribution_dir: Path, build_toc: Pat
         ),
     }
     manifest_path = distribution_dir / "third_party_components.resolved.json"
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     return manifest

@@ -1,4 +1,5 @@
 """Runtime dependency license inventory checks."""
+
 import json
 import pyexpat
 from pathlib import Path
@@ -28,6 +29,8 @@ class LicenseInventoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
             for filename in (
+                "libcrypto-3-x64.dll",
+                "libssl-3-x64.dll",
                 "libffi-8.dll",
                 "_bz2.pyd",
                 "_lzma.pyd",
@@ -35,9 +38,10 @@ class LicenseInventoryTests(unittest.TestCase):
                 "pyexpat.pyd",
             ):
                 (distribution / filename).touch()
-            components = _python_native_components(
-                distribution, "licenses/Python/LICENSE.txt", "3.11.18"
-            )
+            with patch("ssl.OPENSSL_VERSION", "OpenSSL 3.0.15 3 Sep 2024"):
+                components = _python_native_components(
+                    distribution, "licenses/Python/LICENSE.txt", "3.11.18"
+                )
 
         by_name = {item["name"]: item for item in components}
         self.assertEqual(by_name["libffi"]["version"], "3.4.4")
@@ -45,58 +49,149 @@ class LicenseInventoryTests(unittest.TestCase):
         self.assertEqual(by_name["XZ Utils liblzma"]["version"], "5.2.5")
         self.assertEqual(by_name["libmpdec"]["version"], "2.5.1")
         self.assertEqual(by_name["Expat"]["version"], "2.9.0")
-        self.assertTrue(all(item.get("version_source_urls") for item in by_name.values()))
+        self.assertEqual(by_name["OpenSSL"]["version"], "3.0.15")
+        self.assertEqual(
+            by_name["OpenSSL"]["version_source_urls"],
+            [
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/get_externals.bat",
+                "https://github.com/openssl/openssl/releases/tag/openssl-3.0.15",
+            ],
+        )
+        self.assertEqual(
+            by_name["libffi"]["version_source_urls"],
+            [
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/get_externals.bat",
+            ],
+        )
+        self.assertEqual(
+            by_name["bzip2"]["version_source_urls"],
+            [
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/readme.txt",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+            ],
+        )
+        self.assertEqual(
+            by_name["XZ Utils liblzma"]["version_source_urls"],
+            [
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/get_externals.bat",
+            ],
+        )
+        self.assertEqual(
+            by_name["libmpdec"]["version_source_urls"],
+            [
+                "https://github.com/python/cpython/tree/v3.11.18/Modules/_decimal/libmpdec",
+                "https://github.com/python/cpython/blob/v3.11.18/Modules/_decimal/libmpdec/mpdecimal.h",
+            ],
+        )
+        self.assertEqual(
+            by_name["Expat"]["version_source_urls"],
+            ["https://raw.githubusercontent.com/python/cpython/v3.11.18/Modules/expat/expat.h"],
+        )
 
     def test_classifies_python_bundled_native_libraries_separately(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
-            for filename in ("libcrypto-1_1.dll", "libssl-1_1.dll", "libffi-7.dll", "_bz2.pyd", "_lzma.pyd", "_decimal.pyd", "pyexpat.pyd", "VCRUNTIME140.dll"):
+            for filename in (
+                "libcrypto-1_1.dll",
+                "libssl-1_1.dll",
+                "libffi-7.dll",
+                "_bz2.pyd",
+                "_lzma.pyd",
+                "_decimal.pyd",
+                "pyexpat.pyd",
+                "VCRUNTIME140.dll",
+            ):
                 (distribution / filename).touch()
 
             with patch("ssl.OPENSSL_VERSION", "OpenSSL 1.1.1t 7 Feb 2023"):
-                components = _python_native_components(distribution, "licenses/Python/LICENSE.txt", "3.10.11")
+                components = _python_native_components(
+                    distribution, "licenses/Python/LICENSE.txt", "3.10.11"
+                )
 
         by_name = {item["name"]: item for item in components}
-        self.assertEqual(set(by_name), {"OpenSSL", "libffi", "bzip2", "XZ Utils liblzma", "libmpdec", "Expat", "Microsoft Visual C++ Runtime"})
+        self.assertEqual(
+            set(by_name),
+            {
+                "OpenSSL",
+                "libffi",
+                "bzip2",
+                "XZ Utils liblzma",
+                "libmpdec",
+                "Expat",
+                "Microsoft Visual C++ Runtime",
+            },
+        )
         self.assertEqual(by_name["OpenSSL"]["version"], "1.1.1t")
         self.assertEqual(by_name["OpenSSL"]["license_files"], ["licenses/Python/LICENSE.txt"])
         self.assertEqual(by_name["libffi"]["version"], "3.3.0")
-        self.assertEqual(by_name["libffi"]["version_source_urls"], [
-            "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
-            "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
-        ])
+        self.assertEqual(
+            by_name["libffi"]["version_source_urls"],
+            [
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
+            ],
+        )
         self.assertEqual(by_name["libffi"]["license_files"], ["licenses/Python/LICENSE.txt"])
         self.assertEqual(by_name["bzip2"]["version"], "1.0.8")
         self.assertEqual(by_name["bzip2"]["license_files"], ["licenses/Python/LICENSE.txt"])
-        self.assertEqual(by_name["bzip2"]["version_source_urls"], [
-            "https://github.com/python/cpython/blob/v3.10.11/PCbuild/readme.txt",
-            "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
-        ])
+        self.assertEqual(
+            by_name["bzip2"]["version_source_urls"],
+            [
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/readme.txt",
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+            ],
+        )
         self.assertEqual(by_name["XZ Utils liblzma"]["version"], "5.2.5")
         self.assertEqual(by_name["XZ Utils liblzma"]["license_files"], [])
-        self.assertEqual(by_name["XZ Utils liblzma"]["license_reference_urls"], [
-            "https://raw.githubusercontent.com/tukaani-project/xz/v5.2.5/COPYING",
-        ])
-        self.assertEqual(by_name["XZ Utils liblzma"]["audit_status"], "compiled-binary-toolchain-scope-review-required")
+        self.assertEqual(
+            by_name["XZ Utils liblzma"]["license_reference_urls"],
+            [
+                "https://raw.githubusercontent.com/tukaani-project/xz/v5.2.5/COPYING",
+            ],
+        )
+        self.assertEqual(
+            by_name["XZ Utils liblzma"]["audit_status"],
+            "compiled-binary-toolchain-scope-review-required",
+        )
         self.assertEqual(by_name["libmpdec"]["version"], "2.5.1")
-        self.assertEqual(by_name["libmpdec"]["license_files"], ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"])
-        self.assertEqual(by_name["libmpdec"]["version_source_urls"], [
-            "https://github.com/python/cpython/issues/85541",
-            "https://github.com/python/cpython/tree/v3.10.11/Modules/_decimal/libmpdec",
-        ])
+        self.assertEqual(
+            by_name["libmpdec"]["license_files"],
+            ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"],
+        )
+        self.assertEqual(
+            by_name["libmpdec"]["version_source_urls"],
+            [
+                "https://github.com/python/cpython/issues/85541",
+                "https://github.com/python/cpython/tree/v3.10.11/Modules/_decimal/libmpdec",
+            ],
+        )
         self.assertEqual(by_name["Expat"]["version"], "2.5.0")
-        self.assertEqual(by_name["Expat"]["license_files"], ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"])
-        self.assertEqual(by_name["Expat"]["version_source_urls"], [
-            "https://raw.githubusercontent.com/python/cpython/v3.10.11/Modules/expat/expat.h",
-        ])
-        self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["audit_status"], "redistribution-terms-review-required")
+        self.assertEqual(
+            by_name["Expat"]["license_files"],
+            ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"],
+        )
+        self.assertEqual(
+            by_name["Expat"]["version_source_urls"],
+            [
+                "https://raw.githubusercontent.com/python/cpython/v3.10.11/Modules/expat/expat.h",
+            ],
+        )
+        self.assertEqual(
+            by_name["Microsoft Visual C++ Runtime"]["audit_status"],
+            "redistribution-terms-review-required",
+        )
         self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["license_files"], [])
 
     def test_keeps_libffi_version_unresolved_for_unverified_python_builds(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
             (distribution / "libffi-7.dll").touch()
-            components = _python_native_components(distribution, "licenses/Python/LICENSE.txt", "3.14.0")
+            components = _python_native_components(
+                distribution, "licenses/Python/LICENSE.txt", "3.14.0"
+            )
 
         self.assertIsNone(components[0]["version"])
         self.assertEqual(components[0]["audit_status"], "upstream-version-unresolved")
@@ -105,7 +200,9 @@ class LicenseInventoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
             (distribution / "_lzma.pyd").touch()
-            components = _python_native_components(distribution, "licenses/Python/LICENSE.txt", "3.14.0")
+            components = _python_native_components(
+                distribution, "licenses/Python/LICENSE.txt", "3.14.0"
+            )
 
         self.assertIsNone(components[0]["version"])
         self.assertIsNone(components[0]["license_metadata"])
@@ -115,7 +212,9 @@ class LicenseInventoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
             (distribution / "_decimal.pyd").touch()
-            components = _python_native_components(distribution, "licenses/Python/LICENSE.txt", "3.14.0")
+            components = _python_native_components(
+                distribution, "licenses/Python/LICENSE.txt", "3.14.0"
+            )
 
         self.assertIsNone(components[0]["version"])
         self.assertIsNone(components[0]["license_metadata"])
@@ -126,7 +225,9 @@ class LicenseInventoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
             (distribution / "pyexpat.pyd").touch()
-            components = _python_native_components(distribution, "licenses/Python/LICENSE.txt", "3.14.0")
+            components = _python_native_components(
+                distribution, "licenses/Python/LICENSE.txt", "3.14.0"
+            )
 
         self.assertIsNone(components[0]["version"])
         self.assertIsNone(components[0]["license_metadata"])
@@ -193,7 +294,10 @@ class LicenseInventoryTests(unittest.TestCase):
             self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
             expat = by_name["Expat"]
             self.assertEqual(expat["version"], pyexpat.EXPAT_VERSION.removeprefix("expat_"))
-            self.assertEqual(expat["license_files"], ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"])
+            self.assertEqual(
+                expat["license_files"],
+                ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"],
+            )
             self.assertTrue((target / "licenses" / "expat" / "LICENSE.txt").is_file())
             self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])
             native = {item["path"]: item for item in manifest["native_artifacts"]}
@@ -202,11 +306,32 @@ class LicenseInventoryTests(unittest.TestCase):
             self.assertEqual(len(native["KadokaTools.exe"]["sha256"]), 64)
             self.assertEqual(manifest["schema_version"], 2)
             external = {item["name"]: item for item in manifest["external_components"]}
-            expected_external = {"ComfyUI", "WebUI1111", "PixAI Tagger", "TagGUI", "Ollama", "FFmpeg", "7-Zip", "AI model weights"}
+            expected_external = {
+                "ComfyUI",
+                "WebUI1111",
+                "PixAI Tagger",
+                "TagGUI",
+                "Ollama",
+                "FFmpeg",
+                "7-Zip",
+                "AI model weights",
+            }
             self.assertTrue(expected_external.issubset(external))
-            self.assertTrue(all(item["distribution_status"] == "external-only" for item in external.values()))
-            self.assertTrue(all(item["version"] is None and item["license_metadata"] is None for item in external.values()))
-            self.assertTrue(all(item["audit_status"] == "not-audited-by-this-artifact" for item in external.values()))
+            self.assertTrue(
+                all(item["distribution_status"] == "external-only" for item in external.values())
+            )
+            self.assertTrue(
+                all(
+                    item["version"] is None and item["license_metadata"] is None
+                    for item in external.values()
+                )
+            )
+            self.assertTrue(
+                all(
+                    item["audit_status"] == "not-audited-by-this-artifact"
+                    for item in external.values()
+                )
+            )
             for component in manifest["components"]:
                 self.assertTrue(component["version"])
                 self.assertTrue(component["license_files"])
@@ -215,7 +340,11 @@ class LicenseInventoryTests(unittest.TestCase):
 
             resolved_file = target / "third_party_components.resolved.json"
             self.assertEqual(json.loads(resolved_file.read_text(encoding="utf-8")), manifest)
-            copied_names = [Path(path).name for entry in manifest["components"] for path in entry["license_files"]]
+            copied_names = [
+                Path(path).name
+                for entry in manifest["components"]
+                for path in entry["license_files"]
+            ]
             self.assertIn("LICENSE-3RD-PARTY.txt", copied_names)
             self.assertIn("license.terms", copied_names)
 

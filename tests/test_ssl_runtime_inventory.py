@@ -1,4 +1,5 @@
 """Record CPython _ssl provenance and its OpenSSL dependency."""
+
 from pathlib import Path
 import tempfile
 import unittest
@@ -23,8 +24,16 @@ class SslRuntimeInventoryTests(unittest.TestCase):
         toc = root / "COLLECT-00.toc"
         toc.write_text(repr(([("_ssl.pyd", str(source), "BINARY")],)), encoding="utf-8")
         components = [
-            {"name": "Python", "version": python_version, "license_files": ["licenses/Python/LICENSE.txt"]},
-            {"name": "OpenSSL", "version": openssl_version, "license_files": ["licenses/Python/LICENSE.txt"]},
+            {
+                "name": "Python",
+                "version": python_version,
+                "license_files": ["licenses/Python/LICENSE.txt"],
+            },
+            {
+                "name": "OpenSSL",
+                "version": openssl_version,
+                "license_files": ["licenses/Python/LICENSE.txt"],
+            },
         ]
         with patch.object(native_artifact_inventory, "_package_owners", return_value={}):
             return native_artifact_inventory.collect_native_artifact_inventory(
@@ -39,12 +48,31 @@ class SslRuntimeInventoryTests(unittest.TestCase):
         self.assertEqual(artifact["related_components"], [{"name": "OpenSSL", "version": "1.1.1t"}])
         self.assertEqual(artifact["license_files"], ["licenses/Python/LICENSE.txt"])
         self.assertEqual(artifact["audit_status"], "origin-and-license-document-linked")
-        self.assertTrue(any(url.endswith("/PCbuild/_ssl.vcxproj") for url in artifact["source_reference_urls"]))
+        self.assertTrue(
+            any(url.endswith("/PCbuild/_ssl.vcxproj") for url in artifact["source_reference_urls"])
+        )
+
+    def test_links_cpython_31118_extension_to_pinned_openssl(self):
+        artifact = self._collect("3.11.18", "3.0.15")
+        self.assertEqual(artifact["origin_component"], "Python _ssl")
+        self.assertEqual(artifact["origin_version"], "3.11.18")
+        self.assertEqual(artifact["related_components"], [{"name": "OpenSSL", "version": "3.0.15"}])
+        self.assertEqual(
+            artifact["source_reference_urls"],
+            [
+                "https://github.com/python/cpython/blob/v3.11.18/Modules/_ssl.c",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/_ssl.vcxproj",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.11.18/Doc/license.rst",
+            ],
+        )
 
     def test_does_not_apply_pinned_evidence_to_another_runtime_version(self):
         artifact = self._collect("3.11.0", "3.2.0")
         self.assertEqual(artifact["origin_type"], "python-runtime")
-        self.assertEqual(artifact["audit_status"], "runtime-origin-found-license-scope-review-required")
+        self.assertEqual(
+            artifact["audit_status"], "runtime-origin-found-license-scope-review-required"
+        )
         self.assertNotIn("source_reference_urls", artifact)
 
 

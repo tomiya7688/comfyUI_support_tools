@@ -58,6 +58,32 @@ class RuntimePythonTest(unittest.TestCase):
             with self.subTest(launcher=launcher.name):
                 self.assertNotIn("E:\\program_files", launcher.read_text(encoding="utf-8").lower())
 
+    def test_kadoka_setup_requires_supported_cpython_without_unversioned_fallback(self):
+        setup = (
+            (Path(__file__).resolve().parents[1] / "setup_kadoka_tools.bat")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        self.assertIn("kadoka_python31118", setup)
+        self.assertIn("py -3.11.18 -m venv", setup)
+        self.assertIn("sys.implementation.name == 'cpython'", setup)
+        self.assertIn("sys.version_info >= (3, 11, 18)", setup)
+        self.assertIn(".venv-python-pre-31118", setup)
+        self.assertIn(":migrate_unsupported_environment", setup)
+        self.assertNotIn("python -m venv", setup)
+        self.assertNotIn("py -3.10", setup)
+
+    def test_onedir_batch_falls_back_to_supported_cpython_launcher(self):
+        batch = (
+            (Path(__file__).resolve().parents[1] / "tools" / "build" / "build_onedir.bat")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        self.assertIn("py -3.11.18", batch)
+        self.assertIn("sys.implementation.name == 'cpython'", batch)
+        self.assertIn("sys.version_info >= (3, 11, 18)", batch)
+        self.assertIn(":try_python_launcher", batch)
+
     def test_venv_python_prefers_existing_venv_interpreter(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             venv_dir = Path(temp_dir)

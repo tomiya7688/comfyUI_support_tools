@@ -1,4 +1,5 @@
 """Attribute onedir native files to PyInstaller build sources without leaking absolute paths."""
+
 from __future__ import annotations
 
 import ast
@@ -8,6 +9,90 @@ from importlib.metadata import distributions
 from pathlib import Path, PurePosixPath
 
 from packaging.utils import canonicalize_name
+
+
+_CPYTHON_EXTENSION_PINS = {
+    "3.10.11": {
+        "_ctypes.pyd": {
+            "name": "Python _ctypes",
+            "related_components": [{"name": "libffi", "version": "3.3.0"}],
+            "source_reference_urls": [
+                "https://github.com/python/cpython/blob/v3.10.11/Modules/_ctypes/_ctypes.c",
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_ctypes.vcxproj",
+                "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
+            ],
+        },
+        "_hashlib.pyd": {
+            "name": "Python _hashlib",
+            "related_components": [{"name": "OpenSSL", "version": "1.1.1t"}],
+            "source_reference_urls": [
+                "https://github.com/python/cpython/blob/v3.10.11/Modules/_hashopenssl.c",
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_hashlib.vcxproj",
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
+            ],
+        },
+        "_ssl.pyd": {
+            "name": "Python _ssl",
+            "related_components": [{"name": "OpenSSL", "version": "1.1.1t"}],
+            "source_reference_urls": [
+                "https://github.com/python/cpython/blob/v3.10.11/Modules/_ssl.c",
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_ssl.vcxproj",
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
+            ],
+        },
+        "_overlapped.pyd": {
+            "name": "Python _overlapped",
+            "related_components": [],
+            "source_reference_urls": [
+                "https://github.com/python/cpython/blob/v3.10.11/Modules/overlapped.c",
+                "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_overlapped.vcxproj",
+                "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
+            ],
+        },
+    },
+    "3.11.18": {
+        "_ctypes.pyd": {
+            "name": "Python _ctypes",
+            "related_components": [{"name": "libffi", "version": "3.4.4"}],
+            "source_reference_urls": [
+                "https://github.com/python/cpython/blob/v3.11.18/Modules/_ctypes/_ctypes.c",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/_ctypes.vcxproj",
+                "https://github.com/python/cpython/blob/v3.11.18/Doc/license.rst",
+            ],
+        },
+        "_hashlib.pyd": {
+            "name": "Python _hashlib",
+            "related_components": [{"name": "OpenSSL", "version": "3.0.15"}],
+            "source_reference_urls": [
+                "https://github.com/python/cpython/blob/v3.11.18/Modules/_hashopenssl.c",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/_hashlib.vcxproj",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.11.18/Doc/license.rst",
+            ],
+        },
+        "_ssl.pyd": {
+            "name": "Python _ssl",
+            "related_components": [{"name": "OpenSSL", "version": "3.0.15"}],
+            "source_reference_urls": [
+                "https://github.com/python/cpython/blob/v3.11.18/Modules/_ssl.c",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/_ssl.vcxproj",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+                "https://github.com/python/cpython/blob/v3.11.18/Doc/license.rst",
+            ],
+        },
+        "_overlapped.pyd": {
+            "name": "Python _overlapped",
+            "related_components": [],
+            "source_reference_urls": [
+                "https://github.com/python/cpython/blob/v3.11.18/Modules/overlapped.c",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/_overlapped.vcxproj",
+                "https://github.com/python/cpython/blob/v3.11.18/Doc/license.rst",
+            ],
+        },
+    },
+}
 
 _SUFFIXES = {".dll", ".pyd", ".exe", ".so", ".dylib"}
 
@@ -67,10 +152,38 @@ def _license_component(name: str, components: list[dict]) -> dict | None:
 
 def _source_hint(source: Path) -> str:
     parts = [
-        part for part in source.parent.parts
+        part
+        for part in source.parent.parts
         if part.casefold() not in {"users", "tomiy", ".cache", "codex-runtimes", "dependencies"}
     ]
     return "/".join(parts[-3:])
+
+
+def _cpython_extension_attribution(filename: str, components: list[dict]) -> dict | None:
+    python = _license_component("Python", components)
+    if not python:
+        return None
+
+    pin = _CPYTHON_EXTENSION_PINS.get(python.get("version"), {}).get(filename)
+    if not pin:
+        return None
+
+    for dependency in pin["related_components"]:
+        component = _license_component(dependency["name"], components)
+        if not component or component.get("version") != dependency["version"]:
+            return None
+
+    attribution = {
+        "origin_type": "python-runtime-extension",
+        "origin_component": pin["name"],
+        "origin_version": python["version"],
+        "license_files": python.get("license_files", []),
+        "source_reference_urls": pin["source_reference_urls"],
+        "audit_status": "origin-and-license-document-linked",
+    }
+    if pin["related_components"]:
+        attribution["related_components"] = pin["related_components"]
+    return attribution
 
 
 def _attribute(
@@ -99,7 +212,9 @@ def _attribute(
         origin_type = "python-package"
         if canonicalize_name(name) == "pyinstaller":
             parts = {part.casefold() for part in source.parts}
-            name = "PyInstaller bootloader" if "bootloader" in parts else "PyInstaller runtime hooks"
+            name = (
+                "PyInstaller bootloader" if "bootloader" in parts else "PyInstaller runtime hooks"
+            )
             origin_type = "build-tool-component"
         item = _license_component(name, components)
         licenses = item.get("license_files", []) if item else []
@@ -108,7 +223,9 @@ def _attribute(
             "origin_component": name,
             "origin_version": owner["version"],
             "license_files": licenses,
-            "audit_status": "origin-and-license-document-linked" if licenses else "license-document-not-linked",
+            "audit_status": "origin-and-license-document-linked"
+            if licenses
+            else "license-document-not-linked",
         }
 
     filename = source.name.casefold()
@@ -117,76 +234,15 @@ def _attribute(
         runtime_component_name = "OpenSSL"
     elif filename == "_asyncio.pyd":
         runtime_component_name = "Python"
-    elif filename == "_ctypes.pyd" and _within(source, python_root):
-        python = _license_component("Python", components)
-        libffi = _license_component("libffi", components)
-        if python and python.get("version") == "3.10.11" and libffi and libffi.get("version") == "3.3.0":
-            return {
-                "origin_type": "python-runtime-extension",
-                "origin_component": "Python _ctypes",
-                "origin_version": python["version"],
-                "related_components": [{"name": "libffi", "version": libffi["version"]}],
-                "license_files": python.get("license_files", []),
-                "source_reference_urls": [
-                    "https://github.com/python/cpython/blob/v3.10.11/Modules/_ctypes/_ctypes.c",
-                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_ctypes.vcxproj",
-                    "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
-                ],
-                "audit_status": "origin-and-license-document-linked",
-            }
+    elif filename in _CPYTHON_EXTENSION_PINS.get(
+        "3.10.11", {}
+    ) or filename in _CPYTHON_EXTENSION_PINS.get("3.11.18", {}):
+        if _within(source, python_root):
+            attribution = _cpython_extension_attribution(filename, components)
+            if attribution:
+                return attribution
     elif filename == "_bz2.pyd":
         runtime_component_name = "bzip2"
-    elif filename == "_hashlib.pyd" and _within(source, python_root):
-        python = _license_component("Python", components)
-        openssl = _license_component("OpenSSL", components)
-        if python and python.get("version") == "3.10.11" and openssl and openssl.get("version") == "1.1.1t":
-            return {
-                "origin_type": "python-runtime-extension",
-                "origin_component": "Python _hashlib",
-                "origin_version": python["version"],
-                "related_components": [{"name": "OpenSSL", "version": openssl["version"]}],
-                "license_files": python.get("license_files", []),
-                "source_reference_urls": [
-                    "https://github.com/python/cpython/blob/v3.10.11/Modules/_hashopenssl.c",
-                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_hashlib.vcxproj",
-                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
-                    "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
-                ],
-                "audit_status": "origin-and-license-document-linked",
-            }
-    elif filename == "_ssl.pyd" and _within(source, python_root):
-        python = _license_component("Python", components)
-        openssl = _license_component("OpenSSL", components)
-        if python and python.get("version") == "3.10.11" and openssl and openssl.get("version") == "1.1.1t":
-            return {
-                "origin_type": "python-runtime-extension",
-                "origin_component": "Python _ssl",
-                "origin_version": python["version"],
-                "related_components": [{"name": "OpenSSL", "version": openssl["version"]}],
-                "license_files": python.get("license_files", []),
-                "source_reference_urls": [
-                    "https://github.com/python/cpython/blob/v3.10.11/Modules/_ssl.c",
-                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_ssl.vcxproj",
-                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
-                    "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
-                ],
-                "audit_status": "origin-and-license-document-linked",
-            }
-    elif filename == "_overlapped.pyd" and _within(source, python_root):
-        python = _license_component("Python", components)
-        if python and python.get("version") == "3.10.11":
-            return {
-                "origin_type": "python-runtime-extension",
-                "origin_component": "Python _overlapped",
-                "origin_version": python["version"],
-                "license_files": python.get("license_files", []),
-                "source_reference_urls": [
-                    "https://github.com/python/cpython/blob/v3.10.11/Modules/overlapped.c",
-                    "https://github.com/python/cpython/blob/v3.10.11/PCbuild/_overlapped.vcxproj",
-                    "https://github.com/python/cpython/blob/v3.10.11/Doc/license.rst",
-                ],
-                "audit_status": "origin-and-license-document-linked",
-            }
     elif filename == "_lzma.pyd":
         runtime_component_name = "XZ Utils liblzma"
     elif filename == "_decimal.pyd":
@@ -270,17 +326,24 @@ def collect_native_artifact_inventory(
             }
         else:
             origin = _attribute(
-                source_entry[0], source_entry[1], owners, components,
-                site_packages, python_root, system_root,
+                source_entry[0],
+                source_entry[1],
+                owners,
+                components,
+                site_packages,
+                python_root,
+                system_root,
             )
         digest = hashlib.sha256()
         with path.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(chunk)
-        artifacts.append({
-            "path": relative,
-            "size_bytes": path.stat().st_size,
-            "sha256": digest.hexdigest(),
-            **origin,
-        })
+        artifacts.append(
+            {
+                "path": relative,
+                "size_bytes": path.stat().st_size,
+                "sha256": digest.hexdigest(),
+                **origin,
+            }
+        )
     return artifacts

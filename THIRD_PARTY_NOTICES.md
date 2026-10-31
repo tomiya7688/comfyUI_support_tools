@@ -3,7 +3,7 @@
 The project-owned code is licensed under the MIT License in `LICENSE`. This
 does not relicense bundled third-party libraries, binaries, or model weights.
 
-The Windows onedir build copies the Python runtime and Tcl/Tk license terms,
+The Windows onedir build uses CPython 3.11.18 and copies its runtime and Tcl/Tk license terms,
 plus license/notice files from the active dependency closure resolved from
 `requirements-kadoka-tools.txt`. It writes
 `third_party_components.resolved.json` beside the executable with exact
@@ -23,7 +23,7 @@ itself a license-compliance determination.
 
 Python-bundled OpenSSL, libffi, bzip2, and libmpdec are listed as separate native components.
 OpenSSL, libffi, and bzip2 link to corresponding notices included in Python's `LICENSE.txt`. The
-libffi 3.3.0 version is evidenced by the CPython 3.10.11 Windows build files;
+OpenSSL 3.0.15 and libffi 3.4.4 versions are evidenced by the CPython 3.11.18 Windows build files;
 the bzip2 1.0.8 pin is evidenced by its matching CPython Windows build files;
 other CPython builds without an explicit pin remain version-unresolved. The
 bundled liblzma 5.2.5 source is identified as public domain by XZ Utils;
@@ -33,16 +33,16 @@ C++ Runtime is separately identified, but its redistribution terms remain
 marked for review; the inventory does not assert that redistribution
 rights have been established.
 
-CPython 3.10.11 bundles Expat 2.5.0 in `pyexpat.pyd`. Its MIT notice is copied
+CPython 3.11.18 bundles Expat 2.9.0 in `pyexpat.pyd`. Its MIT notice is copied
 separately because the installed Python `LICENSE.txt` does not contain that
 notice. The artifact links both the CPython wrapper and Expat license files;
-other Python builds remain version-unresolved until individually verified.
+the version is pinned to the matching CPython source.
 
-CPython 3.10.11 bundles libmpdec 2.5.1. Its BSD-2-Clause notice is copied
+CPython 3.11.18 bundles libmpdec 2.5.1. Its BSD-2-Clause notice is copied
 separately because the installed Python `LICENSE.txt` does not contain that
 notice. The `_decimal.pyd` inventory entry links both the CPython wrapper
-license and libmpdec license. Other Python builds remain version-unresolved
-until individually verified.
+license and libmpdec license, with source evidence pinned to this CPython
+release. Other Python builds remain version-unresolved until individually verified.
 
 Python extension file present in the onedir output. These paths are an audit
 inventory only: entries whose origin/license is not mapped remain explicitly
@@ -55,29 +55,29 @@ The generated `external_components` section records these items as not bundled.
 Their installed versions and licenses vary by user, so this project does not make
 license or redistribution claims for them here. Audit each exact upstream
 component before adding it to a distributable artifact.
-The bundled _asyncio.pyd is the CPython 3.10.11 extension from Modules/_asynciomodule.c.
+The bundled _asyncio.pyd is the CPython 3.11.18 extension from Modules/_asynciomodule.c.
 Its native artifact entry links to the Python runtime component and the copied
 Python LICENSE.txt. Other Python builds remain attributed to their runtime
 version and license evidence rather than inheriting this exact version pin.
-The bundled _ctypes.pyd is recorded as the CPython 3.10.11 _ctypes extension,
-with libffi 3.3.0 tracked as a related runtime dependency. CPython's matching
+The bundled _ctypes.pyd is recorded as the CPython 3.11.18 _ctypes extension,
+with libffi 3.4.4 tracked as a related runtime dependency. CPython's matching
 LICENSE.txt contains the libffi notice; the artifact manifest links that file
 and the version-pinned CPython source, Windows build definition, and license
 references. Other Python/libffi versions remain under runtime-scope review.
-The bundled _hashlib.pyd is recorded as the CPython 3.10.11 extension with
-OpenSSL 1.1.1t as a related runtime dependency. The Python LICENSE.txt includes
+The bundled _hashlib.pyd is recorded as the CPython 3.11.18 extension with
+OpenSSL 3.0.15 as a related runtime dependency. The Python LICENSE.txt includes
 the OpenSSL and Original SSLeay notices; the artifact manifest links that
 notice and version-pinned CPython source, Windows build definition, and version
 metadata. Other Python/OpenSSL versions remain under runtime-scope review.
 
-The bundled `_ssl.pyd` is recorded as the CPython 3.10.11 extension with
-OpenSSL 1.1.1t as a related runtime dependency. Its OpenSSL and Original
+The bundled `_ssl.pyd` is recorded as the CPython 3.11.18 extension with
+OpenSSL 3.0.15 as a related runtime dependency. Its OpenSSL and Original
 SSLeay notices are included in the copied Python `LICENSE.txt`; the artifact
 manifest links that notice and version-pinned CPython source, Windows build
 definition, and version metadata. Other Python/OpenSSL versions remain under
 runtime-scope review.
 
-The bundled `_overlapped.pyd` is recorded as the CPython 3.10.11 Windows
+The bundled `_overlapped.pyd` is recorded as the CPython 3.11.18 Windows
 overlapped-I/O extension and linked to the copied Python `LICENSE.txt`. Its
 manifest entry references the pinned CPython implementation, Windows build
 project, and license document. Other Python runtime versions remain under

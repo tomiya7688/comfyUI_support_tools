@@ -53,12 +53,13 @@ jobs:
           $tclDestination = Join-Path $sourceRoot "PCbuild\lib"
           New-Item -ItemType Directory -Force -Path $tclDestination | Out-Null
           Copy-Item -Path (Join-Path $tclLibrary '*') -Destination $tclDestination -Recurse -Force
-          Copy-Item -LiteralPath (Join-Path $sourceRoot "LICENSE") -Destination (Join-Path $sourceRoot "PCbuild\amd64\LICENSE.txt")
+          Copy-Item -LiteralPath (Join-Path $sourceRoot "LICENSE") -Destination (Join-Path $sourceRoot "LICENSE.txt")
           Add-Content -LiteralPath $env:GITHUB_PATH -Value (Join-Path $sourceRoot "PCbuild\amd64")
 
       - name: Verify Python release and compromised-key rejection
         run: |
           python --version
+          python -c "import sys; assert sys.version_info[:3] == (3, 11, 18), sys.version"
           python -m ensurepip --upgrade
           python -m unittest test.test_ssl.SSLObjectTests.test_distrusted_spki
 

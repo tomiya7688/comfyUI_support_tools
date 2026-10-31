@@ -1,8 +1,11 @@
 import unittest
+from hashlib import sha256
 from io import BytesIO
+import ssl
 from unittest.mock import patch
 
 from tools.context import select_task
+from tools.security.check_python_ca import AFFECTED_CERTIFICATES
 
 
 class SelectTaskTests(unittest.TestCase):
@@ -53,7 +56,14 @@ class SelectTaskTests(unittest.TestCase):
             select_task._request_json("https://api.github.com/test")
 
         context = urlopen.call_args.kwargs["context"]
-        self.assertIsNotNone(context)
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+        fingerprints = {
+            sha256(certificate).hexdigest()
+            for certificate in context.get_ca_certs(binary_form=True)
+        }
+        self.assertTrue(fingerprints)
+        self.assertFalse(fingerprints & set(AFFECTED_CERTIFICATES))
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from hashlib import sha256
 from io import BytesIO
+import ssl
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,7 +13,7 @@ from unittest.mock import patch
 from comfyui_support_tools.applications.sequence.data.processing.ollama_prompt_command import (
     OllamaPromptCommand,
 )
-from tools.security.check_python_ca import AFFECTED_ROOTS
+from tools.security.check_python_ca import AFFECTED_CERTIFICATES
 from comfyui_support_tools.applications.sequence.process.processing.sequence_runner import (
     SequenceRunner,
 )
@@ -130,11 +131,14 @@ class OllamaPromptCommandTests(unittest.TestCase):
             OllamaPromptCommand(timeout=2)._post_json("https://example.com", {})
 
         context = urlopen.call_args.kwargs["context"]
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
         fingerprints = {
             sha256(certificate).hexdigest()
             for certificate in context.get_ca_certs(binary_form=True)
         }
-        self.assertFalse(fingerprints & set(AFFECTED_ROOTS))
+        self.assertTrue(fingerprints)
+        self.assertFalse(fingerprints & set(AFFECTED_CERTIFICATES))
 
 
 if __name__ == "__main__":

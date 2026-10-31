@@ -7,7 +7,6 @@ import ipaddress
 import json
 from collections.abc import Mapping
 from pathlib import Path
-import ssl
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
@@ -19,6 +18,8 @@ from urllib.request import (
     build_opener,
 )
 import uuid
+
+from comfyui_support_tools.shared.python_tls import create_certifi_context
 
 MAX_WORKFLOW_BYTES = 10 * 1024 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
@@ -34,13 +35,21 @@ class _NoRedirect(HTTPRedirectHandler):
 class ComfyUIGenerateCommand:
     """Submit an API-format workflow, save its first image, and expose its path."""
 
+    # {
+    #   責務: [__init__: proxyなしでComfyUI通信を行うopenerを初期化する]
+    #   処理: [1: timeoutとpoll intervalを検証する, 2: certifi CA bundleを使うHTTPS openerを作成する]
+    #   引数: [self: command instance, timeout: 実行timeout秒, poll_interval: polling間隔秒]
+    #   戻り値: []
+    # }
     def __init__(self, timeout: float = 1800.0, poll_interval: float = 0.5) -> None:
         self._validate_timeout(timeout)
         if isinstance(poll_interval, bool) or not isinstance(poll_interval, (int, float)) or poll_interval <= 0:
             raise ValueError("poll_interval must be greater than zero")
         self._timeout = timeout
         self._poll_interval = poll_interval
-        self._opener = build_opener(ProxyHandler({}), _NoRedirect(), HTTPSHandler(context=ssl.create_default_context()))
+        self._opener = build_opener(
+            ProxyHandler({}), _NoRedirect(), HTTPSHandler(context=create_certifi_context())
+        )
 
     def __call__(self, inputs: Mapping[str, Any], _context: Mapping[str, Any]) -> Mapping[str, Any]:
         workflow = self._workflow(inputs)

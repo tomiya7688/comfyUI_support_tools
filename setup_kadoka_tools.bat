@@ -19,7 +19,7 @@ call :verify_creation_python
 if errorlevel 1 goto python_not_found
 echo Creating the Tabbed Tools Python 3.11.18 environment...
 if defined PYTHON31118 goto create_with_configured_python
-py -3.11.18 -m venv "%VENV_DIR%"
+py -3 -m venv "%VENV_DIR%"
 if errorlevel 1 goto creation_failed
 goto validate_environment
 
@@ -35,7 +35,10 @@ if errorlevel 1 goto migrate_unsupported_environment
 :install_requirements
 echo Checking Tabbed Tools dependencies...
 REM Pin the bootstrap installer to avoid inheriting an unverified seeded bundle.
-"%VENV_PY%" -m pip install --disable-pip-version-check "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+"%VENV_PY%" -m pip install --disable-pip-version-check --use-deprecated=legacy-certs "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+if errorlevel 1 goto setup_failed
+
+"%VENV_PY%" -m pip config --site set global.use-deprecated legacy-certs
 if errorlevel 1 goto setup_failed
 
 "%VENV_PY%" -m pip install --disable-pip-version-check -r "%REQUIREMENTS%"
@@ -97,7 +100,7 @@ goto setup_failed
 if defined PYTHON31118 goto verify_configured_python
 where py >nul 2>nul
 if errorlevel 1 exit /b 1
-py -3.11.18 -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
+py -3 -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
 if errorlevel 1 exit /b 1
 exit /b 0
 

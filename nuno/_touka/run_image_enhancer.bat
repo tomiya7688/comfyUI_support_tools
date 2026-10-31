@@ -21,7 +21,7 @@ call :verify_creation_python
 if errorlevel 1 goto python_not_found
 echo Creating the local Python 3.11.18 environment in .venv ...
 if defined PYTHON31118 goto create_with_configured_python
-py -3.11.18 -m venv "%VENV_DIR%"
+py -3 -m venv "%VENV_DIR%"
 if errorlevel 1 goto creation_failed
 goto validate_environment
 
@@ -33,16 +33,20 @@ goto validate_environment
 :check_dependencies
 "%VENV_PY%" -c "import numpy, PIL; assert numpy.__version__ == '1.26.4' and PIL.__version__ == '10.4.0'" >nul 2>&1
 if errorlevel 1 set "INSTALL_REQUIRED=1"
+"%VENV_PY%" -c "import certifi; assert tuple(map(int, certifi.__version__.split('.'))) >= (2026, 10, 19)" >nul 2>&1
+if errorlevel 1 set "INSTALL_REQUIRED=1"
 "%VENV_PY%" -c "import pip; assert tuple(map(int, pip.__version__.split('.'))) >= (26, 2, 2)" >nul 2>&1
 if errorlevel 1 set "INSTALL_REQUIRED=1"
 
 if "%INSTALL_REQUIRED%"=="1" goto install_dependencies
-goto launch_application
+goto configure_pip_trust
 
 :install_dependencies
 echo Installing the pinned Pillow and NumPy versions ...
 REM Upgrade the bootstrap installer from its SHA-256 pinned Python.org wheel.
-"%VENV_PY%" -m pip install --disable-pip-version-check "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+"%VENV_PY%" -m pip install --disable-pip-version-check --use-deprecated=legacy-certs "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+if errorlevel 1 goto setup_failed
+"%VENV_PY%" -m pip config --site set global.use-deprecated legacy-certs
 if errorlevel 1 goto setup_failed
 "%VENV_PY%" -m pip install --disable-pip-version-check --no-input --only-binary=:all: -r "%REQ_FILE%"
 if errorlevel 1 (
@@ -50,6 +54,16 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+goto verify_ca_bundle
+
+:configure_pip_trust
+"%VENV_PY%" -m pip config --site set global.use-deprecated legacy-certs
+if errorlevel 1 goto setup_failed
+goto verify_ca_bundle
+
+:verify_ca_bundle
+"%VENV_PY%" "%~dp0..\..\tools\security\check_python_ca.py"
+if errorlevel 1 goto setup_failed
 goto launch_application
 
 :launch_application
@@ -103,7 +117,7 @@ exit /b 1
 if defined PYTHON31118 goto verify_configured_python
 where py >nul 2>nul
 if errorlevel 1 exit /b 1
-py -3.11.18 -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>&1
+py -3 -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>&1
 if errorlevel 1 exit /b 1
 exit /b 0
 

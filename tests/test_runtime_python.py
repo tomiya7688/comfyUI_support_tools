@@ -65,11 +65,14 @@ class RuntimePythonTest(unittest.TestCase):
             .lower()
         )
         self.assertIn("kadoka_python31118", setup)
-        self.assertIn("py -3.11.18 -m venv", setup)
+        self.assertIn("py -3 -m venv", setup)
+        self.assertNotIn("py -3.11.18", setup)
         self.assertIn("sys.implementation.name == 'cpython'", setup)
         self.assertIn("sys.version_info >= (3, 11, 18)", setup)
         self.assertIn(".venv-python-pre-31118", setup)
         self.assertIn(":migrate_unsupported_environment", setup)
+        self.assertIn("pip config --site set global.use-deprecated legacy-certs", setup)
+        self.assertIn("--use-deprecated=legacy-certs", setup)
         self.assertNotIn("python -m venv", setup)
         self.assertNotIn("py -3.10", setup)
 
@@ -86,12 +89,45 @@ class RuntimePythonTest(unittest.TestCase):
             .lower()
         )
         self.assertIn("kadoka_python31118", launcher)
-        self.assertIn("py -3.11.18 -m venv", launcher)
+        self.assertIn("py -3 -m venv", launcher)
+        self.assertNotIn("py -3.11.18", launcher)
         self.assertIn("sys.implementation.name == 'cpython'", launcher)
         self.assertIn("sys.version_info >= (3, 11, 18)", launcher)
         self.assertIn(".venv-python-pre-31118", launcher)
+        self.assertIn("certifi.__version__", launcher)
+        self.assertIn("check_python_ca.py", launcher)
+        self.assertIn("pip config --site set global.use-deprecated legacy-certs", launcher)
+        self.assertIn("--use-deprecated=legacy-certs", launcher)
         self.assertNotIn("python -m venv", launcher)
         self.assertNotIn("py -3.10", launcher)
+        requirements = (
+            Path(__file__).resolve().parents[1] / "nuno" / "_touka" / "requirements.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("certifi>=2026.10.19", requirements)
+
+    # {
+    #   責務: [test_build_and_ci_pip_avoid_windows_truststore: build/CIのpipがWindows truststoreを併用しないことを検証する]
+    #   処理: [1: buildバッチとCI定義を読む, 2: certifi専用設定を確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_build_and_ci_pip_avoid_windows_truststore(self):
+        repository = Path(__file__).resolve().parents[1]
+        build_batch = (
+            (repository / "tools" / "build" / "build_onedir.bat")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        workflow = (
+            (repository / ".github" / "workflows" / "pyinstaller-onedir.yml")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        setting = "pip config --site set global.use-deprecated legacy-certs"
+        self.assertIn(setting, build_batch)
+        self.assertIn(setting, workflow)
+        self.assertIn("--use-deprecated=legacy-certs", build_batch)
+        self.assertIn("--use-deprecated=legacy-certs", workflow)
 
     def test_onedir_batch_falls_back_to_supported_cpython_launcher(self):
         batch = (
@@ -99,7 +135,8 @@ class RuntimePythonTest(unittest.TestCase):
             .read_text(encoding="utf-8")
             .lower()
         )
-        self.assertIn("py -3.11.18", batch)
+        self.assertIn("py -3", batch)
+        self.assertNotIn("py -3.11.18", batch)
         self.assertIn("sys.implementation.name == 'cpython'", batch)
         self.assertIn("sys.version_info >= (3, 11, 18)", batch)
         self.assertIn(":try_python_launcher", batch)

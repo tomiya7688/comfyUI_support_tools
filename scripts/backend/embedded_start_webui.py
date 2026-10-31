@@ -191,6 +191,8 @@ class EmbeddedStartWebUI:
                 self._current_proc = None
             with self._lifecycle_lock:
                 self._lifecycle_active = False
+                if _generation == self._lifecycle_generation:
+                    self._desired_running = False
                 self._lifecycle_done.set()
 
     # {

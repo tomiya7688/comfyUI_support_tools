@@ -144,6 +144,37 @@ class ResourceLifetimeTests(unittest.TestCase):
         self.assertTrue(fake._stop_event.is_set())
 
     # {
+    # 責務: [test_finished_lifecycle_clears_running_intent: 起動失敗後にrunning intentが残らないことを確認する]
+    # 処理: [1: 存在しない起動scriptでlifecycleを実行する, 2: 完了後にrunning intentが解除されることを確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_finished_lifecycle_clears_running_intent(self):
+        fake = SimpleNamespace(
+            _lifecycle_lock=threading.Lock(),
+            _lifecycle_generation=1,
+            _lifecycle_active=False,
+            _lifecycle_done=threading.Event(),
+            _desired_running=True,
+            _stop_event=threading.Event(),
+            _health_check_stop=threading.Event(),
+            _health_thread=None,
+            _current_proc=None,
+            launch_spec=SimpleNamespace(launch_script_name="missing-start-script-for-test.py"),
+            DISPLAY_NAME="fake backend",
+            _log_msg=mock.Mock(),
+        )
+
+        with mock.patch(
+            "scripts.backend.embedded_start_webui.venv_python", return_value=Path("python.exe")
+        ):
+            EmbeddedStartWebUI._start_webui_thread(fake, [], 1, None, True, 0.1, 0.1, _generation=1)
+
+        self.assertFalse(fake._desired_running)
+        self.assertFalse(fake._lifecycle_active)
+        self.assertTrue(fake._lifecycle_done.is_set())
+
+    # {
     # 責務: [test_concurrent_restarts_coalesce_to_latest_request: 複数restart workerが最新要求1件へ集約されることを確認する]
     # 処理: [1: 完了待ち中に2件restartを送る, 2: 先行workerを無効化して1回だけ起動する]
     # 引数: [self]

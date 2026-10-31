@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import os
 from pathlib import Path
 
 
@@ -12,7 +13,11 @@ class ClassCollector(ast.NodeVisitor):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         bases = [self._name(base) for base in node.bases if self._name(base)]
-        methods = [item.name for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        methods = [
+            item.name
+            for item in node.body
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
         self.classes.append((node.name, bases, methods))
         self.generic_visit(node)
 
@@ -32,12 +37,37 @@ class ClassCollector(ast.NodeVisitor):
         return ""
 
 
-def iter_python_files(root: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in root.rglob("*.py")
-        if "__pycache__" not in path.parts and ".venv" not in path.parts and "venv" not in path.parts
+# {
+#   責務: [should_skip_directory: class diagram生成で仮想環境とcache directoryを除外する]
+#   処理: [1: directory名を正規化する, 2: Python環境またはcacheに一致するか返す]
+#   引数: [name: directory name]
+#   戻り値: [should_skip: traversalから除外する場合true]
+# }
+def should_skip_directory(name: str) -> bool:
+    normalized = name.casefold()
+    return (
+        normalized == "__pycache__"
+        or normalized == "venv"
+        or normalized.startswith((".venv", "venv-", "venv."))
     )
+
+
+# {
+#   責務: [iter_python_files: class diagram対象のproject-owned Python fileを列挙する]
+#   処理: [1: source treeを走査する, 2: venv/cache directoryをpruneする, 3: Python fileを並べて返す]
+#   引数: [root: source treeのroot directory]
+#   戻り値: [python_files: source tree内のPython file一覧]
+# }
+def iter_python_files(root: Path) -> list[Path]:
+    python_files: list[Path] = []
+    for directory, child_directories, filenames in os.walk(root):
+        child_directories[:] = [
+            name for name in child_directories if not should_skip_directory(name)
+        ]
+        python_files.extend(
+            Path(directory) / filename for filename in filenames if filename.endswith(".py")
+        )
+    return sorted(python_files)
 
 
 def render_class_diagram(source_roots: list[Path]) -> str:

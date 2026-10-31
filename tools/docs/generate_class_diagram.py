@@ -48,8 +48,18 @@ def should_skip_directory(name: str) -> bool:
     return (
         normalized == "__pycache__"
         or normalized == "venv"
-        or normalized.startswith((".venv", "venv-", "venv."))
+        or normalized.startswith((".venv", "venv-", "venv.", "venv_"))
     )
+
+
+# {
+#   責務: [is_virtual_environment: directoryがPython仮想環境か判定する]
+#   処理: [1: 名前規則を確認する, 2: pyvenv.cfgの存在を確認する]
+#   引数: [directory: 確認するdirectory]
+#   戻り値: [is_venv: 仮想環境ならtrue]
+# }
+def is_virtual_environment(directory: Path) -> bool:
+    return should_skip_directory(directory.name) or (directory / "pyvenv.cfg").is_file()
 
 
 # {
@@ -59,10 +69,12 @@ def should_skip_directory(name: str) -> bool:
 #   戻り値: [python_files: source tree内のPython file一覧]
 # }
 def iter_python_files(root: Path) -> list[Path]:
+    if is_virtual_environment(root):
+        return []
     python_files: list[Path] = []
     for directory, child_directories, filenames in os.walk(root):
         child_directories[:] = [
-            name for name in child_directories if not should_skip_directory(name)
+            name for name in child_directories if not is_virtual_environment(Path(directory) / name)
         ]
         python_files.extend(
             Path(directory) / filename for filename in filenames if filename.endswith(".py")

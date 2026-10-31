@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 import sysconfig
 import tempfile
 from pathlib import Path
+from typing import BinaryIO
 
 SOURCE_DIRECTORY = Path(__file__).resolve().parent
 SHIM_MARKER = "KADOKA_PYTHON310_CERTIFI_TLS_SHIM: managed runtime file."
@@ -48,6 +50,94 @@ def target_directory() -> Path:
 
 
 # {
+#   責務: [validate_runtime: install/removeの実行環境が対象venvか確認する]
+#   処理: [1: CPython 3.10を確認する, 2: base Pythonではないことを確認する]
+#   引数: []
+#   戻り値: []
+#   エラー: [RuntimeError: 対象Python 3.10 venv以外で実行した場合]
+# }
+def validate_runtime() -> None:
+    if sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 10):
+        raise RuntimeError("Run this installer with the target CPython 3.10 virtual environment")
+    if sys.prefix == sys.base_prefix:
+        raise RuntimeError(
+            "Run this installer from a virtual environment, not a base Python install"
+        )
+
+
+# {
+#   責務: [validate_certifi_bundle: 対象環境のpip/certifiとCA bundleを検証する]
+#   処理: [1: 共通CA検査を対象Pythonで実行する, 2: 不合格時に更新方法を示して停止する]
+#   引数: []
+#   戻り値: []
+#   エラー: [RuntimeError: pip/certifiの版またはCA bundleが基準を満たさない場合]
+# }
+def validate_certifi_bundle() -> None:
+    checker = SOURCE_DIRECTORY / "check_python_ca.py"
+    result = subprocess.run(
+        [sys.executable, str(checker)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode:
+        raise RuntimeError(
+            "Target pip/certifi CA validation failed. Upgrade pip and certifi, then retry.\n"
+            f"{result.stdout}{result.stderr}"
+        )
+
+
+# {
+#   責務: [validate_startup_resolution: 先行sitecustomizeがshimを隠さないか確認する]
+#   処理: [1: sys.path順にsitecustomize候補を確認する, 2: 配置先より前にある競合を拒否する]
+#   引数: [directory: shimを配置するsite-packages directory]
+#   戻り値: []
+#   エラー: [RuntimeError: 先行sitecustomizeが優先される場合]
+# }
+def validate_startup_resolution(directory: Path) -> None:
+    expected = (directory / "sitecustomize.py").resolve()
+    source_directory = SOURCE_DIRECTORY.resolve()
+    for entry in sys.path:
+        candidate_root = Path(entry or os.curdir).resolve()
+        if candidate_root == source_directory:
+            continue
+        module_file = candidate_root / "sitecustomize.py"
+        package_file = candidate_root / "sitecustomize" / "__init__.py"
+        if module_file.is_file():
+            if module_file.resolve() != expected:
+                raise RuntimeError(
+                    f"Another sitecustomize shadows the managed shim ({module_file})"
+                )
+            return
+        if package_file.is_file():
+            raise RuntimeError(
+                f"Another sitecustomize package shadows the managed shim ({package_file})"
+            )
+
+
+# {
+#   責務: [installer_lock: install/remove間の同時実行を直列化する]
+#   処理: [1: site-packages内のOS lockを取得する, 2: 操作後にlockを解放する]
+#   引数: [directory: shimを配置するsite-packages directory]
+#   戻り値: [lock_file: 排他制御中のlock handle]
+#   副作用: [site-packages内にlock fileを作成する]
+# }
+def installer_lock(directory: Path) -> BinaryIO:
+    import msvcrt
+
+    lock_file = (directory / ".python310_tls_shim.lock").open("a+b")
+    lock_file.seek(0)
+    if not lock_file.read(1):
+        lock_file.write(b"0")
+        lock_file.flush()
+    lock_file.seek(0)
+    msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+    return lock_file
+
+
+# {
 #   責務: [validate_managed_target: 既存のsite-packages fileが管理対象か検証する]
 #   処理: [1: fileの有無を調べる, 2: 既存fileのmarkerを確認し管理外fileを拒否する]
 #   引数: [target: 配置先file path]
@@ -67,19 +157,27 @@ def validate_managed_target(target: Path) -> None:
 #   エラー: [RuntimeError: 対象がPython 3.10 venvでない場合, FileExistsError: 管理外ファイルが衝突する場合]
 # }
 def install_shim() -> Path:
-    if sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 10):
-        raise RuntimeError("Run this installer with the target CPython 3.10 virtual environment")
-    if sys.prefix == sys.base_prefix:
-        raise RuntimeError(
-            "Run this installer from a virtual environment, not a base Python install"
-        )
-
-    import certifi
-
-    if not Path(certifi.where()).is_file():
-        raise RuntimeError(f"certifi CA bundle is missing: {certifi.where()}")
+    validate_runtime()
+    validate_certifi_bundle()
 
     directory = target_directory()
+    validate_startup_resolution(directory)
+    lock_file = installer_lock(directory)
+    try:
+        _install_managed_files(directory)
+    finally:
+        lock_file.close()
+    return directory
+
+
+# {
+#   責務: [_install_managed_files: 管理対象shimを排他中に検証して原子的に配置する]
+#   処理: [1: 配置先とsourceを検証する, 2: 一時fileを書き出す, 3: markerを再確認して置換する]
+#   引数: [directory: 対象site-packages directory]
+#   戻り値: []
+#   エラー: [FileExistsError: 管理外fileが配置先にある場合]
+# }
+def _install_managed_files(directory: Path) -> None:
     sources = {name: managed_source(name) for name in MANAGED_FILES}
     for name, source in sources.items():
         if not source.is_file():
@@ -107,11 +205,29 @@ def install_shim() -> Path:
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
                 temporary_path = Path(temporary_file.name)
-            os.replace(temporary_path, target)
+            _replace_managed_target(temporary_path, target)
         finally:
             if temporary_path is not None and temporary_path.exists():
                 temporary_path.unlink()
-    return directory
+
+
+# {
+#   責務: [_replace_managed_target: 管理外fileを上書きせずshimを配置する]
+#   処理: [1: 既存fileのmarkerを確認する, 2: 既存更新は置換し新規配置は排他的linkで作成する]
+#   引数: [temporary_path: 完成済み一時file, target: shimの配置先]
+#   戻り値: []
+#   エラー: [FileExistsError: 新規配置中に管理外fileが作成された場合]
+# }
+def _replace_managed_target(temporary_path: Path, target: Path) -> None:
+    validate_managed_target(target)
+    if target.exists():
+        os.replace(temporary_path, target)
+        return
+    try:
+        os.link(temporary_path, target)
+    except FileExistsError:
+        validate_managed_target(target)
+        os.replace(temporary_path, target)
 
 
 # {
@@ -122,7 +238,22 @@ def install_shim() -> Path:
 #   エラー: [RuntimeError: 管理対象外ファイルがある場合]
 # }
 def remove_shim() -> list[str]:
+    validate_runtime()
     directory = target_directory()
+    lock_file = installer_lock(directory)
+    try:
+        return _remove_managed_files(directory)
+    finally:
+        lock_file.close()
+
+
+# {
+#   責務: [_remove_managed_files: 排他中にmarker付きshimだけ削除する]
+#   処理: [1: 管理外fileを検出して削除を止める, 2: 管理対象fileだけ削除する]
+#   引数: [directory: 対象site-packages directory]
+#   戻り値: [removed: 削除したファイル名一覧]
+# }
+def _remove_managed_files(directory: Path) -> list[str]:
     targets = [directory / name for name in REMOVE_ORDER]
     unmanaged = [
         target
@@ -156,7 +287,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Removed managed TLS shim files: {', '.join(removed) or 'none'}")
         else:
             directory = install_shim()
-            print(f"Installed Python 3.10 certifi TLS shim in: {directory}")
+            print(
+                f"Installed Python 3.10 certifi TLS shim in: {directory}. "
+                "Restart every process using this environment."
+            )
         return 0
     except (FileExistsError, FileNotFoundError, OSError, RuntimeError, ImportError) as exc:
         print(f"Python 3.10 TLS shim operation failed: {exc}", file=sys.stderr)

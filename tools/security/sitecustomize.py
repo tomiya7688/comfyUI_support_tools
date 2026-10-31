@@ -9,6 +9,7 @@ import sys
 if sys.implementation.name == "cpython" and sys.version_info[:2] == (3, 10):
     import ssl
 
+    original_factory = ssl.create_default_context
     try:
         import certifi
         from python310_tls_shim import install_certifi_default_context
@@ -21,12 +22,28 @@ if sys.implementation.name == "cpython" and sys.version_info[:2] == (3, 10):
 
         # {
         #   責務: [block_default_tls: shimまたはcertifiの欠落時に既定TLSを閉じる]
-        #   処理: [1: TLS設定不能の理由をSSL errorとして送出する]
-        #   引数: [args: SSL context factoryの位置引数, kwargs: SSL context factoryの名前付き引数]
+        #   処理: [1: 暗黙のserver trustを拒否する, 2: 呼出元が明示したCA設定は元factoryへ渡す]
+        #   引数: [purpose: TLS contextの用途, cafile: CA bundle, capath: CA directory, cadata: CA data]
         #   戻り値: []
         # }
-        def block_default_tls(*args, **kwargs):
-            raise ssl.SSLError(reason)
+        def block_default_tls(
+            purpose=ssl.Purpose.SERVER_AUTH, *, cafile=None, capath=None, cadata=None
+        ):
+            if purpose == ssl.Purpose.SERVER_AUTH and not (cafile or capath or cadata):
+                raise ssl.SSLError(reason)
+            return original_factory(
+                purpose,
+                cafile=cafile,
+                capath=capath,
+                cadata=cadata,
+            )
 
         ssl.create_default_context = block_default_tls
         ssl._create_default_https_context = block_default_tls
+        for module in tuple(sys.modules.values()):
+            namespace = getattr(module, "__dict__", None)
+            if namespace is None or namespace is globals():
+                continue
+            for name, value in tuple(namespace.items()):
+                if value is original_factory:
+                    namespace[name] = block_default_tls

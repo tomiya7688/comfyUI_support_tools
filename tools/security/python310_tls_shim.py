@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -35,12 +36,7 @@ def install_certifi_default_context(ssl_module: Any, cafile: str) -> None:
         cadata: str | bytes | None = None,
     ) -> Any:
         # Use the refreshed bundle only for implicit server trust; preserve explicit caller policy.
-        if (
-            purpose == ssl_module.Purpose.SERVER_AUTH
-            and cafile is None
-            and capath is None
-            and cadata is None
-        ):
+        if purpose == ssl_module.Purpose.SERVER_AUTH and not cafile and not capath and not cadata:
             cafile = certifi_bundle
         return original_factory(
             purpose,
@@ -52,3 +48,11 @@ def install_certifi_default_context(ssl_module: Any, cafile: str) -> None:
     certifi_bundle = cafile
     ssl_module.create_default_context = create_context
     ssl_module._create_default_https_context = create_context
+
+    for module in tuple(sys.modules.values()):
+        namespace = getattr(module, "__dict__", None)
+        if namespace is None or namespace is globals():
+            continue
+        for name, value in tuple(namespace.items()):
+            if value is original_factory:
+                namespace[name] = create_context

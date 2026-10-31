@@ -58,6 +58,101 @@ class RuntimePythonTest(unittest.TestCase):
             with self.subTest(launcher=launcher.name):
                 self.assertNotIn("E:\\program_files", launcher.read_text(encoding="utf-8").lower())
 
+    def test_kadoka_setup_requires_supported_cpython_without_unversioned_fallback(self):
+        setup = (
+            (Path(__file__).resolve().parents[1] / "setup_kadoka_tools.bat")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        self.assertIn("kadoka_python31118", setup)
+        self.assertIn('set "python_launcher=py -3.12"', setup)
+        self.assertIn('set "python_launcher=py -3.11"', setup)
+        self.assertIn("%python_launcher% -m venv", setup)
+        self.assertIn("sys.implementation.name == 'cpython'", setup)
+        self.assertIn("sys.version_info >= (3, 11, 18)", setup)
+        self.assertIn("sys.version_info < (3, 13)", setup)
+        self.assertIn(".venv-python-pre-31118", setup)
+        self.assertIn(":migrate_unsupported_environment", setup)
+        self.assertIn("pip config --site set global.use-deprecated legacy-certs", setup)
+        self.assertIn("call :configure_bootstrap_trust", setup)
+        self.assertNotIn("python -m venv", setup)
+        self.assertNotIn("py -3.10", setup)
+
+    # {
+    #   責務: [test_nuno_launcher_requires_supported_cpython: Nuno起動バッチのPython要件を検証する]
+    #   処理: [1: 起動バッチを読む, 2: CPythonの最低版と安全な退避を確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_nuno_launcher_requires_supported_cpython_and_uses_versioned_fallback(self):
+        launcher = (
+            (Path(__file__).resolve().parents[1] / "nuno" / "_touka" / "run_image_enhancer.bat")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        self.assertIn("kadoka_python31118", launcher)
+        self.assertIn('set "python_launcher=py -3.12"', launcher)
+        self.assertIn('set "python_launcher=py -3.11"', launcher)
+        self.assertIn("%python_launcher% -m venv", launcher)
+        self.assertIn("%~dp0..\\..\\.venv\\scripts\\python.exe", launcher)
+        self.assertIn("goto verify_root_python", launcher)
+        self.assertIn("sys.implementation.name == 'cpython'", launcher)
+        self.assertIn("sys.version_info >= (3, 11, 18)", launcher)
+        self.assertIn("sys.version_info < (3, 13)", launcher)
+        self.assertIn(".venv-python-pre-31118", launcher)
+        self.assertIn("certifi.__version__", launcher)
+        self.assertIn("check_python_ca.py", launcher)
+        self.assertIn("pip config --site set global.use-deprecated legacy-certs", launcher)
+        self.assertIn("call :configure_bootstrap_trust", launcher)
+        self.assertNotIn("python -m venv", launcher)
+        self.assertNotIn("py -3.10", launcher)
+        requirements = (
+            Path(__file__).resolve().parents[1] / "nuno" / "_touka" / "requirements.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("certifi>=2026.10.19", requirements)
+
+    # {
+    #   責務: [test_build_and_ci_pip_avoid_windows_truststore: build/CIのpipがWindows truststoreを併用しないことを検証する]
+    #   処理: [1: buildバッチとCI定義を読む, 2: certifi専用設定を確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_build_and_ci_pip_avoid_windows_truststore(self):
+        repository = Path(__file__).resolve().parents[1]
+        build_batch = (
+            (repository / "tools" / "build" / "build_onedir.bat")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        workflow = (
+            (repository / ".github" / "workflows" / "pyinstaller-onedir.yml")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        setting = "pip config --site set global.use-deprecated legacy-certs"
+        self.assertIn(setting, build_batch)
+        self.assertIn(setting, workflow)
+        self.assertIn("call :configure_bootstrap_trust", build_batch)
+        self.assertIn("pip.__version__.split('.')[:2]", build_batch)
+        setup_batch = (repository / "setup_kadoka_tools.bat").read_text(encoding="utf-8").lower()
+        self.assertIn("call :configure_bootstrap_trust", setup_batch)
+        self.assertIn("pip.__version__.split('.')[:2]", setup_batch)
+        self.assertIn("$bootstrappipversion", workflow)
+        self.assertIn('[version]"24.2"', workflow)
+
+    def test_onedir_batch_falls_back_to_supported_cpython_launcher(self):
+        batch = (
+            (Path(__file__).resolve().parents[1] / "tools" / "build" / "build_onedir.bat")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        self.assertIn("py -3.12", batch)
+        self.assertIn("py -3.11", batch)
+        self.assertIn("sys.implementation.name == 'cpython'", batch)
+        self.assertIn("sys.version_info >= (3, 11, 18)", batch)
+        self.assertIn("sys.version_info < (3, 13)", batch)
+        self.assertIn(":try_python_launcher", batch)
+
     def test_venv_python_prefers_existing_venv_interpreter(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             venv_dir = Path(temp_dir)

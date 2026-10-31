@@ -18,9 +18,10 @@ The onedir also embeds PyInstaller bootloader and runtime-hook code. Their separ
 
 The `native_artifacts` manifest section fingerprints each `.dll`, `.pyd`, `.exe`, `.so`, and `.dylib` found in the onedir output. A fingerprint is an exact-file identity. The manifest attempts to associate each file with its PyInstaller build source and package license documents, while sanitizing absolute builder paths. Unresolved and operating-system-supplied items still require license review.
 
-OpenSSL, libffi, and bzip2 components shipped with Python are attributed
-separately, not treated as Python-owned code. Their versions are sourced from
-the matching CPython Windows build metadata where known. The Microsoft
+OpenSSL 3.0.15, libffi 3.4.4, and bzip2 1.0.8 components shipped with Python
+3.11.18 are attributed separately, not treated as Python-owned code. Their
+versions are sourced from the matching CPython Windows build metadata where
+known. The Microsoft
 Visual C++ Runtime is also attributed separately and remains pending review of
 the applicable redistribution terms.
 
@@ -30,30 +31,38 @@ toolchain contributions can affect the compiled binary; therefore, the
 artifact's binary license scope remains marked for review.
 
 The bundled `_decimal.pyd` includes CPython's extension wrapper and libmpdec.
-For the audited CPython 3.10.11 runtime, libmpdec is version 2.5.1 and its
+For the audited CPython 3.11.18 runtime, libmpdec is version 2.5.1 and its
 BSD-2-Clause notice is stored in `licenses/libmpdec/LICENSE.txt` and copied
 into the onedir artifact. The inventory links both the Python and libmpdec
 license documents; other Python builds remain unresolved until individually
 verified.
 
 The bundled `pyexpat.pyd` contains CPython's extension wrapper and Expat.
-For the audited CPython 3.10.11 runtime, Expat is version 2.5.0 and its MIT
+For the audited CPython 3.11.18 runtime, Expat is version 2.9.0 and its MIT
 notice is stored in `licenses/expat/LICENSE.txt` and copied into the onedir
 artifact. The inventory links both the Python and Expat license documents;
 other Python builds remain unresolved until individually verified.
 
+The bundled `_ctypes.pyd` is CPython 3.11.18's wrapper and links libffi 3.4.4
+as a related runtime dependency. Its inventory entry includes the pinned
+CPython source, Windows project, and license references.
+
+The bundled `_hashlib.pyd` contains CPython 3.11.18's extension wrapper and
+uses OpenSSL 3.0.15. Its inventory entry links the Python license, OpenSSL
+dependency, and pinned CPython source/build references.
+
 The bundled `_ssl.pyd` contains CPython's extension wrapper and uses OpenSSL.
-For the audited CPython 3.10.11 runtime, OpenSSL is version 1.1.1t and its
+For the audited CPython 3.11.18 runtime, OpenSSL is version 3.0.15 and its
 OpenSSL plus Original SSLeay notices are included in the copied Python
 `LICENSE.txt`. The inventory links the Python license document and pinned
 CPython source/build metadata; other Python/OpenSSL builds remain unresolved
 until individually verified.
 The bundled _asyncio.pyd is linked to the Python runtime component and its
-LICENSE.txt document in the native artifact manifest. CPython 3.10.11's
+LICENSE.txt document in the native artifact manifest. CPython 3.11.18's
 upstream implementation source is Modules/_asynciomodule.c; unverified Python
 builds retain their detected runtime version rather than this exact pin.
 
-The bundled `_overlapped.pyd` is the CPython 3.10.11 Windows overlapped-I/O
+The bundled `_overlapped.pyd` is the CPython 3.11.18 Windows overlapped-I/O
 extension. Its artifact inventory entry links the copied Python
 `LICENSE.txt`, upstream implementation, and Windows build project. Other
 Python runtime versions remain under review until individually verified.

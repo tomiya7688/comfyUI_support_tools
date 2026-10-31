@@ -1,4 +1,5 @@
 """Frozen workspace discovery and isolated launch command regression tests."""
+
 import importlib.util
 import json
 import os
@@ -9,12 +10,32 @@ import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("workspace_builder", ROOT / "tools/build/build_one_dir.py")
+spec = importlib.util.spec_from_file_location(
+    "workspace_builder", ROOT / "tools/build/build_one_dir.py"
+)
 builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 
 
 class WorkspaceBuildTests(unittest.TestCase):
+    # {
+    #   責務: [test_one_dir_build_requires_supported_cpython: 対応Python範囲外をビルドが拒否することを検証する]
+    #   処理: [1: 許容版を通す, 2: 古い版・新しすぎる版・別実装を拒否する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_one_dir_build_requires_supported_cpython(self):
+        builder._require_supported_python((3, 11, 18), "cpython")
+        builder._require_supported_python((3, 12, 0), "cpython")
+        for version, implementation in (
+            ((3, 11, 17), "cpython"),
+            ((3, 13, 0), "cpython"),
+            ((3, 12, 0), "pypy"),
+        ):
+            with self.subTest(version=version, implementation=implementation):
+                with self.assertRaisesRegex(RuntimeError, "CPython 3.11.18 through 3.12"):
+                    builder._require_supported_python(version, implementation)
+
     def test_build_discovers_own_src_package(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -22,7 +43,8 @@ class WorkspaceBuildTests(unittest.TestCase):
             (root / "LICENSE").write_text("MIT test license", encoding="utf-8")
             (root / "THIRD_PARTY_NOTICES.md").write_text("Test notices", encoding="utf-8")
             (root / "requirements-kadoka-tools.txt").write_text(
-                (ROOT / "requirements-kadoka-tools.txt").read_text(encoding="utf-8"), encoding="utf-8"
+                (ROOT / "requirements-kadoka-tools.txt").read_text(encoding="utf-8"),
+                encoding="utf-8",
             )
             tcl_license = root / "licenses" / "TclTk" / "license.terms"
             tcl_license.parent.mkdir(parents=True)
@@ -31,15 +53,33 @@ class WorkspaceBuildTests(unittest.TestCase):
             exe.parent.mkdir(parents=True)
             exe.touch()
             injected_path = os.pathsep.join(("foreign-native-bin", os.environ.get("PATH", "")))
-            with mock.patch.object(platform, "machine", return_value="AMD64"), mock.patch.object(platform, "win32_ver", return_value=("10", "10.0.19045", "", "Multiprocessor Free")), mock.patch.dict(os.environ, {"PATH": injected_path, "PYTHONPATH": "foreign", "PYTHONHOME": "foreign"}), mock.patch.object(builder.subprocess, "run") as run:
+            with (
+                mock.patch.object(platform, "machine", return_value="AMD64"),
+                mock.patch.object(
+                    platform,
+                    "win32_ver",
+                    return_value=("10", "10.0.19045", "", "Multiprocessor Free"),
+                ),
+                mock.patch.dict(
+                    os.environ,
+                    {"PATH": injected_path, "PYTHONPATH": "foreign", "PYTHONHOME": "foreign"},
+                ),
+                mock.patch.object(builder.subprocess, "run") as run,
+            ):
                 self.assertEqual(builder.build(root, output), exe)
-            self.assertEqual((exe.parent / "LICENSE").read_text(encoding="utf-8"), "MIT test license")
-            self.assertEqual((exe.parent / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"), "Test notices")
+            self.assertEqual(
+                (exe.parent / "LICENSE").read_text(encoding="utf-8"), "MIT test license"
+            )
+            self.assertEqual(
+                (exe.parent / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"), "Test notices"
+            )
             resolved_manifest = exe.parent / "third_party_components.resolved.json"
             self.assertTrue(resolved_manifest.is_file())
             resolved_json = json.loads(resolved_manifest.read_text(encoding="utf-8"))
             self.assertIn("external_components", resolved_json)
-            self.assertIn(str(exe.name), {item["path"] for item in resolved_json["native_artifacts"]})
+            self.assertIn(
+                str(exe.name), {item["path"] for item in resolved_json["native_artifacts"]}
+            )
             self.assertTrue((exe.parent / "licenses" / "TclTk" / "license.terms").is_file())
             command = run.call_args.args[0]
             build_environment = run.call_args.kwargs["env"]
@@ -53,10 +93,15 @@ class WorkspaceBuildTests(unittest.TestCase):
     def test_smoke_checks_both_uis_outside_distribution_without_python_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             exe = Path(tmp) / "KadokaTools.exe"
-            with mock.patch.dict(os.environ, {"PYTHONPATH": "foreign", "PYTHONHOME": "foreign"}), mock.patch.object(builder.subprocess, "run") as run:
+            with (
+                mock.patch.dict(os.environ, {"PYTHONPATH": "foreign", "PYTHONHOME": "foreign"}),
+                mock.patch.object(builder.subprocess, "run") as run,
+            ):
                 builder.run_smoke_test(exe)
-            self.assertEqual([call.args[0][1:] for call in run.call_args_list],
-                             [["--smoke-test"], ["--new-ui", "--smoke-test"], ["--shell-smoke-test"]])
+            self.assertEqual(
+                [call.args[0][1:] for call in run.call_args_list],
+                [["--smoke-test"], ["--new-ui", "--smoke-test"], ["--shell-smoke-test"]],
+            )
             for call in run.call_args_list:
                 self.assertNotEqual(Path(call.kwargs["cwd"]), exe.parent)
                 self.assertNotIn("PYTHONPATH", call.kwargs["env"])

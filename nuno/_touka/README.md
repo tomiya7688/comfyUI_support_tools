@@ -1,5 +1,7 @@
 # Image Enhancer
 
+[日本語](README.ja.md)
+
 Small, general-purpose desktop utility for non-person imagery, making subtle information in ordinary imagery easier to inspect. It works by creating an adjustable processed copy and blending that copy over the original. It cannot recover information absent from the source.
 
 ## Run
@@ -9,7 +11,7 @@ python -m pip install -r requirements.txt
 python image_enhancer.py
 ```
 
-On Windows, double-click `run_image_enhancer.bat`. On its first run it creates a local `.venv` beside the script and installs the pinned Pillow 10.4.0 and NumPy 1.26.4 versions. Later launches reuse that environment and verify the versions automatically.
+On Windows, double-click `run_image_enhancer.bat`. It requires CPython 3.11.18 through 3.12 because the pinned NumPy 1.26.4 does not support newer Python releases. On its first run it creates a local `.venv` beside the script and installs the pinned Pillow 10.4.0 and NumPy 1.26.4 versions plus certifi 2026.10.19 or newer. An unsupported existing `.venv` is preserved as `.venv-python-pre-31118`; it is never deleted or overwritten. The launcher uses the repository `.venv` if the Windows `py` launcher is unavailable. Set `KADOKA_PYTHON31118` to a supported `python.exe` to override runtime discovery. Pip is configured to use certifi without adding the Windows trust store. Later launches reuse the environment, verify dependency versions, and reject CA bundles containing affected certificates.
 
 Use **Open…**, shape the Master RGB or individual Red/Green/Blue curves, adjust contrast, highlights, shadows, and detail, then choose a blend mode and opacity. The preview is updated as controls move. **Show original** toggles between the source and processed preview. **Reset all** restores every curve and control to defaults. **Repeated passes** applies the same copy-and-blend operation up to five times. **Save export…** processes the full-resolution source image.
 

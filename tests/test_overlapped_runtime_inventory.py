@@ -1,4 +1,5 @@
 """Record CPython _overlapped provenance and its Python license."""
+
 from pathlib import Path
 import tempfile
 import unittest
@@ -44,10 +45,25 @@ class OverlappedRuntimeInventoryTests(unittest.TestCase):
             artifact["source_reference_urls"],
         )
 
+    def test_links_cpython_31118_extension_to_python_license_and_sources(self):
+        artifact = self._collect("3.11.18")
+        self.assertEqual(artifact["origin_component"], "Python _overlapped")
+        self.assertEqual(artifact["origin_version"], "3.11.18")
+        self.assertEqual(
+            artifact["source_reference_urls"],
+            [
+                "https://github.com/python/cpython/blob/v3.11.18/Modules/overlapped.c",
+                "https://github.com/python/cpython/blob/v3.11.18/PCbuild/_overlapped.vcxproj",
+                "https://github.com/python/cpython/blob/v3.11.18/Doc/license.rst",
+            ],
+        )
+
     def test_does_not_apply_pinned_evidence_to_another_runtime_version(self):
         artifact = self._collect("3.11.0")
         self.assertEqual(artifact["origin_type"], "python-runtime")
-        self.assertEqual(artifact["audit_status"], "runtime-origin-found-license-scope-review-required")
+        self.assertEqual(
+            artifact["audit_status"], "runtime-origin-found-license-scope-review-required"
+        )
         self.assertNotIn("source_reference_urls", artifact)
 
 

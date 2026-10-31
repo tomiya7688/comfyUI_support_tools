@@ -5,9 +5,13 @@ cd /d "%~dp0\..\.."
 set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
 set "PYTHON_CMD=python"
+if exist ".venv\Scripts\python.exe" set "PYTHON_CMD=.venv\Scripts\python.exe"
 
-where py >nul 2>nul
-if not errorlevel 1 set "PYTHON_CMD=py -3.10"
+%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11, 18) else 1)"
+if errorlevel 1 (
+    echo Python 3.11.18 or newer is required. Recreate .venv with the supported runtime.
+    goto build_failed
+)
 
 echo Installing Kadoka Tools runtime dependencies...
 REM Upgrade bootstrap pip via the SHA-256 URL published by Python.org.

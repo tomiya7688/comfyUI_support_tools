@@ -23,6 +23,11 @@ _CPYTHON_LIBFFI_PINS = {
         "source_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
         "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
     },
+    "3.11.18": {
+        "version": "3.4.4",
+        "source_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+        "source_script_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/get_externals.bat",
+    },
 }
 _CPYTHON_BZIP2_PINS = {
     "3.10.11": {
@@ -30,12 +35,22 @@ _CPYTHON_BZIP2_PINS = {
         "source_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/readme.txt",
         "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
     },
+    "3.11.18": {
+        "version": "1.0.8",
+        "source_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/readme.txt",
+        "source_script_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+    },
 }
 _CPYTHON_LIBLZMA_PINS = {
     "3.10.11": {
         "version": "5.2.5",
         "source_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/python.props",
         "source_script_url": "https://github.com/python/cpython/blob/v3.10.11/PCbuild/get_externals.bat",
+    },
+    "3.11.18": {
+        "version": "5.2.5",
+        "source_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/python.props",
+        "source_script_url": "https://github.com/python/cpython/blob/v3.11.18/PCbuild/get_externals.bat",
     },
 }
 _CPYTHON_LIBMPDEC_PINS = {
@@ -45,12 +60,23 @@ _CPYTHON_LIBMPDEC_PINS = {
         "source_file_url": "https://github.com/python/cpython/tree/v3.10.11/Modules/_decimal/libmpdec",
         "license_url": "https://raw.githubusercontent.com/python/cpython/v3.10.11/Doc/license.rst",
     },
+    "3.11.18": {
+        "version": "2.5.1",
+        "source_url": "https://github.com/python/cpython/tree/v3.11.18/Modules/_decimal/libmpdec",
+        "source_file_url": "https://github.com/python/cpython/blob/v3.11.18/Modules/_decimal/libmpdec/mpdecimal.h",
+        "license_url": "https://raw.githubusercontent.com/python/cpython/v3.11.18/Doc/license.rst",
+    },
 }
 _CPYTHON_EXPAT_PINS = {
     "3.10.11": {
         "version": "2.5.0",
         "source_url": "https://raw.githubusercontent.com/python/cpython/v3.10.11/Modules/expat/expat.h",
         "license_url": "https://raw.githubusercontent.com/python/cpython/v3.10.11/Doc/license.rst",
+    },
+    "3.11.18": {
+        "version": "2.9.0",
+        "source_url": "https://raw.githubusercontent.com/python/cpython/v3.11.18/Modules/expat/expat.h",
+        "license_url": "https://raw.githubusercontent.com/python/cpython/v3.11.18/Doc/license.rst",
     },
 }
 _EXTERNAL_COMPONENTS = (

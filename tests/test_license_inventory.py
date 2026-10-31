@@ -1,5 +1,6 @@
 """Runtime dependency license inventory checks."""
 import json
+import pyexpat
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,6 +13,40 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LicenseInventoryTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_records_cpython_3_11_18_native_library_versions: CPython 3.11.18のネイティブ依存版を検証する
+    #   ]
+    #   処理: [
+    #     1: CPython 3.11.18の配布ファイルを模した入力を作る
+    #     2: ネイティブ依存の版と根拠URLを照合する
+    #   ]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_records_cpython_3_11_18_native_library_versions(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            distribution = Path(temporary_directory)
+            for filename in (
+                "libffi-8.dll",
+                "_bz2.pyd",
+                "_lzma.pyd",
+                "_decimal.pyd",
+                "pyexpat.pyd",
+            ):
+                (distribution / filename).touch()
+            components = _python_native_components(
+                distribution, "licenses/Python/LICENSE.txt", "3.11.18"
+            )
+
+        by_name = {item["name"]: item for item in components}
+        self.assertEqual(by_name["libffi"]["version"], "3.4.4")
+        self.assertEqual(by_name["bzip2"]["version"], "1.0.8")
+        self.assertEqual(by_name["XZ Utils liblzma"]["version"], "5.2.5")
+        self.assertEqual(by_name["libmpdec"]["version"], "2.5.1")
+        self.assertEqual(by_name["Expat"]["version"], "2.9.0")
+        self.assertTrue(all(item.get("version_source_urls") for item in by_name.values()))
+
     def test_classifies_python_bundled_native_libraries_separately(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
@@ -98,6 +133,18 @@ class LicenseInventoryTests(unittest.TestCase):
         self.assertEqual(components[0]["license_files"], [])
         self.assertEqual(components[0]["audit_status"], "upstream-version-unresolved")
 
+    # {
+    #   責務: [
+    #     test_copies_runtime_license_files_and_records_resolved_versions: 実行中Pythonの依存版とライセンスを記録する
+    #   ]
+    #   処理: [
+    #     1: onedir成果物を模した一時配布物を作る
+    #     2: 実行環境の版に対応するライセンス台帳を生成する
+    #     3: 生成された版と全ライセンスファイルを確認する
+    #   ]
+    #   引数: []
+    #   戻り値: []
+    # }
     def test_copies_runtime_license_files_and_records_resolved_versions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory)
@@ -112,20 +159,40 @@ class LicenseInventoryTests(unittest.TestCase):
             manifest = collect_license_inventory(ROOT, target)
 
             names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
-            self.assertTrue({"python", "tcl/tk", "numpy", "pillow", "opencv-python-headless", "requests", "psutil"}.issubset(names))
-            self.assertTrue(all(item["distribution_status"] in {"bundled", "bundled-component"} for item in manifest["components"]))
+            self.assertTrue(
+                {
+                    "python",
+                    "tcl/tk",
+                    "numpy",
+                    "pillow",
+                    "opencv-python-headless",
+                    "requests",
+                    "psutil",
+                }.issubset(names)
+            )
+            self.assertTrue(
+                all(
+                    item["distribution_status"] in {"bundled", "bundled-component"}
+                    for item in manifest["components"]
+                )
+            )
             by_name = {item["name"]: item for item in manifest["components"]}
             bootloader = by_name["PyInstaller bootloader"]
             runtime_hooks = by_name["PyInstaller runtime hooks"]
-            self.assertEqual(bootloader["license_metadata"], "GPL-2.0-or-later WITH Bootloader-exception")
+            self.assertEqual(
+                bootloader["license_metadata"], "GPL-2.0-or-later WITH Bootloader-exception"
+            )
             self.assertEqual(runtime_hooks["license_metadata"], "Apache-2.0")
             self.assertEqual(bootloader["version"], runtime_hooks["version"])
             libmpdec = by_name["libmpdec"]
             self.assertEqual(libmpdec["version"], "2.5.1")
-            self.assertEqual(libmpdec["license_files"], ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"])
+            self.assertEqual(
+                libmpdec["license_files"],
+                ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"],
+            )
             self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
             expat = by_name["Expat"]
-            self.assertEqual(expat["version"], "2.5.0")
+            self.assertEqual(expat["version"], pyexpat.EXPAT_VERSION.removeprefix("expat_"))
             self.assertEqual(expat["license_files"], ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"])
             self.assertTrue((target / "licenses" / "expat" / "LICENSE.txt").is_file())
             self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])

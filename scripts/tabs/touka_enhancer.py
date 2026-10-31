@@ -473,6 +473,12 @@ class ToukaEnhancerTab(ttk.Frame):
             f"強調対象参考画像から提案: {label}（解析画像 {image_count} 件、共通候補 {common_count} 件、形状一致 {shape_consistency:.0%}、除外候補 {outlier_count} 件、確信度 {confidence:.0%}、内訳 {details}）"
         )
 
+    # {
+    #   責務: [select_video_roi: 動画フレーム上でユーザーが選択した範囲を正規化して保存する]
+    #   処理: [1: 動画からpreview frameを読む, 2: canvas上の矩形選択UIを表示する, 3: 選択範囲を相対座標で保存する]
+    #   引数: [self: 入力動画とROI状態を持つenhancer UI]
+    #   戻り値: []
+    # }
     def select_video_roi(self):
         try:
             import cv2
@@ -547,6 +553,12 @@ class ToukaEnhancerTab(ttk.Frame):
         except Exception as exc:
             self.logbox.log(f"動画対象選択エラー: {exc}")
 
+    # {
+    #   責務: [auto_select_video_object: 動画preview frameから物体候補の範囲を推定してROIとして保存する]
+    #   処理: [1: 動画frameを読む, 2: GrabCutで前景候補を分割する, 3: 最大輪郭をpadding付きで相対ROIへ変換する]
+    #   引数: [self: 入力動画とROI状態を持つenhancer UI]
+    #   戻り値: []
+    # }
     def auto_select_video_object(self):
         try:
             import cv2

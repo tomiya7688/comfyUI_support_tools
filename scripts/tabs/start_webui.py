@@ -180,6 +180,12 @@ class StartWebUITab(ttk.Frame):
             float(self.hard_kill.get()),
         )
 
+    # {
+    #   責務: [start: 検証済みの起動設定でbackend開始要求を予約してworkerを起動する]
+    #   処理: [1: API-only・backend状態・入力を確認する, 2: generationを予約する, 3: token付きworkerを起動する]
+    #   引数: [self: backend制御UI]
+    #   戻り値: []
+    # }
     def start(self):
         if API_ONLY_MODE:
             self.logbox.log("API専用モードではローカルバックエンドを起動できません")

@@ -5,15 +5,12 @@ from ..widgets.preset_store import PresetStore
 from ..backend.taggui_controller import TagGUIController
 from ..backend.tag_category_splitter import TagCategorySplitter
 
+
 class FolderTaggerTab(ttk.Frame):
     TAGGER_PRESETS = {
         "PixAI Tagger": (PIXAI_TAGGER_API_URL, PIXAI_TAGGER_MODEL),
     }
-    DEFAULT_OUTPUT = str(
-        WILDCARDS_DIR
-        / "many_prompt_by_artist"
-        / "folder_tags.txt"
-    )
+    DEFAULT_OUTPUT = str(WILDCARDS_DIR / "many_prompt_by_artist" / "folder_tags.txt")
     DEFAULT_EXCLUDE = (
         "worst quality, low quality, normal quality, lowres, blurry, jpeg artifacts, "
         "bad anatomy, bad hands, extra fingers, missing fingers, text, error, signature, "
@@ -76,10 +73,18 @@ class FolderTaggerTab(ttk.Frame):
         )
         tagger_combo.pack(side="left")
         tagger_combo.bind("<<ComboboxSelected>>", self._apply_tagger_preset)
-        ttk.Button(kind_row, text="PixAI API起動", command=self.start_pixai_api).pack(side="left", padx=(12, 4))
-        ttk.Button(kind_row, text="PixAI API停止", command=self.stop_pixai_api).pack(side="left", padx=4)
-        ttk.Button(kind_row, text="TagGUIを起動（手動タグ付け）", command=self.start_taggui).pack(side="left", padx=(12, 4))
-        ttk.Button(kind_row, text="TagGUIを停止", command=self.stop_taggui).pack(side="left", padx=4)
+        ttk.Button(kind_row, text="PixAI API起動", command=self.start_pixai_api).pack(
+            side="left", padx=(12, 4)
+        )
+        ttk.Button(kind_row, text="PixAI API停止", command=self.stop_pixai_api).pack(
+            side="left", padx=4
+        )
+        ttk.Button(kind_row, text="TagGUIを起動（手動タグ付け）", command=self.start_taggui).pack(
+            side="left", padx=(12, 4)
+        )
+        ttk.Button(kind_row, text="TagGUIを停止", command=self.stop_taggui).pack(
+            side="left", padx=4
+        )
 
         api_row = ttk.Frame(api_frame)
         api_row.pack(fill="x", pady=2)
@@ -91,7 +96,9 @@ class FolderTaggerTab(ttk.Frame):
         ttk.Label(model_row, text="モデル", width=16).pack(side="left")
         self.model_combo = ttk.Combobox(model_row, textvariable=self.model, width=42)
         self.model_combo.pack(side="left", fill="x", expand=True)
-        ttk.Button(model_row, text="モデル一覧取得", command=self.refresh_models).pack(side="left", padx=(6, 0))
+        ttk.Button(model_row, text="モデル一覧取得", command=self.refresh_models).pack(
+            side="left", padx=(6, 0)
+        )
 
         number_row = ttk.Frame(api_frame)
         number_row.pack(fill="x", pady=2)
@@ -112,12 +119,24 @@ class FolderTaggerTab(ttk.Frame):
 
         options = ttk.Frame(self)
         options.pack(fill="x", pady=4)
-        ttk.Checkbutton(options, text="サブフォルダも処理", variable=self.recursive).pack(side="left", padx=4)
-        ttk.Checkbutton(options, text="出力TXTを上書き", variable=self.overwrite).pack(side="left", padx=4)
-        ttk.Checkbutton(options, text="GIF: 全フレームの信頼度を平均", variable=self.gif_average).pack(side="left", padx=4)
-        ttk.Checkbutton(options, text="人物・キャラクター候補だけをタグ付け", variable=self.character_crop).pack(side="left", padx=4)
-        ttk.Checkbutton(options, text="タグを12カテゴリにも出力", variable=self.split_categories).pack(side="left", padx=4)
-        ttk.Checkbutton(options, text="動画もタグ付け", variable=self.tag_videos).pack(side="left", padx=4)
+        ttk.Checkbutton(options, text="サブフォルダも処理", variable=self.recursive).pack(
+            side="left", padx=4
+        )
+        ttk.Checkbutton(options, text="出力TXTを上書き", variable=self.overwrite).pack(
+            side="left", padx=4
+        )
+        ttk.Checkbutton(
+            options, text="GIF: 全フレームの信頼度を平均", variable=self.gif_average
+        ).pack(side="left", padx=4)
+        ttk.Checkbutton(
+            options, text="人物・キャラクター候補だけをタグ付け", variable=self.character_crop
+        ).pack(side="left", padx=4)
+        ttk.Checkbutton(
+            options, text="タグを12カテゴリにも出力", variable=self.split_categories
+        ).pack(side="left", padx=4)
+        ttk.Checkbutton(options, text="動画もタグ付け", variable=self.tag_videos).pack(
+            side="left", padx=4
+        )
         ttk.Label(options, text="動画フレーム数").pack(side="left", padx=(8, 3))
         ttk.Entry(options, textvariable=self.video_frames, width=4).pack(side="left")
 
@@ -125,7 +144,9 @@ class FolderTaggerTab(ttk.Frame):
         buttons.pack(fill="x", pady=4)
         ttk.Button(buttons, text="開始", command=self.start).pack(side="left", padx=4)
         ttk.Button(buttons, text="停止", command=self.stop).pack(side="left", padx=4)
-        ttk.Button(buttons, text="ログ消去", command=lambda: self.logbox.delete("1.0", "end")).pack(side="left", padx=4)
+        ttk.Button(buttons, text="ログ消去", command=lambda: self.logbox.delete("1.0", "end")).pack(
+            side="left", padx=4
+        )
         ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
         self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
         self.preset_combo.pack(side="left")
@@ -134,11 +155,31 @@ class FolderTaggerTab(ttk.Frame):
 
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
-        self.logbox.log("PixAI Taggerは1画像につき1行を出力TXTへ保存します。GIFは全フレームのタグ信頼度を平均します。")
+        self.logbox.log(
+            "PixAI Taggerは1画像につき1行を出力TXTへ保存します。GIFは全フレームのタグ信頼度を平均します。"
+        )
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        return {"input_dir": self.input_dir.get(), "output_file": self.output_file.get(), "tagger_kind": self.tagger_kind.get(), "api_url": self.api_url.get(), "model": self.model.get(), "threshold": self.threshold.get(), "character_threshold": self.character_threshold.get(), "timeout": self.timeout.get(), "additional": self.additional.get(), "exclude": self.exclude.get(), "recursive": self.recursive.get(), "overwrite": self.overwrite.get(), "gif_average": self.gif_average.get(), "character_crop": self.character_crop.get(), "split_categories": self.split_categories.get(), "tag_videos": self.tag_videos.get(), "video_frames": self.video_frames.get()}
+        return {
+            "input_dir": self.input_dir.get(),
+            "output_file": self.output_file.get(),
+            "tagger_kind": self.tagger_kind.get(),
+            "api_url": self.api_url.get(),
+            "model": self.model.get(),
+            "threshold": self.threshold.get(),
+            "character_threshold": self.character_threshold.get(),
+            "timeout": self.timeout.get(),
+            "additional": self.additional.get(),
+            "exclude": self.exclude.get(),
+            "recursive": self.recursive.get(),
+            "overwrite": self.overwrite.get(),
+            "gif_average": self.gif_average.get(),
+            "character_crop": self.character_crop.get(),
+            "split_categories": self.split_categories.get(),
+            "tag_videos": self.tag_videos.get(),
+            "video_frames": self.video_frames.get(),
+        }
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -146,16 +187,39 @@ class FolderTaggerTab(ttk.Frame):
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), self._preset_values())
-            self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
-        except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
+            self.preset_name.set(path.stem)
+            self._refresh_preset_choices()
+            self.logbox.log(f"プリセットを保存しました: {path}")
+        except Exception as error:
+            self.logbox.log(f"プリセット保存エラー: {error}")
 
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("input_dir", self.input_dir), ("output_file", self.output_file), ("tagger_kind", self.tagger_kind), ("api_url", self.api_url), ("model", self.model), ("threshold", self.threshold), ("character_threshold", self.character_threshold), ("timeout", self.timeout), ("additional", self.additional), ("exclude", self.exclude), ("recursive", self.recursive), ("overwrite", self.overwrite), ("gif_average", self.gif_average), ("character_crop", self.character_crop), ("split_categories", self.split_categories), ("tag_videos", self.tag_videos), ("video_frames", self.video_frames)):
-                if key in values: variable.set(values[key])
+            for key, variable in (
+                ("input_dir", self.input_dir),
+                ("output_file", self.output_file),
+                ("tagger_kind", self.tagger_kind),
+                ("api_url", self.api_url),
+                ("model", self.model),
+                ("threshold", self.threshold),
+                ("character_threshold", self.character_threshold),
+                ("timeout", self.timeout),
+                ("additional", self.additional),
+                ("exclude", self.exclude),
+                ("recursive", self.recursive),
+                ("overwrite", self.overwrite),
+                ("gif_average", self.gif_average),
+                ("character_crop", self.character_crop),
+                ("split_categories", self.split_categories),
+                ("tag_videos", self.tag_videos),
+                ("video_frames", self.video_frames),
+            ):
+                if key in values:
+                    variable.set(values[key])
             self.logbox.log("プリセットを読み込みました")
-        except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
+        except Exception as error:
+            self.logbox.log(f"プリセット読込エラー: {error}")
 
     @staticmethod
     def _split_tags(text):
@@ -234,32 +298,47 @@ class FolderTaggerTab(ttk.Frame):
     def _tag_scores(result):
         def from_value(value):
             if isinstance(value, dict):
-                direct = {str(tag).strip(): float(score) for tag, score in value.items() if isinstance(score, (int, float)) and str(tag).strip()}
-                if direct: return direct
+                direct = {
+                    str(tag).strip(): float(score)
+                    for tag, score in value.items()
+                    if isinstance(score, (int, float)) and str(tag).strip()
+                }
+                if direct:
+                    return direct
                 for key in ("tag", "tags", "caption"):
                     if key in value:
                         scores = from_value(value[key])
-                        if scores: return scores
+                        if scores:
+                            return scores
             if isinstance(value, list):
                 scores = {}
                 for item in value:
                     if isinstance(item, dict):
-                        name = item.get("name", item.get("tag")); score = item.get("confidence", item.get("score", 1.0))
-                        if name is not None and isinstance(score, (int, float)): scores[str(name).strip()] = float(score)
-                    elif str(item).strip(): scores[str(item).strip()] = 1.0
-                if scores: return scores
-            if isinstance(value, str): return {tag.strip(): 1.0 for tag in value.split(",") if tag.strip()}
+                        name = item.get("name", item.get("tag"))
+                        score = item.get("confidence", item.get("score", 1.0))
+                        if name is not None and isinstance(score, (int, float)):
+                            scores[str(name).strip()] = float(score)
+                    elif str(item).strip():
+                        scores[str(item).strip()] = 1.0
+                if scores:
+                    return scores
+            if isinstance(value, str):
+                return {tag.strip(): 1.0 for tag in value.split(",") if tag.strip()}
             return {}
+
         scores = from_value(result)
-        if scores: return scores
+        if scores:
+            return scores
         return {tag: 1.0 for tag in extract_tagger_tags(result)}
 
     @staticmethod
     def _average_gif_scores(frame_scores):
-        if not frame_scores: return {}
+        if not frame_scores:
+            return {}
         totals = {}
         for scores in frame_scores:
-            for tag, score in scores.items(): totals[tag] = totals.get(tag, 0.0) + float(score)
+            for tag, score in scores.items():
+                totals[tag] = totals.get(tag, 0.0) + float(score)
         return {tag: score / len(frame_scores) for tag, score in totals.items()}
 
     def _interrogate_bytes(self, data, api_url, model, threshold, character_threshold, timeout):
@@ -273,19 +352,27 @@ class FolderTaggerTab(ttk.Frame):
         else:
             payload = {"image": encoded, "threshold": threshold}
             if "/pixai/v1/" in api_url:
-                payload.update({"model": model or PIXAI_TAGGER_MODEL, "character_threshold": character_threshold})
+                payload.update(
+                    {
+                        "model": model or PIXAI_TAGGER_MODEL,
+                        "character_threshold": character_threshold,
+                    }
+                )
         response = requests.post(api_url, json=payload, timeout=timeout)
         response.raise_for_status()
         return self._tag_scores(response.json())
 
     def _interrogate(self, image_path, api_url, model, threshold, character_threshold, timeout):
-        return self._interrogate_bytes(image_path.read_bytes(), api_url, model, threshold, character_threshold, timeout)
+        return self._interrogate_bytes(
+            image_path.read_bytes(), api_url, model, threshold, character_threshold, timeout
+        )
 
     @staticmethod
     def _crop_character_image(image):
         import cv2
         import numpy as np
         from PIL import Image
+
         rgba = image.convert("RGBA")
         alpha = rgba.getchannel("A")
         alpha_min, _ = alpha.getextrema()
@@ -298,52 +385,126 @@ class FolderTaggerTab(ttk.Frame):
         if min(width, height) < 8:
             return Image.fromarray(rgb), "original"
         margin = max(2, min(width, height) * 8 // 100)
-        segmentation = np.zeros((height, width), np.uint8); background = np.zeros((1, 65), np.float64); foreground = np.zeros((1, 65), np.float64)
+        segmentation = np.zeros((height, width), np.uint8)
+        background = np.zeros((1, 65), np.float64)
+        foreground = np.zeros((1, 65), np.float64)
         try:
-            cv2.grabCut(rgb, segmentation, (margin, margin, width - margin * 2, height - margin * 2), background, foreground, 2, cv2.GC_INIT_WITH_RECT)
+            cv2.grabCut(
+                rgb,
+                segmentation,
+                (margin, margin, width - margin * 2, height - margin * 2),
+                background,
+                foreground,
+                2,
+                cv2.GC_INIT_WITH_RECT,
+            )
             mask = np.where((segmentation == 1) | (segmentation == 3), 255, 0).astype("uint8")
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
                 x, y, crop_width, crop_height = cv2.boundingRect(max(contours, key=cv2.contourArea))
                 if crop_width * crop_height < width * height * 0.95:
                     padding = max(2, min(width, height) // 40)
-                    return Image.fromarray(rgb).crop((max(0, x-padding), max(0, y-padding), min(width, x+crop_width+padding), min(height, y+crop_height+padding))), "grabcut"
+                    return Image.fromarray(rgb).crop(
+                        (
+                            max(0, x - padding),
+                            max(0, y - padding),
+                            min(width, x + crop_width + padding),
+                            min(height, y + crop_height + padding),
+                        )
+                    ), "grabcut"
         except cv2.error:
             pass
         return Image.fromarray(rgb), "original"
 
-    def _interrogate_pil_image(self, image, api_url, model, threshold, character_threshold, timeout, character_crop):
+    def _interrogate_pil_image(
+        self, image, api_url, model, threshold, character_threshold, timeout, character_crop
+    ):
         if character_crop:
             image, _ = self._crop_character_image(image)
-        buffer = io.BytesIO(); image.convert("RGB").save(buffer, format="PNG")
-        return self._interrogate_bytes(buffer.getvalue(), api_url, model, threshold, character_threshold, timeout)
+        buffer = io.BytesIO()
+        image.convert("RGB").save(buffer, format="PNG")
+        return self._interrogate_bytes(
+            buffer.getvalue(), api_url, model, threshold, character_threshold, timeout
+        )
 
-    def _interrogate_gif(self, image_path, api_url, model, threshold, character_threshold, timeout, character_crop=False):
+    def _interrogate_gif(
+        self,
+        image_path,
+        api_url,
+        model,
+        threshold,
+        character_threshold,
+        timeout,
+        character_crop=False,
+    ):
         from PIL import Image, ImageSequence
+
         frame_scores = []
         with Image.open(image_path) as image:
             for frame in ImageSequence.Iterator(image):
-                if self.stop_event.is_set(): break
-                frame_scores.append(self._interrogate_pil_image(frame, api_url, model, threshold, character_threshold, timeout, character_crop))
-        if not frame_scores: raise RuntimeError("GIFから処理可能なフレームを取得できませんでした")
+                if self.stop_event.is_set():
+                    break
+                frame_scores.append(
+                    self._interrogate_pil_image(
+                        frame,
+                        api_url,
+                        model,
+                        threshold,
+                        character_threshold,
+                        timeout,
+                        character_crop,
+                    )
+                )
+        if not frame_scores:
+            raise RuntimeError("GIFから処理可能なフレームを取得できませんでした")
         return self._average_gif_scores(frame_scores), len(frame_scores)
 
-    def _interrogate_video(self, video_path, api_url, model, threshold, character_threshold, timeout, frame_count):
+    # {
+    #   責務: [_interrogate_video: 動画から代表frameを抽出してtagger APIで評価する]
+    #   処理: [1: 動画frame数からサンプル位置を決める, 2: 各frameをJPEG化してAPIへ送る, 3: frameスコアの平均と件数を返す, 4: finallyでcaptureを解放する]
+    #   引数: [self: 停止状態とtagger処理を持つfolder tagger, video_path: 入力動画, api_url: tagger API URL, model: 使用モデル, threshold: tag閾値, character_threshold: character閾値, timeout: API timeout秒, frame_count: サンプルframe数]
+    #   戻り値: [平均スコアと処理frame数]
+    # }
+    def _interrogate_video(
+        self, video_path, api_url, model, threshold, character_threshold, timeout, frame_count
+    ):
         import cv2
+
         capture = cv2.VideoCapture(str(video_path))
-        total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        if total < 1:
-            capture.release(); raise RuntimeError("動画を読めません")
-        indices = sorted({round((total - 1) * index / max(1, frame_count - 1)) for index in range(max(1, frame_count))})
-        scores = []
-        for index in indices:
-            if self.stop_event.is_set(): break
-            capture.set(cv2.CAP_PROP_POS_FRAMES, index); ok, frame = capture.read()
-            if not ok: continue
-            ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
-            if ok: scores.append(self._interrogate_bytes(encoded.tobytes(), api_url, model, threshold, character_threshold, timeout))
-        capture.release()
-        if not scores: raise RuntimeError("動画から処理可能なフレームを取得できませんでした")
+        try:
+            total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            if total < 1:
+                raise RuntimeError("動画を読めません")
+            indices = sorted(
+                {
+                    round((total - 1) * index / max(1, frame_count - 1))
+                    for index in range(max(1, frame_count))
+                }
+            )
+            scores = []
+            for index in indices:
+                if self.stop_event.is_set():
+                    break
+                capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+                ok, frame = capture.read()
+                if not ok:
+                    continue
+                ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                if ok:
+                    scores.append(
+                        self._interrogate_bytes(
+                            encoded.tobytes(),
+                            api_url,
+                            model,
+                            threshold,
+                            character_threshold,
+                            timeout,
+                        )
+                    )
+        finally:
+            capture.release()
+        if not scores:
+            raise RuntimeError("動画から処理可能なフレームを取得できませんでした")
         return self._average_gif_scores(scores), len(scores)
 
     def run(self):
@@ -377,8 +538,13 @@ class FolderTaggerTab(ttk.Frame):
 
         iterator = root.rglob("*") if self.recursive.get() else root.iterdir()
         images = sorted(
-            path for path in iterator
-            if path.is_file() and (path.suffix.lower() in self.IMAGE_EXTENSIONS or (self.tag_videos.get() and path.suffix.lower() in self.VIDEO_EXTENSIONS))
+            path
+            for path in iterator
+            if path.is_file()
+            and (
+                path.suffix.lower() in self.IMAGE_EXTENSIONS
+                or (self.tag_videos.get() and path.suffix.lower() in self.VIDEO_EXTENSIONS)
+            )
         )
         if not images:
             raise FileNotFoundError(f"画像が見つかりません: {root}")
@@ -401,29 +567,59 @@ class FolderTaggerTab(ttk.Frame):
                 self.logbox.log(f"[{index}/{len(images)}] {image_path}")
                 try:
                     if image_path.suffix.lower() in self.VIDEO_EXTENSIONS:
-                        scores, frame_count = self._interrogate_video(image_path, api_url, model, threshold, character_threshold, timeout, self.video_frames.get())
+                        scores, frame_count = self._interrogate_video(
+                            image_path,
+                            api_url,
+                            model,
+                            threshold,
+                            character_threshold,
+                            timeout,
+                            self.video_frames.get(),
+                        )
                         self.logbox.log(f"  動画 {frame_count}フレームを平均")
                     elif image_path.suffix.lower() == ".gif" and self.gif_average.get():
-                        scores, frame_count = self._interrogate_gif(image_path, api_url, model, threshold, character_threshold, timeout, self.character_crop.get())
+                        scores, frame_count = self._interrogate_gif(
+                            image_path,
+                            api_url,
+                            model,
+                            threshold,
+                            character_threshold,
+                            timeout,
+                            self.character_crop.get(),
+                        )
                         self.logbox.log(f"  GIF {frame_count}フレームを平均")
                     elif self.character_crop.get():
                         from PIL import Image
+
                         with Image.open(image_path) as image:
                             cropped, crop_source = self._crop_character_image(image)
-                            scores = self._interrogate_pil_image(cropped, api_url, model, threshold, character_threshold, timeout, False)
+                            scores = self._interrogate_pil_image(
+                                cropped,
+                                api_url,
+                                model,
+                                threshold,
+                                character_threshold,
+                                timeout,
+                                False,
+                            )
                         self.logbox.log(f"  キャラクター候補を切り出し: {crop_source}")
                     else:
-                        scores = self._interrogate(image_path, api_url, model, threshold, character_threshold, timeout)
+                        scores = self._interrogate(
+                            image_path, api_url, model, threshold, character_threshold, timeout
+                        )
                     tags = [tag for tag, score in scores.items() if score >= threshold]
                     tags = [
-                        tag for tag in tags
+                        tag
+                        for tag in tags
                         if tag not in excluded and tag.replace(" ", "_") not in excluded
                     ]
                     line = ", ".join(additional + tags)
                     destination.write(line + "\n")
                     destination.flush()
                     if splitter:
-                        for category, categorized_tags in splitter.classify(splitter.split_tags(line)).items():
+                        for category, categorized_tags in splitter.classify(
+                            splitter.split_tags(line)
+                        ).items():
                             category_lines[category].append(", ".join(categorized_tags))
                     completed += 1
                     self.logbox.log(f"  ✅ {len(additional) + len(tags)}タグ")

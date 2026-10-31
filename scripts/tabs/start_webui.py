@@ -4,6 +4,7 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..subapp_runtime import launch_packaged_executable, packaged_executable
 
+
 class StartWebUITab(ttk.Frame):
     def __init__(self, master):
         super().__init__(master, padding=10)
@@ -24,7 +25,9 @@ class StartWebUITab(ttk.Frame):
 
     def _build(self):
         if isinstance(self.mod, Exception):
-            ttk.Label(self, text=f"start_webui.py を読み込めませんでした: {self.mod}").pack(anchor="w")
+            ttk.Label(self, text=f"start_webui.py を読み込めませんでした: {self.mod}").pack(
+                anchor="w"
+            )
             return
 
         if API_ONLY_MODE:
@@ -44,7 +47,9 @@ class StartWebUITab(ttk.Frame):
         ttk.Entry(grid, textvariable=self.ram, width=10).grid(row=1, column=1, sticky="w")
         ttk.Label(grid, text="空白で無制限").grid(row=1, column=2, sticky="w")
 
-        ttk.Checkbutton(grid, text="低優先度で実行", variable=self.low_priority).grid(row=2, column=0, columnspan=3, sticky="w", padx=4, pady=4)
+        ttk.Checkbutton(grid, text="低優先度で実行", variable=self.low_priority).grid(
+            row=2, column=0, columnspan=3, sticky="w", padx=4, pady=4
+        )
 
         ttk.Label(grid, text="ソフト停止待機秒").grid(row=3, column=0, sticky="w", padx=4, pady=4)
         ttk.Entry(grid, textvariable=self.soft_stop, width=10).grid(row=3, column=1, sticky="w")
@@ -59,7 +64,9 @@ class StartWebUITab(ttk.Frame):
         status_row = ttk.Frame(self)
         status_row.pack(fill="x", pady=6)
         ttk.Label(status_row, text="API ステータス:").pack(side="left")
-        self.status_label = ttk.Label(status_row, text="⚫ オフライン", font=("TkDefaultFont", 10, "bold"))
+        self.status_label = ttk.Label(
+            status_row, text="⚫ オフライン", font=("TkDefaultFont", 10, "bold")
+        )
         self.status_label.pack(side="left", padx=6)
 
         buttons = ttk.Frame(self)
@@ -68,10 +75,20 @@ class StartWebUITab(ttk.Frame):
         ttk.Button(buttons, text="⏹️ 停止", command=self.stop).pack(side="left", padx=4)
         ttk.Button(buttons, text="� 強制停止", command=self.force_kill).pack(side="left", padx=4)
         ttk.Button(buttons, text="🔄 再起動", command=self.restart).pack(side="left", padx=4)
-        ttk.Button(buttons, text="🏥 ヘルスチェック", command=self.health_check).pack(side="left", padx=4)
-        ttk.Button(buttons, text="WebUI1111画面を開く", command=lambda: self.open_backend_gui("a1111")).pack(side="left", padx=(16, 4))
-        ttk.Button(buttons, text="ComfyUI画面を開く", command=lambda: self.open_backend_gui("comfyui")).pack(side="left", padx=4)
-        ttk.Label(buttons, text="preset").pack(side="left", padx=(16,4)); self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18); self.preset_combo.pack(side="left"); ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4); ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
+        ttk.Button(buttons, text="🏥 ヘルスチェック", command=self.health_check).pack(
+            side="left", padx=4
+        )
+        ttk.Button(
+            buttons, text="WebUI1111画面を開く", command=lambda: self.open_backend_gui("a1111")
+        ).pack(side="left", padx=(16, 4))
+        ttk.Button(
+            buttons, text="ComfyUI画面を開く", command=lambda: self.open_backend_gui("comfyui")
+        ).pack(side="left", padx=4)
+        ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
+        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
+        self.preset_combo.pack(side="left")
+        ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
+        ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
 
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
@@ -88,11 +105,19 @@ class StartWebUITab(ttk.Frame):
         self.hard_kill.set(str(getattr(self.mod, "HARD_KILL_WAIT_SEC", 2.0)))
         if self.flags_text is not None:
             self.flags_text.delete("1.0", "end")
-            self.flags_text.insert("end", " ".join(getattr(self.mod, "DEFAULT_FLAGS", ["--lowvram", "--disable-safe-unpickle", "--api"])))
+            self.flags_text.insert(
+                "end",
+                " ".join(
+                    getattr(
+                        self.mod, "DEFAULT_FLAGS", ["--lowvram", "--disable-safe-unpickle", "--api"]
+                    )
+                ),
+            )
         if self.logbox:
             self.logbox.log(f"🎮 {getattr(self.mod, 'DISPLAY_NAME', 'WebUI')} タブを起動しました")
 
         old_log = getattr(self.mod, "_log_msg", None)
+
         def tab_log(msg: str):
             try:
                 if old_log:
@@ -101,25 +126,48 @@ class StartWebUITab(ttk.Frame):
                     self.logbox.log(msg)
             except Exception:
                 pass
+
         self.mod._log_msg = tab_log
         self._refresh_preset_choices()
 
-    def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
+    def _refresh_preset_choices(self):
+        self.preset_combo.configure(values=self.preset_store.names())
 
     def save_preset(self):
         try:
-            values = {"cpu": self.cpu.get(), "ram": self.ram.get(), "low_priority": self.low_priority.get(), "soft_stop": self.soft_stop.get(), "hard_kill": self.hard_kill.get(), "flags": self.flags_text.get("1.0", "end").strip() if self.flags_text else ""}
-            path = self.preset_store.save(self.preset_name.get(), values); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
-        except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
+            values = {
+                "cpu": self.cpu.get(),
+                "ram": self.ram.get(),
+                "low_priority": self.low_priority.get(),
+                "soft_stop": self.soft_stop.get(),
+                "hard_kill": self.hard_kill.get(),
+                "flags": self.flags_text.get("1.0", "end").strip() if self.flags_text else "",
+            }
+            path = self.preset_store.save(self.preset_name.get(), values)
+            self.preset_name.set(path.stem)
+            self._refresh_preset_choices()
+            self.logbox.log(f"プリセットを保存しました: {path}")
+        except Exception as error:
+            self.logbox.log(f"プリセット保存エラー: {error}")
 
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("cpu", self.cpu), ("ram", self.ram), ("low_priority", self.low_priority), ("soft_stop", self.soft_stop), ("hard_kill", self.hard_kill)):
-                if key in values: variable.set(values[key])
-            if self.flags_text is not None and "flags" in values: self.flags_text.delete("1.0", "end"); self.flags_text.insert("end", values["flags"])
+            for key, variable in (
+                ("cpu", self.cpu),
+                ("ram", self.ram),
+                ("low_priority", self.low_priority),
+                ("soft_stop", self.soft_stop),
+                ("hard_kill", self.hard_kill),
+            ):
+                if key in values:
+                    variable.set(values[key])
+            if self.flags_text is not None and "flags" in values:
+                self.flags_text.delete("1.0", "end")
+                self.flags_text.insert("end", values["flags"])
             self.logbox.log("プリセットを読み込みました")
-        except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
+        except Exception as error:
+            self.logbox.log(f"プリセット読込エラー: {error}")
 
     def _values(self):
         flags = self.flags_text.get("1.0", "end").strip().split() if self.flags_text else []
@@ -132,33 +180,70 @@ class StartWebUITab(ttk.Frame):
             float(self.hard_kill.get()),
         )
 
+    # {
+    #   責務: [start: 検証済みの起動設定でbackend開始要求を予約してworkerを起動する]
+    #   処理: [1: API-only・backend状態・入力を確認する, 2: generationを予約する, 3: token付きworkerを起動する]
+    #   引数: [self: backend制御UI]
+    #   戻り値: []
+    # }
     def start(self):
         if API_ONLY_MODE:
             self.logbox.log("API専用モードではローカルバックエンドを起動できません")
             return
         if isinstance(self.mod, Exception):
             return
-        if getattr(self.mod, "_current_proc", None):
-            self.logbox.log(f"⚠️ {getattr(self.mod, 'DISPLAY_NAME', 'WebUI')} はすでに起動しています")
+        if any(
+            getattr(self.mod, attribute, False)
+            for attribute in ("_current_proc", "_lifecycle_active", "_desired_running")
+        ):
+            self.logbox.log(
+                f"⚠️ {getattr(self.mod, 'DISPLAY_NAME', 'WebUI')} はすでに起動しています"
+            )
             return
         try:
             args = self._values()
         except ValueError as e:
             self.logbox.log(f"❌ 入力エラー: {e}")
             return
-        threading.Thread(target=self.mod._start_webui_thread, args=args, daemon=True).start()
+        generation = self.mod.request_start()
+        if generation is None:
+            self.logbox.log(
+                f"⚠️ {getattr(self.mod, 'DISPLAY_NAME', 'WebUI')} はすでに起動しています"
+            )
+            return
+        threading.Thread(
+            target=self.mod._start_webui_thread,
+            args=args,
+            kwargs={"_generation": generation},
+            daemon=True,
+        ).start()
 
+    # {
+    # 責務: [stop: 起動中または開始中のbackend lifecycleを停止する]
+    # 処理: [1: API-only制約を確認する, 2: request_stopでpending restartも取り消す]
+    # 引数: [self]
+    # 戻り値: []
+    # }
     def stop(self):
         if API_ONLY_MODE:
             self.logbox.log("API専用モードではローカルバックエンドを停止しません")
             return
         if isinstance(self.mod, Exception):
             return
-        if not getattr(self.mod, "_current_proc", None):
+        if not any(
+            getattr(self.mod, attribute, False)
+            for attribute in ("_current_proc", "_lifecycle_active", "_desired_running")
+        ):
             self.logbox.log(f"⚠️ {getattr(self.mod, 'DISPLAY_NAME', 'WebUI')} は起動していません")
             return
-        self.mod._stop_event.set()
+        self.mod.request_stop()
 
+    # {
+    # 責務: [force_kill: backendを停止するか外部portのprocessを終了する]
+    # 処理: [1: 管理中lifecycleを停止する, 2: 未管理の場合は外部processを検索する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
     def force_kill(self):
         """既に起動しているプロセスを強制終了する"""
         if API_ONLY_MODE:
@@ -167,13 +252,16 @@ class StartWebUITab(ttk.Frame):
         if isinstance(self.mod, Exception):
             self.logbox.log("❌ start_webui.py を読み込めません")
             return
-        
+
         # GUI経由で起動したプロセスがあれば、まずそれを停止
-        if getattr(self.mod, "_current_proc", None):
-            self.mod._stop_event.set()
+        if any(
+            getattr(self.mod, attribute, False)
+            for attribute in ("_current_proc", "_lifecycle_active", "_desired_running")
+        ):
+            self.mod.request_stop()
             self.logbox.log("✅ GUI経由で起動したプロセスを停止しました")
             return
-        
+
         # 外部から起動したプロセスを検出して強制終了
         self.logbox.log("🔍 既に起動しているプロセスを検索中...")
         threading.Thread(target=self._force_kill_thread, daemon=True).start()
@@ -194,7 +282,7 @@ class StartWebUITab(ttk.Frame):
         if isinstance(self.mod, Exception):
             self.logbox.log("❌ start_webui.py を読み込めません")
             return
-        
+
         self.logbox.log("🏥 ヘルスチェック実行中...")
         threading.Thread(target=self._health_check_thread, daemon=True).start()
 
@@ -202,15 +290,15 @@ class StartWebUITab(ttk.Frame):
         """ヘルスチェックを別スレッドで実行"""
         if isinstance(self.mod, Exception):
             return
-        
+
         if not hasattr(self.mod, "_health_check_now"):
             self.logbox.log("❌ _health_check_now が見つかりません")
             return
-        
+
         try:
             result = self.mod._health_check_now()
             self.logbox.log(f"ステータス: {result['status']}")
-            if result['online']:
+            if result["online"]:
                 self.logbox.log("✅ API に接続できます")
             else:
                 self.logbox.log("❌ API に接続できません")

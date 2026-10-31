@@ -39,12 +39,13 @@ jobs:
       - name: Verify Python CA bundles
         run: python tools/security/check_python_ca.py
 
-      - name: Run quality-tool unit tests
+      - name: Run quality and resource-lifetime unit tests
         run: |
           python -m unittest \
             tests.tools.quality.test_quality_gate \
             tests.tools.quality.test_resource_leak_gate \
-            tests.tools.completion.test_completion_gate
+            tests.tools.completion.test_completion_gate \
+            tests.test_resource_lifetime
 
       - name: Run resource leak gate
         run: python tools/quality/resource_leak_gate.py

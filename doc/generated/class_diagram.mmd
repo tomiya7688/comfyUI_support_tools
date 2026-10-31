@@ -113,6 +113,8 @@ classDiagram
         +_start_webui_thread()
         +_stop_webui()
         +_restart_webui()
+        +request_stop()
+        +request_start()
     }
     class WorkflowModelInput {
     }
@@ -718,6 +720,7 @@ classDiagram
     class LogBox {
         +__init__()
         +log()
+        +_trim_visible_lines()
         +_flush_logs()
     }
     ScrolledText <|-- LogBox

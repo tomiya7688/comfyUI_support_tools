@@ -119,24 +119,26 @@ class MovieToTextTab(ttk.Frame):
         coverage = min(1.0, max(0.0, float(self.minimum_coverage.get())))
         threshold = float(self.threshold.get())
         capture = cv2.VideoCapture(str(source))
-        total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        if total < 1:
-            capture.release(); raise ValueError(f"動画を読めません: {source}")
-        indices = sorted({round((total - 1) * index / max(1, count - 1)) for index in range(count)})
-        scores = []
-        for order, index in enumerate(indices, 1):
-            if self.stop_event.is_set(): break
-            capture.set(cv2.CAP_PROP_POS_FRAMES, index)
-            ok, frame = capture.read()
-            if not ok: continue
-            ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
-            if not ok: continue
-            payload = {"image": base64.b64encode(encoded.tobytes()).decode("ascii"), "model": self.model.get().strip(), "threshold": threshold, "character_threshold": threshold}
-            response = requests.post(self.api_url.get().strip(), json=payload, timeout=300)
-            response.raise_for_status()
-            scores.append(self._scores(response.json()))
-            self.logbox.log(f"タグ取得: {order}/{len(indices)} frame={index}")
-        capture.release()
+        try:
+            total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            if total < 1:
+                raise ValueError(f"動画を読めません: {source}")
+            indices = sorted({round((total - 1) * index / max(1, count - 1)) for index in range(count)})
+            scores = []
+            for order, index in enumerate(indices, 1):
+                if self.stop_event.is_set(): break
+                capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+                ok, frame = capture.read()
+                if not ok: continue
+                ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                if not ok: continue
+                payload = {"image": base64.b64encode(encoded.tobytes()).decode("ascii"), "model": self.model.get().strip(), "threshold": threshold, "character_threshold": threshold}
+                response = requests.post(self.api_url.get().strip(), json=payload, timeout=300)
+                response.raise_for_status()
+                scores.append(self._scores(response.json()))
+                self.logbox.log(f"タグ取得: {order}/{len(indices)} frame={index}")
+        finally:
+            capture.release()
         output = Path(self.output_file.get().strip())
         output.parent.mkdir(parents=True, exist_ok=True)
         if self.output_mode.get() == "wildcard_frames":

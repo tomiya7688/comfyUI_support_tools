@@ -193,14 +193,12 @@ class Python310TlsShimTest(unittest.TestCase):
         self.assertIsNotNone(spec)
         installer = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(installer)
+        spec_result = SimpleNamespace(origin=str(Path.cwd() / "shadow" / "sitecustomize.py"))
         with patch("sys.path", ["shadow", "managed"]):
             with patch.object(
-                Path,
-                "is_file",
-                autospec=True,
-                side_effect=lambda path: (
-                    path.name == "sitecustomize.py" and path.parent.name == "shadow"
-                ),
+                installer.importlib.machinery.PathFinder,
+                "find_spec",
+                return_value=spec_result,
             ):
                 with self.assertRaisesRegex(RuntimeError, "shadows"):
                     installer.validate_startup_resolution(Path("managed"))
@@ -220,16 +218,15 @@ class Python310TlsShimTest(unittest.TestCase):
         self.assertIsNotNone(spec)
         installer = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(installer)
+        spec_result = SimpleNamespace(origin=str(Path("managed/sitecustomize.py").resolve()))
         with patch("sys.path", [str(source), "managed"]):
             with patch.object(
-                Path,
-                "is_file",
-                autospec=True,
-                side_effect=lambda path: (
-                    path.name == "sitecustomize.py" and path.parent == source.resolve()
-                ),
-            ):
+                installer.importlib.machinery.PathFinder,
+                "find_spec",
+                return_value=spec_result,
+            ) as find_spec:
                 installer.validate_startup_resolution(Path("managed"))
+        self.assertNotIn(str(source.resolve()), find_spec.call_args.args[1])
 
 
 if __name__ == "__main__":

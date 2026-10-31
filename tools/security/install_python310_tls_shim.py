@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.machinery
 import os
 import subprocess
 import sys
@@ -96,25 +97,25 @@ def validate_certifi_bundle() -> None:
 #   戻り値: []
 #   エラー: [RuntimeError: 先行sitecustomizeが優先される場合]
 # }
-def validate_startup_resolution(directory: Path) -> None:
+def validate_startup_resolution(directory: Path, require_managed: bool = False) -> None:
     expected = (directory / "sitecustomize.py").resolve()
     source_directory = SOURCE_DIRECTORY.resolve()
-    for entry in sys.path:
-        candidate_root = Path(entry or os.curdir).resolve()
-        if candidate_root == source_directory:
-            continue
-        module_file = candidate_root / "sitecustomize.py"
-        package_file = candidate_root / "sitecustomize" / "__init__.py"
-        if module_file.is_file():
-            if module_file.resolve() != expected:
-                raise RuntimeError(
-                    f"Another sitecustomize shadows the managed shim ({module_file})"
-                )
-            return
-        if package_file.is_file():
-            raise RuntimeError(
-                f"Another sitecustomize package shadows the managed shim ({package_file})"
-            )
+    search_paths = [str(Path.cwd())]
+    search_paths.extend(sys.path)
+    normalized_paths = list(
+        dict.fromkeys(
+            str(resolved)
+            for entry in search_paths
+            if (resolved := Path(entry or os.curdir).resolve()) != source_directory
+        )
+    )
+    spec = importlib.machinery.PathFinder.find_spec("sitecustomize", normalized_paths)
+    if spec is not None and spec.origin is not None:
+        if Path(spec.origin).resolve() != expected:
+            raise RuntimeError(f"Another sitecustomize shadows the managed shim ({spec.origin})")
+        return
+    if require_managed:
+        raise RuntimeError("Managed sitecustomize is not importable from the target environment")
 
 
 # {
@@ -165,6 +166,7 @@ def install_shim() -> Path:
     lock_file = installer_lock(directory)
     try:
         _install_managed_files(directory)
+        validate_startup_resolution(directory, require_managed=True)
     finally:
         lock_file.close()
     return directory

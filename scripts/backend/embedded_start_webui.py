@@ -239,6 +239,9 @@ class EmbeddedStartWebUI:
             self._stop_event.set()
             lifecycle_active = self._lifecycle_active
         if lifecycle_active and not self._lifecycle_done.wait(args[-2] + args[-1] + 5.0):
+            with self._lifecycle_lock:
+                if generation == self._lifecycle_generation:
+                    self._desired_running = False
             self._log_msg(f"⚠️ {self.DISPLAY_NAME} の停止完了を待てず、再起動を保留しました")
             return
         with self._lifecycle_lock:

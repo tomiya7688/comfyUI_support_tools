@@ -214,6 +214,31 @@ class ResourceLifetimeTests(unittest.TestCase):
         fake._start_webui_thread.assert_called_once_with([], 1, None, True, 0.1, 0.1, _generation=2)
 
     # {
+    # 責務: [test_restart_timeout_clears_pending_intent: 停止待ちtimeout後に再起動予約が解除されることを確認する]
+    # 処理: [1: lifecycle完了待ちをtimeoutさせる, 2: その世代のpending intentだけが解除されることを確認する]
+    # 引数: [self]
+    # 戻り値: []
+    # }
+    def test_restart_timeout_clears_pending_intent(self):
+        fake = SimpleNamespace(
+            _lifecycle_lock=threading.Lock(),
+            _lifecycle_generation=0,
+            _lifecycle_active=True,
+            _lifecycle_done=SimpleNamespace(wait=mock.Mock(return_value=False)),
+            _desired_running=True,
+            _stop_event=threading.Event(),
+            _log_msg=mock.Mock(),
+            DISPLAY_NAME="fake backend",
+            _start_webui_thread=mock.Mock(),
+        )
+
+        EmbeddedStartWebUI._restart_webui(fake, [], 1, None, True, 0.1, 0.1)
+
+        self.assertEqual(fake._lifecycle_generation, 1)
+        self.assertFalse(fake._desired_running)
+        fake._start_webui_thread.assert_not_called()
+
+    # {
     # 責務: [ test_all_opencv_video_captures_are_exception_safe: productionのVideoCaptureがfinallyでreleaseされることを検証する ]
     # 処理: [ 1: 対象Python sourceをAST解析する, 2: VideoCapture代入を探す, 3: 直後のtry-finallyで同じ変数をreleaseすることを確認する ]
     # 引数: []

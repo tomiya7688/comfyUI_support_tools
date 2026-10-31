@@ -44,7 +44,9 @@ goto configure_pip_trust
 :install_dependencies
 echo Installing the pinned Pillow and NumPy versions ...
 REM Upgrade the bootstrap installer from its SHA-256 pinned Python.org wheel.
-"%VENV_PY%" -m pip install --disable-pip-version-check --use-deprecated=legacy-certs "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+call :configure_bootstrap_trust
+if errorlevel 1 goto setup_failed
+"%VENV_PY%" -m pip install --disable-pip-version-check "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
 if errorlevel 1 goto setup_failed
 "%VENV_PY%" -m pip config --site set global.use-deprecated legacy-certs
 if errorlevel 1 goto setup_failed
@@ -65,6 +67,12 @@ goto verify_ca_bundle
 "%VENV_PY%" "%~dp0..\..\tools\security\check_python_ca.py"
 if errorlevel 1 goto setup_failed
 goto launch_application
+
+:configure_bootstrap_trust
+"%VENV_PY%" -c "import pip; raise SystemExit(0 if tuple(map(int, pip.__version__.split('.')[:2])) >= (24, 2) else 1)" >nul 2>&1
+if errorlevel 1 exit /b 0
+"%VENV_PY%" -m pip config --site set global.use-deprecated legacy-certs
+exit /b %ERRORLEVEL%
 
 :launch_application
 "%VENV_PY%" "%~dp0image_enhancer.py"

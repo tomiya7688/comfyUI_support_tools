@@ -72,7 +72,7 @@ class RuntimePythonTest(unittest.TestCase):
         self.assertIn(".venv-python-pre-31118", setup)
         self.assertIn(":migrate_unsupported_environment", setup)
         self.assertIn("pip config --site set global.use-deprecated legacy-certs", setup)
-        self.assertIn("--use-deprecated=legacy-certs", setup)
+        self.assertIn("call :configure_bootstrap_trust", setup)
         self.assertNotIn("python -m venv", setup)
         self.assertNotIn("py -3.10", setup)
 
@@ -97,7 +97,7 @@ class RuntimePythonTest(unittest.TestCase):
         self.assertIn("certifi.__version__", launcher)
         self.assertIn("check_python_ca.py", launcher)
         self.assertIn("pip config --site set global.use-deprecated legacy-certs", launcher)
-        self.assertIn("--use-deprecated=legacy-certs", launcher)
+        self.assertIn("call :configure_bootstrap_trust", launcher)
         self.assertNotIn("python -m venv", launcher)
         self.assertNotIn("py -3.10", launcher)
         requirements = (
@@ -126,8 +126,13 @@ class RuntimePythonTest(unittest.TestCase):
         setting = "pip config --site set global.use-deprecated legacy-certs"
         self.assertIn(setting, build_batch)
         self.assertIn(setting, workflow)
-        self.assertIn("--use-deprecated=legacy-certs", build_batch)
-        self.assertIn("--use-deprecated=legacy-certs", workflow)
+        self.assertIn("call :configure_bootstrap_trust", build_batch)
+        self.assertIn("pip.__version__.split('.')[:2]", build_batch)
+        setup_batch = (repository / "setup_kadoka_tools.bat").read_text(encoding="utf-8").lower()
+        self.assertIn("call :configure_bootstrap_trust", setup_batch)
+        self.assertIn("pip.__version__.split('.')[:2]", setup_batch)
+        self.assertIn("$bootstrappipversion", workflow)
+        self.assertIn('[version]"24.2"', workflow)
 
     def test_onedir_batch_falls_back_to_supported_cpython_launcher(self):
         batch = (

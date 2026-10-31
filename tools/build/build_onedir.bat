@@ -22,7 +22,9 @@ if errorlevel 1 goto unsupported_runtime
 
 echo Installing Kadoka Tools runtime dependencies...
 REM Upgrade bootstrap pip via the SHA-256 URL published by Python.org.
-%PYTHON_CMD% -m pip install --disable-pip-version-check --use-deprecated=legacy-certs "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+call :configure_bootstrap_trust
+if errorlevel 1 goto build_failed
+%PYTHON_CMD% -m pip install --disable-pip-version-check "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
 if errorlevel 1 goto build_failed
 
 %PYTHON_CMD% -m pip config --site set global.use-deprecated legacy-certs
@@ -60,3 +62,9 @@ exit /b 1
 :unsupported_runtime
 echo CPython 3.11.18 or newer is required. Recreate .venv or install the runtime with the py launcher.
 goto build_failed
+
+:configure_bootstrap_trust
+%PYTHON_CMD% -c "import pip; raise SystemExit(0 if tuple(map(int, pip.__version__.split('.')[:2])) >= (24, 2) else 1)" >nul 2>nul
+if errorlevel 1 exit /b 0
+%PYTHON_CMD% -m pip config --site set global.use-deprecated legacy-certs
+exit /b %ERRORLEVEL%

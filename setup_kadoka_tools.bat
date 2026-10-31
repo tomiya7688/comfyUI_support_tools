@@ -35,7 +35,9 @@ if errorlevel 1 goto migrate_unsupported_environment
 :install_requirements
 echo Checking Tabbed Tools dependencies...
 REM Pin the bootstrap installer to avoid inheriting an unverified seeded bundle.
-"%VENV_PY%" -m pip install --disable-pip-version-check --use-deprecated=legacy-certs "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+call :configure_bootstrap_trust
+if errorlevel 1 goto setup_failed
+"%VENV_PY%" -m pip install --disable-pip-version-check "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
 if errorlevel 1 goto setup_failed
 
 "%VENV_PY%" -m pip config --site set global.use-deprecated legacy-certs
@@ -103,6 +105,12 @@ if errorlevel 1 exit /b 1
 py -3 -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul
 if errorlevel 1 exit /b 1
 exit /b 0
+
+:configure_bootstrap_trust
+"%VENV_PY%" -c "import pip; raise SystemExit(0 if tuple(map(int, pip.__version__.split('.')[:2])) >= (24, 2) else 1)" >nul 2>nul
+if errorlevel 1 exit /b 0
+"%VENV_PY%" -m pip config --site set global.use-deprecated legacy-certs
+exit /b %ERRORLEVEL%
 
 :verify_configured_python
 "%PYTHON31118%" -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) else 1)" >nul 2>nul

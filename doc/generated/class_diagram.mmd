@@ -20,6 +20,19 @@ classDiagram
         +generate()
         +generate_from_image()
     }
+    class ScoreProvider {
+        +ai_score()
+    }
+    Protocol <|-- ScoreProvider
+    class ImageOriginResult {
+    }
+    class AnimeAIDetector {
+        +__init__()
+        +_load_pipeline()
+        +_create_pipeline()
+        +close()
+        +ai_score()
+    }
     class BackendLaunchSpec {
     }
     class BackendRuntimeProfile {
@@ -100,6 +113,7 @@ classDiagram
         +_start_webui_thread()
         +_stop_webui()
         +_restart_webui()
+        +request_stop()
     }
     class WorkflowModelInput {
     }
@@ -233,6 +247,20 @@ classDiagram
         +build_segment_command()
         +run()
     }
+    class AIImageClusterTab {
+        +__init__()
+        +_build()
+        +start_analysis()
+        +_classify_worker()
+        +_show_results()
+        +_set_idle()
+        +_set_action_states()
+        +save_results()
+        +override_selected()
+        +copy_results()
+        +_copy_worker()
+    }
+    ttk.Frame <|-- AIImageClusterTab
     class BodyPromptTab {
         +__init__()
         +_build()

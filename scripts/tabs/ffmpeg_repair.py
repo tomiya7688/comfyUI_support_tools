@@ -29,7 +29,13 @@ class FfmpegRepairTab(ttk.Frame):
             values = self.preset_store.load(self.preset_name.get()); self.input_file.set(values.get("input_file", self.input_file.get())); self.output_file.set(values.get("output_file", self.output_file.get())); self.mode.set(values.get("mode", self.mode.get())); self.cpu_cores.set(values.get("cpu_cores", self.cpu_cores.get())); self.logbox.log("プリセットを読み込みました")
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
     def _cmd(self,cmd,cpu_cores):
-        self.logbox.log("実行: "+" ".join(cmd)); process=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding="utf-8",errors="ignore"); ProcessCpuLimiter.apply(process.pid,cpu_cores); output,_=process.communicate(); self.logbox.log(output); return process.returncode==0
+        self.logbox.log("実行: "+" ".join(cmd))
+        process=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding="utf-8",errors="ignore")
+        ProcessCpuLimiter.apply(process.pid,cpu_cores)
+        for line in process.stdout or ():
+            line=line.rstrip()
+            if line: self.logbox.log(line)
+        return process.wait()==0
     def run(self):
         if shutil.which("ffmpeg") is None: self.logbox.log("ffmpeg が PATH にありません"); return
         inp=self.input_file.get().strip(); out=self.output_file.get().strip(); mode=self.mode.get()

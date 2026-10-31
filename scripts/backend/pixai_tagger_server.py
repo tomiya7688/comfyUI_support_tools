@@ -83,6 +83,16 @@ class PixAITaggerServer:
             if process.poll() is not None:
                 raise RuntimeError(f"PixAI Tagger APIが終了しました（コード: {process.returncode}）")
             time.sleep(0.5)
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        with self._lock:
+            if self._process is process:
+                self._process = None
         raise TimeoutError("PixAI Tagger APIが30秒以内に起動しませんでした")
 
     def stop(self, log=None):

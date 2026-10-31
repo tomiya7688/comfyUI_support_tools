@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import argparse
 import importlib.machinery
+import importlib.util
 import os
-import subprocess
 import sys
 import sysconfig
 import tempfile
@@ -74,20 +74,29 @@ def validate_runtime() -> None:
 #   エラー: [RuntimeError: pip/certifiの版またはCA bundleが基準を満たさない場合]
 # }
 def validate_certifi_bundle() -> None:
-    checker = SOURCE_DIRECTORY / "check_python_ca.py"
-    result = subprocess.run(
-        [sys.executable, str(checker)],
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if result.returncode:
+    errors = ca_audit_errors()
+    if errors:
         raise RuntimeError(
             "Target pip/certifi CA validation failed. Upgrade pip and certifi, then retry.\n"
-            f"{result.stdout}{result.stderr}"
+            + "\n".join(errors)
         )
+
+
+# {
+#   責務: [ca_audit_errors: 共通CA監査moduleから検査結果を取得する]
+#   処理: [1: 既存checkerをfile pathから読み込む, 2: target Python環境を検査する]
+#   引数: []
+#   戻り値: [errors: CA検査エラー一覧]
+#   エラー: [FileNotFoundError: 共通checkerがない場合, RuntimeError: checkerのloaderがない場合]
+# }
+def ca_audit_errors() -> list[str]:
+    checker = SOURCE_DIRECTORY / "check_python_ca.py"
+    spec = importlib.util.spec_from_file_location("_python_ca_checker", checker)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Cannot load CA checker: {checker}")
+    checker_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker_module)
+    return checker_module.check_environment()
 
 
 # {

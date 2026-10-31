@@ -173,8 +173,7 @@ class Python310TlsShimTest(unittest.TestCase):
         self.assertIsNotNone(spec)
         installer = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(installer)
-        result = SimpleNamespace(returncode=1, stdout="FAIL: stale certifi", stderr="")
-        with patch.object(installer.subprocess, "run", return_value=result):
+        with patch.object(installer, "ca_audit_errors", return_value=["stale certifi"]):
             with self.assertRaisesRegex(RuntimeError, "Upgrade pip and certifi"):
                 installer.validate_certifi_bundle()
 
@@ -202,6 +201,32 @@ class Python310TlsShimTest(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(RuntimeError, "shadows"):
                     installer.validate_startup_resolution(Path("managed"))
+
+    # {
+    #   責務: [test_installer_detects_shadowing_package: 同じdirectoryのsitecustomize packageを検出する]
+    #   処理: [1: packageのimport specを模擬する, 2: managed moduleよりpackageが優先される競合を拒否する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_installer_detects_shadowing_package(self):
+        source = Path(__file__).resolve().parents[3] / "tools" / "security"
+        spec = importlib.util.spec_from_file_location(
+            "install_python310_tls_shim_shadow_package_test_target",
+            source / "install_python310_tls_shim.py",
+        )
+        self.assertIsNotNone(spec)
+        installer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(installer)
+        managed = Path("managed/sitecustomize.py").resolve()
+        package = Path("managed/sitecustomize/__init__.py").resolve()
+        with patch.object(
+            installer.importlib.machinery.PathFinder,
+            "find_spec",
+            return_value=SimpleNamespace(origin=str(package)),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "shadows"):
+                installer.validate_startup_resolution(managed.parent)
+        self.assertNotEqual(package, managed)
 
     # {
     #   責務: [test_installer_ignores_its_source_path: installer自身のscript directoryを通常のshadowとして扱わない]

@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
+import ssl
 import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
+from urllib.request import HTTPSHandler
 
 from comfyui_support_tools.applications.sequence.data.processing.comfyui_generate_command import (
     ComfyUIGenerateCommand,
 )
 from comfyui_support_tools.applications.sequence.process.processing.sequence_runner import SequenceRunner
 from comfyui_support_tools.shared.contracts.sequence_contracts import SequenceDefinition, SequenceStep
+from tools.security.check_python_ca import AFFECTED_CERTIFICATES
 
 
 class _ComfyHandler(BaseHTTPRequestHandler):
@@ -85,6 +89,27 @@ class ComfyUIGenerateCommandTests(unittest.TestCase):
                   "_meta": {"title": "Negative Prompt"}},
             "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "test"}},
         }
+
+    # {
+    #   責務: [test_https_context_uses_managed_ca_bundle: ComfyUI HTTPS contextは管理対象CAだけを信頼する]
+    #   処理: [1: opener内のHTTPS contextを取得する, 2: 検証設定と影響証明書の不在を確認する]
+    #   引数: [self: テストインスタンス]
+    #   戻り値: []
+    # }
+    def test_https_context_uses_managed_ca_bundle(self) -> None:
+        context = next(
+            handler._context
+            for handler in self.command._opener.handlers
+            if isinstance(handler, HTTPSHandler)
+        )
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+        fingerprints = {
+            sha256(certificate).hexdigest()
+            for certificate in context.get_ca_certs(binary_form=True)
+        }
+        self.assertTrue(fingerprints)
+        self.assertFalse(fingerprints & set(AFFECTED_CERTIFICATES))
 
     def test_generation_output_is_available_to_next_step(self) -> None:
         observed: list[bytes] = []

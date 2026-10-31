@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from scripts.backend.ollama_prompt_corrector import OllamaPromptCorrector
+from comfyui_support_tools.shared.python_tls import create_certifi_context
 
 
 class OllamaPromptCommand:
@@ -58,6 +59,13 @@ class OllamaPromptCommand:
             raise ValueError("api_url must be the Ollama server base URL")
         return f"{parsed.scheme}://{parsed.netloc}"
 
+    # {
+    #   責務: [_post_json: 管理対象CA bundleで検証しながらOllamaへ生成要求を送信する]
+    #   処理: [1: 要求をencodeする, 2: certifi bundleでHTTPSを検証する, 3: サイズ制限内のJSON応答を解析する]
+    #   引数: [url: Ollama endpoint, payload: JSON request mapping]
+    #   戻り値: [data: 解析したJSON object]
+    #   エラー: [RuntimeError: 接続失敗、応答サイズ超過、またはJSON不正]
+    # }
     def _post_json(self, url: str, payload: Mapping[str, Any]) -> Mapping[str, Any]:
         request = Request(
             url,
@@ -66,7 +74,11 @@ class OllamaPromptCommand:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=self._timeout) as response:
+            with urlopen(
+                request,
+                timeout=self._timeout,
+                context=create_certifi_context(),
+            ) as response:
                 body = response.read(4 * 1024 * 1024 + 1)
         except HTTPError as error:
             raise RuntimeError(f"Ollama returned HTTP {error.code}") from None

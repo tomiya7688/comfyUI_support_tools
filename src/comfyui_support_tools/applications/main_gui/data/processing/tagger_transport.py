@@ -7,14 +7,13 @@ import base64
 from io import BytesIO
 import json
 from pathlib import Path
-import ssl
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
 from PIL import Image
-import certifi
 
 from comfyui_support_tools.shared.contracts.tagger_backend import resolve_backend
+from comfyui_support_tools.shared.python_tls import create_certifi_context
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -26,11 +25,17 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class TaggerTransport:
+    # {
+    #   Responsibility: [__init__: Prepare a proxy-free Tagger client with the filtered CA bundle]
+    #   Processing: [1: Build a direct opener, 2: Restrict HTTPS trust to certifi]
+    #   Arguments: [self: TaggerTransport instance]
+    #   Returns: []
+    # }
     def __init__(self):
         self._opener = build_opener(
             ProxyHandler({}),
             NoRedirect(),
-            HTTPSHandler(context=ssl.create_default_context(cafile=certifi.where())),
+            HTTPSHandler(context=create_certifi_context()),
         )
 
     def _json(self, url, timeout, payload=None):

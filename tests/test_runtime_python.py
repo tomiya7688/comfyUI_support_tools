@@ -73,6 +73,26 @@ class RuntimePythonTest(unittest.TestCase):
         self.assertNotIn("python -m venv", setup)
         self.assertNotIn("py -3.10", setup)
 
+    # {
+    #   責務: [test_nuno_launcher_requires_supported_cpython: Nuno起動バッチのPython要件を検証する]
+    #   処理: [1: 起動バッチを読む, 2: CPythonの最低版と安全な退避を確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_nuno_launcher_requires_supported_cpython_without_unversioned_fallback(self):
+        launcher = (
+            (Path(__file__).resolve().parents[1] / "nuno" / "_touka" / "run_image_enhancer.bat")
+            .read_text(encoding="utf-8")
+            .lower()
+        )
+        self.assertIn("kadoka_python31118", launcher)
+        self.assertIn("py -3.11.18 -m venv", launcher)
+        self.assertIn("sys.implementation.name == 'cpython'", launcher)
+        self.assertIn("sys.version_info >= (3, 11, 18)", launcher)
+        self.assertIn(".venv-python-pre-31118", launcher)
+        self.assertNotIn("python -m venv", launcher)
+        self.assertNotIn("py -3.10", launcher)
+
     def test_onedir_batch_falls_back_to_supported_cpython_launcher(self):
         batch = (
             (Path(__file__).resolve().parents[1] / "tools" / "build" / "build_onedir.bat")

@@ -9,6 +9,7 @@ set "REQ_FILE=%~dp0requirements.txt"
 set "INSTALL_REQUIRED=0"
 set "PYTHON31118=%KADOKA_PYTHON31118%"
 set "PYTHON_LAUNCHER="
+set "ROOT_VENV_PY=%~dp0..\..\.venv\Scripts\python.exe"
 
 if not exist "%VENV_PY%" goto create_environment
 
@@ -125,14 +126,19 @@ exit /b 1
 :verify_creation_python
 if defined PYTHON31118 goto verify_configured_python
 where py >nul 2>nul
-if errorlevel 1 exit /b 1
+if errorlevel 1 goto verify_root_python
 set "PYTHON_LAUNCHER=py -3.12"
 %PYTHON_LAUNCHER% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>&1
 if not errorlevel 1 exit /b 0
 set "PYTHON_LAUNCHER=py -3.11"
 %PYTHON_LAUNCHER% -c "import sys; raise SystemExit(0 if sys.implementation.name == 'cpython' and sys.version_info >= (3, 11, 18) and sys.version_info < (3, 13) else 1)" >nul 2>&1
-if errorlevel 1 exit /b 1
+if errorlevel 1 goto verify_root_python
 exit /b 0
+
+:verify_root_python
+if not exist "%ROOT_VENV_PY%" exit /b 1
+set "PYTHON31118=%ROOT_VENV_PY%"
+goto verify_configured_python
 
 :verify_configured_python
 if not exist "%PYTHON31118%" exit /b 1

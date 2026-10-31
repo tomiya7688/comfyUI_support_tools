@@ -84,7 +84,7 @@ class RuntimePythonTest(unittest.TestCase):
     #   引数: []
     #   戻り値: []
     # }
-    def test_nuno_launcher_requires_supported_cpython_without_unversioned_fallback(self):
+    def test_nuno_launcher_requires_supported_cpython_and_uses_versioned_fallback(self):
         launcher = (
             (Path(__file__).resolve().parents[1] / "nuno" / "_touka" / "run_image_enhancer.bat")
             .read_text(encoding="utf-8")
@@ -94,6 +94,8 @@ class RuntimePythonTest(unittest.TestCase):
         self.assertIn('set "python_launcher=py -3.12"', launcher)
         self.assertIn('set "python_launcher=py -3.11"', launcher)
         self.assertIn("%python_launcher% -m venv", launcher)
+        self.assertIn("%~dp0..\\..\\.venv\\scripts\\python.exe", launcher)
+        self.assertIn("goto verify_root_python", launcher)
         self.assertIn("sys.implementation.name == 'cpython'", launcher)
         self.assertIn("sys.version_info >= (3, 11, 18)", launcher)
         self.assertIn("sys.version_info < (3, 13)", launcher)

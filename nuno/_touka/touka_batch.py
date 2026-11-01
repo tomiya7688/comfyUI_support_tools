@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 from image_enhancer import EnhanceSettings, process_image
+from candidate_evaluator import HeuristicBaselineEvaluator
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -892,33 +893,27 @@ def process_video(
         + avg_skeleton_endpoints * 0.1
         + avg_area / max(1, width * height) * 5.0,
     )
-    preset_bonus = {
-        "clothing": avg_area / max(1, width * height) * 6.0,
-        "cloth": temporal_shape * 5.0,
-        "shirt": avg_area / max(1, width * height) * 6.5 + avg_symmetry * 1.5,
-        "bra": avg_area / max(1, width * height) * 5.8 + avg_symmetry * 2.0,
-        "panties": avg_area / max(1, width * height) * 5.8 + avg_symmetry * 1.8,
-        "skin": avg_tracking_confidence * 3.0 + avg_area / max(1, width * height) * 3.0,
-        "carpet": temporal_shape * 5.5 + avg_area / max(1, width * height) * 3.0,
-        "ribbon": avg_elongated * 0.5,
-        "regular": avg_components * 0.1,
-        "solid": avg_tracking_confidence * 4.0,
-        "generic": 0.0,
-    }[object_preset]
-    score = (
-        avg_gain * 0.28
-        + avg_edge * 18.0
-        + shape_score
-        + temporal_shape * 8.0
-        + preset_bonus
-        + avg_tracking_confidence * 20.0
-        - avg_flicker * 0.45
-        - avg_camera_motion * 0.1
-        - avg_clip * 24.0
-        - avg_deviation * 0.04
-        - min(10.0, avg_noise / 500.0)
-        - avg_halo * 4.0
+    evaluation = HeuristicBaselineEvaluator().evaluate(
+        {
+            "information_gain": avg_gain,
+            "edge_gain": avg_edge,
+            "shape_score": shape_score,
+            "temporal_shape": temporal_shape,
+            "tracking_confidence": avg_tracking_confidence,
+            "flicker": avg_flicker,
+            "camera_motion": avg_camera_motion,
+            "clipping": avg_clip,
+            "deviation": avg_deviation,
+            "noise": avg_noise,
+            "halo": avg_halo,
+            "area_ratio": avg_area / max(1, width * height),
+            "symmetry": avg_symmetry,
+            "elongated_components": avg_elongated,
+            "components": avg_components,
+        },
+        object_preset,
     )
+    score = evaluation.score
     print(
         f"candidate_score={score:.2f} information_gain={avg_gain:.2f} edge_gain={avg_edge:.3f} clipping={avg_clip:.3f} flicker_penalty={avg_flicker:.2f}",
         flush=True,
@@ -955,6 +950,9 @@ def process_video(
     temp.unlink(missing_ok=True)
     return {
         "score": score,
+        "score_breakdown": dict(evaluation.breakdown),
+        "evaluator_id": evaluation.evaluator_id,
+        "evaluator_version": evaluation.version,
         "mask_preview": str(mask_preview_path),
         "resolved_object_preset": object_preset,
         "surface_preset": surface_preset,

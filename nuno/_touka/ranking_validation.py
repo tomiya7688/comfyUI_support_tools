@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Sequence
+from typing import Protocol
 
 
 # {
@@ -16,6 +17,34 @@ class RankingValidation:
     top1_accuracy: float
     top_k_inclusion: float
     candidate_count: int
+
+
+# {
+# 責務: [ ScoreProvider: 候補featureを独立評価するevaluator契約を定義する ]
+# フィールド: []
+# 処理: []
+# }
+class ScoreProvider(Protocol):
+    # {
+    # 責務: [ score: candidate featureとpresetから評価scoreを返す ]
+    # 処理: [ 1: candidateを採点する, 2: scalar scoreを返す ]
+    # 引数: [ self: evaluator, features: candidate feature, object_preset: preset ]
+    # 戻り値: [ score: evaluator score ]
+    # }
+    def score(self, features: Mapping[str, float], object_preset: str) -> float: ...
+
+
+# {
+# 責務: [ RankedCandidate: 複数evaluatorによる候補順位と不一致を保持する ]
+# フィールド: [ candidate_index: 入力候補index, score: 統合順位score, disagreement: evaluator標準scoreの標準偏差, uncertain: 閾値超過 ]
+# 処理: []
+# }
+@dataclass(frozen=True)
+class RankedCandidate:
+    candidate_index: int
+    score: float
+    disagreement: float
+    uncertain: bool
 
 
 # {
@@ -68,3 +97,48 @@ def validate_ranking(
         top_k_inclusion=float(bool(set(predicted[:top_k]) & good)),
         candidate_count=len(scores),
     )
+
+
+# {
+# 責務: [ rank_candidates: evaluator群を標準化して候補順位と不一致を計算する ]
+# 処理: [ 1: evaluator別scoreを計算する, 2: scoreを標準化する, 3: 合意scoreと不一致を降順で返す ]
+# 引数: [ candidates: candidate feature列, evaluators: score provider列, object_preset: preset, disagreement_threshold: uncertain閾値 ]
+# 戻り値: [ ranked: 統合順位 ]
+# }
+def rank_candidates(
+    candidates: Sequence[Mapping[str, float]],
+    evaluators: Sequence[ScoreProvider],
+    object_preset: str,
+    *,
+    disagreement_threshold: float = 1.0,
+) -> list[RankedCandidate]:
+    if not candidates or not evaluators:
+        raise ValueError("ranking requires candidates and evaluators")
+    if disagreement_threshold < 0:
+        raise ValueError("disagreement_threshold cannot be negative")
+    score_columns = [
+        [float(evaluator.score(item, object_preset)) for item in candidates]
+        for evaluator in evaluators
+    ]
+    normalized_columns: list[list[float]] = []
+    for scores in score_columns:
+        mean = sum(scores) / len(scores)
+        variance = sum((score - mean) ** 2 for score in scores) / len(scores)
+        deviation = variance**0.5
+        normalized_columns.append(
+            [(score - mean) / deviation if deviation else 0.0 for score in scores]
+        )
+    ranked = []
+    for index in range(len(candidates)):
+        values = [column[index] for column in normalized_columns]
+        score = sum(values) / len(values)
+        disagreement = (sum((value - score) ** 2 for value in values) / len(values)) ** 0.5
+        ranked.append(
+            RankedCandidate(
+                candidate_index=index,
+                score=score,
+                disagreement=disagreement,
+                uncertain=disagreement > disagreement_threshold,
+            )
+        )
+    return sorted(ranked, key=lambda item: item.score, reverse=True)

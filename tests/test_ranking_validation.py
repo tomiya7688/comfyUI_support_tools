@@ -1,6 +1,6 @@
 import unittest
 
-from nuno._touka.ranking_validation import validate_ranking
+from nuno._touka.ranking_validation import rank_candidates, validate_ranking
 
 
 # {
@@ -9,6 +9,32 @@ from nuno._touka.ranking_validation import validate_ranking
 # 処理: [ 1: 一致/不一致rankingを検証する, 2: 不正入力を検証する ]
 # }
 class RankingValidationTests(unittest.TestCase):
+    # {
+    # 責務: [ _FakeScoreProvider: featureからfixture scoreを返す ]
+    # フィールド: [ feature: 参照feature, reverse: score反転 ]
+    # 処理: []
+    # }
+    class _FakeScoreProvider:
+        # {
+        # 責務: [ __init__: score providerのfixture設定を保持する ]
+        # 処理: [ 1: feature名と反転設定を保存する ]
+        # 引数: [ self: instance, feature: 読み取るmetric, reverse: 順序反転 ]
+        # 戻り値: []
+        # }
+        def __init__(self, feature, reverse=False):
+            self.feature = feature
+            self.reverse = reverse
+
+        # {
+        # 責務: [ score: fixture candidateを採点する ]
+        # 処理: [ 1: metricを読む, 2: 必要なら順序を反転する ]
+        # 引数: [ self: instance, features: candidate feature, object_preset: unused preset ]
+        # 戻り値: [ score: numeric fixture score ]
+        # }
+        def score(self, features, object_preset):
+            value = features[self.feature]
+            return -value if self.reverse else value
+
     # {
     # 責務: [ test_reports_perfect_ranking_and_top_k: synthetic GTの一致指標を確認する ]
     # 処理: [ 1: GT一致scoreを評価する, 2: 指標を確認する ]
@@ -42,6 +68,32 @@ class RankingValidationTests(unittest.TestCase):
     def test_rejects_mismatched_validation_data(self):
         with self.assertRaises(ValueError):
             validate_ranking([0.5], [])
+
+    # {
+    # 責務: [ test_combines_multiple_evaluators_and_flags_disagreement: evaluator順位統合と不一致を確認する ]
+    # 処理: [ 1: 合意候補をrankする, 2: 逆順位evaluatorの不一致を確認する ]
+    # 引数: [ self: test instance ]
+    # 戻り値: []
+    # }
+    def test_combines_multiple_evaluators_and_flags_disagreement(self):
+        candidates = [{"shape": 3.0}, {"shape": 2.0}, {"shape": 1.0}]
+        agreement = rank_candidates(
+            candidates,
+            [self._FakeScoreProvider("shape"), self._FakeScoreProvider("shape")],
+            "generic",
+        )
+        self.assertEqual(agreement[0].candidate_index, 0)
+        disagreement = rank_candidates(
+            candidates,
+            [
+                self._FakeScoreProvider("shape"),
+                self._FakeScoreProvider("shape", reverse=True),
+            ],
+            "generic",
+            disagreement_threshold=0.5,
+        )
+        self.assertTrue(disagreement[0].uncertain)
+        self.assertGreater(disagreement[0].disagreement, 0.5)
 
 
 if __name__ == "__main__":

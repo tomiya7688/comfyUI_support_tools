@@ -75,6 +75,11 @@ def work():
         findings = quality_gate.scan_source("scripts/tabs/example.py", source, ())
         self.assertFalse(any(item.rule == "QUA230" for item in findings))
 
+    def test_rejects_new_network_and_filesystem_work_in_legacy_tab(self) -> None:
+        source = "import requests\nfrom pathlib import Path\nrequests.get('http://localhost')\nPath('out.txt').write_text('data')\n"
+        findings = quality_gate.scan_source("scripts/tabs/example.py", source, ((1, 4),))
+        self.assertEqual(sum(item.rule == "QUA230" for item in findings), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

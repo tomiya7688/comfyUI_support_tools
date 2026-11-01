@@ -325,6 +325,7 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
                 called.startswith("subprocess.")
                 or called.startswith("requests.")
                 or called in {"urlopen", "open"}
+                or called in {"write_text", "write_bytes", "unlink", "rename", "replace", "mkdir", "rmdir"}
                 or called.endswith((".write_text", ".write_bytes", ".unlink", ".rename", ".replace", ".mkdir", ".rmdir"))
             ):
                 findings.append(

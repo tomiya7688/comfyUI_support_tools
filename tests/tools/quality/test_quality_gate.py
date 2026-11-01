@@ -80,6 +80,11 @@ def work():
         findings = quality_gate.scan_source("scripts/tabs/example.py", source, ((1, 4),))
         self.assertEqual(sum(item.rule == "QUA230" for item in findings), 2)
 
+    def test_requires_audit_for_new_declarations_in_mega_module(self) -> None:
+        source = "class NewResponsibility:\n    pass\n" + "value = 1\n" * 1000
+        findings = quality_gate.scan_source("large.py", source, ((1, 1002),))
+        self.assertTrue(any(item.rule == "QUA240" and item.severity == "E" for item in findings))
+
 
 if __name__ == "__main__":
     unittest.main()

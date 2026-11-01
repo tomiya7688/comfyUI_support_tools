@@ -264,6 +264,16 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             size = (node.end_lineno or node.lineno) - node.lineno + 1
+            if len(lines) > 1000 and _line_in_ranges(_declaration_start(node), added_ranges):
+                findings.append(
+                    Finding(
+                        "E",
+                        "QUA240",
+                        path,
+                        _declaration_start(node),
+                        f"new function {node.name!r} added to a file over 1000 lines; split responsibilities or document an approved exception",
+                    )
+                )
             if size > 120:
                 severity = "E" if size > 200 and _line_in_ranges(node.lineno, added_ranges) else "W"
                 findings.append(
@@ -277,6 +287,16 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
                 )
         elif isinstance(node, ast.ClassDef):
             size = (node.end_lineno or node.lineno) - node.lineno + 1
+            if len(lines) > 1000 and _line_in_ranges(_declaration_start(node), added_ranges):
+                findings.append(
+                    Finding(
+                        "E",
+                        "QUA240",
+                        path,
+                        _declaration_start(node),
+                        f"new class {node.name!r} added to a file over 1000 lines; split responsibilities or document an approved exception",
+                    )
+                )
             if size > 500:
                 findings.append(
                     Finding(

@@ -32,6 +32,10 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 現在のPyInstaller onedir版にはPyTorch/Transformersを同梱していないため、凍結実行ファイルではOSSモデルによる推論を利用できません。明示metadataの分類とコピーは使えますが、モデル判定が必要な画像は `uncertain` に残ります。OSSモデル推論を使う場合は、対応依存を導入したソース版GUIを起動してください。
 
+### Touka候補評価
+
+Toukaの動画候補scoreは、候補生成中のmetricから独立したversion付きbaseline evaluatorで計算し、`candidate_scores.json` にscore内訳とevaluator versionを記録します。ranking検証ユーティリティはground-truth品質値に対するpairwise accuracy、top-1選択率、top-k良候補包含率を計算します。現行baselineは未校正のため、実データで検証するまではscoreを画質の保証として扱わないでください。
+
 ---
 
 ## English
@@ -63,3 +67,7 @@ The `AI画像クラスタ` tab analyzes an image folder and previews three group
 To use the detector, install `requirements-ai-image-clustering.txt` and a compatible PyTorch build into the GUI's Python environment. The model weights are downloaded from Hugging Face on first inference and stored under `user_data/cache/ai_origin` by default. The model targets anime images and its score thresholds are uncalibrated. Treat image-only results as estimates and keep ambiguous results in `uncertain`. Images are not sent to an external service. The model weights are Apache-2.0 licensed and are not bundled with the application.
 
 The current PyInstaller onedir build does not bundle PyTorch or Transformers, so OSS model inference is unavailable in the frozen executable. Explicit metadata classification and copying still work, while images requiring model inference remain `uncertain`. To use OSS model inference, launch the source version of the GUI with the supported dependencies installed.
+
+### Touka candidate evaluation
+
+Touka video candidate scores are computed by a separate, versioned baseline evaluator from candidate metrics. `candidate_scores.json` records the metric breakdown and evaluator version. The ranking validation utility reports pairwise accuracy, top-1 selection accuracy, and top-k inclusion against ground-truth quality labels. The current baseline is uncalibrated; do not treat its score as a quality guarantee until it is validated on representative data.

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Protocol
-
+from typing import Protocol
 
 HEURISTIC_BASELINE_VERSION = "touka-heuristic-v1"
 
@@ -28,9 +28,13 @@ class EvaluationResult:
 # 戻り値: []
 # }
 class CandidateEvaluator(Protocol):
-    def evaluate(
-        self, metrics: Mapping[str, float], object_preset: str
-    ) -> EvaluationResult: ...
+    # {
+    # 責務: [ evaluate: featureとpresetから候補評価結果を生成する ]
+    # 処理: [ 1: evaluator metricを算出する, 2: provenance付き結果を返す ]
+    # 引数: [ self: evaluator, metrics: candidate feature, object_preset: preset名 ]
+    # 戻り値: [ result: 評価結果 ]
+    # }
+    def evaluate(self, metrics: Mapping[str, float], object_preset: str) -> EvaluationResult: ...
 
 
 # {
@@ -61,9 +65,7 @@ class HeuristicBaselineEvaluator:
     # 引数: [ metrics: 抽出済み候補metric, object_preset: preset名 ]
     # 戻り値: [ result: version付きscore内訳 ]
     # }
-    def evaluate(
-        self, metrics: Mapping[str, float], object_preset: str
-    ) -> EvaluationResult:
+    def evaluate(self, metrics: Mapping[str, float], object_preset: str) -> EvaluationResult:
         if object_preset not in self.PRESET_BONUSES:
             raise ValueError(f"Unsupported Touka object preset: {object_preset}")
         coefficients = {
@@ -82,9 +84,7 @@ class HeuristicBaselineEvaluator:
             name: float(metrics.get(name, 0.0)) * coefficient
             for name, coefficient in coefficients.items()
         }
-        breakdown["noise_penalty"] = -min(
-            10.0, float(metrics.get("noise", 0.0)) / 500.0
-        )
+        breakdown["noise_penalty"] = -min(10.0, float(metrics.get("noise", 0.0)) / 500.0)
         preset = self.PRESET_BONUSES.get(object_preset, ())
         for index in range(0, len(preset), 2):
             feature, coefficient = preset[index : index + 2]

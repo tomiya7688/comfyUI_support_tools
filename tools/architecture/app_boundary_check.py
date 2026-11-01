@@ -40,6 +40,38 @@ def scan_source(path: str, source: str) -> list[Violation]:
     runtime_scope = path.replace("\\", "/").startswith("scripts/")
     tab_scope = path.replace("\\", "/").startswith("scripts/tabs/")
 
+    # Track simple local assignments so helper-resolved interpreters are treated
+    # like literal Python commands at subprocess boundaries.
+    python_values: set[str] = set()
+    script_values: set[str] = set()
+    command_values: dict[str, ast.AST] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        value = node.value
+        if value is None:
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        names = [target.id for target in targets if isinstance(target, ast.Name)]
+        for name in names:
+            command_values[name] = value
+        if not names:
+            continue
+        if isinstance(value, ast.Call) and _name(value.func).endswith("venv_python"):
+            python_values.update(names)
+        elif any(isinstance(part, ast.Attribute) and part.attr.endswith("script_name") for part in ast.walk(value)):
+            script_values.update(names)
+        elif isinstance(value, ast.BinOp) and any(
+            isinstance(part, ast.Constant) and str(part.value).lower().endswith(".py") for part in ast.walk(value)
+        ):
+            script_values.update(names)
+        elif "python" in ast.unparse(value).lower():
+            if isinstance(value, ast.Call) and _name(value.func) == "Path" or isinstance(value, ast.BinOp):
+                python_values.update(names)
+        elif isinstance(value, ast.BinOp) and isinstance(value.op, ast.Div):
+            if isinstance(value.right, ast.Constant) and str(value.right.value).lower().endswith(".py"):
+                script_values.update(names)
+
     for node in ast.walk(tree):
         if runtime_scope and isinstance(node, ast.Import):
             for alias in node.names:
@@ -61,12 +93,28 @@ def scan_source(path: str, source: str) -> list[Violation]:
 
             if called in {"subprocess.Popen", "subprocess.run", "subprocess.call", "subprocess.check_call", "subprocess.check_output"} and node.args:
                 command = node.args[0]
+                if isinstance(command, ast.Name):
+                    command = command_values.get(command.id, command)
                 if isinstance(command, (ast.List, ast.Tuple)) and command.elts:
                     first = command.elts[0]
                     if isinstance(first, ast.Constant) and str(first.value).lower() in PYTHON_COMMANDS:
                         violations.append(Violation(path, node.lineno, "ARCH003", f"PATH Python subprocess is forbidden: {first.value}"))
                     if _name(first) == "sys.executable":
                         violations.append(Violation(path, node.lineno, "ARCH004", "sys.executable must not launch another app/script"))
+                    first_value = first.args[0] if isinstance(first, ast.Call) and _name(first.func) == "str" and first.args else first
+                    if isinstance(first_value, ast.Call) and _name(first_value.func) == "packaged_executable":
+                        continue
+                    if isinstance(first_value, ast.Name) and first_value.id in python_values:
+                        if len(command.elts) > 1:
+                            second = command.elts[1]
+                            if isinstance(second, ast.Call) and _name(second.func) == "str" and second.args:
+                                second = second.args[0]
+                            if isinstance(second, ast.Name) and second.id in script_values:
+                                violations.append(Violation(path, node.lineno, "ARCH005", "venv Python must not launch an external backend script"))
+                            elif isinstance(second, ast.Call) and _name(second.func) == "str" and second.args and isinstance(second.args[0], ast.Name) and second.args[0].id in script_values:
+                                violations.append(Violation(path, node.lineno, "ARCH005", "venv Python must not launch an external backend script"))
+                            elif isinstance(second, ast.Constant) and str(second.value).lower().endswith(".py"):
+                                violations.append(Violation(path, node.lineno, "ARCH005", "venv Python must not launch an external backend script"))
 
     return violations
 

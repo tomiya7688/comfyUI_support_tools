@@ -29,6 +29,29 @@ class AppBoundaryCheckTests(unittest.TestCase):
         source = "import subprocess\nimport requests\nsubprocess.Popen(['OtherService.exe', '--port', '8188'])\nrequests.get('http://127.0.0.1:8188/health')\n"
         self.assertEqual(app_boundary_check.scan_source("scripts/example.py", source), [])
 
+    def test_detects_venv_python_and_backend_script_variables(self):
+        source = """from pathlib import Path
+import subprocess
+python = venv_python(RUNTIME_DIR / 'venv')
+script = RUNTIME_DIR / self.launch_spec.launch_script_name
+subprocess.Popen([str(python), str(script)])
+"""
+        rules = [item.rule for item in app_boundary_check.scan_source("scripts/backend/example.py", source)]
+        self.assertIn("ARCH005", rules)
+
+    def test_detects_path_python_executable(self):
+        source = """from pathlib import Path
+import subprocess
+python = Path(root) / 'Scripts/python.exe'
+subprocess.run([str(python), 'tool.py'])
+"""
+        rules = [item.rule for item in app_boundary_check.scan_source("scripts/example.py", source)]
+        self.assertIn("ARCH005", rules)
+
+    def test_allows_packaged_executable_helper(self):
+        source = "import subprocess\nsubprocess.Popen([packaged_executable('Touka'), '--help'])\n"
+        self.assertEqual(app_boundary_check.scan_source("scripts/example.py", source), [])
+
     def test_baseline_blocks_new_violation_and_requires_reduction(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -69,6 +69,18 @@ Files under 1000 lines can still require splitting when responsibilities are mix
 
 ---
 
+### Extensibility and integration quality
+
+- Add backends, model detectors, evaluators, processors, actions, parameter types, export formats, filters, and quality strategies through composition-root registration or versioned descriptors instead of adding branches to domain cores.
+- Keep registries limited to factory, descriptor, and capability registration. If a normal extension requires editing several central definitions, review the single source of truth.
+- Do not add subprocess, HTTP, filesystem mutation, inference, image/video processing, retries, or scoring to UI code. Move processing behind Application, Processing, or Adapter boundaries when extending a legacy tab.
+- Substantive precision, quality, or ranking claims require a baseline, validation set, metric, before/after results, and representative failure cases. Keep generators separate from evaluators.
+- A placeholder UI does not complete a feature. Connect its adapter, capability, execution, results, error handling, and tests.
+- Connect optional behavior to the versioned settings schema instead of saving ad hoc Tk variables or handwritten presets.
+- Reuse shared runtime contracts for jobs, artifacts, dry runs, manifests, and resources rather than reimplementing them per feature.
+- For extensible core code, test a fake extension that can be registered and used without changing the core.
+- Review responsibility boundaries before adding duties to large mixed-responsibility files. Record why a large file remains cohesive when it is not split.
+
 ## 3. Python style
 
 Follow common PEP 8 conventions unless the repository formatter defines a more specific rule.

@@ -65,6 +65,16 @@ def work():
         self.assertEqual(len(audit), 1)
         self.assertEqual(audit[0].severity, "A")
 
+    def test_rejects_new_subprocess_work_in_legacy_tab(self) -> None:
+        source = "import subprocess\nsubprocess.run(['ffmpeg', '-version'])\n"
+        findings = quality_gate.scan_source("scripts/tabs/example.py", source, ((1, 2),))
+        self.assertTrue(any(item.rule == "QUA230" and item.severity == "E" for item in findings))
+
+    def test_allows_existing_subprocess_work_outside_added_lines(self) -> None:
+        source = "import subprocess\nsubprocess.run(['ffmpeg', '-version'])\n"
+        findings = quality_gate.scan_source("scripts/tabs/example.py", source, ())
+        self.assertFalse(any(item.rule == "QUA230" for item in findings))
+
 
 if __name__ == "__main__":
     unittest.main()

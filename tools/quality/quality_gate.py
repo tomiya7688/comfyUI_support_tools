@@ -320,6 +320,22 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
 
         if isinstance(node, ast.Call) and _line_in_ranges(node.lineno, added_ranges):
             called = _call_name(node.func)
+            normalized_path = path.replace("\\", "/")
+            if normalized_path.startswith("scripts/tabs/") and (
+                called.startswith("subprocess.")
+                or called.startswith("requests.")
+                or called in {"urlopen", "open"}
+                or called.endswith((".write_text", ".write_bytes", ".unlink", ".rename", ".replace", ".mkdir", ".rmdir"))
+            ):
+                findings.append(
+                    Finding(
+                        "E",
+                        "QUA230",
+                        path,
+                        node.lineno,
+                        f"new direct I/O or process work in legacy UI ({called}); move it behind an adapter",
+                    )
+                )
             if any(
                 keyword.arg == "shell"
                 and isinstance(keyword.value, ast.Constant)

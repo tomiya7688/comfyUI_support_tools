@@ -41,7 +41,7 @@ def check_lora_compatibility(
             "Cannot compare model families: "
             f"LoRA: {lora.family_reason} Base model: {base_model.family_reason}",
         )
-    if lora.family is not base_model.family:
+    if lora.family != base_model.family:
         return CompatibilityResult(
             CompatibilityStatus.INCOMPATIBLE,
             f"LoRA family {lora.family.value} does not match "

@@ -1,10 +1,19 @@
 """Offline frozen-executable acceptance probe using temporary synthetic media."""
+
 from pathlib import Path
 import tempfile
 import time
 import threading
 
 
+# {
+#   責務: [create_samples: media browser acceptance probe用のsynthetic image/video/broken fileを作る]
+#   処理: [出力directoryを作成し、日本語名画像2枚、壊れた画像、MJPG videoを保存する]
+#   引数: [root: fixture filesを書き出すdirectory]
+#   戻り値: [なし]
+#   副作用: [root配下へtemporary fixture filesを作成する]
+#   エラー: [OpenCV video writerを開けない場合RuntimeError]
+# }
 def create_samples(root: Path) -> None:
     from PIL import Image, ImageDraw
     import cv2
@@ -26,6 +35,14 @@ def create_samples(root: Path) -> None:
         video.release()
 
 
+# {
+#   責務: [wait_until: GUI updateを回しながら非同期smoke conditionを待つ]
+#   処理: [monotonic deadlineまでwindow.updateとpredicate確認を繰り返す]
+#   引数: [window: update可能なTk window, predicate: 完了条件, timeout: 待機秒数]
+#   戻り値: [なし。condition成立時にreturn]
+#   エラー: [RuntimeError: timeout内にconditionが成立しない]
+#   副作用: [window event loopを逐次更新し、短時間sleepする]
+# }
 def wait_until(window, predicate, timeout=12.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -36,6 +53,13 @@ def wait_until(window, predicate, timeout=12.0):
     raise RuntimeError("Media browser probe timed out")
 
 
+# {
+#   責務: [exercise_media: synthetic mediaを使ってbrowser scan/filter/preview/list selectionを検証する]
+#   処理: [一時directoryを作り、画像/動画、複数選択、Unicode検索、list表示とworker終了を確認する]
+#   引数: [window: 起動済みMain GUI window]
+#   戻り値: [なし。検証失敗時RuntimeError]
+#   副作用: [GUI stateとtemporary filesを操作し、decoder worker終了を待つ]
+# }
 def exercise_media(window) -> None:
     with tempfile.TemporaryDirectory(prefix="kadoka_media_") as temporary:
         root = Path(temporary) / "日本語 media"
@@ -73,6 +97,14 @@ def exercise_media(window) -> None:
         wait_until(window, lambda: window.media_preview.photo is not None)
         # Finish all decoding before temporary files are deleted (Windows locks).
         browser.close()
-        wait_until(window, lambda: not any(t.is_alive() for t in threading.enumerate()
-                                           if t.name in ("media-scan", "media-preview")))
+        wait_until(
+            window,
+            lambda: (
+                not any(
+                    t.is_alive()
+                    for t in threading.enumerate()
+                    if t.name in ("media-scan", "media-preview")
+                )
+            ),
+        )
     print("KadokaTools media browser smoke test: OK")

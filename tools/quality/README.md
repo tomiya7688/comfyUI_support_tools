@@ -32,10 +32,10 @@ PRではbase branchとの差分Pythonファイルを検査します。
 
 ~~~bash
 python tools/quality/comment_coverage.py
-python tools/quality/comment_coverage.py --path tools --path tests --strict
+python tools/quality/comment_coverage.py --path tools --path tests --path src/comfyui_support_tools/shared --path src/comfyui_support_tools/entrypoints --strict
 ~~~
 
-対象言語はPythonです。Git追跡されたfirst-party Pythonのclass / function / method（同期・非同期、nested、decorator付き、constructorを含む）を対象にします。`.bat`、YAML、JSON、Markdownは現在の規約が対象宣言を定義していないため対象外です。外部checkout、vendored code、generated code、rootのbuild/dist、license成果物、model/user dataも対象外です。`tools/build`のような開発toolのsourceは除外しません。`--path` はfile/directory prefixで対象を絞り、`--strict` は未適用または判定不能があると失敗します。全体移行中はsummaryを基準にし、移行済み領域（現時点のtoolsとtests）でstrict checkをcompletion gateから実行します。対象file数や宣言数はGit追跡内容から毎回算出します。
+対象言語はPythonです。Git追跡されたfirst-party Pythonのclass / function / method（同期・非同期、nested、decorator付き、constructorを含む）を対象にします。`.bat`、YAML、JSON、Markdownは現在の規約が対象宣言を定義していないため対象外です。外部checkout、vendored code、generated code、rootのbuild/dist、license成果物、model/user dataも対象外です。`tools/build`のような開発toolのsourceは除外しません。`--path` はfile/directory prefixで対象を絞り、`--strict` は未適用または判定不能があると失敗します。全体移行中はsummaryを基準にし、移行済み領域（tools、tests、shared、entrypoints）でstrict checkをcompletion gateから実行します。対象file数や宣言数はGit追跡内容から毎回算出します。
 
 ## English
 
@@ -63,4 +63,4 @@ Main checks:
 
 Files over 1000 lines and functions over 120 lines are not automatically forbidden. They trigger an explicit responsibility-boundary review.
 
-Run declaration coverage with `python tools/quality/comment_coverage.py`; use `--path tools --path tests --strict` for strict checks on migrated areas. Python is the covered language. The scanner includes tracked first-party classes/functions/methods, including nested, async, decorated declarations and constructors. `.bat`, YAML, JSON, and Markdown do not define declaration targets under the current standard. It excludes external checkouts, vendored/generated code, root build/dist outputs, license artifacts, and model/user data; development tools such as `tools/build` remain in scope. `--path` filters by file/directory prefix; `--strict` fails on missing or undecidable comments. Counts are recalculated from tracked files at every run. During the repository-wide migration, use the aggregate report; strict enforcement is connected for each migrated area.
+Run declaration coverage with `python tools/quality/comment_coverage.py`; use `--path tools --path tests --path src/comfyui_support_tools/shared --path src/comfyui_support_tools/entrypoints --strict` for strict checks on migrated areas. Python is the covered language. The scanner includes tracked first-party classes/functions/methods, including nested, async, decorated declarations and constructors. `.bat`, YAML, JSON, and Markdown do not define declaration targets under the current standard. It excludes external checkouts, vendored/generated code, root build/dist outputs, license artifacts, and model/user data; development tools such as `tools/build` remain in scope. `--path` filters by file/directory prefix; `--strict` fails on missing or undecidable comments. Counts are recalculated from tracked files at every run. During the repository-wide migration, use the aggregate report; strict enforcement is connected for each migrated area.

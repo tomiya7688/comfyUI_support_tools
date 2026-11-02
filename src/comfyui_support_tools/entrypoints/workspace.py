@@ -1,16 +1,35 @@
 """Composition root for the opt-in Main GUI shell; no backend is loaded here."""
-from comfyui_support_tools.applications.main_gui.process.commander.navigation_commander import NavigationCommander
-from comfyui_support_tools.applications.main_gui.process.messenger.navigation_messenger import ProcessNavigationMessenger
-from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import NavigationProcessing
-from comfyui_support_tools.applications.main_gui.ui.commander.navigation_commander import NavigationUiCommander
-from comfyui_support_tools.applications.main_gui.ui.messenger.navigation_messenger import UiNavigationMessenger
-from comfyui_support_tools.applications.main_gui.ui.processing.inspector_shell import InspectorShellWindow as ShellWindow
+
+from comfyui_support_tools.applications.main_gui.process.commander.navigation_commander import (
+    NavigationCommander,
+)
+from comfyui_support_tools.applications.main_gui.process.messenger.navigation_messenger import (
+    ProcessNavigationMessenger,
+)
+from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import (
+    NavigationProcessing,
+)
+from comfyui_support_tools.applications.main_gui.ui.commander.navigation_commander import (
+    NavigationUiCommander,
+)
+from comfyui_support_tools.applications.main_gui.ui.messenger.navigation_messenger import (
+    UiNavigationMessenger,
+)
+from comfyui_support_tools.applications.main_gui.ui.processing.inspector_shell import (
+    InspectorShellWindow as ShellWindow,
+)
 from comfyui_support_tools.shared.contracts.tool_entry import ToolEntry
 from comfyui_support_tools.entrypoints.media_browser import create_media_browser
 from comfyui_support_tools.entrypoints.inspector import create_inspector
 from comfyui_support_tools.entrypoints.jobs import create_job_queue, create_job_runtime
 
 
+# {
+#   責務: [create_navigation: tool metadataをNavigation UI境界へ接続する]
+#   処理: [NavigationProcessing、process/ui messenger、commanderを順にcomposeする]
+#   引数: [tools: navigationに表示するToolEntry tuple]
+#   戻り値: [NavigationUiCommander: tool filter/section操作入口]
+# }
 def create_navigation(tools: tuple[ToolEntry, ...]) -> NavigationUiCommander:
     processing = NavigationProcessing(tools)
     process = NavigationCommander(processing)
@@ -19,14 +38,34 @@ def create_navigation(tools: tuple[ToolEntry, ...]) -> NavigationUiCommander:
     return NavigationUiCommander(ui_messenger)
 
 
+# {
+#   責務: [create_workspace_components: shared job runtimeを共有するmedia/Inspector/job UI componentを作る]
+#   処理: [2並行job runtimeを生成し3つのcomponentへ注入する]
+#   引数: []
+#   戻り値: [media browser, Inspector, Job Queue commanderのtuple]
+# }
 def create_workspace_components():
     runtime = create_job_runtime(max_concurrent=2)
     return create_media_browser(runtime), create_inspector(runtime), create_job_queue(runtime)
 
 
+# {
+#   責務: [run_shell: shell windowを起動し、選択されたlegacy tool IDを返す]
+#   処理: [filter/sectionを初期化し、componentを組み立ててmainloop後に要求toolを読む]
+#   引数: [commander: navigation UI commander]
+#   戻り値: [requested tool IDまたはNone]
+#   副作用: [Tk windowを生成しmain event loopを開始する]
+# }
 def run_shell(commander: NavigationUiCommander) -> str | None:
     requested: list[str] = []
 
+    # {
+    #   責務: [open_legacy: window終了時にnavigationから選ばれたtool IDを保管する]
+    #   処理: [IDをrequested listへ追加してshell windowをdestroyする]
+    #   引数: [tool_id: 起動要求されたlegacy tool識別子]
+    #   戻り値: [なし]
+    #   副作用: [closure stateを更新しwindowを閉じる]
+    # }
     def open_legacy(tool_id: str) -> None:
         requested.append(tool_id)
         window.destroy()
@@ -39,6 +78,13 @@ def run_shell(commander: NavigationUiCommander) -> str | None:
     return requested[0] if requested else None
 
 
+# {
+#   責務: [smoke_test: shell layout、section/pane、media/Inspector、shared jobsを合成検証する]
+#   処理: [Tk callback error、pane表示、smoke probes、job終端状態とhistory描画を検査する]
+#   引数: [tools: navigationに表示するToolEntry tuple]
+#   戻り値: [なし。検証失敗時RuntimeError]
+#   副作用: [Tk windowとworkerを起動し、最後にwindowをdestroyする]
+# }
 def smoke_test(tools: tuple[ToolEntry, ...]) -> None:
     requested: list[str] = []
     media, inspector, jobs = create_workspace_components()
@@ -47,8 +93,10 @@ def smoke_test(tools: tuple[ToolEntry, ...]) -> None:
     window.report_callback_exception = lambda *args: errors.append(str(args))
     try:
         window.update()
-        if not all(getattr(window, name).winfo_ismapped()
-                   for name in ("toolbar", "library", "workspace", "inspector", "jobs")):
+        if not all(
+            getattr(window, name).winfo_ismapped()
+            for name in ("toolbar", "library", "workspace", "inspector", "jobs")
+        ):
             raise RuntimeError("One or more shell regions did not display")
         for section in ("all", "images", "videos", "dataset", "generated", "favorites", "recent"):
             window.select_section(section)
@@ -61,12 +109,16 @@ def smoke_test(tools: tuple[ToolEntry, ...]) -> None:
         window.geometry("900x600")
         window.update()
         from comfyui_support_tools.entrypoints.inspector_smoke import exercise_inspector
+
         exercise_inspector(window)
         from comfyui_support_tools.entrypoints.media_smoke import exercise_media
+
         exercise_media(window)
         kinds = {job.kind for job in jobs.snapshots()}
         if not {"tagger_probe", "tagger_tag", "media_scan"}.issubset(kinds):
-            raise RuntimeError(f"Shared Job Queue did not record both task families: {sorted(kinds)}")
+            raise RuntimeError(
+                f"Shared Job Queue did not record both task families: {sorted(kinds)}"
+            )
         if any(job.state in ("queued", "running") for job in jobs.snapshots()):
             raise RuntimeError("Frozen smoke left an active Job")
         window.job_panel.refresh()

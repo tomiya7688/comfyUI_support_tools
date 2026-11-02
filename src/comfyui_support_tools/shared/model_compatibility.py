@@ -8,18 +8,32 @@ from enum import Enum
 from .model_identity import ModelClassification, ModelFamily, ModelKind
 
 
+# {
+# 責務: [CompatibilityStatus: family-level LoRA判定結果の3状態を表す]
+# フィールド: [compatible, incompatible, unknown]
+# }
 class CompatibilityStatus(str, Enum):
     COMPATIBLE = "compatible"
     INCOMPATIBLE = "incompatible"
     UNKNOWN = "unknown"
 
 
+# {
+# 責務: [CompatibilityResult: 互換性statusと根拠messageを返す]
+# フィールド: [status: CompatibilityStatus, reason: 判定根拠]
+# }
 @dataclass(frozen=True)
 class CompatibilityResult:
     status: CompatibilityStatus
     reason: str
 
 
+# {
+#   責務: [check_lora_compatibility: LoRAとbase modelのkind/familyを保守的に照合する]
+#   処理: [kind不一致やunknown familyはunknown、既知family差はincompatible、family一致はcompatibleを返す]
+#   引数: [lora: LoRA classification, base_model: checkpointまたはUNet classification]
+#   戻り値: [CompatibilityResult: statusとreason]
+# }
 def check_lora_compatibility(
     lora: ModelClassification,
     base_model: ModelClassification,

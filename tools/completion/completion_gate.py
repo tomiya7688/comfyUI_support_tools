@@ -104,8 +104,8 @@ def quality_check() -> CheckResult:
 
 
 # {
-#   責務: [comment_coverage_check: toolsとtests内の宣言comment coverageをstrictに検査する]
-#   処理: [移行済みtools/tests pathsにcoverage checkerを実行し、そのstatusを返す]
+#   責務: [comment_coverage_check: tools/tests/shared/entrypointsの宣言comment coverageをstrictに検査する]
+#   処理: [移行済み四領域のpath filterでcoverage checkerを実行し、そのstatusを返す]
 #   引数: []
 #   戻り値: [result: coverage checkerのCheckResult]
 #   副作用: [coverage checker subprocessを起動する]
@@ -119,6 +119,10 @@ def comment_coverage_check() -> CheckResult:
             "tools",
             "--path",
             "tests",
+            "--path",
+            "src/comfyui_support_tools/shared",
+            "--path",
+            "src/comfyui_support_tools/entrypoints",
             "--strict",
         ]
     )
@@ -138,18 +142,20 @@ def comment_coverage_check() -> CheckResult:
 #   ],
 # }
 def test_check() -> CheckResult:
-    return run([
-        sys.executable,
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests",
-        "-t",
-        ".",
-        "-p",
-        "test_*.py",
-    ])
+    return run(
+        [
+            sys.executable,
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-t",
+            ".",
+            "-p",
+            "test_*.py",
+        ]
+    )
 
 
 # {
@@ -241,7 +247,9 @@ def diff_check() -> CheckResult:
 #   ],
 # }
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run repository completion checks before commit/PR.")
+    parser = argparse.ArgumentParser(
+        description="Run repository completion checks before commit/PR."
+    )
     parser.add_argument("--skip-tests", action="store_true")
     args = parser.parse_args(argv)
 

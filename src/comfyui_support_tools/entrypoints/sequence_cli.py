@@ -21,13 +21,21 @@ from comfyui_support_tools.applications.sequence.data.processing.ollama_prompt_c
 )
 from comfyui_support_tools.applications.sequence.data.processing.sequence_store import SequenceStore
 from comfyui_support_tools.applications.sequence.data.processing.tagger_command import TaggerCommand
-from comfyui_support_tools.applications.sequence.process.processing.sequence_runner import SequenceRunner
+from comfyui_support_tools.applications.sequence.process.processing.sequence_runner import (
+    SequenceRunner,
+)
 from comfyui_support_tools.shared.contracts.sequence_contracts import SequenceRunResult
 
 
 DEFAULT_SEQUENCE_DIRECTORY = Path("user_data/input/config/sequences")
 
 
+# {
+#   責務: [_build_runner: sequence CLIが実行可能なbuilt-in command registryを作る]
+#   処理: [A1111、ComfyUI、Ollama prompt、Tagger commandをSequenceRunnerへ登録する]
+#   引数: []
+#   戻り値: [SequenceRunner: built-in command mappingを持つrunner]
+# }
 def _build_runner() -> SequenceRunner:
     commands = {
         "a1111_generate": A1111GenerateCommand(),
@@ -38,17 +46,36 @@ def _build_runner() -> SequenceRunner:
     return SequenceRunner(commands)
 
 
+# {
+#   責務: [_sequence_directory: CLI option、環境変数、既定値の順でdefinition directoryを決める]
+#   処理: [explicit valueを優先し、次にKADOKA_SEQUENCE_DIR、最後にrepository defaultを使う]
+#   引数: [value: optional --directory value]
+#   戻り値: [Path: expanduser済みsequence directory]
+# }
 def _sequence_directory(value: str | None) -> Path:
     configured = value or os.environ.get("KADOKA_SEQUENCE_DIR")
     return Path(configured).expanduser() if configured else DEFAULT_SEQUENCE_DIRECTORY
 
 
+# {
+#   責務: [_definition_names: directory直下のJSON sequence定義名を列挙する]
+#   処理: [存在するdirectoryの*.json fileからsuffixを除いたstemをsortして返す]
+#   引数: [directory: sequence definition directory]
+#   戻り値: [names: sorted sequence names]
+#   エラー: [FileNotFoundError: directoryが存在しない]
+# }
 def _definition_names(directory: Path) -> list[str]:
     if not directory.is_dir():
         raise FileNotFoundError(f"sequence directory does not exist: {directory}")
     return sorted(path.stem for path in directory.glob("*.json") if path.is_file())
 
 
+# {
+#   責務: [_json_value: nested mapping/list/tupleをJSON対応containerへ再帰変換する]
+#   処理: [mapping keyをstring化し、配下containerを再帰的にlist/dictへ変換する]
+#   引数: [value: sequence result内の値]
+#   戻り値: [JSON-compatible containerまたは元scalar]
+# }
 def _json_value(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {str(key): _json_value(item) for key, item in value.items()}
@@ -57,6 +84,12 @@ def _json_value(value: Any) -> Any:
     return value
 
 
+# {
+#   責務: [_result_payload: sequence run resultをCLIのstable JSON response shapeへ変換する]
+#   処理: [sequence stateとstep input/output/errorをserializable mappingへ整形する]
+#   引数: [result: SequenceRunResult]
+#   戻り値: [payload: JSONへ書けるsequence result object]
+# }
 def _result_payload(result: SequenceRunResult) -> dict[str, Any]:
     return {
         "sequence_name": result.sequence_name,
@@ -75,11 +108,24 @@ def _result_payload(result: SequenceRunResult) -> dict[str, Any]:
     }
 
 
+# {
+#   責務: [_write_json: indented UTF-8互換JSONと改行を指定streamへ書く]
+#   処理: [ensure_asciiをfalseにし、indent 2でdumpしてnewlineを追加する]
+#   引数: [stream: 出力先text stream, value: JSON-compatible object]
+#   戻り値: [なし]
+#   副作用: [streamへ文字列を書き込む]
+# }
 def _write_json(stream: TextIO, value: Any) -> None:
     stream.write(json.dumps(value, ensure_ascii=False, indent=2))
     stream.write("\n")
 
 
+# {
+#   責務: [_parser: sequence save/list/run subcommandとdirectory optionを定義する]
+#   処理: [argparse parser、必須action subparser、各subcommand引数を構築する]
+#   引数: []
+#   戻り値: [ArgumentParser: CLI argument parser]
+# }
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sequence",
@@ -103,6 +149,13 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+# {
+#   責務: [main: sequence定義のsave/list/run CLIを実行しJSON結果とstatus codeを返す]
+#   処理: [argvをparseし、directoryを選択してstore/runnerを実行しdomain errorsをJSON化する]
+#   引数: [argv: optional args, stdout/stderr: injectable text streams, runner: injectable runner]
+#   戻り値: [0:成功/done, 1:run結果がdone以外, 2: filesystem/validation/JSON error]
+#   副作用: [sequence JSON filesを読み書きし、stdout/stderrへJSONを出力する]
+# }
 def main(
     argv: list[str] | None = None,
     *,

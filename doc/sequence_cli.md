@@ -40,5 +40,19 @@ sampler・steps・cfg・寸法・Hires.fix設定は省略時に既定値を使�
 `{"$ref": "context.generate.image"}` で受け取れます。
 シーケンスstepはA1111側の追加保存を無効にするため、出力が二重になりません。
 
+画像生成stepでprovenanceを付ける場合だけ、次のように明示します。既定ではOFFで、prompt/model/workflowの開示は`none`です。ComfyUIとA1111の両方で同じ`transparency` optionを使えます。`sign_c2pa`にはホストから安全な`SignerProvider`を注入してください。
+
+```json
+"transparency": {
+  "enabled": true,
+  "write_sidecar": true,
+  "prompt_disclosure": "none",
+  "model_disclosure": "none",
+  "workflow_disclosure": "none"
+}
+```
+
+有効化すると生成画像は変更せず、provenanceを持つsidecarを追加します。PNG metadataまたはC2PA署名copyは`write_png_metadata` / `sign_c2pa`を明示した場合にのみ作成し、sourceファイルは保持します。
+
 接続先はローカルホストまたはloopback IPに限られます。WebUI 1111本体やモデルは
 同梱せず、既存のHTTP APIを呼び出します。

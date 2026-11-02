@@ -12,6 +12,9 @@ from urllib.parse import urlsplit
 
 from scripts.backend.image_generation_backend_factory import create_image_generation_backend
 from scripts.backend.text_to_image_request import TextToImageRequest
+from comfyui_support_tools.shared.c2pa_adapter import SignerProvider
+from comfyui_support_tools.shared.transparency_preferences import TransparencyPreferenceStore
+from comfyui_support_tools.shared.transparency_processing import apply_generation_transparency
 
 MAX_IMAGE_BYTES = 100 * 1024 * 1024
 MAX_TIMEOUT = 3600
@@ -24,10 +27,15 @@ class A1111GenerateCommand:
         self,
         timeout: float = 1800.0,
         request_post: Callable[..., Any] | None = None,
+        *,
+        transparency_preferences: TransparencyPreferenceStore | None = None,
+        transparency_signer_provider: SignerProvider | None = None,
     ) -> None:
         self._validate_timeout(timeout)
         self._timeout = timeout
         self._request_post = request_post
+        self._transparency_preferences = transparency_preferences
+        self._transparency_signer_provider = transparency_signer_provider
 
     def __call__(self, inputs: Mapping[str, Any], _context: Mapping[str, Any]) -> Mapping[str, Any]:
         prompt = self._required_text(inputs, "prompt")
@@ -49,7 +57,23 @@ class A1111GenerateCommand:
             raise RuntimeError("WebUI 1111 image response exceeds 100 MiB")
         extension = self._image_extension(image_data)
         image_path = self._save_image(output_dir, extension, image_data)
-        return {"image": str(image_path), "prompt": prompt, "backend": "a1111"}
+        transparency_options = inputs.get("transparency")
+        result = {"image": str(image_path), "prompt": prompt, "backend": "a1111"}
+        transparency = apply_generation_transparency(
+            image_path,
+            application_id="sequence.a1111",
+            backend="a1111",
+            prompt=prompt,
+            model_id=(transparency_options.get("model_id") if isinstance(transparency_options, Mapping) else None),
+            model_family=(transparency_options.get("model_family") if isinstance(transparency_options, Mapping) else None),
+            model_version=(transparency_options.get("model_version") if isinstance(transparency_options, Mapping) else None),
+            transparency_options=transparency_options,
+            preferences=self._transparency_preferences,
+            signer_provider=self._transparency_signer_provider,
+        )
+        if transparency["transparency_enabled"]:
+            result.update(transparency)
+        return result
 
     def _post_function(self) -> Callable[..., Any]:
         if self._request_post is not None:

@@ -20,6 +20,9 @@ from urllib.request import (
 import uuid
 
 from comfyui_support_tools.shared.python_tls import create_certifi_context
+from comfyui_support_tools.shared.transparency_processing import apply_generation_transparency
+from comfyui_support_tools.shared.transparency_preferences import TransparencyPreferenceStore
+from comfyui_support_tools.shared.c2pa_adapter import SignerProvider
 
 MAX_WORKFLOW_BYTES = 10 * 1024 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
@@ -41,12 +44,21 @@ class ComfyUIGenerateCommand:
     #   引数: [self: command instance, timeout: 実行timeout秒, poll_interval: polling間隔秒]
     #   戻り値: []
     # }
-    def __init__(self, timeout: float = 1800.0, poll_interval: float = 0.5) -> None:
+    def __init__(
+        self,
+        timeout: float = 1800.0,
+        poll_interval: float = 0.5,
+        *,
+        transparency_preferences: TransparencyPreferenceStore | None = None,
+        transparency_signer_provider: SignerProvider | None = None,
+    ) -> None:
         self._validate_timeout(timeout)
         if isinstance(poll_interval, bool) or not isinstance(poll_interval, (int, float)) or poll_interval <= 0:
             raise ValueError("poll_interval must be greater than zero")
         self._timeout = timeout
         self._poll_interval = poll_interval
+        self._transparency_preferences = transparency_preferences
+        self._transparency_signer_provider = transparency_signer_provider
         self._opener = build_opener(
             ProxyHandler({}), _NoRedirect(), HTTPSHandler(context=create_certifi_context())
         )
@@ -68,7 +80,24 @@ class ComfyUIGenerateCommand:
         image_info = self._wait_for_image(api_url, prompt_id, timeout)
         image_data = self._download_image(api_url, image_info, timeout)
         image_path = self._save_image(output_dir, image_info["filename"], prompt_id, image_data)
-        return {"image": str(image_path), "prompt_id": prompt_id, "backend": "comfyui"}
+        result = {"image": str(image_path), "prompt_id": prompt_id, "backend": "comfyui"}
+        transparency_options = inputs.get("transparency")
+        transparency = apply_generation_transparency(
+            image_path,
+            application_id="sequence.comfyui",
+            backend="comfyui",
+            prompt=prompt,
+            model_id=(transparency_options.get("model_id") if isinstance(transparency_options, Mapping) else None),
+            model_family=(transparency_options.get("model_family") if isinstance(transparency_options, Mapping) else None),
+            model_version=(transparency_options.get("model_version") if isinstance(transparency_options, Mapping) else None),
+            workflow=workflow,
+            transparency_options=transparency_options,
+            preferences=self._transparency_preferences,
+            signer_provider=self._transparency_signer_provider,
+        )
+        if transparency["transparency_enabled"]:
+            result.update(transparency)
+        return result
 
     @staticmethod
     def _required_text(inputs: Mapping[str, Any], key: str) -> str:

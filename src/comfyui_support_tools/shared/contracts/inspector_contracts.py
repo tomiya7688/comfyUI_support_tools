@@ -59,6 +59,31 @@ class ExportSettings:
     batch_txt_path: str = ""
     include_style_in_caption: bool = False
     overwrite: bool = False
+    transparency_assist: bool = False
+    save_transparency_as_global_default: bool = False
+    save_transparency_as_application_override: bool = False
+    transparency_sidecar: bool = True
+    transparency_png_copy: bool = False
+    transparency_classification: str = "unknown"
+    transparency_visible_disclosure: bool = False
+    transparency_deepfake_assist: bool = False
+    transparency_deepfake_applicable: bool = False
+    transparency_real_person_place_event: bool = False
+    transparency_c2pa_sign: bool = False
+    c2pa_certificate_path: str = ""
+    c2pa_private_key_path: str = ""
+    c2pa_timestamp_authority_url: str = ""
+    c2pa_verification_failure_policy: str = "error"
+    transparency_prompt_disclosure: str = "none"
+    transparency_prompt_summary: str = ""
+    transparency_model_disclosure: str = "none"
+    transparency_model_family: str = ""
+    transparency_model_id: str = ""
+    transparency_model_version: str = ""
+    transparency_model_hash: str = ""
+    transparency_workflow_disclosure: str = "none"
+    transparency_workflow_id: str = ""
+    transparency_workflow_json_path: str = ""
 
 
 @dataclass(frozen=True)

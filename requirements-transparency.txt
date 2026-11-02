@@ -1,0 +1,3 @@
+# Optional native Content Credentials support from the Content Authenticity Initiative.
+# Install only when C2PA signing/verification is required.
+c2pa-python==0.38.1

@@ -44,6 +44,10 @@ Tensor検出器は `ModelFamilyDetectorRegistry` へ登録でき、結果にdete
 
 Random Image の CFG、steps、resolution、sampler は共通 `ParameterSpecRegistry` から解決します。seed、scheduler、独自parameter、backend namespace付き値はspec登録で追加でき、解決済み値は既存4項目との互換形式を保ちながら `parameters` / `backend_parameters` に保存されます。UIとpresetはregistryのschema descriptorを共有できます。
 
+### 出力成果物
+
+共通 `output_artifact` helper は fail / skip / overwrite / rename / versioned conflict policy、入力とのpath衝突防止、一時ファイルへのfsync、commit前validator、atomic publishを提供します。Inspectorのsidecar exportはこのhelperを使ってJSON検証後に書き込みます。
+
 ---
 
 ## English
@@ -87,3 +91,7 @@ Tensor detectors register through `ModelFamilyDetectorRegistry`, and classificat
 ### Generation parameters
 
 Random Image CFG, steps, resolution, and sampler resolve through the shared `ParameterSpecRegistry`. Seed, scheduler, custom parameters, and backend-namespaced values can be added through spec registration. Resolved values preserve the existing four-field representation and store extensions under `parameters` / `backend_parameters`. UI and presets can share the registry schema descriptors.
+
+### Output artifacts
+
+The shared `output_artifact` helper provides fail, skip, overwrite, rename, and versioned conflict policies, source-path collision protection, fsynced temporary writes, validation before commit, and atomic publication. Inspector sidecar export uses it to validate JSON before publishing.

@@ -63,9 +63,18 @@ def analyze_frame_sequence(
     resolved_preset = FrameFilterPreset(options.preset)
     if not frames:
         raise ValueError("at least one normalized frame is required")
+    if any(
+        index >= len(frames)
+        for mapping in (text_boxes or {}, subject_scores or {}, saliency_scores or {})
+        for index in mapping
+    ):
+        raise ValueError("analyzer evidence references a frame outside the sequence")
     boxes_by_frame = text_boxes or {}
     subjects = subject_scores or {}
     saliency = saliency_scores or {}
+    if options.enabled and (options.detect_text_only or options.detect_title_credits):
+        if text_boxes is None:
+            raise ValueError("OCR evidence is required when text-only or title rules are enabled")
     if not options.enabled:
         reports = tuple(
             _disabled_report(index, frame, options.analyzer_version)
@@ -566,6 +575,8 @@ def _validate_options(
 ) -> None:
     if not isinstance(source_id, str) or not source_id.strip():
         raise ValueError("source_id must be non-empty")
+    if not isinstance(options, FrameFilterOptions):
+        raise ValueError("options must be a FrameFilterOptions instance")
     try:
         FrameFilterPreset(options.preset)
     except (TypeError, ValueError) as error:
@@ -574,10 +585,45 @@ def _validate_options(
         FrameFilterAction(options.action)
     except (TypeError, ValueError) as error:
         raise ValueError("unsupported frame filter action") from error
-    if options.title_credits_policy not in {"keep", "drop", "separate"}:
+    if not isinstance(options.title_credits_policy, str) or options.title_credits_policy not in {
+        "keep",
+        "drop",
+        "separate",
+    }:
         raise ValueError("title_credits_policy must be keep, drop, or separate")
+    bool_fields = (
+        options.enabled,
+        options.detect_black,
+        options.detect_white,
+        options.detect_transition,
+        options.detect_text_only,
+        options.detect_title_credits,
+        options.detect_low_detail,
+        options.detect_blur,
+        options.compare_neighbors,
+    )
+    if not all(type(value) is bool for value in bool_fields):
+        raise ValueError("frame filter switches must be booleans")
+    thresholds = (
+        options.low_confidence_threshold,
+        options.high_confidence_threshold,
+        options.custom_extreme_ratio_threshold,
+        options.custom_candidate_threshold,
+        options.custom_title_threshold,
+        options.custom_information_protection_threshold,
+    )
     if (
-        not 0 <= options.low_confidence_threshold <= options.high_confidence_threshold <= 1
+        not isinstance(options.purpose, str)
+        or not isinstance(options.analyzer_version, str)
+        or not options.purpose.strip()
+        or not options.analyzer_version.strip()
+        or any(
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            for value in thresholds
+        )
+        or not 0 <= options.low_confidence_threshold <= options.high_confidence_threshold <= 1
         or any(
             not math.isfinite(value) or not 0 <= value <= 1
             for value in (
@@ -587,22 +633,42 @@ def _validate_options(
                 options.custom_information_protection_threshold,
             )
         )
-        or not options.purpose.strip()
-        or not options.analyzer_version.strip()
     ):
         raise ValueError("invalid frame filter thresholds or provenance")
+    for score_map in (subject_scores, saliency_scores):
+        if score_map is not None and not isinstance(score_map, Mapping):
+            raise ValueError("subject and saliency scores must be mappings")
     for score_map in (subject_scores or {}, saliency_scores or {}):
         if any(
-            type(index) is not int or not math.isfinite(score) or not 0 <= score <= 1
+            type(index) is not int
+            or index < 0
+            or isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not math.isfinite(score)
+            or not 0 <= score <= 1
             for index, score in score_map.items()
         ):
             raise ValueError("subject and saliency scores must be finite values in 0..1")
-    for boxes in (text_boxes or {}).values():
+    if text_boxes is not None and not isinstance(text_boxes, Mapping):
+        raise ValueError("OCR boxes must be a mapping by frame index")
+    for index, boxes in (text_boxes or {}).items():
+        if (
+            type(index) is not int
+            or index < 0
+            or not isinstance(boxes, Sequence)
+            or isinstance(boxes, (str, bytes))
+        ):
+            raise ValueError("OCR box entries must use nonnegative integer frame indexes")
         for box in boxes:
-            if not isinstance(box, FrameTextBox) or any(
-                not math.isfinite(value)
-                for value in (box.x, box.y, box.width, box.height, box.confidence)
-            ):
+            if not isinstance(box, FrameTextBox):
+                raise ValueError("OCR boxes must contain FrameTextBox values")
+            numeric = (box.x, box.y, box.width, box.height, box.confidence)
+            if any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                for value in numeric
+            ) or not isinstance(box.text, str):
                 raise ValueError("OCR boxes must contain finite normalized geometry")
             if (
                 box.x < 0

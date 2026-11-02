@@ -52,7 +52,12 @@ class VideoFrameFilterTests(unittest.TestCase):
         white = self._frame(np.full((48, 48, 3), 255, dtype=np.uint8))
         rng = np.random.default_rng(423)
         night = self._frame(rng.integers(12, 48, size=(48, 48, 3), dtype=np.uint8))
-        options = FrameFilterOptions(enabled=True, preset=FrameFilterPreset.BALANCED)
+        options = FrameFilterOptions(
+            enabled=True,
+            preset=FrameFilterPreset.BALANCED,
+            detect_text_only=False,
+            detect_title_credits=False,
+        )
 
         result = analyze_frame_sequence("scene", (black, white, night), options)
 
@@ -146,6 +151,8 @@ class VideoFrameFilterTests(unittest.TestCase):
             preset=FrameFilterPreset.BALANCED,
             compare_neighbors=True,
             action=FrameFilterAction.REVIEW_QUEUE,
+            detect_text_only=False,
+            detect_title_credits=False,
         )
 
         result = analyze_frame_sequence("transition", (scene, blank, scene, failed), options)
@@ -188,6 +195,8 @@ class VideoFrameFilterTests(unittest.TestCase):
             enabled=True,
             preset=FrameFilterPreset.CUSTOM,
             detect_low_detail=False,
+            detect_text_only=False,
+            detect_title_credits=False,
             custom_extreme_ratio_threshold=0.9999,
         )
 

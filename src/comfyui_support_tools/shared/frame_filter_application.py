@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, replace
@@ -48,14 +50,22 @@ def filter_existing_frame_folder(
     text_detector: Callable[[np.ndarray], Sequence[FrameTextBox]] | None = None,
 ) -> FrameFilterBatchManifest:
     source = Path(input_root).expanduser().resolve(strict=True)
-    destination = Path(output_root).expanduser().resolve()
+    requested_destination = Path(output_root).expanduser().absolute()
+    if requested_destination.is_symlink():
+        raise ValueError("frame filter output cannot be a symbolic link")
+    destination = requested_destination.resolve()
     if not source.is_dir():
         raise ValueError("frame input must be a directory")
     if source == destination or source in destination.parents or destination in source.parents:
         raise ValueError("frame filter output must be separate from the input tree")
+    if not dry_run and options.enabled and (destination.exists() or destination.is_symlink()):
+        raise FileExistsError(destination)
     files = _image_files(source)
     if not files:
         raise ValueError("frame input contains no supported image files")
+    if options.enabled and (options.detect_text_only or options.detect_title_credits):
+        if text_detector is None:
+            raise ValueError("text-only/title filtering requires a configured OCR detector")
     grouped: dict[Path, list[Path]] = defaultdict(list)
     for path in files:
         grouped[path.parent].append(path)
@@ -74,7 +84,7 @@ def filter_existing_frame_folder(
             normalized = tuple(item[0] for item in loaded)
             center_offset = center_index - first_index
             boxes = loaded[center_offset][1]
-            box_map = {center_offset: boxes} if boxes else {}
+            box_map = {center_offset: boxes} if text_detector is not None else {}
             batch = analyze_frame_sequence(
                 parent.relative_to(source).as_posix() or ".",
                 normalized,
@@ -83,10 +93,19 @@ def filter_existing_frame_folder(
             )
             report = batch.reports[center_offset]
             relative = path.relative_to(source)
+            detector_version = (
+                str(getattr(text_detector, "version", "custom"))
+                if text_detector is not None
+                else "none"
+            )
             report = replace(
                 report,
                 frame_index=len(reports),
-                provenance=report.provenance + (("source_relative_path", relative.as_posix()),),
+                provenance=report.provenance
+                + (
+                    ("source_relative_path", relative.as_posix()),
+                    ("ocr_engine", detector_version),
+                ),
             )
             reports.append(report)
             output_relative = _output_relative_path(relative, report, options)
@@ -103,18 +122,29 @@ def filter_existing_frame_folder(
         sum(item.decision is FrameFilterDecision.ERROR for item in reports),
     )
     if not dry_run and options.enabled:
-        manifest_path = destination / "frame_filter_manifest.json"
-        if manifest_path.exists() or manifest_path.is_symlink():
-            raise FileExistsError(manifest_path)
-        _apply_copies(planned_copies, source)
-        destination.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(asdict(manifest), ensure_ascii=False, indent=2).encode("utf-8")
-        atomic_write_bytes(
-            manifest_path,
-            payload,
-            policy=ConflictPolicy.FAIL,
-            source=source,
+        if destination.exists() or destination.is_symlink():
+            raise FileExistsError(destination)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        stage = Path(
+            tempfile.mkdtemp(prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent)
         )
+        try:
+            staged_copies = [
+                (source_path, stage / target.relative_to(destination))
+                for source_path, target in planned_copies
+            ]
+            _apply_copies(staged_copies, source)
+            payload = json.dumps(asdict(manifest), ensure_ascii=False, indent=2).encode("utf-8")
+            atomic_write_bytes(
+                stage / "frame_filter_manifest.json",
+                payload,
+                policy=ConflictPolicy.FAIL,
+                source=source,
+            )
+            stage.rename(destination)
+        except Exception:
+            shutil.rmtree(stage, ignore_errors=True)
+            raise
     return manifest
 
 

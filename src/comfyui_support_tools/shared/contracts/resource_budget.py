@@ -1,6 +1,8 @@
 """Shared resource budget and stage execution contracts."""
 
+import threading
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from enum import Enum
 
 
@@ -20,6 +22,15 @@ class ResourceKind(str, Enum):
 
 
 # {
+#   責務: [CancellationPolicy: stage cancellation後のactive item扱いを定義する]
+#   フィールド: [pending破棄後の即時cancelまたはactive item完了]
+# }
+class CancellationPolicy(str, Enum):
+    CANCEL_PENDING = "cancel_pending"
+    FINISH_ACTIVE = "finish_active"
+
+
+# {
 #   責務: [ResourceBudget: resource種類別のconcrete safe limitsを保持する]
 #   フィールド: [cpu/gpu/memory/disk/network/api/queue limits]
 # }
@@ -34,6 +45,8 @@ class ResourceBudget:
     network_jobs: int = 4
     external_api_concurrency: int = 2
     queue_capacity: int = 8
+    priority: int = 0
+    cancellation_policy: CancellationPolicy = CancellationPolicy.CANCEL_PENDING
 
 
 # {
@@ -51,6 +64,8 @@ class ResourceBudgetOverride:
     network_jobs: int | None = None
     external_api_concurrency: int | None = None
     queue_capacity: int | None = None
+    priority: int | None = None
+    cancellation_policy: CancellationPolicy | str | None = None
 
 
 # {
@@ -65,6 +80,7 @@ class ResourceLease:
     resource: ResourceKind
     units: int
     _released: bool = False
+    _release_lock: threading.Lock = dataclass_field(default_factory=threading.Lock, repr=False)
 
     # {
     #   責務: [release: resource reservationを一度だけ返却する]
@@ -73,9 +89,10 @@ class ResourceLease:
     #   戻り値: []
     # }
     def release(self) -> None:
-        if not self._released:
-            self.manager._release(self.application_id, self.run_id, self.resource, self.units)
-            self._released = True
+        with self._release_lock:
+            if not self._released:
+                self.manager._release(self.application_id, self.run_id, self.resource, self.units)
+                self._released = True
 
     # {
     #   責務: [__enter__: with blockを開始する]

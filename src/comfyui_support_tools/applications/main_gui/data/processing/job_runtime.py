@@ -32,6 +32,8 @@ from comfyui_support_tools.applications.main_gui.data.processing.job_runtime_mod
     RetryHandler,
     _JobRecord,
 )
+from comfyui_support_tools.shared.contracts.resource_budget import ResourceKind, ResourceLease
+from comfyui_support_tools.shared.resource_budget import ResourceBudgetManager
 
 
 # {
@@ -51,13 +53,26 @@ class JobRuntime(JobRuntimeControlMixin):
         max_concurrent: int = 2,
         history_limit: int = 100,
         store: JobSnapshotStore | None = None,
+        resource_manager: ResourceBudgetManager | None = None,
+        application_id: str = "main-gui",
+        resource_kind: ResourceKind | str = ResourceKind.CPU_PROCESSES,
+        resource_units: int = 1,
     ):
         if not 1 <= max_concurrent <= 16:
             raise ValueError("max_concurrent must be 1..16")
         if not 10 <= history_limit <= 1000:
             raise ValueError("history_limit must be 10..1000")
+        if not isinstance(application_id, str) or not application_id.strip():
+            raise ValueError("application_id is required")
+        if type(resource_units) is not int or resource_units < 1:
+            raise ValueError("resource_units must be a positive integer")
         self.max_concurrent = max_concurrent
         self.history_limit = history_limit
+        self._resource_manager = resource_manager
+        self._resource_application_id = application_id
+        self._resource_kind = ResourceKind(resource_kind)
+        self._resource_units = resource_units
+        self._resource_leases: dict[str, ResourceLease] = {}
         self._store = store
         self._condition = Condition()
         self._records: dict[str, _JobRecord] = {}
@@ -196,6 +211,17 @@ class JobRuntime(JobRuntimeControlMixin):
                     and self._queue[0] == job_id
                     and len(self._running) < self.max_concurrent
                 ):
+                    if self._resource_manager is not None:
+                        lease = self._resource_manager.try_acquire(
+                            self._resource_application_id,
+                            job_id,
+                            self._resource_kind,
+                            self._resource_units,
+                        )
+                        if lease is None:
+                            self._condition.wait(0.05)
+                            continue
+                        self._resource_leases[job_id] = lease
                     self._queue.popleft()
                     self._running.add(job_id)
                     record.state = "running"
@@ -413,6 +439,7 @@ class JobRuntime(JobRuntimeControlMixin):
         self._finish_after_item.discard(record.id)
         self._cancel_requested.discard(record.id)
         self._remove_from_queue_locked(record.id)
+        self._release_resource_lease_locked(record.id)
         record.state = state
         record.finished_at = time.time()
         if state == "done":
@@ -421,6 +448,37 @@ class JobRuntime(JobRuntimeControlMixin):
         record.error = str(error)[:500]
         record.logs.append((record.error or record.message)[:MAX_LOG_CHARS])
         self._persist_locked()
+
+    # {
+    #   責務: [_release_resource_lease_locked: job終了時にshared resource slotを解放する]
+    #   処理: [1: job IDのleaseを取り除く 2: idempotent releaseを呼ぶ]
+    #   引数: [job_id: 対象Job]
+    #   戻り値: []
+    # }
+    def _release_resource_lease_locked(self, job_id: str) -> None:
+        lease = self._resource_leases.pop(job_id, None)
+        if lease is not None:
+            lease.release()
+
+    # {
+    #   責務: [_try_acquire_resource_lease_locked: pause後の再開用resource slotをnonblocking取得する]
+    #   処理: [1: unmanaged runtimeを許容する 2: shared leaseが取れた場合のみ保存する]
+    #   引数: [job_id: 対象Job]
+    #   戻り値: [acquired: lease取得結果]
+    # }
+    def _try_acquire_resource_lease_locked(self, job_id: str) -> bool:
+        if self._resource_manager is None:
+            return True
+        lease = self._resource_manager.try_acquire(
+            self._resource_application_id,
+            job_id,
+            self._resource_kind,
+            self._resource_units,
+        )
+        if lease is None:
+            return False
+        self._resource_leases[job_id] = lease
+        return True
 
     # {
     #   責務: [_remove_from_queue_locked: queueからJob IDを安全に除去する]

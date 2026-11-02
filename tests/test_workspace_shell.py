@@ -1,23 +1,35 @@
 """Offline navigation, real Tk layout, and legacy-bridge regression tests."""
+
+# The source path must be added before importing the package under test.
+# ruff: noqa: E402
+
 import ast
 import importlib.util
 import os
-from pathlib import Path
 import sys
-from types import ModuleType
 import unittest
+from pathlib import Path
+from types import ModuleType
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import NavigationProcessing, SECTIONS
-from comfyui_support_tools.applications.main_gui.ui.processing.library_panel import LABELS
-from comfyui_support_tools.applications.main_gui.ui.processing.shell_window import ShellWindow
-from comfyui_support_tools.entrypoints.workspace import create_navigation
-from comfyui_support_tools.shared.contracts.tool_entry import ToolEntry
-from scripts.tab_catalog import TAB_CATALOG, tab_index
+from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import (  # noqa: E402
+    SECTIONS,
+    NavigationProcessing,
+)
+from comfyui_support_tools.applications.main_gui.ui.processing.library_panel import (
+    LABELS,  # noqa: E402
+)
+from comfyui_support_tools.applications.main_gui.ui.processing.shell_window import (
+    ShellWindow,  # noqa: E402
+)
+from comfyui_support_tools.entrypoints.workspace import create_navigation  # noqa: E402
+from comfyui_support_tools.shared.contracts.tool_entry import ToolEntry  # noqa: E402
+from scripts.tab_catalog import TAB_CATALOG, tab_index  # noqa: E402
+from scripts.tool_registry import TOOL_REGISTRY  # noqa: E402
 
 TOOLS = (ToolEntry("tag", "Folder Tagger", "Tag"), ToolEntry("video", "動画変換", "Video"))
 
@@ -53,9 +65,11 @@ class NavigationTests(unittest.TestCase):
         self.assertEqual(nav.visible_tools()[0].id, "19")
 
     def test_unknown_values_fail_without_mutating_state(self):
-        for method, args in ((self.nav.select_section, ("unknown",)),
-                             (self.nav.filter_tools, ("tagger", "unknown")),
-                             (self.nav.request_open, ("unknown",))):
+        for method, args in (
+            (self.nav.select_section, ("unknown",)),
+            (self.nav.filter_tools, ("tagger", "unknown")),
+            (self.nav.request_open, ("unknown",)),
+        ):
             with self.assertRaises(ValueError):
                 method(*args)
         self.assertEqual(self.nav.visible_tools(), TOOLS)
@@ -76,14 +90,32 @@ class NavigationTests(unittest.TestCase):
 
 
 class CatalogParityTests(unittest.TestCase):
+    # {
+    #   責務: [test_catalog_matches_every_legacy_tab_in_order: catalogとsettings metadataがdescriptorから同じ順に派生することを検証する]
+    #   処理: [1: legacy descriptor列を取得する 2: compatibility catalogとapp shell参照を照合する]
+    #   引数: []
+    #   戻り値: []
+    # }
     def test_catalog_matches_every_legacy_tab_in_order(self):
         # Read source without importing legacy backends or opening their windows.
         tree = ast.parse((ROOT / "scripts/app.py").read_text(encoding="utf-8"))
-        lists = [node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
-                 and any(isinstance(t, ast.Name) and t.id == "tab_titles" for t in node.targets)]
-        self.assertEqual(len(lists), 1)
-        self.assertEqual(tuple(item.elts[1].id for item in lists[0].elts),
-                         tuple(item[0] for item in TAB_CATALOG))
+        source = (ROOT / "scripts/app.py").read_text(encoding="utf-8")
+        self.assertTrue(any(isinstance(node, ast.For) for node in ast.walk(tree)))
+        self.assertIn("TOOL_REGISTRY.descriptors", source)
+        self.assertIn("load_implementation", source)
+        self.assertNotIn("tab_titles", source)
+        descriptors = TOOL_REGISTRY.descriptors
+        self.assertEqual(
+            tuple(item.legacy_class for item in descriptors),
+            tuple(item[0] for item in TAB_CATALOG),
+        )
+        self.assertEqual(
+            tuple(item.settings_id for item in descriptors),
+            tuple(
+                TOOL_REGISTRY.settings_id_for_legacy_class(item.legacy_class)
+                for item in descriptors
+            ),
+        )
 
 
 class ShellGuiTests(unittest.TestCase):
@@ -144,8 +176,13 @@ class ShellGuiTests(unittest.TestCase):
             for name in ("library", "inspector", "jobs"):
                 self.window.set_pane_visible(name, True)
             self.window.update()
-            self.assertEqual(self.window.horizontal.panes(),
-                             tuple(str(getattr(self.window, name)) for name in ("library", "workspace", "inspector")))
+            self.assertEqual(
+                self.window.horizontal.panes(),
+                tuple(
+                    str(getattr(self.window, name))
+                    for name in ("library", "workspace", "inspector")
+                ),
+            )
 
     def test_small_window_and_draggable_sashes(self):
         self.window.geometry("900x600")
@@ -173,7 +210,9 @@ class ShellGuiTests(unittest.TestCase):
 
 class LegacyBridgeTests(unittest.TestCase):
     def test_selects_requested_tab_and_can_return_without_subprocess(self):
-        spec = importlib.util.spec_from_file_location("workspace_launcher", ROOT / "tabbed_tools_gui.py")
+        spec = importlib.util.spec_from_file_location(
+            "workspace_launcher", ROOT / "tabbed_tools_gui.py"
+        )
         launcher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(launcher)
         fake = ModuleType("scripts.app")
@@ -187,7 +226,10 @@ class LegacyBridgeTests(unittest.TestCase):
             return mock.Mock()
 
         app.mainloop.side_effect = lambda: callbacks[0]()
-        with mock.patch.dict(sys.modules, {"scripts.app": fake}), mock.patch("tkinter.ttk.Button", side_effect=button):
+        with (
+            mock.patch.dict(sys.modules, {"scripts.app": fake}),
+            mock.patch("tkinter.ttk.Button", side_effect=button),
+        ):
             self.assertTrue(launcher._legacy_window("FolderTaggerTab"))
         app.show_tab.assert_called_once_with(tab_index("FolderTaggerTab"))
         app._close.assert_called_once()

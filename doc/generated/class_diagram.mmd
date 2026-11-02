@@ -722,6 +722,13 @@ classDiagram
         +set_affinity_for_pid()
     }
     ttk.Frame <|-- ZipperTab
+    class ToolDescriptor {
+    }
+    class ToolRegistry {
+        +__init__()
+        +settings_id_for_legacy_class()
+        +load_implementation()
+    }
     class DarkTheme {
         +apply()
     }

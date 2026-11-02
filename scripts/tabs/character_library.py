@@ -29,23 +29,24 @@ from comfyui_support_tools.shared.contracts.character_registry import (
     OutfitProfile,
 )
 
+from ..context import USER_INPUT_DIR
+
 
 # {
 #   責務: [CharacterLibraryPanel: stable IDでCharacter profileを登録/編集しprompt previewを表示する]
 #   フィールド: [profile root、選択profile/version、entry variables、library/list/log controls]
 # }
 class CharacterLibraryPanel(ttk.Frame):
-    settings_id = "character.library"
-
     # {
     #   責務: [__init__: Character Library UI controlsとrepository boundaryを構成する]
-    #   処理: [1: profile store rootを保存する 2: registration/detail controlsを構築する 3: saved profilesを読み込む]
+    #   処理: [1: profile store rootとstate variablesを初期化する 2: panel buildersを呼ぶ 3: saved profilesを読み込む]
     #   引数: [master: parent widget, profile_root: persistent character store path]
     #   戻り値: []
     # }
-    def __init__(self, master: tk.Misc, profile_root: Path):
+    def __init__(self, master: tk.Misc, profile_root: Path | None = None):
         super().__init__(master, padding=10)
-        self.profile_root = Path(profile_root).expanduser()
+        resolved_root = profile_root or USER_INPUT_DIR / "characters"
+        self.profile_root = Path(resolved_root).expanduser()
         self.current_profile: CharacterProfile | None = None
         self.current_version: str | None = None
         self.character_id = tk.StringVar()
@@ -63,7 +64,16 @@ class CharacterLibraryPanel(ttk.Frame):
         self.image_outfit = tk.StringVar(value="unassigned")
         self.image_storage_mode = tk.StringVar(value=ImageStorageMode.ORIGINAL_AND_WEBP.value)
         self.webp_quality = tk.StringVar(value="92")
+        self._build_layout()
+        self.reload_profiles()
 
+    # {
+    #   責務: [_build_layout: library paneとeditor paneを組み合わせる]
+    #   処理: [1: two-column containerを作る 2: library/editor subpanelsを構築する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def _build_layout(self) -> None:
         columns = ttk.Frame(self)
         columns.pack(fill="both", expand=True)
         library = ttk.LabelFrame(columns, text="Character Library", padding=8)
@@ -72,9 +82,21 @@ class CharacterLibraryPanel(ttk.Frame):
         self.profile_list.pack(fill="y", expand=True)
         self.profile_list.bind("<<ListboxSelect>>", self._on_profile_selected)
         ttk.Button(library, text="Reload", command=self.reload_profiles).pack(fill="x", pady=4)
-
         detail = ttk.Frame(columns)
         detail.pack(side="left", fill="both", expand=True)
+        self._build_identity_panel(detail)
+        self._build_outfit_panel(detail)
+        self._build_trait_panel(detail)
+        self._build_image_panel(detail)
+        self._build_preview_panel(detail)
+
+    # {
+    #   責務: [_build_identity_panel: stable ID/name/aliasの編集UIを作る]
+    #   処理: [1: identity fieldを表示する 2: save/new commandsを接続する]
+    #   引数: [detail: character detail parent]
+    #   戻り値: []
+    # }
+    def _build_identity_panel(self, detail: ttk.Frame) -> None:
         identity = ttk.LabelFrame(detail, text="Identity", padding=8)
         identity.pack(fill="x")
         self._entry(identity, "Stable character ID", self.character_id)
@@ -86,8 +108,14 @@ class CharacterLibraryPanel(ttk.Frame):
             command=lambda: self._run_action(self.save_identity),
         ).pack(anchor="e", pady=(4, 0))
         ttk.Button(identity, text="New character", command=self.new_character).pack(anchor="e")
-        ttk.Button(identity, text="New character", command=self.new_character).pack(anchor="e")
 
+    # {
+    #   責務: [_build_outfit_panel: outfit ID/name/default選択UIを作る]
+    #   処理: [1: outfit fieldを表示する 2: default toggleとadd commandを接続する]
+    #   引数: [detail: character detail parent]
+    #   戻り値: []
+    # }
+    def _build_outfit_panel(self, detail: ttk.Frame) -> None:
         outfit = ttk.LabelFrame(detail, text="Outfits", padding=8)
         outfit.pack(fill="x", pady=6)
         self._entry(outfit, "Stable outfit ID", self.outfit_id)
@@ -99,6 +127,13 @@ class CharacterLibraryPanel(ttk.Frame):
             outfit, text="Add outfit", command=lambda: self._run_action(self.add_outfit)
         ).pack(anchor="e")
 
+    # {
+    #   責務: [_build_trait_panel: owner scope/visibilityを含むmanual trait editorを構築する]
+    #   処理: [1: trait fieldsとscope selectorを表示する 2: add/edit/reject actionを接続する]
+    #   引数: [detail: character detail parent]
+    #   戻り値: []
+    # }
+    def _build_trait_panel(self, detail: ttk.Frame) -> None:
         traits = ttk.LabelFrame(detail, text="Manual trait review", padding=8)
         traits.pack(fill="x")
         self._entry(traits, "Category", self.trait_category)
@@ -131,6 +166,13 @@ class CharacterLibraryPanel(ttk.Frame):
             command=lambda: self._run_action(self.reject_selected_trait),
         ).pack(side="left", padx=4)
 
+    # {
+    #   責務: [_build_image_panel: source/outfit/storage settingsからimage registration UIを構築する]
+    #   処理: [1: image metadata fieldsを表示する 2: storage modeとregister actionを接続する]
+    #   引数: [detail: character detail parent]
+    #   戻り値: []
+    # }
+    def _build_image_panel(self, detail: ttk.Frame) -> None:
         images = ttk.LabelFrame(detail, text="Reference images", padding=8)
         images.pack(fill="x", pady=6)
         self._entry(images, "Image file", self.image_path)
@@ -156,6 +198,13 @@ class CharacterLibraryPanel(ttk.Frame):
             command=lambda: self._run_action(self.register_image),
         ).pack(anchor="e")
 
+    # {
+    #   責務: [_build_preview_panel: resolved promptとstatusを表示するreadonly areaを作る]
+    #   処理: [1: preview text widgetを作る 2: current status labelを接続する]
+    #   引数: [detail: character detail parent]
+    #   戻り値: []
+    # }
+    def _build_preview_panel(self, detail: ttk.Frame) -> None:
         preview = ttk.LabelFrame(detail, text="Prompt preview", padding=8)
         preview.pack(fill="both", expand=True)
         self.preview_text = tk.Text(preview, height=5, wrap="word", state="disabled")
@@ -164,7 +213,6 @@ class CharacterLibraryPanel(ttk.Frame):
             value="Character data remains local to the selected profile root."
         )
         ttk.Label(detail, textvariable=self.status, wraplength=700).pack(anchor="w", pady=4)
-        self.reload_profiles()
 
     # {
     #   責務: [_entry: label付きの編集欄をparentへ追加する]

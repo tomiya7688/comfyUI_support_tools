@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from scripts import context
+from scripts.tool_registry import TOOL_REGISTRY
 from scripts.widgets.last_settings_store import LastSettingsStore
 from scripts.widgets.settings_document import (
     CURRENT_SCHEMA_VERSION,
@@ -47,38 +48,8 @@ class SettingsDocumentTests(TestCase):
     # }
     def test_registered_tabs_have_stable_settings_ids(self):
         registered_tabs = {
-            "StartWebUITab",
-            "RandomImageTab",
-            "PromptGenerateTab",
-            "RandomImg2ImgTab",
-            "FolderTaggerTab",
-            "RandomLinePickerTab",
-            "BodyPromptTab",
-            "TagDeleterTab",
-            "TagSplitterTab",
-            "TagReplacerTab",
-            "TagToPromptTab",
-            "FlatFileCopyTab",
-            "TextMergerTab",
-            "ScreenshotFromMovieTab",
-            "MovieToTextTab",
-            "ImagesToWebpTab",
-            "DuplicateLineDeleteTab",
-            "FfmpegRepairTab",
-            "CheckBracesTab",
-            "WildcardCheckerTab",
-            "WildcardMoveTab",
-            "ZipperTab",
-            "YouTubeDownloaderTab",
-            "VideoReencoderTab",
-            "StaticSpecTab",
-            "DocstringAuditTab",
-            "DependencyStatusTab",
-            "OllamaPromptTab",
-            "ToukaEnhancerTab",
-            "ToukaEvaluationReportTab",
+            item.legacy_class for item in TOOL_REGISTRY.descriptors if item.legacy_class
         }
-
         self.assertEqual(set(STABLE_SETTINGS_IDS), registered_tabs)
         for tab_name, expected_id in STABLE_SETTINGS_IDS.items():
             with self.subTest(tab=tab_name):
@@ -228,9 +199,7 @@ class SettingsDocumentTests(TestCase):
     #   戻り値: []
     # }
     def test_prompt_generate_tab_uses_stable_settings_id(self):
-        prompt_generate_tab = type(
-            "PromptGenerateTab", (), {"settings_id": "generation.prompt_generate"}
-        )()
+        prompt_generate_tab = type("PromptGenerateTab", (), {})()
         prompt_generate_tab.width = tk.IntVar(master=tk.Tcl(), value=0)
         legacy = {"comfyui": {"PromptGenerateTab": {"width": 1024}}}
         with tempfile.TemporaryDirectory() as directory:

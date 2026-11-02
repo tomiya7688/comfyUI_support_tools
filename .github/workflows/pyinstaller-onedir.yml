@@ -98,9 +98,119 @@ jobs:
             throw "dist/KadokaTools/KadokaTools.exe was not created"
           }
 
-      - name: Upload one-dir artifact
+      - name: Sign and verify Windows binaries
+        if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
+          WINDOWS_CODESIGN_PFX_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PFX_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CODESIGN_PFX_BASE64 -or -not $env:WINDOWS_CODESIGN_PFX_PASSWORD) {
+            throw "Public artifact signing is disabled until both Windows code-signing secrets are configured."
+          }
+          $sdkRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+          $signtool = Get-ChildItem -LiteralPath $sdkRoot -Filter signtool.exe -Recurse -File |
+            Sort-Object -Property FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw "Windows SDK signtool.exe was not found." }
+          $pfxPath = Join-Path $env:RUNNER_TEMP "kadoka-codesign.pfx"
+          try {
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
+            $binaries = Get-ChildItem -LiteralPath "dist/KadokaTools" -Recurse -File |
+              Where-Object { $_.Extension -in @(".exe", ".dll", ".pyd", ".msi", ".msix") }
+            if (-not ($binaries | Where-Object { $_.Extension -eq ".exe" })) {
+              throw "The distribution has no executable to sign."
+            }
+            foreach ($binary in $binaries) {
+              & $signtool.FullName sign /fd SHA256 /f $pfxPath /p $env:WINDOWS_CODESIGN_PFX_PASSWORD /tr https://timestamp.digicert.com /td SHA256 $binary.FullName
+              if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed for $($binary.Name)." }
+              & $signtool.FullName verify /pa /all /v $binary.FullName
+              if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed for $($binary.Name)." }
+            }
+          }
+          finally {
+            Remove-Item -LiteralPath $pfxPath -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Package final archive and checksum manifest
+        if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
+        run: python tools/build/package_artifact.py dist/KadokaTools dist/release
+
+      - name: Verify package checksum and archive
+        if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
+        run: python tools/build/package_artifact.py --verify dist/release
+
+      - name: Upload release staging artifact
+        if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: KadokaTools-windows-onedir
-          path: dist/KadokaTools/
+          name: KadokaTools-release-staging
+          path: dist/release/
           if-no-files-found: error
+          retention-days: 1
+
+  attest-release:
+    if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
+    needs: build-windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout verifier
+        uses: actions/checkout@v4
+
+      - name: Download staged release files
+        uses: actions/download-artifact@v4
+        with:
+          name: KadokaTools-release-staging
+          path: release
+
+      - name: Verify final archive and checksum manifest
+        run: python tools/build/package_artifact.py --verify release
+
+      - name: Attest final archive and checksum manifest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/KadokaTools-windows-onedir.zip
+            release/SHA256SUMS.txt
+
+      - name: Verify provenance attestations
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh --version
+          gh attestation verify release/KadokaTools-windows-onedir.zip --repo $env:GITHUB_REPOSITORY --signer-workflow "$env:GITHUB_REPOSITORY/.github/workflows/pyinstaller-onedir.yml"
+          if ($LASTEXITCODE -ne 0) { throw "Archive provenance attestation verification failed." }
+          gh attestation verify release/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --signer-workflow "$env:GITHUB_REPOSITORY/.github/workflows/pyinstaller-onedir.yml"
+          if ($LASTEXITCODE -ne 0) { throw "Checksum manifest provenance attestation verification failed." }
+
+      - name: Upload verified CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KadokaTools-windows-onedir-verified
+          path: |
+            release/KadokaTools-windows-onedir.zip
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload verified GitHub Release assets
+        if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes
+            if ($LASTEXITCODE -ne 0) { throw "Verified GitHub Release could not be created." }
+          }
+          gh release upload $tag release/KadokaTools-windows-onedir.zip release/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Attested release assets could not be uploaded." }

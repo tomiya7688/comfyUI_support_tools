@@ -49,4 +49,16 @@ GUI を開かず、`scripts.app` と各タブの import が完了すれば終了
 - `torch` / `torchvision` / `torchaudio` は意図的に PyInstaller 対象外。重量級処理は各バックエンド側の環境を利用する。
 - ffmpeg、7-Zip、外部 downloader 等を使う機能は、それぞれの実行ファイルまたは設定済みパスが必要。
 - `user_data` の設定・入力・出力は配布ディレクトリ側に保持する。
-- GitHub Actions の `PyInstaller onedir` workflow が Windows で実ビルドと smoke test を行い、成功時は onedir 一式を artifact として保存する。
+- GitHub Actions の `PyInstaller onedir` workflow は PR/main push で build/smoke test を行う。署名用 secrets を使う配布はタグを選んで workflow を手動実行し、Authenticode と GitHub attestation の検証後にのみ Release を作成・公開する。
+
+## 公開配布の署名と検証
+
+GitHub Actions の `PyInstaller onedir` workflow は PR とmain pushでビルドと smoke test のみを行い、未署名 artifact を upload しない。タグを指定した workflow 手動実行では `WINDOWS_CODESIGN_PFX_BASE64` / `WINDOWS_CODESIGN_PFX_PASSWORD` secrets を必須とし、`.exe` / `.dll` / `.pyd` を Authenticode SHA-256 + RFC 3161 timestamp で署名・検証する。次に `tools/build/package_artifact.py` が onedir 全体を deterministic ZIP にまとめ、`SHA256SUMS.txt` を作成・照合する。GitHub Artifact Attestations を ZIP と checksum manifest の双方へ付け、`gh attestation verify` 成功後にのみ最終artifactを保存し、その後にRelease assetsを公開する。署名鍵はrepositoryへ保存しない。secrets が未設定・署名不可の場合は公開artifact作成を失敗させる。
+
+ユーザーはReleaseから `KadokaTools-windows-onedir.zip` と `SHA256SUMS.txt` を取得し、README記載の `gh attestation verify`、SHA-256照合、展開後のAuthenticode検証を行う。2026-11-02の調査時点ではGitHub Releaseが公開されていないため、修復対象の既存配布Releaseはなかった。現在の配布物一覧は Windows onedir ZIP とその checksum manifest のみ。
+
+## Public artifact signing and verification
+
+The `PyInstaller onedir` GitHub Actions workflow builds and smoke-tests pull requests and main-branch pushes without uploading unsigned artifacts. Manual runs targeting a tag require the `WINDOWS_CODESIGN_PFX_BASE64` and `WINDOWS_CODESIGN_PFX_PASSWORD` secrets. The workflow Authenticode-signs and verifies `.exe` / `.dll` / `.pyd` files with SHA-256 and an RFC 3161 timestamp, packages the complete onedir tree as a deterministic ZIP, and writes/verifies `SHA256SUMS.txt`. It attaches GitHub Artifact Attestations to both files and publishes only after `gh attestation verify` succeeds. A manual tag run creates/uploads Release assets only after verification. The signing key is never stored in the repository. Missing credentials or failed signing blocks publication.
+
+Users download `KadokaTools-windows-onedir.zip` and `SHA256SUMS.txt` from a Release, then follow the README commands to verify attestations, the ZIP digest, and Authenticode after extraction. No GitHub Releases were published at the 2026-11-02 audit, so there were no historical release assets to remediate. The current artifact inventory consists only of the Windows onedir ZIP and its checksum manifest.

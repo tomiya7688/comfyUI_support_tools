@@ -22,6 +22,7 @@
 - compact log（最大50行、各400文字）
 - error
 - `backend_job_id`: ComfyUI等の外部job/prompt IDを保持する予約field
+- `register_backend_cancel_handler(job_id, handler)`: backend adapterが停止要求callbackを登録する。通常停止とGUI終了時に外部IDとともに呼ばれ、callback例外はJob logへ記録される
 - `retry_of / retryable`: 将来のretry契約。現処理はpayloadを永続保存しないためretryable=false
 
 Job履歴はWorkspace内最大100件で、古いterminal Jobから破棄する。ディスクへ保存しない。
@@ -34,7 +35,8 @@ Job履歴はWorkspace内最大100件で、古いterminal Jobから破棄する�
 - runningを停止: cancel Eventを通知。Media Scanは走査loopで協調停止、Tag HTTPは現在のHTTP応答/timeout後に次の画像へ進まず停止
 - ネイティブ/OS/HTTP呼び出しを強制killする契約ではない
 - GUI終了: queuedをcancelled、runningへ停止Eventを通知し、完了待ちでGUI終了を止めない
-- 既に外部backendへ受理された処理をサーバー側からcancelするには、そのbackend用adapterがbackend_job_idを使ってcancel APIを実装する必要がある
+- 既に外部backendへ受理された処理は、adapterがbackend ID単位の停止callbackを登録すればサーバー側へ停止要求をdispatchできる
+- callbackはUIを止めないよう、非blockingでbackend停止要求をqueueへ登録する。HTTP通信そのものはadapter worker側で実行する
 
 ## 画面
 

@@ -106,6 +106,63 @@ class JobRuntimeTests(unittest.TestCase):
         runtime.close()
         self.assertLess(time.monotonic() - start, 0.2)
 
+    # {
+    #   責務: [test_backend_cancel_handler_receives_external_id_and_failures_are_observable: backend停止通知と失敗記録を検証する]
+    #   処理: [1: 外部IDの通知を確認する 2: callback例外がlocal cancelを妨げないことを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_backend_cancel_handler_receives_external_id_and_failures_are_observable(self):
+        runtime = JobRuntime(max_concurrent=1)
+        requested = []
+        job = runtime.create("comfyui", "Generate")
+        runtime.set_backend_job_id(job, "prompt-123")
+        runtime.register_backend_cancel_handler(job, requested.append)
+        self.assertTrue(runtime.wait_start(job))
+        self.assertTrue(runtime.cancel(job))
+        self.assertFalse(runtime.cancel(job))
+        self.assertEqual(requested, ["prompt-123"])
+        self.assertTrue(runtime.snapshots()[0].logs)
+        runtime.close()
+
+        runtime = JobRuntime(max_concurrent=1)
+        job = runtime.create("comfyui", "Generate")
+        runtime.set_backend_job_id(job, "prompt-456")
+
+        # {
+        #   責務: [fail_cancel: backend cancel callbackの失敗を再現する]
+        #   処理: [1: RuntimeErrorを送出する]
+        #   引数: [_backend_job_id: 外部backend job ID]
+        #   戻り値: []
+        # }
+        def fail_cancel(_backend_job_id):
+            raise RuntimeError("backend unavailable")
+
+        runtime.register_backend_cancel_handler(job, fail_cancel)
+        self.assertTrue(runtime.wait_start(job))
+        self.assertTrue(runtime.cancel(job))
+        snapshot = runtime.snapshots()[0]
+        self.assertEqual(snapshot.state, "running")
+        self.assertTrue(any("backend cancel request failed" in line for line in snapshot.logs))
+        runtime.close()
+
+    # {
+    #   責務: [test_shutdown_dispatches_backend_cancel_without_waiting: shutdown時のbackend停止通知を検証する]
+    #   処理: [1: running Jobへ外部IDを登録する 2: close後に停止callbackが呼ばれることを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_shutdown_dispatches_backend_cancel_without_waiting(self):
+        runtime = JobRuntime(max_concurrent=1)
+        requested = []
+        job = runtime.create("comfyui", "Generate")
+        runtime.set_backend_job_id(job, "prompt-shutdown")
+        runtime.register_backend_cancel_handler(job, requested.append)
+        self.assertTrue(runtime.wait_start(job))
+        runtime.close()
+        self.assertEqual(requested, ["prompt-shutdown"])
+        self.assertEqual(runtime.snapshots()[0].state, "running")
+
     def test_history_is_bounded_and_progress_validation_is_strict(self):
         runtime = JobRuntime(max_concurrent=1, history_limit=10)
         for index in range(12):

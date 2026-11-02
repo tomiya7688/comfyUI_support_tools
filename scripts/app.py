@@ -1,5 +1,10 @@
+import os
+import subprocess
 import sys
+import tkinter as tk
+from functools import partial
 from pathlib import Path
+from tkinter import ttk
 
 if __package__ in (None, ""):
     application_root = Path(__file__).resolve().parent.parent
@@ -7,45 +12,52 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(application_root / "src"))
     __package__ = "scripts"
 
-from .context import *
-from .context import _safe_thread
-from .services import *
-from .tabs.flat_file_copy import FlatFileCopyTab
-from .tabs.tag_deleter import TagDeleterTab
-from .tabs.tag_splitter import TagSplitterTab
-from .tabs.tag_replacer import TagReplacerTab
-from .tabs.text_merger import TextMergerTab
-from .tabs.start_webui import StartWebUITab
-from .tabs.random_image import RandomImageTab
-from .tabs.random_img2img import RandomImg2ImgTab
-from .tabs.folder_tagger import FolderTaggerTab
+from .context import (
+    BACKEND_DISPLAY_NAME,
+    CHECKPOINTS_DIR,
+    SD_ROOT,
+    USER_INPUT_DIR,
+    WILDCARDS_DIR,
+    configured_backend_runtime_directory,
+    create_configured_last_settings_store,
+)
+from .runtime_python import venv_python
 from .tabs.ai_image_cluster import AIImageClusterTab
-from .tabs.random_line_picker import RandomLinePickerTab
 from .tabs.body_prompt import BodyPromptTab
+from .tabs.character_library import CharacterLibraryPanel
 from .tabs.check_braces import CheckBracesTab
-from .tabs.screenshot_from_movie import ScreenshotFromMovieTab
-from .tabs.images_to_webp import ImagesToWebpTab
+from .tabs.dependency_status import DependencyStatusTab
+from .tabs.docstring_audit import DocstringAuditTab
 from .tabs.duplicate_line_delete import DuplicateLineDeleteTab
 from .tabs.ffmpeg_repair import FfmpegRepairTab
-from .tabs.zipper import ZipperTab
-from .tabs.youtube_downloader import YouTubeDownloaderTab
-from .tabs.video_reencoder import VideoReencoderTab
-from .tabs.static_spec import StaticSpecTab
-from .tabs.docstring_audit import DocstringAuditTab
-from .tabs.dependency_status import DependencyStatusTab
+from .tabs.flat_file_copy import FlatFileCopyTab
+from .tabs.folder_tagger import FolderTaggerTab
+from .tabs.images_to_webp import ImagesToWebpTab
+from .tabs.movie_to_text import MovieToTextTab
 from .tabs.ollama_prompt import OllamaPromptTab
+from .tabs.prompt_generate import PromptGenerateTab
+from .tabs.random_image import RandomImageTab
+from .tabs.random_img2img import RandomImg2ImgTab
+from .tabs.random_line_picker import RandomLinePickerTab
+from .tabs.screenshot_from_movie import ScreenshotFromMovieTab
+from .tabs.start_webui import StartWebUITab
+from .tabs.static_spec import StaticSpecTab
+from .tabs.tag_deleter import TagDeleterTab
+from .tabs.tag_replacer import TagReplacerTab
+from .tabs.tag_splitter import TagSplitterTab
+from .tabs.tag_to_prompt import TagToPromptTab
+from .tabs.text_merger import TextMergerTab
 from .tabs.touka_enhancer import ToukaEnhancerTab
 from .tabs.touka_evaluation_report import ToukaEvaluationReportTab
+from .tabs.video_reencoder import VideoReencoderTab
 from .tabs.wildcard_checker import WildcardCheckerTab
 from .tabs.wildcard_move import WildcardMoveTab
-from .tabs.prompt_generate import PromptGenerateTab
-from .tabs.tag_to_prompt import TagToPromptTab
-from .tabs.movie_to_text import MovieToTextTab
-from .widgets.scrollable_tab_container import ScrollableTabContainer
-from .widgets.tk_tab_settings_adapter import TkTabSettingsAdapter
-from .widgets.tab_navigation import TabNavigation
+from .tabs.youtube_downloader import YouTubeDownloaderTab
+from .tabs.zipper import ZipperTab
 from .widgets.dark_theme import DarkTheme
-from .runtime_python import venv_python
+from .widgets.scrollable_tab_container import ScrollableTabContainer
+from .widgets.tab_navigation import TabNavigation
+from .widgets.tk_tab_settings_adapter import TkTabSettingsAdapter
 
 
 def _launch_backend_gui(backend):
@@ -139,6 +151,10 @@ class TabbedToolsApp(tk.Tk):
             ("Flat Copy/Move", FlatFileCopyTab),
             ("Text Merger", TextMergerTab),
             ("Movie Frames", ScreenshotFromMovieTab),
+            (
+                "Character Library",
+                partial(CharacterLibraryPanel, profile_root=USER_INPUT_DIR / "characters"),
+            ),
             ("Movie to Text", MovieToTextTab),
             ("画像をWEBP変換", ImagesToWebpTab),
             ("重複行削除", DuplicateLineDeleteTab),

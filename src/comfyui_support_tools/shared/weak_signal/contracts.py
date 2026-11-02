@@ -43,6 +43,9 @@ class ObservationInput:
     frames: tuple[bytes, ...]
     media_kind: str = "image"
     metadata: tuple[tuple[str, str], ...] = ()
+    input_evidence_kind: EvidenceKind = EvidenceKind.OBSERVED
+    input_generator: str = "source_observation"
+    input_provenance_note: str = "original encoded pixels"
 
     # {
     #   責務: [__post_init__: observation ID/frame payload/media kindをvalidateする]
@@ -66,6 +69,12 @@ class ObservationInput:
             raise ValueError("media_kind must be image, burst, or video")
         if self.media_kind == "image" and len(self.frames) != 1:
             raise ValueError("single-image observations must contain exactly one frame")
+        if not isinstance(self.input_evidence_kind, EvidenceKind):
+            raise TypeError("input_evidence_kind must use EvidenceKind")
+        if not isinstance(self.input_generator, str) or not self.input_generator.strip():
+            raise ValueError("input_generator must not be empty")
+        if not isinstance(self.input_provenance_note, str):
+            raise TypeError("input_provenance_note must be a string")
 
 
 # {

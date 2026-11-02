@@ -91,10 +91,10 @@ class PillowWeakSignalBackend:
             provenance = [
                 EvidenceProvenance(
                     "input observation",
-                    EvidenceKind.OBSERVED,
+                    observation.input_evidence_kind,
                     1.0,
-                    "source_observation",
-                    "original encoded pixels are preserved in the observed_input component",
+                    observation.input_generator,
+                    observation.input_provenance_note,
                 ),
                 EvidenceProvenance(
                     "output image",
@@ -105,7 +105,12 @@ class PillowWeakSignalBackend:
                 ),
             ]
             original_frames = tuple(_encode_png(frame) for frame in observed_frames)
-            components = (("observed_input", original_frames), ("transmission_candidate", encoded))
+            source_component = (
+                "observed_input"
+                if observation.input_evidence_kind is EvidenceKind.OBSERVED
+                else "derived_input"
+            )
+            components = ((source_component, original_frames), ("transmission_candidate", encoded))
             if component_frames:
                 residual_encoded = tuple(_encode_png(frame) for frame in component_frames[0][1])
                 components += ((component_frames[0][0], residual_encoded),)

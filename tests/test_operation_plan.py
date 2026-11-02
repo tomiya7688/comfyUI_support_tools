@@ -1,6 +1,7 @@
 """Shared operation plan, stale detection, preview, and apply tests."""
 
 import argparse
+import hashlib
 import json
 import tempfile
 import unittest
@@ -61,6 +62,52 @@ class OperationPlanTests(unittest.TestCase):
         )
 
     # {
+    #   責務: [test_plan_builder_rejects_malformed_inputs_with_value_error: 不正なbuilder入力を一貫して拒否する]
+    #   処理: [1: 各不正入力を与える 2: ValueErrorを確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_plan_builder_rejects_malformed_inputs_with_value_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "source"
+            source.write_text("x", encoding="utf-8")
+            valid_action = PlannedAction("copy", "source-1", "copy")
+            cases = (
+                {"operation_id": None},
+                {"confidence": True},
+                {"sources": {1: source}},
+                {"actions": (object(),)},
+                {"estimated_resources": {"bytes": float("inf")}},
+            )
+            for overrides in cases:
+                arguments = {
+                    "operation_id": "operation-test",
+                    "mode": OperationMode.DRY_RUN,
+                    "sources": {"source-1": source},
+                    "actions": (valid_action,),
+                    "settings": {},
+                }
+                arguments.update(overrides)
+                with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                    create_operation_plan(**arguments)
+
+    # {
+    #   責務: [test_snapshot_rejects_invalid_hash_limits: 不正なhash上限を拒否する]
+    #   処理: [1: 負数/真偽値/小数を与える 2: ValueErrorを確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_snapshot_rejects_invalid_hash_limits(self):
+        from comfyui_support_tools.shared.operation_plan import capture_source_snapshot
+
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "source"
+            source.write_text("x", encoding="utf-8")
+            for limit in (-1, True, 1.5):
+                with self.subTest(limit=limit), self.assertRaises(ValueError):
+                    capture_source_snapshot("source-1", source, limit)
+
+    # {
     #   責務: [test_plan_round_trip_is_atomic_and_digest_checked: plan JSON保存とintegrity digestを検証する]
     #   処理: [1: plan manifestを書き戻す 2: dataclass equalityを確認する 3: tamperを拒否する]
     #   引数: []
@@ -79,6 +126,18 @@ class OperationPlanTests(unittest.TestCase):
             payload["plan"]["settings_sha256"] = "0" * 64
             manifest.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "digest"):
+                load_operation_plan(manifest)
+            payload["plan"]["affected_count"] += 1
+            canonical = json.dumps(
+                payload["plan"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+            payload["plan_sha256"] = hashlib.sha256(canonical).hexdigest()
+            manifest.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "affected count"):
                 load_operation_plan(manifest)
 
     # {

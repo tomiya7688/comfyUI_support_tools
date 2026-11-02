@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import random
 import stat
 import time
@@ -40,7 +41,12 @@ def capture_source_snapshot(
     path: Path,
     content_hash_limit: int = CONTENT_HASH_LIMIT_BYTES,
 ) -> SourceSnapshot:
-    if not source_id.strip() or content_hash_limit < 0:
+    if (
+        not isinstance(source_id, str)
+        or not source_id.strip()
+        or type(content_hash_limit) is not int
+        or content_hash_limit < 0
+    ):
         raise ValueError("source ID and nonnegative content hash limit are required")
     source = Path(path).expanduser().absolute()
     try:
@@ -50,9 +56,22 @@ def capture_source_snapshot(
     digest = ""
     if stat.S_ISREG(metadata.st_mode) and metadata.st_size <= content_hash_limit:
         hasher = hashlib.sha256()
-        with source.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                hasher.update(chunk)
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(source, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if _stat_identity(opened) != _stat_identity(metadata):
+                raise OSError("source changed while its snapshot was captured")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            if _stat_identity(os.fstat(descriptor)) != _stat_identity(metadata):
+                raise OSError("source changed while its snapshot was captured")
+            final = os.stat(source, follow_symlinks=False)
+            if _stat_identity(final) != _stat_identity(metadata):
+                raise OSError("source changed while its snapshot was captured")
+        finally:
+            os.close(descriptor)
         digest = hasher.hexdigest()
     return SourceSnapshot(
         source_id,
@@ -64,6 +83,22 @@ def capture_source_snapshot(
         metadata.st_dev,
         metadata.st_ino,
         digest,
+    )
+
+
+# {
+#   責務: [_stat_identity: file descriptor/stat pathの同一性比較用tupleを作る]
+#   処理: [1: device/inode/mode/size/mtimeを取り出す]
+#   引数: [metadata: os.stat_result]
+#   戻り値: [identity: stat identity tuple]
+# }
+def _stat_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_size,
+        metadata.st_mtime_ns,
     )
 
 
@@ -110,31 +145,65 @@ def create_operation_plan(
     before_count: int | None = None,
     after_count: int | None = None,
 ) -> OperationPlan:
-    if not operation_id.strip() or type(skipped_count) is not int or skipped_count < 0:
+    if (
+        not isinstance(operation_id, str)
+        or not operation_id.strip()
+        or type(skipped_count) is not int
+        or skipped_count < 0
+    ):
         raise ValueError("operation ID and nonnegative skipped count are required")
-    if not math.isfinite(confidence) or not 0 <= confidence <= 1:
+    if (
+        isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not math.isfinite(confidence)
+        or not 0 <= confidence <= 1
+    ):
         raise ValueError("confidence must be finite and in 0..1")
+    if not isinstance(sources, Mapping) or not isinstance(settings, Mapping):
+        raise ValueError("sources and settings must be mappings")
+    if not isinstance(actions, Sequence) or isinstance(actions, (str, bytes)):
+        raise ValueError("actions must be a sequence of PlannedAction values")
     source_items = tuple(
         capture_source_snapshot(source_id, path) for source_id, path in sources.items()
     )
     source_ids = {item.source_id for item in source_items}
     action_items = tuple(actions)
+    if any(not isinstance(item, PlannedAction) for item in action_items):
+        raise ValueError("actions must contain PlannedAction values")
     if len(source_ids) != len(source_items):
         raise ValueError("source IDs must be unique")
     if len({item.action_id for item in action_items}) != len(action_items):
         raise ValueError("action IDs must be unique")
-    if any(not item.action_id.strip() or not item.operation.strip() for item in action_items):
+    if any(
+        not isinstance(item, PlannedAction)
+        or not isinstance(item.action_id, str)
+        or not isinstance(item.operation, str)
+        or not item.action_id.strip()
+        or not item.operation.strip()
+        for item in action_items
+    ):
         raise ValueError("action IDs and operations must not be empty")
     if any(item.source_id not in source_ids for item in action_items):
         raise ValueError("every action must reference a planned source")
     if any(not isinstance(item.decision_reasons, tuple) for item in action_items):
         raise ValueError("action decision reasons must be tuples")
     if any(
-        not math.isfinite(item.confidence) or not 0 <= item.confidence <= 1 for item in action_items
+        isinstance(item.confidence, bool)
+        or not isinstance(item.confidence, (int, float))
+        or not math.isfinite(item.confidence)
+        or not 0 <= item.confidence <= 1
+        for item in action_items
     ):
         raise ValueError("action confidence must be finite and in 0..1")
     resources = tuple(sorted((estimated_resources or {}).items()))
-    if any(isinstance(value, float) and not math.isfinite(value) for _, value in resources):
+    if any(
+        not isinstance(key, str)
+        or not key
+        or isinstance(value, bool)
+        or not isinstance(value, (int, float, str))
+        or (isinstance(value, float) and not math.isfinite(value))
+        for key, value in resources
+    ):
         raise ValueError("estimated resources must be finite")
     before = len(source_items) if before_count is None else before_count
     after = max(0, before - len(action_items)) if after_count is None else after_count
@@ -218,6 +287,7 @@ def preview_operation_plan(
 #   戻り値: [written_path: saved manifest path]
 # }
 def save_operation_plan(plan: OperationPlan, path: Path, *, overwrite: bool = False) -> Path:
+    _validate_operation_plan(plan)
     payload = operation_plan_to_dict(plan)
     encoded_plan = _canonical_json(payload)
     envelope = {
@@ -255,7 +325,7 @@ def load_operation_plan(path: Path) -> OperationPlan:
     if payload.get("schema_version") != PLAN_SCHEMA_VERSION:
         raise ValueError("operation plan schema version is unsupported")
     try:
-        return OperationPlan(
+        plan = OperationPlan(
             operation_id=payload["operation_id"],
             mode=OperationMode(payload["mode"]),
             source_items=tuple(SourceSnapshot(**item) for item in payload["source_items"]),
@@ -282,6 +352,124 @@ def load_operation_plan(path: Path) -> OperationPlan:
         )
     except (KeyError, TypeError, ValueError) as error:
         raise ValueError("operation plan payload is invalid") from error
+    try:
+        _validate_operation_plan(plan)
+    except (TypeError, AttributeError) as error:
+        raise ValueError("operation plan payload is invalid") from error
+    return plan
+
+
+# {
+#   責務: [_validate_operation_plan: planの型と内部整合性を保存/apply境界で検証する]
+#   処理: [1: identity/count/digest/action/sourceの不変条件を検証する]
+#   引数: [plan: operation plan]
+#   戻り値: []
+# }
+def _validate_operation_plan(plan: OperationPlan) -> None:
+    if not isinstance(plan, OperationPlan):
+        raise ValueError("operation plan must be an OperationPlan")
+    if any(
+        not isinstance(value, tuple)
+        for value in (
+            plan.source_items,
+            plan.proposed_actions,
+            plan.warnings,
+            plan.conflicts,
+            plan.estimated_resources,
+            plan.output_destinations,
+            plan.decision_reasons,
+        )
+    ):
+        raise ValueError("operation plan collections must be immutable tuples")
+    if (
+        not isinstance(plan.operation_id, str)
+        or not plan.operation_id.strip()
+        or not isinstance(plan.mode, OperationMode)
+        or type(plan.schema_version) is not int
+        or plan.schema_version != PLAN_SCHEMA_VERSION
+        or isinstance(plan.created_at, bool)
+        or not isinstance(plan.created_at, (int, float))
+        or not math.isfinite(plan.created_at)
+    ):
+        raise ValueError("operation plan identity or version is invalid")
+    counts = (plan.affected_count, plan.skipped_count, plan.before_count, plan.after_count)
+    if any(type(value) is not int or value < 0 for value in counts):
+        raise ValueError("operation plan counts must be nonnegative integers")
+    if plan.affected_count != len(plan.proposed_actions):
+        raise ValueError("operation plan affected count does not match its actions")
+    if (
+        isinstance(plan.confidence, bool)
+        or not isinstance(plan.confidence, (int, float))
+        or not math.isfinite(plan.confidence)
+        or not 0 <= plan.confidence <= 1
+    ):
+        raise ValueError("operation plan confidence is invalid")
+    if (
+        not isinstance(plan.settings_sha256, str)
+        or len(plan.settings_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in plan.settings_sha256)
+    ):
+        raise ValueError("operation plan settings digest is invalid")
+    if not all(isinstance(item, SourceSnapshot) for item in plan.source_items):
+        raise ValueError("operation plan source snapshots are invalid")
+    source_ids = {item.source_id for item in plan.source_items}
+    if len(source_ids) != len(plan.source_items):
+        raise ValueError("operation plan source IDs are not unique")
+    for item in plan.source_items:
+        if (
+            not isinstance(item.source_id, str)
+            or not item.source_id.strip()
+            or not isinstance(item.path, str)
+            or type(item.exists) is not bool
+            or any(
+                type(value) is not int or value < 0
+                for value in (
+                    item.size_bytes,
+                    item.modified_ns,
+                    item.mode,
+                    item.device_id,
+                    item.inode,
+                )
+            )
+            or not isinstance(item.content_sha256, str)
+            or (
+                item.content_sha256
+                and (
+                    len(item.content_sha256) != 64
+                    or any(character not in "0123456789abcdef" for character in item.content_sha256)
+                )
+            )
+        ):
+            raise ValueError("operation plan source snapshot is invalid")
+    if not all(isinstance(item, PlannedAction) for item in plan.proposed_actions):
+        raise ValueError("operation plan actions are invalid")
+    action_ids = set()
+    for item in plan.proposed_actions:
+        if (
+            not isinstance(item.action_id, str)
+            or not item.action_id.strip()
+            or item.action_id in action_ids
+            or not isinstance(item.source_id, str)
+            or item.source_id not in source_ids
+            or not isinstance(item.operation, str)
+            or not item.operation.strip()
+            or not isinstance(item.destination, str)
+            or not isinstance(item.decision_reasons, tuple)
+            or not all(isinstance(reason, str) for reason in item.decision_reasons)
+            or not isinstance(item.risk_level, str)
+            or type(item.review_required) is not bool
+            or type(item.reversible) is not bool
+            or isinstance(item.confidence, bool)
+            or not isinstance(item.confidence, (int, float))
+            or not math.isfinite(item.confidence)
+            or not 0 <= item.confidence <= 1
+        ):
+            raise ValueError("operation plan action is invalid")
+        action_ids.add(item.action_id)
+    if type(plan.reversible) is not bool or plan.reversible != all(
+        item.reversible for item in plan.proposed_actions
+    ):
+        raise ValueError("operation plan reversibility does not match its actions")
 
 
 # {
@@ -311,6 +499,10 @@ def apply_operation_plan(
     confirmed: bool = False,
     rollback_action: Callable[[PlannedAction], None] | None = None,
 ) -> PlanExecutionResult:
+    try:
+        _validate_operation_plan(plan)
+    except (TypeError, ValueError) as error:
+        return PlanExecutionResult(PlanExecutionStatus.STALE_DECISIONS, message=str(error))
     if plan.mode is OperationMode.MANIFEST_ONLY:
         return PlanExecutionResult(PlanExecutionStatus.MANIFEST_ONLY)
     if plan.conflicts:
@@ -329,6 +521,7 @@ def apply_operation_plan(
         raise TypeError("rebuild_plan and apply_action must be callable")
     try:
         refreshed = rebuild_plan()
+        _validate_operation_plan(refreshed)
     except Exception as error:
         return PlanExecutionResult(
             PlanExecutionStatus.STALE_DECISIONS,

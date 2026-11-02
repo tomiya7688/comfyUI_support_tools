@@ -13,7 +13,6 @@ from .adapters import RuntimeTrainerAdapter
 from .contracts import (
     AdapterMethod,
     ArchitectureProfile,
-    MethodSupport,
     SupportLevel,
     SupportMatrixEntry,
     TrainerResolution,

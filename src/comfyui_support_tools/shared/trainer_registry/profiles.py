@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .contracts import ArchitectureProfile, AdapterMethod, Quantization, SupportLevel
-
+from .contracts import AdapterMethod, ArchitectureProfile, Quantization, SupportLevel
 
 _TRAINER_SUPPORT = {
     "simpletuner": SupportLevel.SUPPORTED,
@@ -48,8 +47,16 @@ _LOW_VRAM_FEATURES = {
 # 引数: [None: profiles are project-owned immutable declarations]
 # 戻り値: [dict[str, ArchitectureProfile]: supported architecture profile registry]
 # }
-def architecture_profiles() -> dict[str, ArchitectureProfile]:
-    profiles = (
+
+
+# {
+# 責務: [_classic_profiles: provide declarative profiles for related model architectures]
+# 処理: [return model-specific immutable architecture and trainer capability data]
+# 引数: [None: profile data is owned by this module]
+# 戻り値: [tuple[ArchitectureProfile, ...]: a related profile group]
+# }
+def _classic_profiles() -> tuple[ArchitectureProfile, ...]:
+    return (
         ArchitectureProfile(
             key="sdxl",
             family="sdxl",
@@ -104,6 +111,35 @@ def architecture_profiles() -> dict[str, ArchitectureProfile]:
                 "sd_scripts": (Quantization.NONE,),
             },
         ),
+        ArchitectureProfile(
+            key="sd3_5",
+            family="sd3",
+            flavour="3.5-large-medium",
+            text_encoder="clip_l+clip_g+t5_xxl",
+            latent_format="sd3_16ch",
+            target_modules=("transformer_blocks.*.attn.*", "transformer_blocks.*.ff.*"),
+            training_schedule="flow_matching",
+            text_encoder_trainable=False,
+            minimum_vram_gib=24,
+            supported_trainers=dict(_TRAINER_SUPPORT),
+            methods={**_LORA_METHODS, **_LYCORIS_METHODS},
+            quantization={
+                "simpletuner": (Quantization.NONE, Quantization.FP8),
+                "ai_toolkit": (Quantization.NONE, Quantization.NF4),
+                "sd_scripts": (Quantization.NONE,),
+            },
+        ),
+    )
+
+
+# {
+# 責務: [_flux2_profiles: provide declarative profiles for related model architectures]
+# 処理: [return model-specific immutable architecture and trainer capability data]
+# 引数: [None: profile data is owned by this module]
+# 戻り値: [tuple[ArchitectureProfile, ...]: a related profile group]
+# }
+def _flux2_profiles() -> tuple[ArchitectureProfile, ...]:
+    return (
         ArchitectureProfile(
             key="flux2_dev",
             family="flux2",
@@ -168,6 +204,17 @@ def architecture_profiles() -> dict[str, ArchitectureProfile]:
                 "ai_toolkit": (Quantization.NONE, Quantization.NF4, Quantization.INT8),
             },
         ),
+    )
+
+
+# {
+# 責務: [_qwen_profiles: provide declarative profiles for related model architectures]
+# 処理: [return model-specific immutable architecture and trainer capability data]
+# 引数: [None: profile data is owned by this module]
+# 戻り値: [tuple[ArchitectureProfile, ...]: a related profile group]
+# }
+def _qwen_profiles() -> tuple[ArchitectureProfile, ...]:
+    return (
         ArchitectureProfile(
             key="qwen_image",
             family="qwen_image",
@@ -229,24 +276,17 @@ def architecture_profiles() -> dict[str, ArchitectureProfile]:
             methods=dict(_LORA_METHODS),
             quantization={"ai_toolkit": (Quantization.NONE, Quantization.NF4, Quantization.INT8)},
         ),
-        ArchitectureProfile(
-            key="sd3_5",
-            family="sd3",
-            flavour="3.5-large-medium",
-            text_encoder="clip_l+clip_g+t5_xxl",
-            latent_format="sd3_16ch",
-            target_modules=("transformer_blocks.*.attn.*", "transformer_blocks.*.ff.*"),
-            training_schedule="flow_matching",
-            text_encoder_trainable=False,
-            minimum_vram_gib=24,
-            supported_trainers=dict(_TRAINER_SUPPORT),
-            methods={**_LORA_METHODS, **_LYCORIS_METHODS},
-            quantization={
-                "simpletuner": (Quantization.NONE, Quantization.FP8),
-                "ai_toolkit": (Quantization.NONE, Quantization.NF4),
-                "sd_scripts": (Quantization.NONE,),
-            },
-        ),
+    )
+
+
+# {
+# 責務: [_emerging_profiles: provide declarative profiles for related model architectures]
+# 処理: [return model-specific immutable architecture and trainer capability data]
+# 引数: [None: profile data is owned by this module]
+# 戻り値: [tuple[ArchitectureProfile, ...]: a related profile group]
+# }
+def _emerging_profiles() -> tuple[ArchitectureProfile, ...]:
+    return (
         ArchitectureProfile(
             key="anima",
             family="anima",
@@ -331,6 +371,21 @@ def architecture_profiles() -> dict[str, ArchitectureProfile]:
                 "ai_toolkit": (Quantization.NONE, Quantization.NF4),
             },
         ),
+    )
+
+
+# {
+# 責務: [architecture_profiles: combine model-specific training contracts]
+# 処理: [merge declarative groups and attach the independent memory feature matrix]
+# 引数: [None: profiles are project-owned immutable declarations]
+# 戻り値: [dict[str, ArchitectureProfile]: supported architecture profile registry]
+# }
+def architecture_profiles() -> dict[str, ArchitectureProfile]:
+    profiles = (
+        *_classic_profiles(),
+        *_flux2_profiles(),
+        *_qwen_profiles(),
+        *_emerging_profiles(),
     )
     enriched = (replace(profile, features=dict(_LOW_VRAM_FEATURES)) for profile in profiles)
     return {profile.key: profile for profile in enriched}

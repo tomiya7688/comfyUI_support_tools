@@ -158,6 +158,19 @@ def work():
                     )
                 )
             )
+            package_init = root / "src" / "quality" / "audio_to_face" / "__init__.py"
+            package_init.parent.mkdir(parents=True)
+            package_init.write_text("class FaceEvaluation: pass\n", encoding="utf-8")
+            self.assertEqual(
+                quality_gate.precision_validation_findings(
+                    root,
+                    (
+                        "src/quality/audio_to_face/__init__.py",
+                        "tests/test_audio_to_face.py",
+                    ),
+                ),
+                [],
+            )
 
 
 if __name__ == "__main__":

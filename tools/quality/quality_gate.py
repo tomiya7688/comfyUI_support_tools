@@ -500,9 +500,12 @@ def precision_validation_findings(root: Path, changed_files: tuple[str, ...]) ->
         if any(term in Path(path).stem.casefold() for term in PRECISION_TERMS) or any(
             term in source for term in PRECISION_TERMS
         ):
+            module_name = Path(path).stem
+            if module_name == "__init__":
+                module_name = Path(path).parent.name
             module_terms = {
                 term
-                for term in re.split(r"[^a-z0-9]+", Path(path).stem.casefold())
+                for term in re.split(r"[^a-z0-9]+", module_name.casefold())
                 if term and term not in {"test", "quality"}
             }
             has_related_test = any(

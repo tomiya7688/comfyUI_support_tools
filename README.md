@@ -155,3 +155,15 @@ This stage does not bundle PMX 2.1 soft-body support, a GUI, an MMD Bullet motio
 `comfyui_support_tools.shared.camera_director` reads dance VMD and generates a camera VMD, JSON plan, animated GIF preview, and SVG storyboard from a style preset, optional stage bounds, and optional PCM WAV energy sections. Its heuristic backend is reproducible with a fixed seed and can regenerate only a selected frame interval. DanceStyleCam and model-aware collision checking can be injected as adapters; outputs are written as a non-overwriting artifact set.
 
 By default, subject tracking uses a root-bone name or the first bone track, and WAV audio is divided into fixed-size RMS energy windows. DanceStyleCam itself, PMX/stage-geometry visibility and collision checks, beat/section inference, a 3D scene renderer, and a timeline GUI are not included. GIF and SVG visualize the camera plan; they do not render the 3D scene.
+
+### Audio-to-MMD Face基盤
+
+`comfyui_support_tools.shared.audio_to_face` はPCM WAVとtranscript、または注入したspeech analyzerからtimed phonemeを受け取り、日本語vowel morph・emotion morph・seeded blink curveを作成します。PMX固有morph名/rangeは `MorphCalibration` で指定でき、facial-only VMDとbody VMDへの非破壊morph merge、timing report、morph curve GIFを保存します。モデル名や既存成果物を壊さないため出力は上書きせず作成します。
+
+既定のtranscript経路はmoraを音声全体へ均等配分する概算で、実際のspeech timingやlip-sync品質を保証しません。音声認識、phoneme alignment、歌唱/音素解析には外部 `SpeechAnalyzer` adapterが必要です。AnyTalk本体、PMX自動morph検出・calibration、gaze/head motion、preview videoは同梱していません。評価値は生成timelineの整合性指標であり、正解ラベルとの音声/映像比較ではありません。
+
+### Audio-to-MMD Face foundation
+
+`comfyui_support_tools.shared.audio_to_face` accepts timed phonemes from PCM WAV plus a transcript, or from an injected speech analyzer, then generates Japanese vowel morphs, emotion morphs, and seeded blink curves. `MorphCalibration` supplies model-specific morph names and ranges. The service writes a facial-only VMD, a non-destructive morph merge into a body VMD, a timing report, and a GIF of the morph curves without overwriting existing outputs.
+
+The built-in transcript path distributes mora uniformly across the audio as an estimate; it does not provide real speech timing or guarantee lip-sync quality. Speech recognition, phoneme alignment, and singing analysis require an external `SpeechAnalyzer` adapter. AnyTalk itself, automatic PMX morph discovery/calibration, gaze/head motion, and preview video are not bundled. Evaluation values measure generated-timeline consistency, not comparison against labeled audio/video ground truth.

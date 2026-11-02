@@ -11,6 +11,7 @@ from PIL import Image, ImageTk
 from comfyui_support_tools.shared.pixel_art import (
     SIZE_PRESETS,
     PixelArtApplication,
+    PixelArtCategory,
     PixelArtRequest,
     PixelArtSettings,
     PixelEdit,
@@ -26,6 +27,34 @@ from comfyui_support_tools.shared.pixel_art import (
 # 処理: [keep image conversion UI behavior separate from root window setup]
 # }
 class ImageConversionActions:
+    # {
+    # 責務: [configure_text_backend: connect a local ComfyUI workflow for prompt generation]
+    # 処理: [select an API-format workflow and validated loopback endpoint]
+    # 引数: [None: obtains workflow and endpoint from dialogs]
+    # 戻り値: [None: installs pixel adapter or displays configuration feedback]
+    # }
+    def configure_text_backend(self) -> None:
+        selected = filedialog.askopenfilename(
+            title="Select ComfyUI API workflow", filetypes=(("JSON workflow", "*.json"),)
+        )
+        if not selected:
+            return
+        api_url = simpledialog.askstring(
+            "ComfyUI endpoint",
+            "Local API URL:",
+            initialvalue="http://127.0.0.1:8188",
+            parent=self,
+        )
+        if not api_url:
+            return
+        try:
+            from .comfyui_backend import ComfyUIPixelTextBackend
+
+            self.application.text_backend = ComfyUIPixelTextBackend(Path(selected), api_url)
+            self.status.set(f"Text generation configured with {Path(selected).name}.")
+        except (OSError, ValueError, RuntimeError) as error:
+            messagebox.showerror("Text backend", str(error), parent=self)
+
     # {
     # 責務: [compare_image_modes: compare four structure/palette conversion candidates]
     # 処理: [show native-grid candidates and accept one result into the editor project]
@@ -324,57 +353,11 @@ class PixelRetouchActions:
 
 
 # {
-# 責務: [PixelArtWindow: standalone UI for all Pixel Art Creator entry workflows]
-# フィールド: [workflow/settings controls, preview canvas, project and shared application]
-# 処理: [allow text/image/retouch selection from one pixel-focused window]
+# 責務: [PixelWindowLayoutActions: compose shared settings and workflow controls]
+# フィールド: [Tk variables and callbacks initialized by PixelArtWindow]
+# 処理: [separate view construction from application state and editor behavior]
 # }
-class PixelArtWindow(ImageConversionActions, PixelRetouchActions, tk.Tk):
-    # {
-    # 責務: [__init__: create the pixel art desktop application window]
-    # 処理: [wire common controls, editor canvas, and injected generation backend]
-    # 引数: [text_backend: optional Text workflow adapter]
-    # 戻り値: [None: initialized Tk application]
-    # }
-    def __init__(self, text_backend: PixelTextBackend | None = None):
-        super().__init__()
-        self.title("Pixel Art Creator")
-        self.geometry("1050x760")
-        self.minsize(760, 560)
-        self.application = PixelArtApplication(text_backend)
-        self.result = None
-        self.project = None
-        self.palette = ()
-        self._preview_photo = None
-        self.workflow = tk.StringVar(self, value="Image")
-        self.size = tk.StringVar(self, value="64")
-        self.colors = tk.StringVar(self, value="16")
-        self.palette_mode = tk.StringVar(self, value="count")
-        self.zoom = tk.StringVar(self, value="8x")
-        self.image_mode = tk.StringVar(self, value="faithful")
-        self.crop_policy = tk.StringVar(self, value="fit")
-        self.dithering = tk.StringVar(self, value="none")
-        self.category = tk.StringVar(self, value="character")
-        self.prompt = tk.StringVar(self)
-        self.color = tk.StringVar(self, value="#202020")
-        self.show_grid = tk.BooleanVar(self, value=True)
-        self.status = tk.StringVar(self, value="Text / Image / Retouchを選択してください。")
-        self._build()
-
-    # {
-    # 責務: [_build: layout shared settings and crisp pixel canvas]
-    # 処理: [provide three workflow choices, pixel settings, import, edit, and export actions]
-    # 引数: [None: uses initialized Tk variables]
-    # 戻り値: [None: updates UI layout]
-    # }
-    def _build(self) -> None:
-        self._build_settings()
-        self._build_workflow_actions()
-        self._build_editor_actions()
-        self._build_canvas()
-        ttk.Label(self, textvariable=self.status, padding=8).pack(fill="x")
-        self.editor_tool = "pencil"
-        self.source_path = None
-
+class PixelWindowLayoutActions:
     # {
     # 責務: [_build_settings: lay out pixel dimensions, palette, crop, and preview settings]
     # 処理: [create shared settings controls in two compact rows]
@@ -443,6 +426,48 @@ class PixelArtWindow(ImageConversionActions, PixelRetouchActions, tk.Tk):
             2,
             row=1,
         )
+        self._combo(
+            controls,
+            "Style",
+            self.style,
+            (
+                "8_bit",
+                "16_bit",
+                "jrpg",
+                "tactical_rpg",
+                "roguelike",
+                "modern_indie",
+                "chibi",
+                "retro_console",
+                "custom",
+            ),
+            3,
+            row=1,
+        )
+        self._combo(
+            controls,
+            "Outline",
+            self.outline_policy,
+            ("clear_outline", "soft_outline", "no_outline", "auto"),
+            0,
+            row=2,
+        )
+        self._combo(
+            controls,
+            "Shading",
+            self.shading_level,
+            ("flat", "low", "medium", "high"),
+            1,
+            row=2,
+        )
+        self._combo(
+            controls,
+            "Detail",
+            self.detail_level,
+            ("auto", "minimal", "balanced", "rich"),
+            2,
+            row=2,
+        )
 
     # {
     # 責務: [_build_workflow_actions: add source, palette, convert, batch, and comparison controls]
@@ -457,8 +482,13 @@ class PixelArtWindow(ImageConversionActions, PixelRetouchActions, tk.Tk):
         ttk.Entry(prompt_row, textvariable=self.prompt).pack(
             side="left", fill="x", expand=True, padx=8
         )
+        ttk.Label(prompt_row, text="Negative").pack(side="left")
+        ttk.Entry(prompt_row, textvariable=self.negative_prompt, width=16).pack(side="left", padx=6)
         ttk.Button(prompt_row, text="Open image", command=self.open_image).pack(side="left")
         ttk.Button(prompt_row, text="Palette…", command=self.open_palette).pack(
+            side="left", padx=(6, 0)
+        )
+        ttk.Button(prompt_row, text="Text backend…", command=self.configure_text_backend).pack(
             side="left", padx=(6, 0)
         )
         ttk.Button(prompt_row, text="Create / Convert", command=self.run_workflow).pack(
@@ -470,6 +500,64 @@ class PixelArtWindow(ImageConversionActions, PixelRetouchActions, tk.Tk):
         ttk.Button(prompt_row, text="Compare modes…", command=self.compare_image_modes).pack(
             side="left", padx=(6, 0)
         )
+
+
+# {
+# 責務: [PixelArtWindow: standalone UI for all Pixel Art Creator entry workflows]
+# フィールド: [workflow/settings controls, preview canvas, project and shared application]
+# 処理: [allow text/image/retouch selection from one pixel-focused window]
+# }
+class PixelArtWindow(ImageConversionActions, PixelWindowLayoutActions, PixelRetouchActions, tk.Tk):
+    # {
+    # 責務: [__init__: create the pixel art desktop application window]
+    # 処理: [wire common controls, editor canvas, and injected generation backend]
+    # 引数: [text_backend: optional Text workflow adapter]
+    # 戻り値: [None: initialized Tk application]
+    # }
+    def __init__(self, text_backend: PixelTextBackend | None = None):
+        super().__init__()
+        self.title("Pixel Art Creator")
+        self.geometry("1050x760")
+        self.minsize(760, 560)
+        self.application = PixelArtApplication(text_backend)
+        self.result = None
+        self.project = None
+        self.palette = ()
+        self._preview_photo = None
+        self.workflow = tk.StringVar(self, value="Image")
+        self.size = tk.StringVar(self, value="64")
+        self.colors = tk.StringVar(self, value="16")
+        self.palette_mode = tk.StringVar(self, value="count")
+        self.zoom = tk.StringVar(self, value="8x")
+        self.image_mode = tk.StringVar(self, value="faithful")
+        self.crop_policy = tk.StringVar(self, value="fit")
+        self.dithering = tk.StringVar(self, value="none")
+        self.category = tk.StringVar(self, value="character")
+        self.style = tk.StringVar(self, value="modern_indie")
+        self.outline_policy = tk.StringVar(self, value="clear_outline")
+        self.shading_level = tk.StringVar(self, value="medium")
+        self.detail_level = tk.StringVar(self, value="auto")
+        self.prompt = tk.StringVar(self)
+        self.negative_prompt = tk.StringVar(self)
+        self.color = tk.StringVar(self, value="#202020")
+        self.show_grid = tk.BooleanVar(self, value=True)
+        self.status = tk.StringVar(self, value="Text / Image / Retouchを選択してください。")
+        self._build()
+
+    # {
+    # 責務: [_build: layout shared settings and crisp pixel canvas]
+    # 処理: [provide three workflow choices, pixel settings, import, edit, and export actions]
+    # 引数: [None: uses initialized Tk variables]
+    # 戻り値: [None: updates UI layout]
+    # }
+    def _build(self) -> None:
+        self._build_settings()
+        self._build_workflow_actions()
+        self._build_editor_actions()
+        self._build_canvas()
+        ttk.Label(self, textvariable=self.status, padding=8).pack(fill="x")
+        self.editor_tool = "pencil"
+        self.source_path = None
 
     # {
     # 責務: [_build_editor_actions: create manual, cleanup, history, and export controls]
@@ -596,7 +684,7 @@ class PixelArtWindow(ImageConversionActions, PixelRetouchActions, tk.Tk):
     def _settings(self) -> PixelArtSettings:
         return PixelArtSettings(
             size=int(self.size.get()),
-            category=self.category.get(),
+            category=PixelArtCategory(self.category.get()),
             palette_mode=self.palette_mode.get(),
             color_count=int(self.colors.get()),
             palette=self.palette,
@@ -617,7 +705,16 @@ class PixelArtWindow(ImageConversionActions, PixelRetouchActions, tk.Tk):
             settings = self._settings()
             mode = self.workflow.get()
             if mode == "Text":
-                request = PixelArtRequest(self.prompt.get(), settings, candidate_count=4)
+                request = PixelArtRequest(
+                    self.prompt.get(),
+                    settings,
+                    negative_prompt=self.negative_prompt.get(),
+                    style=self.style.get(),
+                    outline_policy=self.outline_policy.get(),
+                    shading_level=self.shading_level.get(),
+                    detail_level=self.detail_level.get(),
+                    candidate_count=4,
+                )
                 candidates = self.application.text_to_pixel(request)
                 self._set_result(candidates[0])
                 self.status.set(

@@ -1,9 +1,12 @@
 """GUI-independent action discovery and validation; no backend execution here."""
+
 import math
 from urllib.parse import urlsplit
 
 from comfyui_support_tools.shared.contracts.inspector_contracts import (
-    ActionAvailability, ActionDefinition, TaggerSettings,
+    ActionAvailability,
+    ActionDefinition,
+    TaggerSettings,
 )
 from comfyui_support_tools.shared.contracts.tagger_backend import resolve_backend
 
@@ -11,7 +14,12 @@ from comfyui_support_tools.shared.contracts.tagger_backend import resolve_backen
 # adapter. Style remains disabled until #64 provides its service contract.
 ACTIONS = (
     ActionDefinition("tag", "Tag / 内容タグ付け", ("image",)),
-    ActionDefinition("style", "Analyze Style", ("image",), "Style Analyzer service未実装 (#64)。同じAction導線へadapter追加予定"),
+    ActionDefinition(
+        "style",
+        "Analyze Style",
+        ("image",),
+        "Style Analyzer service未実装 (#64)。同じAction導線へadapter追加予定",
+    ),
     ActionDefinition("img2img", "Img2img", ("image",), "生成Action adapter未実装"),
     ActionDefinition("dataset", "Add to LoRA Dataset", ("image",), "Dataset登録Action未実装"),
     ActionDefinition("character", "Character Replace", ("image",), "Character API adapter未実装"),
@@ -20,6 +28,13 @@ ACTIONS = (
 )
 
 
+# {
+#   責務: [validate_settings: Tagger URL/backend/model/threshold/timeout settingsを処理前に検証する]
+#   処理: [HTTP(S) URL、backend endpoint、model text、0..1 finite thresholds、1..120s timeoutを確認する]
+#   引数: [settings: TaggerSettings]
+#   戻り値: [なし]
+#   エラー: [ValueError: URL/backend/field valueがサポート範囲外]
+# }
 def validate_settings(settings: TaggerSettings) -> None:
     url = settings.url
     parts = urlsplit(url)
@@ -27,10 +42,17 @@ def validate_settings(settings: TaggerSettings) -> None:
         port = parts.port
     except ValueError as exc:
         raise ValueError("API URLのportが不正です") from exc
-    if (parts.scheme not in ("http", "https") or not parts.hostname
-            or parts.username is not None or parts.password is not None
-            or parts.query or parts.fragment or any(c.isspace() for c in url)
-            or len(url) > 2048 or (port is not None and not 1 <= port <= 65535)):
+    if (
+        parts.scheme not in ("http", "https")
+        or not parts.hostname
+        or parts.username is not None
+        or parts.password is not None
+        or parts.query
+        or parts.fragment
+        or any(c.isspace() for c in url)
+        or len(url) > 2048
+        or (port is not None and not 1 <= port <= 65535)
+    ):
         raise ValueError("認証情報/queryを含まないHTTP(S) Tagger API URLを指定してください")
     resolve_backend(settings.backend, url)
     if len(settings.model) > 256 or any(ord(c) < 32 for c in settings.model):
@@ -42,6 +64,12 @@ def validate_settings(settings: TaggerSettings) -> None:
         raise ValueError("timeoutは1〜120秒で指定してください")
 
 
+# {
+#   責務: [action_options: selection/ready/busy stateからaction definitionsのavailabilityを組み立てる]
+#   処理: [disabled reason precedenceに従いunsupported, empty, invalid selection, busy, unreadyを判定する]
+#   引数: [items: selected media, ready: Tagger ready state, busy: active action flag]
+#   戻り値: [ActionAvailability tuple]
+# }
 def action_options(items, ready: bool, busy: bool):
     results = []
     for action in ACTIONS:

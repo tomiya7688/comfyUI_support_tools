@@ -1,4 +1,5 @@
 """Read-only, cancellable directory traversal. No decoder runs during scanning."""
+
 import hashlib
 import os
 from pathlib import Path
@@ -15,8 +16,16 @@ MAX_ITEMS = 100_000
 BATCH_SIZE = 128
 
 
-def scan_folder(folder: str, collection: str, token: int, cancel: Event,
-                emit: Callable[[MediaEvent], None]) -> None:
+# {
+#   責務: [scan_folder: symlinkを追わずread-only traversalしbounded MediaItem batchをemitする]
+#   処理: [collection/rootを検証し、MAX_ITEMSまで画像/動画をstat/hashしてbatch/done/error eventを送る]
+#   引数: [folder: scan root, collection: allowed collection, token: view generation, cancel: stop event, emit: event callback]
+#   戻り値: [なし。scan outcomeはemit callback経由で返す]
+#   副作用: [filesystem directory entryを走査し、emit callbackを呼ぶ]
+# }
+def scan_folder(
+    folder: str, collection: str, token: int, cancel: Event, emit: Callable[[MediaEvent], None]
+) -> None:
     """Emit up to MAX_ITEMS records; never follow directory/file symlinks."""
     batch = []
     count = 0
@@ -43,14 +52,31 @@ def scan_folder(folder: str, collection: str, token: int, cancel: Event,
                                 pending.append(entry.path)
                                 continue
                             suffix = Path(entry.name).suffix.lower()
-                            kind = "image" if suffix in IMAGE_SUFFIXES else "video" if suffix in VIDEO_SUFFIXES else ""
+                            kind = (
+                                "image"
+                                if suffix in IMAGE_SUFFIXES
+                                else "video"
+                                if suffix in VIDEO_SUFFIXES
+                                else ""
+                            )
                             if not kind or not entry.is_file(follow_symlinks=False):
                                 continue
                             stat = entry.stat(follow_symlinks=False)
                             path = os.path.abspath(entry.path)
-                            identity = hashlib.sha256(os.path.normcase(path).encode("utf-8", "surrogatepass")).hexdigest()
-                            batch.append(MediaItem(identity, path, entry.name, kind, collection,
-                                                   stat.st_size, stat.st_mtime_ns))
+                            identity = hashlib.sha256(
+                                os.path.normcase(path).encode("utf-8", "surrogatepass")
+                            ).hexdigest()
+                            batch.append(
+                                MediaItem(
+                                    identity,
+                                    path,
+                                    entry.name,
+                                    kind,
+                                    collection,
+                                    stat.st_size,
+                                    stat.st_mtime_ns,
+                                )
+                            )
                             count += 1
                             if len(batch) >= BATCH_SIZE:
                                 emit(MediaEvent("batch", token, tuple(batch)))

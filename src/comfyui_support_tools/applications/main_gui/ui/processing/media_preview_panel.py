@@ -1,11 +1,23 @@
 """Basic Inspector preview only; editable Actions belong to issue #220."""
+
 import base64
 import math
 import tkinter as tk
 from tkinter import ttk
 
 
+# {
+# 責務: [MediaPreviewPanel: bounded PNG still previewとvideo seek sliderをInspector内に表示する]
+# フィールド: [item_id/photo/details, seek position/timer/settings state, on_seek callback]
+# }
 class MediaPreviewPanel(ttk.Frame):
+    # {
+    #   責務: [__init__: no-selection placeholder、preview labels、debounced seek sliderを作る]
+    #   処理: [Tk widgetsを配置しDestroy cleanupをbindする]
+    #   引数: [self: panel, master: parent, on_seek: fraction callback]
+    #   戻り値: [なし]
+    #   副作用: [Tk controlsとevent bindingを生成する]
+    # }
     def __init__(self, master, on_seek):
         super().__init__(master)
         self.on_seek = on_seek
@@ -20,11 +32,21 @@ class MediaPreviewPanel(ttk.Frame):
         self.seek_frame = ttk.Frame(self)
         ttk.Label(self.seek_frame, text="動画: 静止フレーム位置", wraplength=200).pack(anchor="w")
         self.position = tk.DoubleVar(self, value=0)
-        ttk.Scale(self.seek_frame, from_=0, to=100, variable=self.position,
-                  command=self._schedule_seek).pack(fill="x")
-        ttk.Label(self.seek_frame, text="連続再生・音声再生は未対応", wraplength=200).pack(anchor="w")
+        ttk.Scale(
+            self.seek_frame, from_=0, to=100, variable=self.position, command=self._schedule_seek
+        ).pack(fill="x")
+        ttk.Label(self.seek_frame, text="連続再生・音声再生は未対応", wraplength=200).pack(
+            anchor="w"
+        )
         self.bind("<Destroy>", self._destroyed, add=True)
 
+    # {
+    #   責務: [select: selection先頭itemをcurrent preview対象にしUI/loading/seek stateをresetする]
+    #   処理: [empty selectionをplaceholder表示しvideoのみseek controlsを表示する]
+    #   引数: [self: panel, items: selected MediaItem sequence]
+    #   戻り値: [なし]
+    #   副作用: [pending seek timerをcancelしTk labels/sliderを更新する]
+    # }
     def select(self, items):
         self.item_id = items[0].id if items else None
         self.photo = None
@@ -40,6 +62,13 @@ class MediaPreviewPanel(ttk.Frame):
         if items and items[0].kind == "video":
             self.seek_frame.pack(fill="x", pady=8)
 
+    # {
+    #   責務: [render: current item IDと一致するpreviewをPhotoImage/detailsまたはerrorとして描画する]
+    #   処理: [stale previewを捨て、PNG bytesをdecodeし210x240枠内に縮小する]
+    #   引数: [self: panel, preview: MediaPreview contract]
+    #   戻り値: [なし]
+    #   副作用: [PhotoImage referenceとTk labelsを更新する]
+    # }
     def render(self, preview):
         if preview.item_id != self.item_id:
             return
@@ -48,12 +77,19 @@ class MediaPreviewPanel(ttk.Frame):
             self.details.configure(text=preview.error[:300])
             return
         photo = tk.PhotoImage(master=self, data=base64.b64encode(preview.png))
-        scale = max(1, math.ceil(photo.width()/210), math.ceil(photo.height()/240))
+        scale = max(1, math.ceil(photo.width() / 210), math.ceil(photo.height() / 240))
         self.photo = photo.subsample(scale, scale)
         self.image.configure(image=self.photo, text="")
         duration = f" / 約 {preview.duration:.1f} 秒" if preview.duration else ""
         self.details.configure(text=f"{preview.width} × {preview.height}{duration}")
 
+    # {
+    #   責務: [_schedule_seek: slider変更を200ms後へdebounceしseek要求を予約する]
+    #   処理: [programmatic updates/no itemなら無視し、既存timerを置換する]
+    #   引数: [self: panel, _value: Scale callback value（positionはDoubleVarから読む）]
+    #   戻り値: [なし]
+    #   副作用: [Tk after timerを作成/取消する]
+    # }
     def _schedule_seek(self, _value):
         if self._setting or not self.item_id:
             return
@@ -61,11 +97,25 @@ class MediaPreviewPanel(ttk.Frame):
             self.after_cancel(self._seek_after)
         self._seek_after = self.after(200, self._seek)
 
+    # {
+    #   責務: [_seek: current slider percentを0..1 fractionへ変換しparent callbackへ送る]
+    #   処理: [timer IDをclearしloading表示後on_seekを呼ぶ]
+    #   引数: [self: panel]
+    #   戻り値: [なし]
+    #   副作用: [image labelとpreview request callbackを更新する]
+    # }
     def _seek(self):
         self._seek_after = None
         self.image.configure(text="位置を読込中…")
-        self.on_seek(self.position.get()/100)
+        self.on_seek(self.position.get() / 100)
 
+    # {
+    #   責務: [_destroyed: panel自身破棄時だけ保留中seek timerをcancelする]
+    #   処理: [event.widget identity確認後after_cancelする]
+    #   引数: [self: panel, event: Tk Destroy event]
+    #   戻り値: [None]
+    #   副作用: [pending Tk callbackを取り消す]
+    # }
     def _destroyed(self, event):
         if event.widget is self and self._seek_after:
             self.after_cancel(self._seek_after)

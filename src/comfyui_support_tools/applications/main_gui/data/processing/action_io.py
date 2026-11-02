@@ -1,15 +1,30 @@
 """Bounded Inspector Action worker integrated with the shared Job Runtime."""
+
 import json
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
 
 from comfyui_support_tools.applications.main_gui.data.processing.job_runtime import JobRuntime
-from comfyui_support_tools.applications.main_gui.data.processing.result_exporter import export_records
-from comfyui_support_tools.applications.main_gui.data.processing.tagger_transport import TaggerTransport
+from comfyui_support_tools.applications.main_gui.data.processing.result_exporter import (
+    export_records,
+)
+from comfyui_support_tools.applications.main_gui.data.processing.tagger_transport import (
+    TaggerTransport,
+)
 from comfyui_support_tools.shared.contracts.inspector_contracts import ActionEvent
 
 
+# {
+# 責務: [ActionIO: Inspector probe/tag/exportをbounded workerとshared Job runtimeで実行する]
+# フィールド: [_transport, _jobs, bounded event queue, worker/cancel/closed state, last_job_id]
+# }
 class ActionIO:
+    # {
+    #   責務: [__init__: transport/runtimeとbounded event/worker stateを初期化する]
+    #   処理: [外部runtimeがなければ所有runtimeを作り、64 event queueとlock/cancel stateを用意する]
+    #   引数: [self: IO adapter, transport: optional TaggerTransport, jobs: optional shared JobRuntime]
+    #   戻り値: [なし]
+    # }
     def __init__(self, transport=None, jobs=None):
         self._transport = transport or TaggerTransport()
         self._jobs_owned = jobs is None
@@ -21,6 +36,14 @@ class ActionIO:
         self._thread = None
         self.last_job_id = ""
 
+    # {
+    #   責務: [start: 検証済みInspector actionをJob runtimeとbackground workerへ登録する]
+    #   処理: [request種別/件数/export inputを検証し、jobを作成して一つのworkerを開始する]
+    #   引数: [self: IO adapter, request: token付きActionRequest]
+    #   戻り値: [なし]
+    #   エラー: [ValueError: closed/running状態、unsupported kind、または不正なrequest]
+    #   副作用: [JobSnapshotを追加しdaemon worker threadを開始する]
+    # }
     def start(self, request):
         with self._lock:
             if self._closed or (self._thread and self._thread.is_alive()):
@@ -28,8 +51,7 @@ class ActionIO:
             if request.kind not in ("probe", "tag", "export") or len(request.items) > 60:
                 raise ValueError("Unsupported action request")
             if request.kind == "export" and (
-                request.export_settings is None
-                or len(request.export_records) != len(request.items)
+                request.export_settings is None or len(request.export_records) != len(request.items)
             ):
                 raise ValueError("Invalid export request")
             self._cancel = Event()
@@ -54,6 +76,13 @@ class ActionIO:
             )
             self._thread.start()
 
+    # {
+    #   責務: [_emit: eventをbounded queueへ追加し、満杯ならcloseまでbackpressureする]
+    #   処理: [50ms timeoutでqueue.putを再試行する]
+    #   引数: [self: IO adapter, event: ownerへ返すActionEvent]
+    #   戻り値: [なし]
+    #   副作用: [event queueへ書き込む]
+    # }
     def _emit(self, event):
         while not self._closed:
             try:
@@ -62,6 +91,13 @@ class ActionIO:
             except Full:
                 continue
 
+    # {
+    #   責務: [_run: probe/tag/exportを実行しprogress/result/error/terminal eventを送る]
+    #   処理: [Job slotを待ち、request kind別にtransport/exporterを呼び、cancel/failureをterminal stateへ反映する]
+    #   引数: [self: IO adapter, request: ActionRequest, job_id: shared job ID]
+    #   戻り値: [なし]
+    #   副作用: [HTTP Tagger、filesystem export、JobRuntime、event queueを更新する]
+    # }
     def _run(self, request, job_id):
         failed = False
         if not self._jobs.wait_start(job_id):
@@ -73,7 +109,9 @@ class ActionIO:
                 models = self._transport.probe(request.settings)
                 if not self._cancel.is_set():
                     self._emit(ActionEvent(request.token, "models", models=models))
-                    self._jobs.update(job_id, 0.9, f"モデル {len(models)}件を確認", "model list received")
+                    self._jobs.update(
+                        job_id, 0.9, f"モデル {len(models)}件を確認", "model list received"
+                    )
             elif request.kind == "tag":
                 total = len(request.items)
                 for index, item in enumerate(request.items, 1):
@@ -89,7 +127,11 @@ class ActionIO:
                         log = f"{item.name}: response received"
                     except Exception as exc:
                         message = f"{type(exc).__name__}: {exc}"[:300]
-                        self._emit(ActionEvent(request.token, "result", item=item, message=message, failed=True))
+                        self._emit(
+                            ActionEvent(
+                                request.token, "result", item=item, message=message, failed=True
+                            )
+                        )
                         log = f"{item.name}: {message}"[:400]
                     self._jobs.update(
                         job_id,
@@ -98,6 +140,13 @@ class ActionIO:
                         log,
                     )
             else:
+                # {
+                #   責務: [progress: export中にcancelを確認しjob progressとfile名を記録する]
+                #   処理: [cancel時はValueErrorでexportを中断し、通常時はfraction/message/logを更新する]
+                #   引数: [index: 完了数, total: export対象数, name: 現在のfile名]
+                #   戻り値: [なし]
+                #   エラー: [ValueError: export停止要求を受け取った]
+                # }
                 def progress(index, total, name):
                     if self._cancel.is_set():
                         raise ValueError("Export停止要求を受信しました")
@@ -114,11 +163,13 @@ class ActionIO:
                     progress,
                 )
                 if not self._cancel.is_set():
-                    self._emit(ActionEvent(
-                        request.token,
-                        "exported",
-                        message=f"Export完了: {len(written)}ファイル",
-                    ))
+                    self._emit(
+                        ActionEvent(
+                            request.token,
+                            "exported",
+                            message=f"Export完了: {len(written)}ファイル",
+                        )
+                    )
         except Exception as exc:
             if self._cancel.is_set():
                 self._emit(ActionEvent(request.token, "done", message="停止しました"))
@@ -132,12 +183,20 @@ class ActionIO:
                 self._jobs.finish(job_id, "cancelled", "停止しました")
             elif not failed:
                 self._jobs.finish(job_id, "done", "完了")
-            self._emit(ActionEvent(
-                request.token,
-                "done",
-                message="停止しました" if self._cancel.is_set() else "完了",
-            ))
+            self._emit(
+                ActionEvent(
+                    request.token,
+                    "done",
+                    message="停止しました" if self._cancel.is_set() else "完了",
+                )
+            )
 
+    # {
+    #   責務: [poll: bounded event queueから最大64件の完了eventをdrainする]
+    #   処理: [Emptyまでnonblocking getしtupleとして返す]
+    #   引数: [self: IO adapter]
+    #   戻り値: [ActionEvent tuple]
+    # }
     def poll(self):
         events = []
         for _ in range(64):
@@ -147,11 +206,25 @@ class ActionIO:
                 break
         return tuple(events)
 
+    # {
+    #   責務: [cancel: current request cancellation eventをsetしjob cancelを通知する]
+    #   処理: [eventをsetしlast_job_idがあればruntime.cancelを呼ぶ]
+    #   引数: [self: IO adapter]
+    #   戻り値: [なし]
+    #   副作用: [workerへcancel signalを送りjob stateを更新する]
+    # }
     def cancel(self):
         self._cancel.set()
         if self.last_job_id:
             self._jobs.cancel(self.last_job_id)
 
+    # {
+    #   責務: [close: adapterをclosedにしactive actionをcancelする]
+    #   処理: [queue producerを止めcancelし、adapter所有runtimeだけを閉じる]
+    #   引数: [self: IO adapter]
+    #   戻り値: [なし]
+    #   副作用: [worker/runtime lifecycleへ停止を通知する]
+    # }
     def close(self):
         self._closed = True
         self.cancel()

@@ -1,4 +1,5 @@
 """Explicit backend/URL/model controls; opening this dialog makes no network request."""
+
 import tkinter as tk
 from tkinter import ttk
 
@@ -10,7 +11,18 @@ from comfyui_support_tools.shared.contracts.tagger_backend import (
 )
 
 
+# {
+# 責務: [TaggerSettingsDialog: backend/URL/model/threshold/timeoutを明示編集しprobeを開始する]
+# フィールド: [commander/log callbacks, Tk setting variables, backend/model selectors, last refresh state]
+# }
 class TaggerSettingsDialog(tk.Toplevel):
+    # {
+    #   責務: [__init__: current settingsとregistered backendsからtransient settings dialogを構築する]
+    #   処理: [URL/model/threshold/timeout fieldsとapply/probe actionsを作り、network requestは送らず初期statusを表示する]
+    #   引数: [self: dialog, parent: parent widget, commander: InspectorUiCommander, log: log callback]
+    #   戻り値: [なし]
+    #   副作用: [Tk widgets/variablesを作成しcurrent settingsを読む]
+    # }
     def __init__(self, parent, commander, log):
         super().__init__(parent)
         self.commander, self.log = commander, log
@@ -51,7 +63,11 @@ class TaggerSettingsDialog(tk.Toplevel):
             ttk.Label(row, text=label, width=18).pack(side="left")
             variable = tk.StringVar(self, value=str(getattr(settings, key)))
             self.values[key] = variable
-            entry = ttk.Combobox(row, textvariable=variable) if key == "model" else ttk.Entry(row, textvariable=variable)
+            entry = (
+                ttk.Combobox(row, textvariable=variable)
+                if key == "model"
+                else ttk.Entry(row, textvariable=variable)
+            )
             entry.pack(side="left", fill="x", expand=True)
             if key == "model":
                 self.models = entry
@@ -77,6 +93,14 @@ class TaggerSettingsDialog(tk.Toplevel):
         ttk.Label(body, textvariable=self.message, wraplength=630).pack(anchor="w", pady=8)
         self.refresh(commander.status())
 
+    # {
+    #   責務: [apply: editable field valuesを型変換してTaggerSettingsをcommanderへ設定する]
+    #   処理: [numeric fieldsをfloat化しbackend labelをID化、validation errorはdialogへ表示する]
+    #   引数: [self: dialog]
+    #   戻り値: [bool: configure成功時true]
+    #   エラー: [KeyError/ValueError/TypeErrorを表示してfalseを返す]
+    #   副作用: [commander設定とstatus UIを更新し、失敗はlogする]
+    # }
     def apply(self):
         try:
             values = {key: value.get().strip() for key, value in self.values.items()}
@@ -91,6 +115,14 @@ class TaggerSettingsDialog(tk.Toplevel):
             self.log(str(exc))
             return False
 
+    # {
+    #   責務: [probe: valid settingsを適用後、明示的にTagger model probeを開始する]
+    #   処理: [apply成功時start('probe')を呼び、statusをrefreshする]
+    #   引数: [self: dialog]
+    #   戻り値: [なし]
+    #   エラー: [ValueErrorをdialog messageに表示する]
+    #   副作用: [user-requested network probeを開始する]
+    # }
     def probe(self):
         if self.apply():
             try:
@@ -99,6 +131,13 @@ class TaggerSettingsDialog(tk.Toplevel):
             except ValueError as exc:
                 self.message.set(str(exc))
 
+    # {
+    #   責務: [refresh: busy stateに合わせbuttonsを切替えmodel choices/messageを表示する]
+    #   処理: [model list change時valuesを更新し、status change時だけmessageを書き換える]
+    #   引数: [self: dialog, status: InspectorStatus snapshot]
+    #   戻り値: [なし]
+    #   副作用: [Tk widget states/valuesを更新する]
+    # }
     def refresh(self, status):
         self.apply_button.configure(state="disabled" if status.busy else "normal")
         self.probe_button.configure(state="disabled" if status.busy else "normal")

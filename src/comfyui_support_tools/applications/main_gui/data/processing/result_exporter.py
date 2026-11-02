@@ -1,15 +1,25 @@
 """Explicit, bounded result export. No directories are created implicitly."""
+
 from dataclasses import asdict
 import json
 import os
 from pathlib import Path
 import uuid
 
-from comfyui_support_tools.shared.contracts.inspector_contracts import ExportSettings, MediaExportRecord
+from comfyui_support_tools.shared.contracts.inspector_contracts import (
+    ExportSettings,
+    MediaExportRecord,
+)
 
 MAX_EXPORT_RECORDS = 60
 
 
+# {
+#   責務: [_caption: captionを優先し、未入力時はcategory tagsからcaptionを組み立てる]
+#   処理: [captionがあればtrimして返し、なければtagを重複排除しoptional styleを加える]
+#   引数: [notes: MediaNotes, include_style: style tagsを追加するか]
+#   戻り値: [str: sidecarに書くcaption text]
+# }
 def _caption(notes, include_style):
     if notes.caption.strip():
         return notes.caption.strip()
@@ -19,6 +29,12 @@ def _caption(notes, include_style):
     return ", ".join(dict.fromkeys(tag.strip() for tag in tags if tag.strip()))
 
 
+# {
+#   責務: [_metadata: MediaExportRecordをversioned source/analysis/notes JSON objectへ変換する]
+#   処理: [media identityとtagger labels/scores、promptなどをserializable lists/mappingsへ展開する]
+#   引数: [record: media itemとnotesの組]
+#   戻り値: [dict: schema_version 1 metadata payload]
+# }
 def _metadata(record):
     item, notes = record.item, record.notes
     return {
@@ -54,15 +70,33 @@ def _metadata(record):
     }
 
 
+# {
+#   責務: [_source_ok: export対象sourceが元scan以降に変化していないことを確認する]
+#   処理: [absolute regular non-symlink fileとsize/mtime_nsをMediaItem snapshotに照合する]
+#   引数: [record: source MediaItemとanalysis notes]
+#   戻り値: [なし]
+#   エラー: [ValueError: source欠落/symlink/変更済み]
+#   副作用: [source file metadataをstatする]
+# }
 def _source_ok(record):
     path = Path(record.item.path)
     if not path.is_absolute() or path.is_symlink() or not path.is_file():
         raise ValueError(f"Sourceがありません / linkは対象外です: {record.item.name}")
     stat = path.stat()
     if (stat.st_size, stat.st_mtime_ns) != (record.item.size, record.item.modified_ns):
-        raise ValueError(f"Sourceが変更されています。Browserを再読込してください: {record.item.name}")
+        raise ValueError(
+            f"Sourceが変更されています。Browserを再読込してください: {record.item.name}"
+        )
 
 
+# {
+#   責務: [_write: overwrite policyに従いsidecar contentを作成またはatomic replaceする]
+#   処理: [symlink/parentを確認し、非overwriteはexclusive create、overwriteはfsync後replaceを使う]
+#   引数: [path: destination file, content: text body, overwrite: 既存fileを置換するか]
+#   戻り値: [なし]
+#   エラー: [ValueError/FileExistsError/OSError: path/overwrite/filesystem failure]
+#   副作用: [directory/fileを作成または置換しtemporary fileをcleanupする]
+# }
 def _write(path, content, overwrite):
     if path.is_symlink():
         raise ValueError(f"symlinkへの出力は拒否しました: {path}")
@@ -84,6 +118,14 @@ def _write(path, content, overwrite):
             temporary.unlink()
 
 
+# {
+#   責務: [export_records: 1..60画像のcaption/metadata/batch textを明示したpathへ出力する]
+#   処理: [records/source/output namesを事前検証し、collision/source overwriteを拒否してprogress付きwriteを行う]
+#   引数: [records: MediaExportRecord iterable, settings: ExportSettings, progress: optional(index,total,name) callback]
+#   戻り値: [tuple[str,...]: 実際に書き込んだabsolute paths]
+#   エラー: [ValueError/FileExistsError/OSError: records/settings/source/path/output invalid]
+#   副作用: [caption/metadata/batch sidecar filesを作成またはoverwriteする]
+# }
 def export_records(records, settings: ExportSettings, progress=None):
     records = tuple(records)
     if not records or len(records) > MAX_EXPORT_RECORDS:
@@ -103,10 +145,13 @@ def export_records(records, settings: ExportSettings, progress=None):
         if settings.caption_sidecar:
             planned.append((source.with_suffix(".txt"), caption + "\n"))
         if settings.metadata_sidecar:
-            planned.append((
-                source.with_suffix(source.suffix + ".kadoka.json"),
-                json.dumps(_metadata(record), ensure_ascii=False, indent=2, allow_nan=False) + "\n",
-            ))
+            planned.append(
+                (
+                    source.with_suffix(source.suffix + ".kadoka.json"),
+                    json.dumps(_metadata(record), ensure_ascii=False, indent=2, allow_nan=False)
+                    + "\n",
+                )
+            )
         if settings.batch_txt_path:
             batch_lines.append(f"{record.item.path}\t{caption}")
 

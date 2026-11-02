@@ -7,7 +7,6 @@ import struct
 from pathlib import Path
 
 from .contracts import (
-    DiagnosticSeverity,
     PmxBone,
     PmxDiagnostic,
     PmxJoint,
@@ -15,6 +14,7 @@ from .contracts import (
     PmxRigidBody,
     PmxVertex,
 )
+from .pmx_validation import _diagnostic, _validate_bones, _validate_rigid_physics
 
 MAX_PMX_BYTES = 512 * 1024 * 1024
 MAX_RECORDS = 5_000_000
@@ -187,7 +187,14 @@ def parse_pmx(path: str | Path) -> PmxModel:
         raise PmxFormatError(f"cannot read PMX file: {error}") from error
     if size <= 0 or size > MAX_PMX_BYTES:
         raise PmxFormatError(f"PMX file size must be between 1 byte and {MAX_PMX_BYTES}")
-    return parse_pmx_bytes(source.read_bytes(), source_path=source)
+    try:
+        with source.open("rb") as stream:
+            data = stream.read(MAX_PMX_BYTES + 1)
+    except OSError as error:
+        raise PmxFormatError(f"cannot read PMX file: {error}") from error
+    if len(data) > MAX_PMX_BYTES:
+        raise PmxFormatError(f"PMX file grew beyond the {MAX_PMX_BYTES}-byte safety limit")
+    return parse_pmx_bytes(data, source_path=source)
 
 
 # {
@@ -197,12 +204,20 @@ def parse_pmx(path: str | Path) -> PmxModel:
 # 戻り値: [PmxModel: 処理結果]
 # }
 def parse_pmx_bytes(data: bytes, source_path: Path | None = None) -> PmxModel:
+    if not data or len(data) > MAX_PMX_BYTES:
+        raise PmxFormatError(f"PMX bytes must be between 1 byte and {MAX_PMX_BYTES}")
     reader = _Reader(data)
     diagnostics: list[PmxDiagnostic] = []
     if reader.take(4) != b"PMX ":
         raise PmxFormatError("file does not start with a PMX signature")
     version = reader.f32()
-    if not math.isfinite(version) or not 2.0 <= version <= 2.1:
+    if not math.isfinite(version):
+        raise PmxFormatError(f"unsupported PMX version: {version}")
+    if math.isclose(version, 2.0, abs_tol=1e-5):
+        version = 2.0
+    elif math.isclose(version, 2.1, abs_tol=1e-5):
+        version = 2.1
+    else:
         raise PmxFormatError(f"unsupported PMX version: {version}")
     global_size = reader.u8()
     if global_size != 8:
@@ -228,64 +243,26 @@ def parse_pmx_bytes(data: bytes, source_path: Path | None = None) -> PmxModel:
     reader.skip_text(encoding)
     reader.skip_text(encoding)
 
-    vertices = _read_vertices(reader, vertex_index_size, bone_index_size, additional_uv)
-    face_index_count = reader.count("face index")
-    if face_index_count % 3:
-        raise PmxFormatError(f"face index count is not divisible by 3: {face_index_count}")
-    faces = tuple(
-        tuple(reader.index(vertex_index_size, signed=False) for _ in range(3))
-        for _ in range(face_index_count // 3)
+    vertices, faces, mesh_diagnostics = _read_mesh(
+        reader, vertex_index_size, bone_index_size, additional_uv
     )
-    for face_index, face in enumerate(faces):
-        if any(index >= len(vertices) for index in face):
-            diagnostics.append(
-                _diagnostic(
-                    "mesh.face_vertex_reference",
-                    "mesh",
-                    f"face:{face_index}",
-                    "Face refers to a missing vertex",
-                    indices=face,
-                )
-            )
-    texture_count = reader.count("texture")
-    for _ in range(texture_count):
-        reader.skip_text(encoding)
-    material_count = reader.count("material")
-    material_names = []
-    for material_index in range(material_count):
-        name = reader.text(encoding)
-        reader.skip_text(encoding)
-        material_names.append(name)
-        reader.take(16 + 12 + 4 + 12 + 1 + 16 + 4)
-        texture_index = reader.index(texture_index_size)
-        sphere_index = reader.index(texture_index_size)
-        reader.u8()
-        shared_toon = reader.u8()
-        toon_index = reader.u8() if shared_toon else reader.index(texture_index_size)
-        reader.skip_text(encoding)
-        reader.i32()
-        toon_limit = 10 if shared_toon else texture_count
-        if (
-            texture_index >= texture_count
-            or sphere_index >= texture_count
-            or toon_index >= toon_limit
-        ):
-            diagnostics.append(
-                _diagnostic(
-                    "material.texture_reference",
-                    "material",
-                    f"material:{material_index}:{name}",
-                    "Material references an out-of-range texture",
-                    texture=texture_index,
-                    sphere=sphere_index,
-                    toon=toon_index,
-                )
-            )
-
-    bones = _read_bones(reader, encoding, bone_index_size)
-    morph_count, morph_diagnostics, morph_rigid_refs = _read_morphs(
+    diagnostics.extend(mesh_diagnostics)
+    texture_count = _read_textures(reader, encoding)
+    material_count, material_diagnostics = _read_materials(
+        reader, encoding, texture_index_size, texture_count
+    )
+    diagnostics.extend(material_diagnostics)
+    (
+        bones,
+        morph_count,
+        rigid_bodies,
+        joints,
+        soft_body_count,
+        section_diagnostics,
+    ) = _read_remaining_sections(
         reader,
         encoding,
+        version,
         vertex_index_size,
         material_index_size,
         bone_index_size,
@@ -293,33 +270,8 @@ def parse_pmx_bytes(data: bytes, source_path: Path | None = None) -> PmxModel:
         rigid_index_size,
         len(vertices),
         material_count,
-        len(bones),
     )
-    diagnostics.extend(morph_diagnostics)
-    diagnostics.extend(
-        _read_display_frames(
-            reader, encoding, bone_index_size, morph_index_size, len(bones), morph_count
-        )
-    )
-    rigid_bodies = _read_rigid_bodies(reader, encoding, bone_index_size)
-    for target, rigid_index in morph_rigid_refs:
-        if not 0 <= rigid_index < len(rigid_bodies):
-            diagnostics.append(
-                _diagnostic(
-                    "morph.reference",
-                    "morph",
-                    target,
-                    "Impulse morph references a missing rigid body",
-                    index=rigid_index,
-                )
-            )
-    joints = _read_joints(reader, encoding, rigid_index_size)
-    if version >= 2.1:
-        soft_count = reader.count("soft body")
-        if soft_count:
-            raise PmxFormatError(
-                "PMX 2.1 soft-body records are not yet supported; refusing a partial physics audit"
-            )
+    diagnostics.extend(section_diagnostics)
     if reader.offset != len(data):
         diagnostics.append(
             _diagnostic(
@@ -344,9 +296,166 @@ def parse_pmx_bytes(data: bytes, source_path: Path | None = None) -> PmxModel:
         material_count=material_count,
         rigid_bodies=rigid_bodies,
         joints=joints,
+        soft_body_count=soft_body_count,
         diagnostics=tuple(diagnostics),
         bone_index_size=bone_index_size,
     )
+
+
+# {
+# 責務: [_read_mesh: PMX vertexとface sectionを読む]
+# 処理: [1: bounded vertexを読む, 2: face referenceをdiagnoseする]
+# 引数: [reader, vertex_index_size, bone_index_size, additional_uv]
+# 戻り値: [vertices, faces, diagnostics]
+# }
+def _read_mesh(reader, vertex_index_size, bone_index_size, additional_uv):
+    diagnostics = []
+    vertices = _read_vertices(reader, vertex_index_size, bone_index_size, additional_uv)
+    face_index_count = reader.count("face index")
+    if face_index_count % 3:
+        raise PmxFormatError(f"face index count is not divisible by 3: {face_index_count}")
+    faces = tuple(
+        tuple(reader.index(vertex_index_size, signed=False) for _ in range(3))
+        for _ in range(face_index_count // 3)
+    )
+    for face_index, face in enumerate(faces):
+        if any(index >= len(vertices) for index in face):
+            diagnostics.append(
+                _diagnostic(
+                    "mesh.face_vertex_reference",
+                    "mesh",
+                    f"face:{face_index}",
+                    "Face refers to a missing vertex",
+                    indices=face,
+                )
+            )
+    return vertices, faces, diagnostics
+
+
+# {
+# 責務: [_read_textures: texture path sectionを読み飛ばしcountを返す]
+# 処理: [1: texture countを検証, 2: path recordsを読む]
+# 引数: [reader, encoding]
+# 戻り値: [texture count]
+# }
+def _read_textures(reader, encoding):
+    texture_count = reader.count("texture")
+    for _ in range(texture_count):
+        reader.skip_text(encoding)
+    return texture_count
+
+
+# {
+# 責務: [_read_materials: material recordsとtexture referencesを診断する]
+# 処理: [1: material recordを読む, 2: texture indexを検証する]
+# 引数: [reader, encoding, texture_index_size, texture_count]
+# 戻り値: [material count, diagnostics]
+# }
+def _read_materials(reader, encoding, texture_index_size, texture_count):
+    diagnostics = []
+    material_count = reader.count("material")
+    material_names = []
+    for material_index in range(material_count):
+        name = reader.text(encoding)
+        reader.skip_text(encoding)
+        material_names.append(name)
+        reader.take(16 + 12 + 4 + 12 + 1 + 16 + 4)
+        texture_index = reader.index(texture_index_size)
+        sphere_index = reader.index(texture_index_size)
+        reader.u8()
+        shared_toon = reader.u8()
+        toon_index = reader.u8() if shared_toon else reader.index(texture_index_size)
+        reader.skip_text(encoding)
+        reader.i32()
+        toon_limit = 10 if shared_toon else texture_count
+        if (
+            texture_index < -1
+            or sphere_index < -1
+            or toon_index < 0
+            or texture_index >= texture_count
+            or sphere_index >= texture_count
+            or toon_index >= toon_limit
+        ):
+            diagnostics.append(
+                _diagnostic(
+                    "material.texture_reference",
+                    "material",
+                    f"material:{material_index}:{name}",
+                    "Material references an out-of-range texture",
+                    texture=texture_index,
+                    sphere=sphere_index,
+                    toon=toon_index,
+                )
+            )
+
+    return material_count, diagnostics
+
+
+# {
+# 責務: [_read_remaining_sections: bones/morphs/physics sectionを読む]
+# 処理: [1: skeleton/morph referencesを読む, 2: rigid/joint/soft-body physicsを読む]
+# 引数: [reader, encoding, version, index sizes, mesh/material counts]
+# 戻り値: [bones, morph count, rigid bodies, joints, soft-body count, diagnostics]
+# }
+def _read_remaining_sections(
+    reader,
+    encoding,
+    version,
+    vertex_index_size,
+    material_index_size,
+    bone_index_size,
+    morph_index_size,
+    rigid_index_size,
+    vertex_count,
+    material_count,
+):
+    diagnostics = []
+    bones = _read_bones(reader, encoding, bone_index_size)
+    morph_count, morph_diagnostics, morph_rigid_refs = _read_morphs(
+        reader,
+        encoding,
+        vertex_index_size,
+        material_index_size,
+        bone_index_size,
+        morph_index_size,
+        rigid_index_size,
+        vertex_count,
+        material_count,
+        len(bones),
+    )
+    diagnostics.extend(morph_diagnostics)
+    diagnostics.extend(
+        _read_display_frames(
+            reader, encoding, bone_index_size, morph_index_size, len(bones), morph_count
+        )
+    )
+    rigid_bodies = _read_rigid_bodies(reader, encoding, bone_index_size)
+    for target, rigid_index in morph_rigid_refs:
+        if not 0 <= rigid_index < len(rigid_bodies):
+            diagnostics.append(
+                _diagnostic(
+                    "morph.reference",
+                    "morph",
+                    target,
+                    "Impulse morph references a missing rigid body",
+                    index=rigid_index,
+                )
+            )
+    joints = _read_joints(reader, encoding, rigid_index_size)
+    soft_body_count = 0
+    if version >= 2.1:
+        soft_body_count, soft_diagnostics = _read_soft_bodies(
+            reader,
+            encoding,
+            material_index_size,
+            rigid_index_size,
+            vertex_index_size,
+            material_count,
+            len(rigid_bodies),
+            vertex_count,
+        )
+        diagnostics.extend(soft_diagnostics)
+    return bones, morph_count, rigid_bodies, joints, soft_body_count, diagnostics
 
 
 # {
@@ -635,7 +744,7 @@ def _read_joints(reader, encoding, rigid_size):
         name = reader.text(encoding)
         reader.skip_text(encoding)
         kind = reader.u8()
-        if kind != 0:
+        if kind not in range(6):
             raise PmxFormatError(f"unsupported PMX joint type {kind} at joint {index}")
         body_a, body_b = reader.index(rigid_size), reader.index(rigid_size)
         reader.take(24)
@@ -666,171 +775,98 @@ def _read_joints(reader, encoding, rigid_size):
 
 
 # {
-# 責務: [_validate_bones: PMX doctorの関連処理を実行する]
-# 処理: [入力を検証し、安全な結果を返す]
-# 引数: [bones: 呼び出しに必要な値]
-# 戻り値: [list[PmxDiagnostic]: 処理結果]
+# 責務: [_read_soft_bodies: PMX 2.1 soft-body recordsと参照を検証する]
+# 処理: [1: config/anchor/pin dataを読む, 2: rangeやfinite valueの診断を返す]
+# 引数: [reader, encoding, material_size, rigid_size, vertex_size, material_count, rigid_count, vertex_count]
+# 戻り値: [soft body count and diagnostics]
 # }
-def _validate_bones(bones: tuple[PmxBone, ...]) -> list[PmxDiagnostic]:
+def _read_soft_bodies(
+    reader,
+    encoding,
+    material_size,
+    rigid_size,
+    vertex_size,
+    material_count,
+    rigid_count,
+    vertex_count,
+):
+    count = reader.count("soft body")
     diagnostics = []
-    seen: dict[str, int] = {}
-    for bone in bones:
-        if bone.name in seen:
+    for index in range(count):
+        name = reader.text(encoding)
+        reader.skip_text(encoding)
+        shape = reader.u8()
+        material = reader.index(material_size)
+        reader.u8()  # collision group
+        reader.u16()  # no-collision group mask
+        reader.u8()  # flags
+        reader.i32()  # B-link distance
+        reader.i32()  # cluster count
+        mass = reader.f32()
+        margin = reader.f32()
+        reader.i32()  # aero model
+        config = reader.vec(12)
+        cluster = reader.vec(6)
+        reader.take(4 * 4)  # iteration counts
+        reader.take(4 * 4)  # material stiffness values
+        if shape not in (0, 1):
             diagnostics.append(
                 _diagnostic(
-                    "bone.duplicate_name",
-                    "skeleton",
-                    f"bone:{bone.index}:{bone.name}",
-                    "Bone name is duplicated",
-                    other_index=seen[bone.name],
+                    "physics.soft_body_shape",
+                    "physics",
+                    f"soft_body:{index}:{name}",
+                    "Soft body shape is invalid",
+                    shape=shape,
                 )
             )
-        seen[bone.name] = bone.index
+        if material < 0 or material >= material_count:
+            diagnostics.append(
+                _diagnostic(
+                    "physics.soft_body_material",
+                    "physics",
+                    f"soft_body:{index}:{name}",
+                    "Soft body references a missing material",
+                    material=material,
+                )
+            )
         if (
-            bone.parent_index < -1
-            or bone.parent_index >= len(bones)
-            or bone.parent_index == bone.index
+            not math.isfinite(mass)
+            or not math.isfinite(margin)
+            or any(not math.isfinite(value) for value in (*config, *cluster))
         ):
             diagnostics.append(
                 _diagnostic(
-                    "bone.invalid_parent",
-                    "skeleton",
-                    f"bone:{bone.index}:{bone.name}",
-                    "Bone parent index is invalid or self-referential",
-                    parent=bone.parent_index,
+                    "physics.soft_body_non_finite",
+                    "physics",
+                    f"soft_body:{index}:{name}",
+                    "Soft body contains non-finite physical settings",
                 )
             )
-        if bone.ik_target is not None and not 0 <= bone.ik_target < len(bones):
-            diagnostics.append(
-                _diagnostic(
-                    "ik.invalid_target",
-                    "ik",
-                    f"bone:{bone.index}:{bone.name}",
-                    "IK target references a missing bone",
-                    target=bone.ik_target,
-                )
-            )
-        for link in bone.ik_links:
-            if not 0 <= link < len(bones):
+        for anchor in range(reader.count("soft body anchor")):
+            rigid = reader.index(rigid_size)
+            vertex = reader.index(vertex_size, signed=False)
+            reader.u8()
+            if not 0 <= rigid < rigid_count or vertex >= vertex_count:
                 diagnostics.append(
                     _diagnostic(
-                        "ik.invalid_link",
-                        "ik",
-                        f"bone:{bone.index}:{bone.name}",
-                        "IK link references a missing bone",
-                        link=link,
+                        "physics.soft_body_anchor",
+                        "physics",
+                        f"soft_body:{index}:{name}:anchor:{anchor}",
+                        "Soft body anchor references a missing rigid body or vertex",
+                        rigid=rigid,
+                        vertex=vertex,
                     )
                 )
-    return diagnostics
-
-
-# {
-# 責務: [_validate_rigid_physics: PMX doctorの関連処理を実行する]
-# 処理: [入力を検証し、安全な結果を返す]
-# 引数: [rigid_bodies, joints, bone_count: 呼び出しに必要な値]
-# 戻り値: [処理結果: 処理結果]
-# }
-def _validate_rigid_physics(rigid_bodies, joints, bone_count):
-    diagnostics = []
-    for body in rigid_bodies:
-        if body.bone_index < -1 or body.bone_index >= bone_count:
-            diagnostics.append(
-                _diagnostic(
-                    "physics.invalid_bone",
-                    "physics",
-                    f"rigid:{body.index}:{body.name}",
-                    "Rigid body refers to a missing bone",
-                    bone=body.bone_index,
+        for pin in range(reader.count("soft body pin")):
+            vertex = reader.index(vertex_size, signed=False)
+            if vertex >= vertex_count:
+                diagnostics.append(
+                    _diagnostic(
+                        "physics.soft_body_pin",
+                        "physics",
+                        f"soft_body:{index}:{name}:pin:{pin}",
+                        "Soft body pin references a missing vertex",
+                        vertex=vertex,
+                    )
                 )
-            )
-        if body.shape not in (0, 1, 2) or body.mode not in (0, 1, 2):
-            diagnostics.append(
-                _diagnostic(
-                    "physics.invalid_mode",
-                    "physics",
-                    f"rigid:{body.index}:{body.name}",
-                    "Rigid body shape or mode is invalid",
-                    shape=body.shape,
-                    mode=body.mode,
-                )
-            )
-        if (
-            body.mass < 0
-            or body.linear_damping < 0
-            or body.angular_damping < 0
-            or body.restitution < 0
-            or body.friction < 0
-        ):
-            diagnostics.append(
-                _diagnostic(
-                    "physics.negative_parameter",
-                    "physics",
-                    f"rigid:{body.index}:{body.name}",
-                    "Rigid body has negative mass or damping/material parameter",
-                )
-            )
-        if any(
-            not math.isfinite(value)
-            for value in (
-                body.mass,
-                body.linear_damping,
-                body.angular_damping,
-                body.restitution,
-                body.friction,
-            )
-        ):
-            diagnostics.append(
-                _diagnostic(
-                    "physics.non_finite_parameter",
-                    "physics",
-                    f"rigid:{body.index}:{body.name}",
-                    "Rigid body has non-finite physics parameters",
-                )
-            )
-    for joint in joints:
-        if (
-            joint.body_a < -1
-            or joint.body_b < -1
-            or joint.body_a >= len(rigid_bodies)
-            or joint.body_b >= len(rigid_bodies)
-        ):
-            diagnostics.append(
-                _diagnostic(
-                    "physics.invalid_joint_body",
-                    "physics",
-                    f"joint:{joint.index}:{joint.name}",
-                    "Joint refers to a missing rigid body",
-                    bodies=(joint.body_a, joint.body_b),
-                )
-            )
-        if any(low > high for low, high in zip(joint.minimum, joint.maximum, strict=True)):
-            diagnostics.append(
-                _diagnostic(
-                    "physics.reversed_limits",
-                    "physics",
-                    f"joint:{joint.index}:{joint.name}",
-                    "Joint limit minimum exceeds maximum",
-                )
-            )
-        if any(not math.isfinite(value) for value in (*joint.minimum, *joint.maximum)):
-            diagnostics.append(
-                _diagnostic(
-                    "physics.non_finite_limit",
-                    "physics",
-                    f"joint:{joint.index}:{joint.name}",
-                    "Joint contains non-finite limit values",
-                )
-            )
-    return diagnostics
-
-
-# {
-# 責務: [_diagnostic: PMX doctorの関連処理を実行する]
-# 処理: [入力を検証し、安全な結果を返す]
-# 引数: [code, category, target, message: 呼び出しに必要な値]
-# 戻り値: [PmxDiagnostic: 処理結果]
-# }
-def _diagnostic(code: str, category: str, target: str, message: str, **evidence) -> PmxDiagnostic:
-    return PmxDiagnostic(
-        code, category, DiagnosticSeverity.ERROR, target, message, tuple(sorted(evidence.items()))
-    )
+    return count, diagnostics

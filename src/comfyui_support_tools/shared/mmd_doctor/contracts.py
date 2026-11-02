@@ -134,6 +134,7 @@ class PmxModel:
     material_count: int
     rigid_bodies: tuple[PmxRigidBody, ...]
     joints: tuple[PmxJoint, ...]
+    soft_body_count: int = 0
     diagnostics: tuple[PmxDiagnostic, ...] = ()
     bone_index_size: int = 4
 

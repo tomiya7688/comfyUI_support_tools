@@ -20,8 +20,14 @@ from comfyui_support_tools.shared.mmd_doctor import (
 # 引数: [weight: 呼び出しに必要な値]
 # 戻り値: [bytes: 処理結果]
 # }
-def tiny_pmx(weight: float = 1.2, face_indices: tuple[int, ...] = ()) -> bytes:
-    output = bytearray(b"PMX " + struct.pack("<fB8B", 2.0, 8, 1, 0, 4, 4, 4, 4, 4, 4))
+def tiny_pmx(
+    weight: float = 1.2,
+    face_indices: tuple[int, ...] = (),
+    *,
+    version: float = 2.0,
+    include_soft_body: bool = False,
+) -> bytes:
+    output = bytearray(b"PMX " + struct.pack("<fB8B", version, 8, 1, 0, 4, 4, 4, 4, 4, 4))
 
     # {
     # 責務: [text: PMX doctorの関連処理を実行する]
@@ -49,6 +55,13 @@ def tiny_pmx(weight: float = 1.2, face_indices: tuple[int, ...] = ()) -> bytes:
     output.extend(struct.pack("<3fiiH3f", 0, 0, 0, -1, 0, 0, 0, 0, 0))
     for _ in range(4):
         output.extend(struct.pack("<i", 0))
+    if version >= 2.1:
+        output.extend(struct.pack("<i", int(include_soft_body)))
+        if include_soft_body:
+            for value in ("cloth", ""):
+                text(value)
+            output.extend(struct.pack("<BiBHBiiffi", 0, -1, 0, 0, 0, 0, 0, 1, 0.01, 0))
+            output.extend(struct.pack("<18f10i", *([0.0] * 18), *([0] * 10)))
     return bytes(output)
 
 
@@ -69,6 +82,8 @@ class MmdDoctorServiceTests(unittest.TestCase):
             from comfyui_support_tools.shared.mmd_doctor import parse_pmx_bytes
 
             parse_pmx_bytes(b"not a PMX")
+        with self.assertRaisesRegex(PmxFormatError, "unsupported PMX version"):
+            parse_pmx_bytes(tiny_pmx(version=2.05))
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary) / "source.pmx"
             source.write_bytes(tiny_pmx())
@@ -158,6 +173,22 @@ class MmdDoctorServiceTests(unittest.TestCase):
             source.write_bytes(tiny_pmx(face_indices=(4, 5, 6)))
             _model, diagnostics = ModelDoctorService().analyze(source)
             self.assertTrue(any(item.code == "mesh.face_vertex_reference" for item in diagnostics))
+
+    # {
+    # 責務: [test_pmx_21_float_version_and_soft_body_records_are_parsed: PMX 2.1 parsingを検証する]
+    # 処理: [1: float32 versionとsoft body recordを構築, 2: section countとreferential diagnosticを確認]
+    # 引数: [self: test case]
+    # 戻り値: []
+    # }
+    def test_pmx_21_float_version_and_soft_body_records_are_parsed(self) -> None:
+        from comfyui_support_tools.shared.mmd_doctor import parse_pmx_bytes
+
+        model = parse_pmx_bytes(tiny_pmx(version=2.1, include_soft_body=True))
+        self.assertEqual(model.version, 2.1)
+        self.assertEqual(model.soft_body_count, 1)
+        self.assertTrue(
+            any(item.code == "physics.soft_body_material" for item in model.diagnostics)
+        )
 
 
 if __name__ == "__main__":

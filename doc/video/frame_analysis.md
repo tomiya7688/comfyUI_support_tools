@@ -24,6 +24,6 @@ BT.709、sRGB、PQ、HLG transfer functionを処理し、BT.709、BT.2020、Disp
 
 `tests.test_video_frame_normalization` は、時間方向のletterbox検出、暗いsceneの保護、user
 override、SDR/HDR luminance正規化、limited-range 10-bit入力、VFR PTS/time_base復元、未対応
-format、破損pixel、decode/timestamp errorを確認します。built-in libavとFFmpeg CLIのdecoder
-adapterは同じ `DecodedVideoFrame` contractを生成します。この共通層はdecoderの選択や設定は
-行いません。
+format、破損pixel、decode/timestamp errorを確認します。テスト用のlibav/FFmpeg adapter fixtureは
+同じ `DecodedVideoFrame` contractを生成します。production decoderへの接続は各video feature側の
+follow-upで行い、この共通層はdecoderの選択や設定を行いません。

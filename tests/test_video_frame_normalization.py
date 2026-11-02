@@ -215,6 +215,31 @@ class VideoFrameNormalizationTests(unittest.TestCase):
         )
         self.assertEqual(corrupted.decode_status, FrameDecodeStatus.CORRUPTED)
 
+    # {
+    #   責務: [test_malformed_color_metadata_is_explicit_and_hlg_aliases_agree: malformed stream tagsとHLG aliasを検証する]
+    #   処理: [1: HLG aliasesを正規化する 2: invalid tagをINVALID_FRAMEへ変換する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_malformed_color_metadata_is_explicit_and_hlg_aliases_agree(self):
+        pixels = np.full((2, 2, 3), 0.5, dtype=np.float32)
+        options = {
+            "actual_timestamp": 1.0,
+            "stream_metadata": {"max_luminance_nits": 1000.0},
+        }
+        hlg = normalize_decoded_frame(
+            DecodedVideoFrame(pixels, "rgb24", transfer_function="hlg", **options)
+        )
+        alias = normalize_decoded_frame(
+            DecodedVideoFrame(pixels, "rgb24", transfer_function="ARIB-STD-B67", **options)
+        )
+        np.testing.assert_allclose(hlg.analysis_rgb, alias.analysis_rgb)
+        malformed = normalize_decoded_frame(
+            DecodedVideoFrame(pixels, "rgb24", color_primaries=None, actual_timestamp=1.0)
+        )
+        self.assertEqual(malformed.decode_status, FrameDecodeStatus.INVALID_FRAME)
+        self.assertFalse(malformed.has_pixels)
+
 
 if __name__ == "__main__":
     unittest.main()

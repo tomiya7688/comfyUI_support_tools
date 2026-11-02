@@ -141,6 +141,16 @@ def normalize_decoded_frame(frame: DecodedVideoFrame) -> FrameAnalysisInput:
         return _failed(frame, FrameDecodeStatus.INVALID_FRAME, width, height, metadata)
     if not isinstance(frame.pixel_format, str):
         return _failed(frame, FrameDecodeStatus.INVALID_FRAME, width, height, metadata)
+    if not all(
+        isinstance(value, str)
+        for value in (
+            frame.color_primaries,
+            frame.transfer_function,
+            frame.color_range,
+            frame.matrix_coefficients,
+        )
+    ):
+        return _failed(frame, FrameDecodeStatus.INVALID_FRAME, width, height, metadata)
     if frame.pixel_format.casefold() not in _SUPPORTED_PIXEL_FORMATS:
         return _failed(frame, FrameDecodeStatus.UNSUPPORTED_PIXEL_FORMAT, width, height, metadata)
     expected_channels = 3
@@ -178,7 +188,7 @@ def normalize_decoded_frame(frame: DecodedVideoFrame) -> FrameAnalysisInput:
     except (KeyError, TypeError, ValueError):
         return _failed(frame, FrameDecodeStatus.UNSUPPORTED_COLOR_METADATA, width, height, metadata)
 
-    if frame.transfer_function.casefold() in {"pq", "smpte2084", "hlg", "arib-std-b67"}:
+    if _transfer_name(frame.transfer_function) in {"pq", "smpte2084", "hlg", "aribstdb67"}:
         linear_srgb = _tone_map(linear_srgb)
     linear_srgb = np.clip(linear_srgb, 0.0, 1.0).astype(np.float32, copy=False)
     luminance = np.clip(linear_srgb @ _SRGB_LUMA, 0.0, 1.0).astype(np.float32, copy=False)
@@ -436,13 +446,23 @@ def _normalize_primaries(primaries):
 
 
 # {
+#   責務: [_transfer_name: transfer-function aliasを共通keyへ正規化する]
+#   処理: [1: caseを統一する 2: separatorを除去してalias比較可能なnameを返す]
+#   引数: [transfer: decoder transfer tag]
+#   戻り値: [name: normalized transfer key]
+# }
+def _transfer_name(transfer: str) -> str:
+    return transfer.casefold().replace("-", "").replace("_", "")
+
+
+# {
 #   責務: [_to_linear: SDR/PQ/HLG transfer functionをrelative linear lightへ復号する]
 #   処理: [1: transfer aliasを正規化する 2: EOTFを適用しHDRはpeak nits情報を使う]
 #   引数: [encoded: normalized encoded RGB values, transfer: transfer tag, metadata: stream mastering metadata]
 #   戻り値: [linear: relative linear RGB values]
 # }
 def _to_linear(encoded, transfer, metadata):
-    name = transfer.casefold().replace("-", "").replace("_", "")
+    name = _transfer_name(transfer)
     encoded = np.clip(encoded, 0.0, 1.0)
     if name in {"srgb", "iec6196621"}:
         return np.where(encoded <= 0.04045, encoded / 12.92, ((encoded + 0.055) / 1.055) ** 2.4)

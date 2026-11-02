@@ -30,6 +30,7 @@ view; the source frame stays unchanged.
 `tests.test_video_frame_normalization` covers temporal letterbox detection,
 dark-scene protection, user overrides, SDR/HDR luminance normalization,
 limited-range 10-bit input, VFR PTS/time-base recovery, unsupported formats,
-corrupt pixels, and decode/timestamp errors. Decoder adapters for both built-in
-libav and FFmpeg CLI should construct the same `DecodedVideoFrame` contract;
-this shared layer does not select or configure a decoder.
+corrupt pixels, and decode/timestamp errors. Test-only libav/FFmpeg adapter
+fixtures construct the same `DecodedVideoFrame` contract. Production decoder
+integration remains a follow-up for each video feature; this shared layer does
+not select or configure a decoder.

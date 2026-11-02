@@ -859,6 +859,28 @@ classDiagram
         +save_image()
     }
     tk.Tk <|-- App
+    class SurfaceEstimate {
+        +__post_init__()
+        +manifest()
+    }
+    class MaterialEstimateSet {
+        +__post_init__()
+    }
+    class MaterialEstimator {
+        +name()
+        +estimate()
+    }
+    Protocol <|-- MaterialEstimator
+    class MaterialEstimatorRegistry {
+        +__init__()
+        +estimate()
+    }
+    class ClassicalMaterialEstimator {
+        +name()
+        +estimate()
+    }
+    class EstimateEvaluation {
+    }
     class ProcessingTests {
         +setUp()
         +test_identity_normal_blend_preserves_image()

@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from guidance import apply_guidance_prior, load_guidance, score_guidance_alignment
 from image_enhancer import EnhanceSettings, process_image
+from material_estimator import ClassicalMaterialEstimator, SurfaceEstimate, apply_surface_estimate
 from PIL import Image, ImageDraw, ImageOps
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -411,13 +412,26 @@ def settings_for(profile):
     )
 
 
-def correct_surface_image(image, surface_clusters, surface_alpha, profile):
+# {
+#   責務: [correct_surface_image: optional spatial estimateまたはlegacy scalar priorでimageをcorrectする]
+#   処理: [apply confidence-bounded local estimate when present and retain legacy video fallback]
+#   引数: [image: observed pixels, surface_clusters: reference colors, surface_alpha: scalar fallback, profile: candidate policy, surface_estimate: optional local maps]
+#   戻り値: [Image.Image: corrected RGBA image]
+# }
+def correct_surface_image(
+    image, surface_clusters, surface_alpha, profile, surface_estimate: SurfaceEstimate | None = None
+):
     import numpy as np
 
-    rgba = np.asarray(image.convert("RGBA"))
-    rgb = rgba[..., :3].copy()
-    if surface_clusters:
-        rgb = weaken_surface_component(rgb, surface_clusters, surface_alpha)
+    if surface_estimate is not None:
+        corrected = apply_surface_estimate(image, surface_estimate, profile)
+        rgba = np.asarray(corrected.convert("RGBA"))
+        rgb = rgba[..., :3].copy()
+    else:
+        rgba = np.asarray(image.convert("RGBA"))
+        rgb = rgba[..., :3].copy()
+        if surface_clusters:
+            rgb = weaken_surface_component(rgb, surface_clusters, surface_alpha)
     rgb = reduce_low_frequency_shading(rgb, 0.30 if profile == "conservative" else 0.45)
     rgb = enhance_local_contrast(rgb)
     return Image.fromarray(np.dstack((rgb, rgba[..., 3])), "RGBA")
@@ -487,13 +501,16 @@ def process_images(
             for path in paths
         ]
     guidance_reports = []
+    material_reports = []
+    estimator = ClassicalMaterialEstimator()
     for path, out in destinations:
         if guidance is not None and guidance.source_sha256:
             current_digest = hashlib.sha256(path.read_bytes()).hexdigest()
             if current_digest != guidance.source_sha256:
                 raise ValueError(f"guidance source hash does not match input image: {path.name}")
         out.parent.mkdir(parents=True, exist_ok=True)
-        image = ImageOps.exif_transpose(Image.open(path)).convert("RGBA")
+        with Image.open(path) as source_image:
+            image = ImageOps.exif_transpose(source_image).convert("RGBA")
         surface_clusters = reference_clusters or estimate_surface_color(
             np.asarray(image.convert("RGB"))
         )
@@ -508,7 +525,63 @@ def process_images(
             surface_alpha = (
                 surface_alpha * (1 - guidance.confidence) + hinted_alpha * guidance.confidence
             )
-        prepared = correct_surface_image(image, surface_clusters, surface_alpha, profile)
+        category = guidance.category if guidance is not None else ""
+        material = guidance.material if guidance is not None else ""
+        if not material:
+            material = {
+                "thin_cloth": "thin_cloth",
+                "thick_cloth": "thick_cloth",
+                "thin_paper": "paper",
+                "clear_film": "glass",
+            }.get(semantic_surface_preset, "")
+        estimate_set = estimator.estimate(
+            image,
+            category,
+            material,
+            tuple(reference_clusters or ()),
+            surface_alpha if reference_alpha is not None else None,
+        )
+        selected_index = (
+            0
+            if profile == "conservative" or profile.endswith("_conservative")
+            else 2
+            if profile.endswith("_strong")
+            else 1
+        )
+        selected_estimate = estimate_set.estimates[selected_index]
+        prepared = correct_surface_image(
+            image,
+            surface_clusters,
+            surface_alpha,
+            profile,
+            selected_estimate,
+        )
+        selected_label = selected_estimate.estimate_id.rsplit(":", 1)[-1]
+        map_payloads = {
+            "surface_color": selected_estimate.surface_color_map,
+            "alpha": selected_estimate.alpha_map,
+            "transmittance": selected_estimate.transmittance_map,
+            "shading": selected_estimate.shading_map,
+            "blur_scatter": selected_estimate.blur_scatter_map,
+            "texture_frequency": selected_estimate.texture_frequency_map,
+            "specular": selected_estimate.specular_map,
+            "wrinkle_confidence": selected_estimate.wrinkle_confidence_map,
+            "uncertainty": selected_estimate.uncertainty_map,
+        }
+        map_paths = []
+        for map_name, payload in map_payloads.items():
+            map_path = out.with_name(f"{out.stem}.material_{selected_label}_{map_name}.png")
+            map_path.write_bytes(payload)
+            map_paths.append(map_path.name)
+        material_reports.append(
+            {
+                "input": path.name,
+                "selected_estimate": selected_estimate.manifest(),
+                "hypotheses": [item.manifest() for item in estimate_set.estimates],
+                "warnings": estimate_set.warnings,
+                "map_files": map_paths,
+            }
+        )
         result = process_image(prepared, settings_for(profile))
         if guidance is not None:
             automatic_score, automatic_dimensions = score_guidance_alignment(
@@ -533,6 +606,27 @@ def process_images(
             result = result.convert("RGB")
         result.save(out)
         print(f"processed: {path}", flush=True)
+    material_report_path = (
+        target.with_name(f"{target.stem}.material.json")
+        if target.suffix
+        else target / "material_estimates.json"
+    )
+    material_report_path.parent.mkdir(parents=True, exist_ok=True)
+    material_report_path.write_text(
+        json.dumps(
+            {
+                "schema": "surface-estimates.v1",
+                "estimator": estimator.name,
+                "profile": profile,
+                "inputs": material_reports,
+                "note": "Heuristic local maps are uncertain priors, not verified physical decomposition.",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     if guidance is not None:
         report_path = (
             target.with_name(f"{target.stem}.guidance.json")

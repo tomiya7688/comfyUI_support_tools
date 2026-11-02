@@ -48,6 +48,12 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generatorとBlender `mmd_tools` PMX exporter/preview adapterはまだ接続されていません。従ってこの変更はproduction-ready model generationを提供せず、Character Creator acceptanceのうち実際のPMX生成、顔morph、cloth physics、motion previewは未完了です。外部adapterを登録して初めて出力できる構成で、対応実装がない場合は明確に失敗します。
 
+### Pixel Art Creator
+
+`python -m comfyui_support_tools.applications.pixel_art` で独立したPixel Art Creator画面を起動し、Text / Image / Retouchを選べます。`comfyui_support_tools.shared.pixel_art.PixelArtApplication` は3入口で共通設定と処理を使います。8/16/32/64/96/128/192/256 pxとcustom WxH、palette import/extract/export、透明RGBA、crop/pad、palette制限、dither、nearest-neighbor preview、native-sizeのpixel指標、PNG/JSON出力、undo/redo可能なproject履歴、sprite-sheet分割/結合を提供します。text生成は差し替え可能な `PixelTextBackend` が必要で、この起動コマンドにはComfyUIの生成backendをまだ接続していません。
+
+pixel指標は色数・孤立pixel・色補間らしいpixel・輪郭候補等の決定的なheuristicです。semantic readability、カテゴリ適合、outline品質を機械判定したとは扱わず、小サイズはnative previewで確認してください。画像変換は構図を保つcrop/fitと決定的なpalette処理を行いますが、subject segmentationや生成モデルによるsemantic reconstructionは外部backendの拡張点です。現時点ではこのshared application coreであり、統一GUIへの画面接続は含みません。
+
 ---
 
 ## English
@@ -108,3 +114,10 @@ The core includes an offline procedural baseline but does not bundle a trained d
 `comfyui_support_tools.shared.mmd_character` provides Stable Humanoid/Free 3D routes, CharacterSpec, geometry/rig/morph/physics/preview/export adapter contracts, standard-bone/topology/weight/morph/material/physics validation, provenance/license gating, and up to three local repair rounds. Invalid rigs/geometry and unknown model licenses never reach the PMX exporter.
 
 CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generation and a Blender `mmd_tools` PMX exporter/preview adapter are not connected yet. This change therefore does not provide production character generation; actual PMX generation, facial morph synthesis, cloth physics, and motion preview remain unimplemented acceptance items. Output requires registered external adapters and fails clearly when none are available.
+
+
+### Pixel Art Creator
+
+Launch the standalone Pixel Art Creator window with `python -m comfyui_support_tools.applications.pixel_art` and select Text / Image / Retouch. `comfyui_support_tools.shared.pixel_art.PixelArtApplication` shares processing across these three entry workflows. It provides 8/16/32/64/96/128/192/256 px presets and custom WxH, palette import/extraction/export, transparent RGBA, crop/pad, palette limits, dithering, nearest-neighbor previews, deterministic native-size metrics, PNG/JSON export, undo/redo project history, and basic sprite-sheet split/pack. Text generation requires an injectable `PixelTextBackend`; the launch command does not yet connect a ComfyUI generation backend.
+
+Pixel metrics are deterministic heuristics for color count, isolated pixels, likely interpolated colors, and outline candidates. They do not claim semantic readability, category suitability, or objectively judge outline quality; inspect the native-size preview, especially at small sizes. Image conversion applies composition-aware crop/fit and deterministic palette processing, while subject segmentation and model-assisted semantic reconstruction remain backend extension points. This change supplies the shared application core; it does not connect a GUI screen.

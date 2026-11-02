@@ -6,8 +6,6 @@ from .contracts import (
     DiagnosticSeverity,
     PmxBone,
     PmxDiagnostic,
-    PmxJoint,
-    PmxRigidBody,
 )
 
 

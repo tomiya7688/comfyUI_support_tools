@@ -143,3 +143,15 @@ The shared `output_artifact` helper provides fail, skip, overwrite, rename, and 
 `comfyui_support_tools.shared.mmd_doctor` safely reads PMX 2.0/2.1 structures and reports bone hierarchy, weight, morph-reference, rigid-body, joint, and soft-body findings with localized repair candidates. Repairs never overwrite the source. When a motion evaluator is injected, the service compares candidates with Best-of-N and writes the selected PMX plus before/after findings and byte-level rollback data to separate files. External MMD physics engines and weight estimators can be connected through adapters.
 
 This stage does not bundle PMX 2.1 soft-body support, a GUI, an MMD Bullet motion evaluator, or weight-estimation models such as SkinTokens/UniRig. Files containing soft bodies are rejected to avoid partial audits. Without an evaluator, automatic selection and export are disabled.
+
+### MMD Camera Director基盤
+
+`comfyui_support_tools.shared.camera_director` はdance VMDを読み、style preset・stage bounds・任意のPCM WAV energy sectionsからcamera VMD、JSON plan、animated GIF preview、SVG storyboardを生成します。heuristic backendは固定seedで再現でき、指定frame区間だけ再生成できます。DanceStyleCam用adapterとmodel-aware collision checkerは注入可能で、成果物は既存ファイルを上書きせず一式として保存します。
+
+既定解析はroot bone名または最初のbone trackをsubject proxyに使い、WAVは一定長windowのRMS energyに分けます。DanceStyleCam本体、PMX/stage形状に基づく可視性・衝突検査、beat/section推定、3D scene renderer、timeline GUIは含まれていません。GIFとSVGはcamera planを可視化し、3D scene自体はrenderしません。
+
+### MMD Camera Director foundation
+
+`comfyui_support_tools.shared.camera_director` reads dance VMD and generates a camera VMD, JSON plan, animated GIF preview, and SVG storyboard from a style preset, optional stage bounds, and optional PCM WAV energy sections. Its heuristic backend is reproducible with a fixed seed and can regenerate only a selected frame interval. DanceStyleCam and model-aware collision checking can be injected as adapters; outputs are written as a non-overwriting artifact set.
+
+By default, subject tracking uses a root-bone name or the first bone track, and WAV audio is divided into fixed-size RMS energy windows. DanceStyleCam itself, PMX/stage-geometry visibility and collision checks, beat/section inference, a 3D scene renderer, and a timeline GUI are not included. GIF and SVG visualize the camera plan; they do not render the 3D scene.

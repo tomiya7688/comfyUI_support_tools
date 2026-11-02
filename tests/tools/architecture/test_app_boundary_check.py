@@ -44,12 +44,49 @@ subprocess.Popen(cmd)
         ]
         self.assertEqual(rules, ["ARCH005"])
 
+    def test_detects_current_embedded_webui_violation(self):
+        root = Path(__file__).parents[3]
+        source = (root / "scripts" / "backend" / "embedded_start_webui.py").read_text(
+            encoding="utf-8"
+        )
+        rules = [
+            item.rule
+            for item in app_boundary_check.scan_source(
+                "scripts/backend/embedded_start_webui.py", source
+            )
+        ]
+        self.assertIn("ARCH005", rules)
+
+    def test_detects_direct_venv_call_and_path_based_python_launches(self):
+        sources = [
+            "import subprocess\nsubprocess.run([str(venv_python(root)), 'backend.py'])\n",
+            "import subprocess\n"
+            "python = Path(root) / 'Scripts' / 'python.exe'\n"
+            "script = root / 'backend.py'\n"
+            "subprocess.Popen([str(python), str(script)])\n",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                rules = [
+                    item.rule
+                    for item in app_boundary_check.scan_source("scripts/backend/example.py", source)
+                ]
+                self.assertEqual(rules, ["ARCH005"])
+
     def test_allows_venv_python_for_module_command_and_packaged_executable(self):
         source = """from scripts.runtime_python import venv_python
 import subprocess
 python_path = venv_python(runtime / 'venv')
 subprocess.run([str(python_path), '-m', 'http.server'])
-subprocess.Popen(['Backend.exe', '--port', '8188'])
+subprocess.Popen([packaged_executable('Backend'), '--port', '8188'])
+"""
+        self.assertEqual(app_boundary_check.scan_source("scripts/backend/example.py", source), [])
+
+    def test_ignores_interpreter_and_python_path_in_non_launch_arguments(self):
+        source = """from scripts.runtime_python import venv_python
+import subprocess
+python_path = venv_python(runtime / 'venv')
+subprocess.run(['Packaged.exe', str(python_path), 'documentation.py'])
 """
         self.assertEqual(app_boundary_check.scan_source("scripts/backend/example.py", source), [])
 

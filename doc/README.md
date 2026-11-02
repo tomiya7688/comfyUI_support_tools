@@ -23,6 +23,7 @@
 | [1回分の開発ワークフロー](ワークフロー/ワークフロー.md) | [One-cycle development workflow](ワークフロー/workflow.md) |
 | [LoRA Dataset Curator / Caption Planner](lora_dataset_curator.md) | [LoRA Dataset Curator / Caption Planner](lora_dataset_curator.en.md) |
 | [Composition Template Extractor](composition_template.md) | [Composition Template Extractor](composition_template.en.md) |
+| [Manga Creator / Storyboard](manga_creator.md) | [Manga Creator / Storyboard](manga_creator.en.md) |
 
 ### 既存文書の移行
 
@@ -52,6 +53,7 @@ Project-owned README files and documentation are maintained in both Japanese and
 | [1回分の開発ワークフロー](ワークフロー/ワークフロー.md) | [One-cycle development workflow](ワークフロー/workflow.md) |
 | [LoRA Dataset Curator / Caption Planner](lora_dataset_curator.md) | [LoRA Dataset Curator / Caption Planner](lora_dataset_curator.en.md) |
 | [Composition Template Extractor](composition_template.md) | [Composition Template Extractor](composition_template.en.md) |
+| [Manga Creator / Storyboard](manga_creator.md) | [Manga Creator / Storyboard](manga_creator.en.md) |
 
 ### Legacy migration
 

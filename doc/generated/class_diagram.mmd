@@ -136,6 +136,16 @@ classDiagram
         +supports()
         +require()
     }
+    class ParameterSpec {
+        +__post_init__()
+    }
+    class ParameterSpecRegistry {
+        +__init__()
+        +register_strategy()
+        +register()
+        +resolve()
+        +schema()
+    }
     class GenerationParameterResolver {
         +__init__()
         +resolve()

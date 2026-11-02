@@ -110,6 +110,16 @@ class GenerationParameterResolverTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "configured choices"):
             GenerationParameterResolver(random.Random(9), registry).resolve(invalid_scheduler)
 
+    def test_parameter_specs_reject_invalid_bounds_and_choices(self):
+        with self.assertRaisesRegex(ValueError, "minimum cannot exceed"):
+            ParameterSpec("strength", "number", 2.0, 1.0)
+        with self.assertRaisesRegex(ValueError, "must be integers"):
+            ParameterSpec("seed", "integer", 0.5, 5)
+        with self.assertRaisesRegex(ValueError, "unique"):
+            ParameterSpec("scheduler", "choice", choices=("normal", "normal"))
+        with self.assertRaisesRegex(ValueError, "callable"):
+            default_parameter_registry().register_strategy("broken", "not-callable")
+
     @staticmethod
     def _configuration(**overrides):
         result = {

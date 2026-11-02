@@ -28,6 +28,48 @@ class ParameterSpec:
     default: Any = None
     choices: tuple[str, ...] = ()
 
+    # {
+    # 責務: [__post_init__: schema descriptorのidentityとboundsを検証する]
+    # 処理: [1: field値を検査する 2: type別boundsとchoicesを確認する]
+    # 引数: [self: parameter spec]
+    # 戻り値: []
+    # }
+    def __post_init__(self) -> None:
+        if not self.name or any(character.isspace() for character in self.name):
+            raise ValueError("parameter name must be non-empty and contain no whitespace")
+        if not self.value_type or any(character.isspace() for character in self.value_type):
+            raise ValueError("parameter value_type must be non-empty and contain no whitespace")
+        if self.namespace is not None and (
+            not self.namespace or any(character.isspace() for character in self.namespace)
+        ):
+            raise ValueError("parameter namespace must be non-empty and contain no whitespace")
+        if (self.minimum is None) != (self.maximum is None):
+            raise ValueError("parameter numeric bounds must provide both minimum and maximum")
+        if self.minimum is not None:
+            bounds = (self.minimum, self.maximum)
+            if any(
+                isinstance(value, bool) or not isinstance(value, (int, float)) for value in bounds
+            ):
+                raise ValueError("parameter bounds must be finite numbers")
+            try:
+                finite_bounds = all(math.isfinite(value) for value in bounds)
+            except OverflowError:
+                finite_bounds = False
+            if not finite_bounds:
+                raise ValueError("parameter bounds must be finite numbers")
+            if self.minimum > self.maximum:
+                raise ValueError("parameter minimum cannot exceed maximum")
+            if self.value_type == "integer" and any(
+                not isinstance(value, int) or isinstance(value, bool)
+                for value in (self.minimum, self.maximum)
+            ):
+                raise ValueError("integer parameter bounds must be integers")
+        if self.value_type == "choice":
+            if any(not isinstance(choice, str) or not choice.strip() for choice in self.choices):
+                raise ValueError("choice parameter choices must be non-empty strings")
+            if len(set(self.choices)) != len(self.choices):
+                raise ValueError("choice parameter choices must be unique")
+
 
 # {
 # 責務: [ ParameterSpecRegistry: specとvalue strategyを拡張可能に登録する ]
@@ -52,6 +94,10 @@ class ParameterSpecRegistry:
     # 戻り値: []
     # }
     def register_strategy(self, value_type: str, strategy: Any) -> None:
+        if not value_type or any(character.isspace() for character in value_type):
+            raise ValueError("parameter strategy ID must be non-empty and contain no whitespace")
+        if not callable(strategy):
+            raise ValueError(f"Parameter strategy {value_type} must be callable")
         if value_type in self._strategies:
             raise ValueError(f"Duplicate parameter strategy: {value_type}")
         self._strategies[value_type] = strategy

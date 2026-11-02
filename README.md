@@ -203,3 +203,15 @@ The standalone `python -m comfyui_support_tools.applications.pixel_art` launch d
 `comfyui_support_tools.shared.music_to_mmd` provides audio loading through WAV and an optional FFmpeg decoder, RMS/onset/BPM estimates, coarse energy-based song sections, a beat-aligned choreography plan, replaceable section-generation backends, retargeting through an MMD bone profile, floor/contact correction, VMD export, per-section reroll, and evaluation reports. The default `procedural_baseline` creates deterministic offline motion modulated by beat and style.
 
 The default backend is not a trained full-body dance model and does not guarantee choreography quality or understand lyrics/chorus semantics. Section labels are energy heuristics. PMX geometry, IK, and skirt/hair physics previews are not included; floor/contact metrics are proxies based on bone names and contact labels. AtomicDance/ChoreDiffusion and similar systems can be added through backend adapters but are not bundled or connected.
+
+### MMD Character Creatorの検証基盤
+
+`comfyui_support_tools.shared.mmd_character` はstable humanoid/free-3D routeのadapter contract、mesh/標準bone/skin weights/morph/physics検証、最大3回の局所repair loop、provenance/license確認、PMX exportとpreview adapter境界を提供します。Validation errorが残る候補はexportしません。
+
+このrepositoryにはCharacterGen/Hunyuan3D/VRM/SkinTokens等の生成・autorig adapter、既定PMX binary writer、PMX renderer/physics previewがありません。`MmdCharacterCreator` でPMXを作るには外部backendを登録する必要があり、standalone end-to-end character generationはまだ構成されていません。髪/服のphysicsやあいうえおmorphもadapter生成結果が必要です。
+
+### MMD Character Creator validation foundation
+
+`comfyui_support_tools.shared.mmd_character` provides stable-humanoid/free-3D adapter contracts, mesh/standard-bone/skin-weight/morph/physics validation, up to three local repair rounds, provenance/license checks, and PMX export/preview adapter boundaries. Candidates with remaining validation errors are not exported.
+
+This repository does not include CharacterGen/Hunyuan3D/VRM/SkinTokens generation or auto-rigging adapters, a default PMX binary writer, or a PMX renderer/physics preview. `MmdCharacterCreator` requires an external backend to create a PMX; standalone end-to-end character generation is not configured yet. Hair/clothing physics and Japanese vowel morphs also depend on adapter-generated data.

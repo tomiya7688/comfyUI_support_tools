@@ -3,11 +3,17 @@
 import json
 import pyexpat
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from tools.build.license_inventory import _python_native_components, collect_license_inventory
+from tools.build.license_inventory import (
+    _CPYTHON_EXPAT_PINS,
+    _CPYTHON_LIBMPDEC_PINS,
+    _python_native_components,
+    collect_license_inventory,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -286,19 +292,35 @@ class LicenseInventoryTests(unittest.TestCase):
             self.assertEqual(runtime_hooks["license_metadata"], "Apache-2.0")
             self.assertEqual(bootloader["version"], runtime_hooks["version"])
             libmpdec = by_name["libmpdec"]
-            self.assertEqual(libmpdec["version"], "2.5.1")
+            expected_libmpdec = _CPYTHON_LIBMPDEC_PINS.get(sys.version.split()[0])
             self.assertEqual(
-                libmpdec["license_files"],
-                ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"],
+                libmpdec["version"],
+                expected_libmpdec["version"] if expected_libmpdec else None,
             )
-            self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
+            if expected_libmpdec:
+                self.assertEqual(
+                    libmpdec["license_files"],
+                    ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"],
+                )
+                self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
+            else:
+                self.assertEqual(libmpdec["license_files"], [])
+                self.assertEqual(libmpdec["audit_status"], "upstream-version-unresolved")
             expat = by_name["Expat"]
-            self.assertEqual(expat["version"], pyexpat.EXPAT_VERSION.removeprefix("expat_"))
+            expected_expat = _CPYTHON_EXPAT_PINS.get(sys.version.split()[0])
             self.assertEqual(
-                expat["license_files"],
-                ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"],
+                expat["version"],
+                expected_expat["version"] if expected_expat else None,
             )
-            self.assertTrue((target / "licenses" / "expat" / "LICENSE.txt").is_file())
+            if expected_expat:
+                self.assertEqual(
+                    expat["license_files"],
+                    ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"],
+                )
+                self.assertTrue((target / "licenses" / "expat" / "LICENSE.txt").is_file())
+            else:
+                self.assertEqual(expat["license_files"], [])
+                self.assertEqual(expat["audit_status"], "upstream-version-unresolved")
             self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])
             native = {item["path"]: item for item in manifest["native_artifacts"]}
             self.assertEqual(native["KadokaTools.exe"]["size_bytes"], len(b"test executable"))
@@ -333,6 +355,10 @@ class LicenseInventoryTests(unittest.TestCase):
                 )
             )
             for component in manifest["components"]:
+                if component.get("audit_status") == "upstream-version-unresolved":
+                    self.assertIsNone(component["version"])
+                    self.assertEqual(component["license_files"], [])
+                    continue
                 self.assertTrue(component["version"])
                 self.assertTrue(component["license_files"])
                 for relative_path in component["license_files"]:

@@ -11,8 +11,16 @@ sys.path.insert(0, str(ROOT / "src"))
 from PIL import Image
 from comfyui_support_tools.applications.main_gui.data.processing.action_io import ActionIO
 from comfyui_support_tools.applications.main_gui.data.processing.job_runtime import JobRuntime
+from comfyui_support_tools.entrypoints.jobs import create_job_queue
 from comfyui_support_tools.applications.main_gui.data.processing.media_io import MediaIO
 from comfyui_support_tools.shared.contracts.inspector_contracts import ActionRequest, TaggerSettings
+from comfyui_support_tools.shared.contracts.job_contracts import (
+    CancelCapability,
+    CheckpointCapability,
+    ShutdownPolicy,
+)
+from comfyui_support_tools.shared.contracts.media_item import MediaItem
+from comfyui_support_tools.shared.job_snapshot_store import JobSnapshotStore
 
 
 def wait_for(predicate, timeout=4):
@@ -36,6 +44,8 @@ class JobRuntimeTests(unittest.TestCase):
         before = runtime.snapshots()[0]
         self.assertEqual(before.state, "queued")
         self.assertIsNone(before.started_at)
+        self.assertTrue(runtime.prepare(job))
+        self.assertEqual(runtime.snapshots()[0].state, "preparing")
         self.assertTrue(runtime.wait_start(job))
         runtime.update(job, 0.5, "half", "step 1")
         runtime.set_backend_job_id(job, "backend-123")
@@ -77,9 +87,17 @@ class JobRuntimeTests(unittest.TestCase):
         t1 = Thread(target=worker, args=(first, release))
         t2 = Thread(target=worker, args=(second,))
         t1.start()
-        wait_for(lambda: next(item for item in runtime.snapshots() if item.id == first).state == "running")
+        wait_for(
+            lambda: (
+                next(item for item in runtime.snapshots() if item.id == first).state == "running"
+            )
+        )
         t2.start()
-        wait_for(lambda: next(item for item in runtime.snapshots() if item.id == second).state == "queued")
+        wait_for(
+            lambda: (
+                next(item for item in runtime.snapshots() if item.id == second).state == "queued"
+            )
+        )
         self.assertTrue(runtime.cancel(second))
         t2.join(2)
         self.assertFalse(t2.is_alive())
@@ -99,8 +117,9 @@ class JobRuntimeTests(unittest.TestCase):
         self.assertTrue(runtime.wait_start(job))
         self.assertTrue(runtime.cancel(job))
         current = runtime.snapshots()[0]
-        self.assertEqual(current.state, "running")
+        self.assertEqual(current.state, "cancelling")
         self.assertTrue(cancel.is_set())
+        self.assertIs(runtime.cancellation_token(job), cancel)
         self.assertIn("停止要求", current.message)
         start = time.monotonic()
         runtime.close()
@@ -142,7 +161,7 @@ class JobRuntimeTests(unittest.TestCase):
         self.assertTrue(runtime.wait_start(job))
         self.assertTrue(runtime.cancel(job))
         snapshot = runtime.snapshots()[0]
-        self.assertEqual(snapshot.state, "running")
+        self.assertEqual(snapshot.state, "cancelling")
         self.assertTrue(any("backend cancel request failed" in line for line in snapshot.logs))
         runtime.close()
 
@@ -161,7 +180,268 @@ class JobRuntimeTests(unittest.TestCase):
         self.assertTrue(runtime.wait_start(job))
         runtime.close()
         self.assertEqual(requested, ["prompt-shutdown"])
-        self.assertEqual(runtime.snapshots()[0].state, "running")
+        self.assertEqual(runtime.snapshots()[0].state, "cancelling")
+
+    # {
+    #   責務: [test_checkpoint_pause_resume_reacquires_concurrency_slot: item checkpointでpause/resumeできることを検証する]
+    #   処理: [1: checkpoint対応Jobを開始する 2: pause境界で停止する 3: resumeして再実行する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_checkpoint_pause_resume_reacquires_concurrency_slot(self):
+        runtime = JobRuntime(max_concurrent=1)
+        job = runtime.create(
+            "dataset",
+            "Process files",
+            checkpoint_capability=CheckpointCapability.ITEM,
+        )
+        self.assertTrue(runtime.wait_start(job))
+        self.assertTrue(runtime.pause(job))
+        self.assertFalse(
+            runtime.checkpoint(
+                job,
+                "manifest://run/item-4",
+                completed_items=("item-1", "item-2", "item-3"),
+                pending_items=("item-4", "item-5"),
+            )
+        )
+        paused = runtime.snapshots()[0]
+        self.assertEqual(paused.state, "paused")
+        self.assertEqual(paused.checkpoint_ref, "manifest://run/item-4")
+        self.assertEqual(paused.completed_items, ("item-1", "item-2", "item-3"))
+
+        result = {}
+        waiter = Thread(target=lambda: result.setdefault("resumed", runtime.wait_if_paused(job)))
+        waiter.start()
+        self.assertTrue(runtime.resume(job))
+        waiter.join(2)
+        self.assertFalse(waiter.is_alive())
+        self.assertTrue(result["resumed"])
+        runtime.finish(job, "done", "complete")
+        runtime.close()
+
+    # {
+    #   責務: [test_shutdown_policy_can_preserve_a_resumable_checkpoint: checkpoint-and-stop policyを検証する]
+    #   処理: [1: resumable Jobを開始する 2: checkpoint停止を要求する 3: checkpoint保存後にpausedとなることを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_shutdown_policy_can_preserve_a_resumable_checkpoint(self):
+        runtime = JobRuntime(max_concurrent=1)
+        job = runtime.create(
+            "download",
+            "Download items",
+            checkpoint_capability=CheckpointCapability.ITEM,
+            shutdown_policy=ShutdownPolicy.CHECKPOINT_AND_STOP,
+        )
+        self.assertTrue(runtime.wait_start(job))
+        runtime.close()
+        paused = runtime.snapshots()[0]
+        self.assertEqual(paused.state, "pausing")
+        self.assertFalse(runtime.checkpoint(job, "manifest://download/item-2"))
+        self.assertEqual(runtime.snapshots()[0].state, "paused")
+
+    # {
+    #   責務: [test_restart_recovers_manifest_checkpoint_and_resumes_idempotently: durable restart recoveryを検証する]
+    #   処理: [1: running Jobのcheckpointを保存する 2: runtimeを再生成する 3: manifest handlerで同じJob IDをresumeする]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_restart_recovers_manifest_checkpoint_and_resumes_idempotently(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store_path = Path(temp) / "jobs.sqlite3"
+            store = JobSnapshotStore(store_path)
+            runtime = JobRuntime(max_concurrent=1, store=store)
+            job = runtime.create(
+                "dataset",
+                "Process dataset",
+                retryable=True,
+                checkpoint_capability=CheckpointCapability.ITEM,
+                shutdown_policy=ShutdownPolicy.DETACH,
+                operation_id="operation-123",
+                manifest_ref="manifest://run-123",
+            )
+            self.assertTrue(runtime.wait_start(job))
+            runtime.checkpoint(
+                job,
+                "manifest://run-123/checkpoint-3",
+                completed_items=("item-1", "item-2"),
+                pending_items=("item-3",),
+                artifact_refs=("artifact://one",),
+            )
+            runtime.close()
+
+            recovered = JobRuntime(max_concurrent=1, store=JobSnapshotStore(store_path))
+            snapshot = recovered.snapshots()[0]
+            self.assertEqual(snapshot.state, "interrupted")
+            self.assertEqual(snapshot.checkpoint_ref, "manifest://run-123/checkpoint-3")
+            self.assertEqual(snapshot.completed_items, ("item-1", "item-2"))
+            self.assertEqual(snapshot.artifact_refs, ("artifact://one",))
+            resumed = Event()
+            resumed_items = []
+
+            # {
+            #   責務: [resume_from_manifest: persisted manifest snapshotからworkerを再起動する]
+            #   処理: [1: restored job idを照合する 2: wait_start workerを起動する]
+            #   引数: [restored: 復元されたimmutable Job snapshot]
+            #   戻り値: []
+            # }
+            def resume_from_manifest(restored):
+                self.assertEqual(restored.id, job)
+                self.assertEqual(restored.completed_items, ("item-1", "item-2"))
+
+                # {
+                #   責務: [worker: 未完了itemだけを処理してresumed Jobを完了させる]
+                #   処理: [1: restored Jobを開始する 2: pending itemだけを処理する 3: terminal stateを保存する]
+                #   引数: []
+                #   戻り値: []
+                # }
+                def worker():
+                    if recovered.wait_start(restored.id):
+                        resumed_items.extend(restored.pending_items)
+                        resumed.set()
+                        recovered.finish(restored.id, "done", "resumed")
+
+                Thread(target=worker, daemon=True).start()
+
+            recovered.register_resume_handler("dataset", resume_from_manifest)
+            self.assertTrue(recovered.resume(job))
+            self.assertTrue(resumed.wait(2))
+            self.assertEqual(resumed_items, ["item-3"])
+            self.assertEqual(recovered.snapshots()[0].state, "done")
+            recovered.close()
+
+    # {
+    #   責務: [test_retry_is_manifest_backed_and_idempotent: operation lineage付きretryを一度だけ作る]
+    #   処理: [1: 失敗Jobを記録する 2: adapter retryを登録する 3: 重複要求が同じchildを返す]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_retry_is_manifest_backed_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store_path = Path(temp) / "jobs.sqlite3"
+            runtime = JobRuntime(max_concurrent=1, store=JobSnapshotStore(store_path))
+            original = runtime.create(
+                "generation",
+                "Generate batch",
+                retryable=True,
+                operation_id="operation-idempotent",
+                manifest_ref="manifest://generation",
+            )
+            self.assertTrue(runtime.wait_start(original))
+            runtime.finish(original, "failed", "backend error")
+            created = []
+
+            # {
+            #   責務: [retry_from_manifest: retry parentのlineageとoperationを引き継ぐchildを作る]
+            #   処理: [1: manifest metadataを引き継ぐ 2: retry_ofでparentへ紐付ける]
+            #   引数: [snapshot: retry元Job snapshot]
+            #   戻り値: [child: 新規retry Job ID]
+            # }
+            def retry_from_manifest(snapshot):
+                child = runtime.create(
+                    snapshot.kind,
+                    snapshot.action,
+                    retry_of=snapshot.id,
+                    operation_id=snapshot.operation_id,
+                    manifest_ref=snapshot.manifest_ref,
+                )
+                created.append(child)
+                return child
+
+            runtime.register_retry_handler("generation", retry_from_manifest)
+            first = runtime.retry(original)
+            second = runtime.retry(original)
+            self.assertEqual(first, second)
+            self.assertEqual(created, [first])
+            child = next(job for job in runtime.snapshots() if job.id == first)
+            self.assertEqual(child.retry_of, original)
+            self.assertEqual(child.operation_id, "operation-idempotent")
+            self.assertEqual(child.state, "retrying")
+            runtime.cancel(first)
+            runtime.close()
+
+            recovered = JobRuntime(max_concurrent=1, store=JobSnapshotStore(store_path))
+            self.assertEqual(recovered.retry(original), first)
+            recovered.close()
+
+    # {
+    #   責務: [test_uncancellable_capability_rejects_local_cancel: cannot_cancel capabilityを明示する]
+    #   処理: [1: cancel非対応Jobを作る 2: UI/CLIと共通のcancel要求が拒否されることを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_uncancellable_capability_rejects_local_cancel(self):
+        runtime = JobRuntime(max_concurrent=1)
+        job = runtime.create("remote", "Cannot cancel", cancel_capability=CancelCapability.NONE)
+        self.assertTrue(runtime.wait_start(job))
+        self.assertFalse(runtime.cancel(job))
+        self.assertFalse(runtime.snapshots()[0].cancellable)
+        runtime.finish(job, "done")
+        runtime.close()
+
+    # {
+    #   責務: [test_external_cancel_event_is_still_accounted_by_runtime: adapter先行通知後もruntimeがqueueを整理する]
+    #   処理: [1: 外部EventをJobへ渡す 2: adapter側でEventをsetする 3: runtime.cancelでJob stateを終端化する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_external_cancel_event_is_still_accounted_by_runtime(self):
+        runtime = JobRuntime(max_concurrent=1)
+        cancellation = Event()
+        job = runtime.create("media_scan", "Replace pending scan", cancel_event=cancellation)
+        cancellation.set()
+        self.assertTrue(runtime.cancel(job))
+        self.assertEqual(runtime.snapshots()[0].state, "cancelled")
+        self.assertNotIn(job, runtime._queue)
+        runtime.close()
+
+    # {
+    #   責務: [test_ui_commander_pause_resume_routes_to_shared_runtime: UI boundary経由でpause/resumeできる]
+    #   処理: [1: UI commanderを構築する 2: checkpoint/pause要求を送る 3: resume要求後に同じworkerを再開する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_ui_commander_pause_resume_routes_to_shared_runtime(self):
+        runtime = JobRuntime(max_concurrent=1)
+        commander = create_job_queue(runtime)
+        job = runtime.create(
+            "dataset",
+            "Files",
+            checkpoint_capability=CheckpointCapability.ITEM,
+        )
+        self.assertTrue(runtime.wait_start(job))
+        self.assertTrue(commander.pause(job))
+        self.assertFalse(runtime.checkpoint(job, "manifest://files/item-2"))
+        result = {}
+        waiter = Thread(target=lambda: result.setdefault("running", runtime.wait_if_paused(job)))
+        waiter.start()
+        self.assertTrue(commander.resume(job))
+        waiter.join(2)
+        self.assertTrue(result["running"])
+        runtime.finish(job, "done")
+        commander.close()
+
+    # {
+    #   責務: [test_finish_current_item_shutdown_does_not_cancel_inflight_item: policyが現在itemを保護する]
+    #   処理: [1: item-checkpoint Jobを開始する 2: shutdown policyを実行する 3: cancel tokenではなく境界停止要求を確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_finish_current_item_shutdown_does_not_cancel_inflight_item(self):
+        runtime = JobRuntime(max_concurrent=1)
+        job = runtime.create(
+            "generation",
+            "Generate items",
+            checkpoint_capability=CheckpointCapability.ITEM,
+            shutdown_policy=ShutdownPolicy.FINISH_CURRENT_ITEM,
+        )
+        self.assertTrue(runtime.wait_start(job))
+        runtime.close()
+        self.assertFalse(runtime.cancellation_token(job).is_set())
+        self.assertTrue(runtime.finish_current_item_requested(job))
+        self.assertEqual(runtime.snapshots()[0].state, "cancelling")
+        runtime.finish(job, "cancelled", "finished current item")
 
     def test_history_is_bounded_and_progress_validation_is_strict(self):
         runtime = JobRuntime(max_concurrent=1, history_limit=10)
@@ -194,6 +474,76 @@ class JobRuntimeTests(unittest.TestCase):
 
 
 class SharedExistingProcessJobTests(unittest.TestCase):
+    # {
+    #   責務: [test_tagger_pause_checkpoints_completed_items_and_resumes_without_duplicates: Tagger item境界pause/resumeを検証する]
+    #   処理: [1: 先頭item処理中にpauseする 2: checkpoint stateを確認する 3: resume後に残りだけを実行する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_tagger_pause_checkpoints_completed_items_and_resumes_without_duplicates(self):
+        entered = Event()
+        release = Event()
+        calls = []
+
+        class BlockingTransport:
+            def probe(self, _settings):
+                return ("fixture-model",)
+
+            def tag(self, item, _settings):
+                calls.append(item.id)
+                if len(calls) == 1:
+                    entered.set()
+                    release.wait(2)
+                return {"tags": {"fixture": 0.99}}
+
+        runtime = JobRuntime(max_concurrent=1)
+        action = ActionIO(BlockingTransport(), runtime)
+        try:
+            with tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                items = []
+                for name in ("first.png", "second.png"):
+                    path = root / name
+                    Image.new("RGB", (20, 20), "blue").save(path)
+                    stat = path.stat()
+                    items.append(
+                        MediaItem(
+                            name,
+                            str(path),
+                            name,
+                            "image",
+                            "library",
+                            stat.st_size,
+                            stat.st_mtime_ns,
+                        )
+                    )
+                action.start(
+                    ActionRequest(
+                        1,
+                        "tag",
+                        TaggerSettings("http://127.0.0.1:1/pixai/v1/interrogate", "fixture-model"),
+                        tuple(items),
+                    )
+                )
+                job_id = action.last_job_id
+                self.assertTrue(entered.wait(2))
+                self.assertTrue(runtime.pause(job_id))
+                release.set()
+                wait_for(lambda: runtime.snapshots()[0].state == "paused")
+                paused = runtime.snapshots()[0]
+                self.assertEqual(paused.completed_items, (items[0].id,))
+                self.assertEqual(paused.pending_items, (items[1].id,))
+                self.assertTrue(runtime.resume(job_id))
+                wait_for(lambda: runtime.snapshots()[0].state == "done")
+                self.assertEqual(calls, [items[0].id, items[1].id])
+                self.assertEqual(
+                    runtime.snapshots()[0].completed_items, tuple(item.id for item in items)
+                )
+        finally:
+            release.set()
+            action.close()
+            runtime.close()
+
     def test_media_scan_and_tagger_actions_share_one_job_model(self):
         class FakeTransport:
             def probe(self, _settings):

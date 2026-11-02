@@ -15,17 +15,22 @@
 
 `shared/contracts/job_contracts.py` の immutable `JobSnapshot` がUI/Process/Dataを越える契約。
 
-- state: `queued / running / done / error / cancelled`
+- state: `queued / preparing / running / pausing / paused / cancelling / cancelled / resuming / retrying / done / failed / interrupted`（旧adapterの`error`も読み込める）
 - progress: `0..1` または総量不明時 `None`
 - created / started / finished timestamp
 - action / kind / source media IDsと表示名
 - compact log（最大50行、各400文字）
 - error
 - `backend_job_id`: ComfyUI等の外部job/prompt IDを保持する予約field
-- `register_backend_cancel_handler(job_id, handler)`: backend adapterが停止要求callbackを登録する。通常停止とGUI終了時に外部IDとともに呼ばれ、callback例外はJob logへ記録される
-- `retry_of / retryable`: 将来のretry契約。現処理はpayloadを永続保存しないためretryable=false
+- `register_cancel_handler(job_id, handler, capability)`: process/backend adapterが停止callbackを登録する。通常停止とGUI終了時にJob IDとともに呼ばれ、callback例外はJob logへ記録される。既存名`register_backend_cancel_handler`も互換で残す
+- `cancel_capability`: cooperative / process / backend / noneを表す。noneのJobは停止ボタンが無効
+- `checkpoint_capability / checkpoint_ref`: none / stage / item / nativeと再開位置。`pause -> checkpoint -> wait_if_paused -> resume`で同じruntime内のworkerを止めて再開する
+- `shutdown_policy`: cancel / finish_current_item / checkpoint_and_stop / detachをJob単位で指定する
+- `operation_id / manifest_ref`: Run Manifestとの紐付け、retry idempotency key
+- completed / pending / failed item IDsと`artifact_refs`: partial resultの状態参照
+- `retry_of / retryable`: 登録handlerでmanifestからchild Jobを作る。親Jobと同じoperation ID、およびretry_ofを検証し、二重retry要求には既存childを返す
 
-Job履歴はWorkspace内最大100件で、古いterminal Jobから破棄する。ディスクへ保存しない。
+履歴は最大100件で、古いterminal Jobから破棄する。`create_job_runtime()` はSQLite snapshotをOS state directoryへ保存する。既定はWindows `%LOCALAPPDATA%`、Unix系 `$XDG_STATE_HOME`（未指定時`~/.local/state`）内の`comfyui_support_tools/jobs.sqlite3`。設定用`COMFYUI_SUPPORT_TOOLS_STATE_DIR`で保存先を変更できる。Job入力payloadは複製せず、再開に必要な内容はRun Manifestが保持し、snapshotにはmanifest/checkpoint参照だけを保存する。
 
 ## 同時実行とCancel
 
@@ -35,6 +40,7 @@ Job履歴はWorkspace内最大100件で、古いterminal Jobから破棄する�
 - runningを停止: cancel Eventを通知。Media Scanは走査loopで協調停止、Tag HTTPは現在のHTTP応答/timeout後に次の画像へ進まず停止
 - ネイティブ/OS/HTTP呼び出しを強制killする契約ではない
 - GUI終了: queuedをcancelled、runningへ停止Eventを通知し、完了待ちでGUI終了を止めない
+- `checkpoint_and_stop`: 次のcheckpointでpausedとして保存し、プロセス終了後もmanifest/checkpoint参照を残す。`detach`は外部backendへ停止を要求せず、復元時はinterruptedになる
 - 既に外部backendへ受理された処理は、adapterがbackend ID単位の停止callbackを登録すればサーバー側へ停止要求をdispatchできる
 - callbackはUIを止めないよう、非blockingでbackend停止要求をqueueへ登録する。HTTP通信そのものはadapter worker側で実行する
 
@@ -44,7 +50,7 @@ Jobs tab:
 - 状態、進捗、Action、Source、開始時刻、短いmessage
 - 選択したJobのID、backend_job_id、完了時刻、compact log/error
 - queued/running Jobの「停止」
-- 「再実行」はhandler/payload保持が実装されるまでdisabled
+- pause可能なJobに「一時停止 / 再開」、retryable Jobに「再実行」を表示する。再起動後のresumeはkind別handlerがmanifestからpayloadを復元してworkerを起動する
 
 UI Log tabは従来どおり画面操作ログ。Job logとは分離する。
 
@@ -58,7 +64,7 @@ Job UIがTagger/Media Scanの実装moduleを直接importすることはない。
 
 ## Validation
 
-- `tests/test_job_runtime.py`: state、時刻、progress/log/error、backend_job_id、履歴上限、concurrency=1 fixtureでqueued/cancel、shutdown、Media Scan + Tag系を同一runtimeへ登録
+- `tests/test_job_runtime.py`: lifecycle、durable restart/resume、item checkpoint/pause、idempotent retry、backend cancellation、shutdown policy、履歴上限、Media Scan + Tag系の共有runtime
 - `tests/test_job_queue_ui.py`: 複数Job、progress/error/log、cancel、backend_job_id表示
 - Windows full completion gate / UPD / app-boundary
 - onedir `--shell-smoke-test`: Media Scan、Tagger probe、Tag batchの3 kindが同じJobs履歴へterminal stateで表示されることを確認

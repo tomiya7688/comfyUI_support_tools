@@ -127,9 +127,15 @@ def _load_sources(toc_path: Path | None) -> dict[str, tuple[Path, str]]:
     }
 
 
-def _package_owners(site_packages: Path) -> dict[str, dict]:
+# {
+#   責務: [_package_owners: active system/user site distributionsからnative file ownershipを引く]
+#   処理: [1: active distributionsを走査する 2: extension/native suffixの所有packageを記録する]
+#   引数: []
+#   戻り値: [owners: normalized source pathからpackage metadataへのmap]
+# }
+def _package_owners() -> dict[str, dict]:
     owners = {}
-    for item in distributions(path=[str(site_packages)]):
+    for item in distributions():
         name = item.metadata.get("Name")
         if not name:
             continue
@@ -191,7 +197,7 @@ def _attribute(
     typecode: str,
     owners: dict[str, dict],
     components: list[dict],
-    site_packages: Path,
+    site_packages: tuple[Path, ...],
     python_root: Path,
     system_root: Path | None,
 ) -> dict:
@@ -264,7 +270,7 @@ def _attribute(
                 "audit_status": item.get("audit_status", "origin-and-license-document-linked"),
             }
 
-    if _within(source, site_packages):
+    if any(_within(source, root) for root in site_packages):
         return {
             "origin_type": "python-site-packages",
             "origin_component": None,
@@ -304,15 +310,21 @@ def collect_native_artifact_inventory(
     distribution_dir: Path,
     toc_path: Path | None,
     components: list[dict],
-    site_packages: Path,
+    site_packages: tuple[Path, ...],
     python_root: Path,
     system_root: Path | None,
 ) -> list[dict]:
+    if isinstance(site_packages, Path):
+        site_packages = (site_packages,)
     sources = _load_sources(toc_path)
-    owners = _package_owners(site_packages)
+    owners = _package_owners()
     artifacts = []
     for path in sorted(distribution_dir.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in _SUFFIXES:
+        primary_executable = (
+            path.parent == distribution_dir
+            and path.name.casefold() == distribution_dir.name.casefold()
+        )
+        if not path.is_file() or (path.suffix.lower() not in _SUFFIXES and not primary_executable):
             continue
         relative = path.relative_to(distribution_dir).as_posix()
         source_entry = sources.get(relative.casefold())

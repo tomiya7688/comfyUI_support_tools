@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import sys
+import tempfile
 import tkinter as tk
 import unittest
 
@@ -9,6 +10,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from comfyui_support_tools.entrypoints.jobs import create_job_queue, create_job_runtime
 from comfyui_support_tools.applications.main_gui.ui.processing.job_queue_panel import JobQueuePanel
+from comfyui_support_tools.shared.contracts.job_contracts import CheckpointCapability
 
 
 class JobQueuePanelTests(unittest.TestCase):
@@ -21,7 +23,12 @@ class JobQueuePanelTests(unittest.TestCase):
         self.root = tk.Tk()
         self.root.geometry("900x420")
         self.logs = []
-        self.runtime = create_job_runtime(max_concurrent=1)
+        self._temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp_dir.cleanup)
+        self.runtime = create_job_runtime(
+            max_concurrent=1,
+            store_path=Path(self._temp_dir.name) / "jobs.sqlite3",
+        )
         self.commander = create_job_queue(self.runtime)
         self.panel = JobQueuePanel(self.root, self.commander, self.logs.append)
         self.panel.pack(fill="both", expand=True)
@@ -73,6 +80,30 @@ class JobQueuePanelTests(unittest.TestCase):
         self.panel.tree.selection_set(job)
         self.panel._show_details()
         self.assertIn("prompt-abc", self.panel.detail.get("1.0", "end"))
+
+    # {
+    #   責務: [test_pause_and_resume_controls_use_shared_commander_path: UI pause/resume controlを検証する]
+    #   処理: [1: checkpoint可能Jobを作る 2: pauseする 3: resumeしてqueueへ戻す]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_pause_and_resume_controls_use_shared_commander_path(self):
+        job = self.runtime.create(
+            "dataset",
+            "Dataset batch",
+            checkpoint_capability=CheckpointCapability.ITEM,
+        )
+        self.panel.refresh()
+        self.panel.tree.selection_set(job)
+        self.panel._show_details()
+        self.assertEqual(str(self.panel.pause_button["state"]), "normal")
+        self.panel.pause_button.invoke()
+        self.panel.refresh()
+        self.assertEqual(self.runtime.snapshots()[0].state, "paused")
+        self.assertEqual(str(self.panel.resume_button["state"]), "normal")
+        self.panel.resume_button.invoke()
+        self.panel.refresh()
+        self.assertEqual(self.runtime.snapshots()[0].state, "queued")
 
 
 if __name__ == "__main__":

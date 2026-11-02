@@ -3,13 +3,16 @@
 One scan worker and one preview decoder are retained. Scan work obtains a
 global Job slot; preview decoding is short-lived UI support and is not a Job.
 """
+
 from collections import deque
 from queue import Empty, Full, Queue
 from threading import Condition, Event, Thread
 
 from comfyui_support_tools.applications.main_gui.data.processing.job_runtime import JobRuntime
 from comfyui_support_tools.applications.main_gui.data.processing.media_scan import scan_folder
-from comfyui_support_tools.applications.main_gui.data.processing.media_preview_reader import MediaPreviewReader
+from comfyui_support_tools.applications.main_gui.data.processing.media_preview_reader import (
+    MediaPreviewReader,
+)
 from comfyui_support_tools.shared.contracts.media_event import MediaEvent
 
 
@@ -72,16 +75,29 @@ class MediaIO:
             self._preview = ("preview", token, item, 480, fraction)
             self._condition.notify_all()
 
+    # {
+    #   責務: [_scan_loop: queued media scanをpreparing/running lifecycleで実行する]
+    #   処理: [1: scan requestを受け取る 2: shared Jobをprepare/startする 3: batch/terminal stateをpublishする]
+    #   引数: []
+    #   戻り値: []
+    # }
     def _scan_loop(self):
         while not self._stop.is_set():
             with self._condition:
-                self._condition.wait_for(lambda: self._scan_request is not None or self._stop.is_set())
+                self._condition.wait_for(
+                    lambda: self._scan_request is not None or self._stop.is_set()
+                )
                 if self._stop.is_set():
                     return
                 request, self._scan_request = self._scan_request, None
             folder, collection, token, cancel, job_id = request
+            self._jobs.prepare(job_id)
             if not self._jobs.wait_start(job_id):
-                self._put(self._scan_events, MediaEvent("error", token, message="読込を停止しました"), self._stop)
+                self._put(
+                    self._scan_events,
+                    MediaEvent("error", token, message="読込を停止しました"),
+                    self._stop,
+                )
                 continue
             count = 0
             terminal = False
@@ -90,7 +106,9 @@ class MediaIO:
                 nonlocal count, terminal
                 if event.kind == "batch":
                     count += len(event.items)
-                    self._jobs.update(job_id, None, f"{count:,}件を検出", f"found {count:,} media items")
+                    self._jobs.update(
+                        job_id, None, f"{count:,}件を検出", f"found {count:,} media items"
+                    )
                 elif event.kind == "done":
                     terminal = True
                     self._jobs.finish(job_id, "done", event.message)
@@ -102,7 +120,11 @@ class MediaIO:
             scan_folder(folder, collection, token, cancel, publish)
             if cancel.is_set() and not terminal:
                 self._jobs.finish(job_id, "cancelled", "Media Scanを停止しました")
-                self._put(self._scan_events, MediaEvent("error", token, message="読込を停止しました"), self._stop)
+                self._put(
+                    self._scan_events,
+                    MediaEvent("error", token, message="読込を停止しました"),
+                    self._stop,
+                )
             elif not terminal:
                 self._jobs.finish(job_id, "error", "Media Scanが終端結果なしで終了しました")
                 self._put(
@@ -115,7 +137,9 @@ class MediaIO:
         reader = MediaPreviewReader()
         while not self._stop.is_set():
             with self._condition:
-                self._condition.wait_for(lambda: self._preview or self._thumbnails or self._stop.is_set())
+                self._condition.wait_for(
+                    lambda: self._preview or self._thumbnails or self._stop.is_set()
+                )
                 if self._stop.is_set():
                     return
                 if self._preview:

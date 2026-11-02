@@ -1,11 +1,17 @@
 """Bounded Inspector Action worker integrated with the shared Job Runtime."""
+
 import json
 from queue import Empty, Full, Queue
 from threading import Event, Lock, Thread
 
 from comfyui_support_tools.applications.main_gui.data.processing.job_runtime import JobRuntime
-from comfyui_support_tools.applications.main_gui.data.processing.result_exporter import export_records
-from comfyui_support_tools.applications.main_gui.data.processing.tagger_transport import TaggerTransport
+from comfyui_support_tools.applications.main_gui.data.processing.result_exporter import (
+    export_records,
+)
+from comfyui_support_tools.applications.main_gui.data.processing.tagger_transport import (
+    TaggerTransport,
+)
+from comfyui_support_tools.shared.contracts.job_contracts import CheckpointCapability
 from comfyui_support_tools.shared.contracts.inspector_contracts import ActionEvent
 
 
@@ -28,8 +34,7 @@ class ActionIO:
             if request.kind not in ("probe", "tag", "export") or len(request.items) > 60:
                 raise ValueError("Unsupported action request")
             if request.kind == "export" and (
-                request.export_settings is None
-                or len(request.export_records) != len(request.items)
+                request.export_settings is None or len(request.export_records) != len(request.items)
             ):
                 raise ValueError("Invalid export request")
             self._cancel = Event()
@@ -45,6 +50,11 @@ class ActionIO:
                 source_ids=tuple(item.id for item in request.items),
                 source_names=tuple(item.name for item in request.items),
                 cancel_event=self._cancel,
+                checkpoint_capability=(
+                    CheckpointCapability.ITEM
+                    if request.kind in ("tag", "export")
+                    else CheckpointCapability.NONE
+                ),
             )
             self._thread = Thread(
                 target=self._run,
@@ -62,8 +72,15 @@ class ActionIO:
             except Full:
                 continue
 
+    # {
+    #   責務: [_run: Tagger/Export requestをshared Jobと協調cancel/pauseで実行する]
+    #   処理: [1: Job slotを待つ 2: actionごとにbackend処理を行う 3: item境界を確認してterminal stateを記録する]
+    #   引数: [request: immutable ActionRequest, job_id: shared Job ID]
+    #   戻り値: []
+    # }
     def _run(self, request, job_id):
         failed = False
+        self._jobs.prepare(job_id)
         if not self._jobs.wait_start(job_id):
             self._emit(ActionEvent(request.token, "done", message="停止しました"))
             return
@@ -73,11 +90,15 @@ class ActionIO:
                 models = self._transport.probe(request.settings)
                 if not self._cancel.is_set():
                     self._emit(ActionEvent(request.token, "models", models=models))
-                    self._jobs.update(job_id, 0.9, f"モデル {len(models)}件を確認", "model list received")
+                    self._jobs.update(
+                        job_id, 0.9, f"モデル {len(models)}件を確認", "model list received"
+                    )
             elif request.kind == "tag":
                 total = len(request.items)
+                completed = []
+                failed_items = []
                 for index, item in enumerate(request.items, 1):
-                    if self._cancel.is_set():
+                    if self._cancel.is_set() or self._jobs.finish_current_item_requested(job_id):
                         break
                     log = ""
                     try:
@@ -88,8 +109,13 @@ class ActionIO:
                         self._emit(ActionEvent(request.token, "result", item=item, message=text))
                         log = f"{item.name}: response received"
                     except Exception as exc:
+                        failed_items.append(item.id)
                         message = f"{type(exc).__name__}: {exc}"[:300]
-                        self._emit(ActionEvent(request.token, "result", item=item, message=message, failed=True))
+                        self._emit(
+                            ActionEvent(
+                                request.token, "result", item=item, message=message, failed=True
+                            )
+                        )
                         log = f"{item.name}: {message}"[:400]
                     self._jobs.update(
                         job_id,
@@ -97,7 +123,22 @@ class ActionIO:
                         f"{index}/{total} 処理済み",
                         log,
                     )
+                    if not self._cancel.is_set():
+                        completed.append(item.id)
+                    can_continue = self._jobs.checkpoint(
+                        job_id,
+                        f"item:{index}",
+                        completed_items=completed,
+                        pending_items=(value.id for value in request.items[index:]),
+                        failed_items=failed_items,
+                    )
+                    if not can_continue and not self._cancel.is_set():
+                        if not self._jobs.wait_if_paused(job_id):
+                            break
+                    if self._jobs.finish_current_item_requested(job_id):
+                        break
             else:
+
                 def progress(index, total, name):
                     if self._cancel.is_set():
                         raise ValueError("Export停止要求を受信しました")
@@ -114,11 +155,13 @@ class ActionIO:
                     progress,
                 )
                 if not self._cancel.is_set():
-                    self._emit(ActionEvent(
-                        request.token,
-                        "exported",
-                        message=f"Export完了: {len(written)}ファイル",
-                    ))
+                    self._emit(
+                        ActionEvent(
+                            request.token,
+                            "exported",
+                            message=f"Export完了: {len(written)}ファイル",
+                        )
+                    )
         except Exception as exc:
             if self._cancel.is_set():
                 self._emit(ActionEvent(request.token, "done", message="停止しました"))
@@ -130,13 +173,17 @@ class ActionIO:
         finally:
             if self._cancel.is_set():
                 self._jobs.finish(job_id, "cancelled", "停止しました")
+            elif self._jobs.finish_current_item_requested(job_id):
+                self._jobs.finish(job_id, "cancelled", "現在のitemまで完了して停止しました")
             elif not failed:
                 self._jobs.finish(job_id, "done", "完了")
-            self._emit(ActionEvent(
-                request.token,
-                "done",
-                message="停止しました" if self._cancel.is_set() else "完了",
-            ))
+            self._emit(
+                ActionEvent(
+                    request.token,
+                    "done",
+                    message="停止しました" if self._cancel.is_set() else "完了",
+                )
+            )
 
     def poll(self):
         events = []

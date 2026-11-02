@@ -4,6 +4,17 @@ The build collector stores the Tcl/Tk terms here as source input. Runtime
 Python wheel license and notice files are copied unmodified into the onedir
 artifact under `licenses/python_packages/<normalized-name>/`.
 
+If a managed Python runtime omits its top-level `LICENSE.txt`, the collector
+uses only an exact-version copy under `python_runtime/<full-python-version>/`.
+The CPython 3.12.14 copy is from the matching official CPython release tag;
+other versions still require the runtime's own file or a matching checked-in
+copy.
+
+管理環境のPython runtimeにトップレベルの`LICENSE.txt`がない場合、collectorは
+完全一致するPython versionの`python_runtime/<version>/`のみをfallbackとして使います。
+CPython 3.12.14版は対応する公式release tagから取得した文書です。他のversionは
+runtime側のlicenseまたは同一versionの確認済みコピーが必要です。
+
 Do not infer a complete system inventory from Python package metadata alone.
 The collector covers the active Python dependency closure and Python/Tcl/Tk
 runtime, but OS-provided libraries and separately installed backends remain

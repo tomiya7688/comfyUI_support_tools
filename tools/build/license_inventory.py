@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import site
 import sys
 from importlib.metadata import Distribution, PackageNotFoundError, distribution, distributions
 from pathlib import Path, PurePosixPath
@@ -124,11 +125,16 @@ def _external_components() -> list[dict]:
     ]
 
 
-def _runtime_dependency_names(root: Path) -> list[str]:
-    site_packages = Path(sys.prefix) / "Lib" / "site-packages"
+# {
+#   責務: [_runtime_dependency_names: active interpreterの全install schemeからruntime dependencyを解決する]
+#   処理: [1: system/user siteのdistributionを索引化する 2: requirementsから依存閉包を解決する]
+#   引数: [root: repository root]
+#   戻り値: [dependencies: canonical name順のinstalled distribution]
+# }
+def _runtime_dependency_names(root: Path) -> list[Distribution]:
     available = {
         canonicalize_name(item.metadata["Name"]): item
-        for item in distributions(path=[str(site_packages)])
+        for item in distributions()
         if item.metadata.get("Name")
     }
     requirements_file = root / "requirements-kadoka-tools.txt"
@@ -156,7 +162,13 @@ def _runtime_dependency_names(root: Path) -> list[str]:
     return [resolved[name] for name in sorted(resolved)]
 
 
-def _license_files(item: Distribution, site_packages: Path) -> list[Path]:
+# {
+#   責務: [_license_files: installed distributionの安全なlicense file pathを列挙する]
+#   処理: [1: manifest path traversalを拒否する 2: declared license filesを解決する]
+#   引数: [item: package distribution]
+#   戻り値: [files: existing license/notice files]
+# }
+def _license_files(item: Distribution) -> list[Path]:
     result = []
     for entry in item.files or ():
         relative = PurePosixPath(str(entry).replace("\\", "/"))
@@ -183,13 +195,18 @@ def _license_metadata(item: Distribution) -> dict:
     return {"metadata": label or None, "classifiers": classifiers}
 
 
-def _copy_python_package_licenses(
-    item: Distribution, site_packages: Path, target: Path
-) -> list[str]:
+# {
+#   責務: [_copy_python_package_licenses: package licenseを名前空間ごとonedirへコピーする]
+#   処理: [1: package rootをdistributionから解決する 2: license relative pathを保ってcopyする]
+#   引数: [item: package distribution, target: onedir staging path]
+#   戻り値: [files: artifact-relative copied file paths]
+# }
+def _copy_python_package_licenses(item: Distribution, target: Path) -> list[str]:
     package_name = canonicalize_name(item.metadata["Name"])
+    package_root = Path(item.locate_file("")).resolve()
     copied = []
-    for source in _license_files(item, site_packages):
-        relative = source.relative_to(site_packages)
+    for source in _license_files(item):
+        relative = source.resolve().relative_to(package_root)
         destination = target / "licenses" / "python_packages" / package_name / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
@@ -201,7 +218,25 @@ def _project_urls(item: Distribution) -> list[str]:
     return item.metadata.get_all("Project-URL", [])
 
 
-def _pyinstaller_components(site_packages: Path, distribution_dir: Path) -> list[dict]:
+# {
+#   責務: [_site_package_roots: system/user install schemeのpackage rootsを列挙する]
+#   処理: [1: Python system rootsを読む 2: user rootを加える 3: existing unique rootsを返す]
+#   引数: []
+#   戻り値: [roots: active site-packages directories]
+# }
+def _site_package_roots() -> tuple[Path, ...]:
+    configured_roots = [Path(path).expanduser() for path in site.getsitepackages()]
+    configured_roots.append(Path(site.getusersitepackages()).expanduser())
+    return tuple(dict.fromkeys(path.resolve() for path in configured_roots if path.is_dir()))
+
+
+# {
+#   責務: [_pyinstaller_components: frozen executableが含むPyInstaller component licenseを記録する]
+#   処理: [1: PyInstaller distributionを解決する 2: package licenseをcopyする 3: bootloader/runtime hookを記録する]
+#   引数: [distribution_dir: onedir staging path]
+#   戻り値: [components: PyInstaller component entries]
+# }
+def _pyinstaller_components(distribution_dir: Path) -> list[dict]:
     """Record PyInstaller code that is incorporated into the frozen executable."""
     try:
         pyinstaller = distribution("pyinstaller")
@@ -209,7 +244,7 @@ def _pyinstaller_components(site_packages: Path, distribution_dir: Path) -> list
         raise RuntimeError(
             "PyInstaller is required to audit the onedir bootloader license"
         ) from error
-    license_files = _copy_python_package_licenses(pyinstaller, site_packages, distribution_dir)
+    license_files = _copy_python_package_licenses(pyinstaller, distribution_dir)
     project_urls = _project_urls(pyinstaller)
     common = {
         "distribution_status": "bundled-component",
@@ -401,16 +436,32 @@ def _python_native_components(
     return components
 
 
+# {
+#   責務: [collect_license_inventory: onedir配布物のPython/Tcl/package licenseを収集してmanifestを作る]
+#   処理: [1: active runtime licenseを探す 2: exact-version bundled fallbackを使う 3: dependency closureのlicenseを記録する]
+#   引数: [root: source root, distribution_dir: staged package directory, build_toc: optional PyInstaller inventory]
+#   戻り値: [manifest: resolved third-party inventory]
+# }
 def collect_license_inventory(
     root: Path, distribution_dir: Path, build_toc: Path | None = None
 ) -> dict:
     """Copy Python/Tcl and runtime package licenses and emit resolved metadata."""
     root = root.resolve()
     distribution_dir = distribution_dir.resolve()
-    site_packages = Path(sys.prefix) / "Lib" / "site-packages"
     components = []
 
+    python_version = sys.version.split()[0]
+    site_packages = _site_package_roots()
     python_license = Path(sys.base_prefix) / "LICENSE.txt"
+    if not python_license.is_file():
+        versioned_license = Path("licenses") / "python_runtime" / python_version / "LICENSE.txt"
+        candidates = (
+            root / versioned_license,
+            Path(__file__).resolve().parents[2] / versioned_license,
+        )
+        python_license = next(
+            (candidate for candidate in candidates if candidate.is_file()), python_license
+        )
     if not python_license.is_file():
         raise RuntimeError(f"Python runtime license is missing: {python_license}")
     python_target = distribution_dir / "licenses" / "Python" / "LICENSE.txt"
@@ -427,7 +478,6 @@ def collect_license_inventory(
         }
     )
 
-    python_version = sys.version.split()[0]
     if (distribution_dir / "_decimal.pyd").is_file() and python_version in _CPYTHON_LIBMPDEC_PINS:
         libmpdec_license = root / "licenses" / "libmpdec" / "LICENSE.txt"
         if not libmpdec_license.is_file():
@@ -470,7 +520,7 @@ def collect_license_inventory(
             python_version,
         )
     )
-    components.extend(_pyinstaller_components(site_packages, distribution_dir))
+    components.extend(_pyinstaller_components(distribution_dir))
 
     for item in _runtime_dependency_names(root):
         components.append(
@@ -480,9 +530,7 @@ def collect_license_inventory(
                 "version": item.version,
                 "license_metadata": _license_metadata(item),
                 "source_urls": _project_urls(item),
-                "license_files": _copy_python_package_licenses(
-                    item, site_packages, distribution_dir
-                ),
+                "license_files": _copy_python_package_licenses(item, distribution_dir),
             }
         )
 

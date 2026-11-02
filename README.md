@@ -32,6 +32,12 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 現在のPyInstaller onedir版にはPyTorch/Transformersを同梱していないため、凍結実行ファイルではOSSモデルによる推論を利用できません。明示metadataの分類とコピーは使えますが、モデル判定が必要な画像は `uncertain` に残ります。OSSモデル推論を使う場合は、対応依存を導入したソース版GUIを起動してください。
 
+### Pixel Art Creator
+
+`python -m comfyui_support_tools.applications.pixel_art` で独立したPixel Art Creator画面を起動し、Text / Image / Retouchを選べます。`comfyui_support_tools.shared.pixel_art.PixelArtApplication` は3入口で共通設定と処理を使います。8/16/32/64/96/128/192/256 pxとcustom WxH、palette import/extract/export、透明RGBA、crop/pad、palette制限、dither、nearest-neighbor preview、native-sizeのpixel指標、PNG/JSON出力、undo/redo可能なproject履歴、sprite-sheet分割/結合を提供します。text生成は差し替え可能な `PixelTextBackend` が必要で、この起動コマンドにはComfyUIの生成backendをまだ接続していません。
+
+pixel指標は色数・孤立pixel・色補間らしいpixel・輪郭候補等の決定的なheuristicです。semantic readability、カテゴリ適合、outline品質を機械判定したとは扱わず、小サイズはnative previewで確認してください。画像変換は構図を保つcrop/fitと決定的なpalette処理を行いますが、subject segmentationや生成モデルによるsemantic reconstructionは外部backendの拡張点です。現時点ではこのshared application coreであり、統一GUIへの画面接続は含みません。
+
 ---
 
 ## English
@@ -63,3 +69,9 @@ The `AI画像クラスタ` tab analyzes an image folder and previews three group
 To use the detector, install `requirements-ai-image-clustering.txt` and a compatible PyTorch build into the GUI's Python environment. The model weights are downloaded from Hugging Face on first inference and stored under `user_data/cache/ai_origin` by default. The model targets anime images and its score thresholds are uncalibrated. Treat image-only results as estimates and keep ambiguous results in `uncertain`. Images are not sent to an external service. The model weights are Apache-2.0 licensed and are not bundled with the application.
 
 The current PyInstaller onedir build does not bundle PyTorch or Transformers, so OSS model inference is unavailable in the frozen executable. Explicit metadata classification and copying still work, while images requiring model inference remain `uncertain`. To use OSS model inference, launch the source version of the GUI with the supported dependencies installed.
+
+### Pixel Art Creator
+
+Launch the standalone Pixel Art Creator window with `python -m comfyui_support_tools.applications.pixel_art` and select Text / Image / Retouch. `comfyui_support_tools.shared.pixel_art.PixelArtApplication` shares processing across these three entry workflows. It provides 8/16/32/64/96/128/192/256 px presets and custom WxH, palette import/extraction/export, transparent RGBA, crop/pad, palette limits, dithering, nearest-neighbor previews, deterministic native-size metrics, PNG/JSON export, undo/redo project history, and basic sprite-sheet split/pack. Text generation requires an injectable `PixelTextBackend`; the launch command does not yet connect a ComfyUI generation backend.
+
+Pixel metrics are deterministic heuristics for color count, isolated pixels, likely interpolated colors, and outline candidates. They do not claim semantic readability, category suitability, or objectively judge outline quality; inspect the native-size preview, especially at small sizes. Image conversion applies composition-aware crop/fit and deterministic palette processing, while subject segmentation and model-assisted semantic reconstruction remain backend extension points. This change supplies the shared application core; it does not connect a GUI screen.

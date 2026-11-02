@@ -72,6 +72,10 @@ character/situation/background/styleの学習済みclassifierやembedding model�
 
 `python -m comfyui_support_tools.applications.lora_dataset_curator`でGUIを起動し、task-aware caption、Character Registryのtrait/outfit、quality proxy、duplicate group、coverage、validation split、sample weightを確認・手動修正してからSimpleTuner / AI Toolkit / sd-scripts向けdataset treeをexportできます。入力画像・sidecarは変更せず、fingerprintとdecision manifestを保存します。vision taggerとtrainer固有weight adapterは注入式で、実trainerによるtrainingは未検証です。詳細は[LoRA Dataset Curator](doc/lora_dataset_curator.md)を参照してください。
 
+### Composition Template Extractor
+
+`python -m comfyui_support_tools.applications.composition_template`で画像から正規化した構図領域、余白、saliency proxy、任意のhorizonを抽出し、手動trace・role編集・wireframe確認・aspect-ratio adaptation・JSON/library保存・generation guidance exportを行えます。標準抽出は色/identity/styleを含まない低信頼度ヒューリスティックです。pose、semantic segmentation、depth、vanishing-point推定adapterは注入可能ですが標準実装にはなく、#348/#56/#82/#84/#354の実接続も未実装です。評価・使い方は[日本語ガイド](doc/composition_template.md) / [English guide](doc/composition_template.en.md)を参照してください。
+
 ### LoRA Composition Lab
 
 `comfyui_support_tools.shared.lora_composition` は互換性preflight、LoRA update norm/cosine/subspace/sign conflict分析、weighted/top-K/Zip-style training-free merge、rank圧縮、global/per-layer scale grid探索、seed固定の評価bridge、user scale preference prior、provenance付きsafetensorsとruntime recipe出力を提供します。任意依存は `pip install -r requirements-lora-composition.txt` で導入します。分析するdense updateは1 layerあたり8,388,608要素に制限します。Zip-style/top-Kは研究論文実装そのものではなく、比較可能なtraining-free baselineです。GUIと画像生成/evaluation adapterの統合は未実装です。詳細は[LoRA Composition Lab](doc/lora_composition.md)を参照してください。
@@ -169,6 +173,10 @@ This backend requires live Pixiv credentials and API responses for account-level
 ### LoRA Dataset Curator / Caption Planner
 
 Launch the GUI with `python -m comfyui_support_tools.applications.lora_dataset_curator` to review and edit task-aware captions, Character Registry traits/outfits, quality proxies, duplicate groups, coverage, validation splits, and sample weights before exporting a dataset tree for SimpleTuner / AI Toolkit / sd-scripts. Source images and sidecars remain unchanged; a fingerprint and decision manifest are saved. Vision tagging and trainer-specific weight adapters are injectable; training with an installed trainer has not been validated. See [LoRA Dataset Curator](doc/lora_dataset_curator.en.md).
+
+### Composition Template Extractor
+
+Launch `python -m comfyui_support_tools.applications.composition_template` to extract normalized composition regions, negative space, a saliency proxy, and an optional horizon from an image. The GUI supports manual traces, role edits, wireframe review, aspect-ratio adaptation, JSON/library storage, and generic generation-guidance export. The built-in extraction is a low-confidence heuristic that excludes color, identity, and style. Pose, semantic segmentation, depth, and vanishing-point adapters can be injected but are not bundled, and live integration with #348/#56/#82/#84/#354 is not implemented. See the [Japanese guide](doc/composition_template.md) / [English guide](doc/composition_template.en.md).
 
 ### LoRA Composition Lab
 

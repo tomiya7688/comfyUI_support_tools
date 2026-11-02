@@ -1,0 +1,1 @@
+"""Composition template user interface."""

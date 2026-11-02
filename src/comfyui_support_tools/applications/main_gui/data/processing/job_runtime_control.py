@@ -1,24 +1,23 @@
 """Checkpoint, retry, and durable recovery controls for the shared Job runtime."""
 
+import time
 from collections import deque
 from threading import Event
-import time
 
-from comfyui_support_tools.shared.contracts.job_contracts import (
-    ACTIVE_JOB_STATES,
-    CancelCapability,
-    CheckpointCapability,
-    JobSnapshot,
-    ShutdownPolicy,
-    TERMINAL_JOB_STATES,
-)
-from comfyui_support_tools.shared.job_snapshot_store import JobSnapshotStore
 from comfyui_support_tools.applications.main_gui.data.processing.job_runtime_models import (
     MAX_LOG_LINES,
     CancelHandler,
     ResumeHandler,
     RetryHandler,
     _JobRecord,
+)
+from comfyui_support_tools.shared.contracts.job_contracts import (
+    ACTIVE_JOB_STATES,
+    TERMINAL_JOB_STATES,
+    CancelCapability,
+    CheckpointCapability,
+    JobSnapshot,
+    ShutdownPolicy,
 )
 
 

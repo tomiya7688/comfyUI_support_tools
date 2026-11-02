@@ -1,9 +1,9 @@
 """Durable, backend-neutral persistence for shared Job snapshots."""
 
 import json
+import sqlite3
 from contextlib import closing
 from pathlib import Path
-import sqlite3
 
 from comfyui_support_tools.shared.contracts.job_contracts import JobSnapshot
 

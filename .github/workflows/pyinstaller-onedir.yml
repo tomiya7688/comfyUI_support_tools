@@ -82,6 +82,13 @@ jobs:
           python -m pip install -r tools/build/requirements.txt
           python -m pip install -r requirements-dev.txt
 
+      - name: Pin default TLS trust to the updated certifi bundle
+        shell: pwsh
+        run: |
+          $env:SSL_CERT_FILE = python -c "import certifi; print(certifi.where())"
+          if (-not (Test-Path -LiteralPath $env:SSL_CERT_FILE)) { throw "Updated certifi bundle was not found." }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "SSL_CERT_FILE=$env:SSL_CERT_FILE"
+
       - name: Verify Python CA bundles
         run: python tools/security/check_python_ca.py
 

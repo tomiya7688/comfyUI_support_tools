@@ -36,6 +36,10 @@ if errorlevel 1 goto build_failed
 %PYTHON_CMD% -m pip install --disable-pip-version-check "certifi>=2026.10.19"
 if errorlevel 1 goto build_failed
 
+for /f "delims=" %%i in ('%PYTHON_CMD% -c "import certifi; print(certifi.where())"') do set "SSL_CERT_FILE=%%i"
+if not defined SSL_CERT_FILE goto build_failed
+if not exist "%SSL_CERT_FILE%" goto build_failed
+
 %PYTHON_CMD% -m pip install --disable-pip-version-check -r requirements-kadoka-tools.txt
 if errorlevel 1 goto build_failed
 

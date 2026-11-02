@@ -1,13 +1,20 @@
 """Inspector fields, Media Actions and explicit analysis export."""
-from dataclasses import asdict, replace
 import tkinter as tk
-from tkinter import ttk, messagebox
+from dataclasses import asdict, replace
+from tkinter import messagebox, ttk
 
+from comfyui_support_tools.applications.main_gui.ui.commander.inspector_commander import (
+    InspectorUiCommander,
+)
+from comfyui_support_tools.applications.main_gui.ui.processing.export_dialog import ExportDialog
+from comfyui_support_tools.applications.main_gui.ui.processing.semantic_erase_dialog import (
+    SemanticEraseDialog,
+)
+from comfyui_support_tools.applications.main_gui.ui.processing.tagger_settings_dialog import (
+    TaggerSettingsDialog,
+)
 from comfyui_support_tools.shared.contracts.inspector_contracts import MediaNotes
 from comfyui_support_tools.shared.contracts.tagger_backend import backend_label
-from comfyui_support_tools.applications.main_gui.ui.commander.inspector_commander import InspectorUiCommander
-from comfyui_support_tools.applications.main_gui.ui.processing.export_dialog import ExportDialog
-from comfyui_support_tools.applications.main_gui.ui.processing.tagger_settings_dialog import TaggerSettingsDialog
 
 NOTE_FIELDS = (
     ("content_tags", "内容Tags", "Tags"),
@@ -34,6 +41,7 @@ class InspectorPanel(ttk.Frame):
         self._last_notes = None
         self._settings_window = None
         self._export_window = None
+        self._semantic_erase_window = None
         self._pending_edits = False
         self._editing_fields = False
         self.status_text = tk.StringVar(self)
@@ -79,6 +87,10 @@ class InspectorPanel(ttk.Frame):
         self.save_button.pack(fill="x", pady=4)
         self.export_button = ttk.Button(self, text="結果をTXT / metadataへExport", command=self.open_export)
         self.export_button.pack(fill="x", pady=4)
+        self.semantic_erase_button = ttk.Button(
+            self, text="Semantic Erase Retouch…", command=self.open_semantic_erase
+        )
+        self.semantic_erase_button.pack(fill="x", pady=4)
         ttk.Label(
             self,
             text="Exportは明示操作のみ。元画像は変更せず、既存sidecarは既定で上書きしません。",
@@ -216,6 +228,27 @@ class InspectorPanel(ttk.Frame):
             self._export_window.lift()
             return
         self._export_window = ExportDialog(self, self.export_results, self.log)
+
+    # {
+    # 責務: [open_semantic_erase: 選択画像をnon-destructive manual-mask retouch dialogへ渡す]
+    # 処理: [1: pending note editとselectionを検証する, 2: existing dialogを再利用する, 3: dialogを開く]
+    # 引数: [self: Inspector panel]
+    # 戻り値: []
+    # }
+    def open_semantic_erase(self):
+        if self._pending_edits:
+            self.log("未反映メモを先にセッションへ反映してください。")
+            return
+        if len(self.selection) != 1 or self.selection[0].kind != "image":
+            self.log("Semantic Eraseは画像を1件だけ選択してください。")
+            return
+        if self._semantic_erase_window and self._semantic_erase_window.winfo_exists():
+            self._semantic_erase_window.lift()
+            return
+        try:
+            self._semantic_erase_window = SemanticEraseDialog(self, self.selection[0].path)
+        except (OSError, ValueError) as exc:
+            self.log(f"Semantic Erase dialogを開けません: {exc}")
 
     def export_results(self, settings):
         snapshot = self.selection

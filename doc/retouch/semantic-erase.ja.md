@@ -1,0 +1,11 @@
+# Semantic Erase Retouch
+
+Inspectorから画像を1件選ぶとSemantic Erase dialogを開けます。sourceはread-onlyで扱い、maskをブラシで追加・消去し、候補を作ってpreservation / boundary / residual scoreを確認してから、PNG別copyとして保存します。候補とversion付き操作履歴は`.semantic-erase-history`へ保存されます。Undo/Redoはactive history pointerを移動し、sourceや候補fileを削除しません。
+
+共有serviceはtext query、正規化range、manual mask、selected-match policy、fill policy、quality budget、batch requestを受け取ります。複数region providerの候補を統合・deduplicateし、`remove_all`は全maskのunion、`selected`と`all_except_selected`はmatch IDを厳密指定、`inside_range`はrangeを必須とします。候補数budget内でmask dilationを試し、同じregion providerでinpaint後にtargetを再検出します。残存候補があればmaskを局所拡張してretryします。candidate rankingはtarget残存、mask外pixel保持、局所境界gradientを含みます。
+
+Region detectorとinpaint modelは拡張pointです。ホストはGroundingDINO等のtext grounding detectorとSAM 2等のsegmenterを`TextGroundingDetector` / `MaskSegmenter`へ接続し、`GroundedSegmentationProvider`として登録できます。VLM、tagger、face/body parserによるattribute/state候補は`AttributeStateFallbackProvider`へ接続します。LaMa/MAT、BrushNet、PowerPaint、diffusion inpaint、Qwen/FLUX等は`CallableInpaintBackend`でwrapしてstable IDとともに登録できます。OpenCV Teleaはlocal fallbackとして残ります。
+
+repositoryにはGroundingDINO、SAM 2、LaMa/MAT、BrushNet、PowerPaint、diffusion model本体やweightを同梱・自動downloadしていません。現行desktop UIはmanual maskとOpenCV Teleaを提供します。textによるsemantic detectionおよびskin/clothに合わせたsemantic restorationは、ホストがmodel adapterを登録した場合だけ利用できます。detector無しのtext-only requestはfail closedになります。結果の再検出器が無ければ候補はreview状態に残り、自動acceptされません。CPU fallbackは局所texture補間のみのため、skin、cloth、custom prompt指定にはsemantic restorationではないことをwarningします。
+
+自動batch cleanupへ使う前に、実ユーザー画像でmodel integrationを検証してください。preservation / boundary scoreは技術的heuristicで、本人性認識や視覚品質の保証ではありません。出力はすべて別copyで、入力画像を上書きしません。

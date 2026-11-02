@@ -165,6 +165,12 @@ def adapt_template(
         shift = 0.0
     source_ratio = template.aspect_ratio
 
+    # {
+    #   責務: [regions: 領域群にアスペクト比変換を適用する]
+    #   処理: [1: 各領域を変換, 2: 範囲外領域を除外]
+    #   引数: [values: CompositionRegion群, horizontal_shift: 水平移動量]
+    #   戻り値: [tuple[CompositionRegion, ...]: 変換後領域]
+    # }
     def regions(
         values: tuple[CompositionRegion, ...], horizontal_shift: float = 0.0
     ) -> tuple[CompositionRegion, ...]:

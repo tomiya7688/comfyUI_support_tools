@@ -6,7 +6,6 @@ import hashlib
 import math
 from collections import deque
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
@@ -23,7 +22,6 @@ from comfyui_support_tools.shared.contracts.composition_template import (
     PoseAnalysisAdapter,
     RegionRole,
     SubjectAnalysisAdapter,
-    VanishingPoint,
     VisualWeightMap,
 )
 

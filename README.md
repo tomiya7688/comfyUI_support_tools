@@ -52,6 +52,8 @@ CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generatorとBlender `mmd_tools` PMX
 
 `python -m comfyui_support_tools.applications.pixel_art` で独立したPixel Art Creator画面を起動し、Text / Image / Retouchを選べます。`comfyui_support_tools.shared.pixel_art.PixelArtApplication` は3入口で共通設定と処理を使います。8/16/32/64/96/128/192/256 pxとcustom WxH、palette import/extract/export、透明RGBA、crop/pad、palette制限、dither、nearest-neighbor preview、native-sizeのpixel指標、PNG/JSON出力、undo/redo可能なproject履歴、sprite-sheet分割/結合を提供します。text生成は差し替え可能な `PixelTextBackend` が必要で、この起動コマンドにはComfyUIの生成backendをまだ接続していません。
 
+Retouchでは1px pencil/eraser/fillに加えて、palette色の一括置換、減色、半透明edgeの二値化、isolated pixel・palette・輪郭の保守的なcleanup候補を選べます。候補を適用する前にnearest-neighbor preview、変更pixel数、変更領域、palette前後を確認でき、採用操作はundo/redo履歴に保存されます。semantic confidenceは未算出として報告し、cleanupは自動適用しません。
+
 pixel指標は色数・孤立pixel・色補間らしいpixel・輪郭候補等の決定的なheuristicです。semantic readability、カテゴリ適合、outline品質を機械判定したとは扱わず、小サイズはnative previewで確認してください。画像変換は構図を保つcrop/fitと決定的なpalette処理を行いますが、subject segmentationや生成モデルによるsemantic reconstructionは外部backendの拡張点です。現時点ではこのshared application coreであり、統一GUIへの画面接続は含みません。
 
 ---
@@ -119,5 +121,7 @@ CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generation and a Blender `mmd_tools
 ### Pixel Art Creator
 
 Launch the standalone Pixel Art Creator window with `python -m comfyui_support_tools.applications.pixel_art` and select Text / Image / Retouch. `comfyui_support_tools.shared.pixel_art.PixelArtApplication` shares processing across these three entry workflows. It provides 8/16/32/64/96/128/192/256 px presets and custom WxH, palette import/extraction/export, transparent RGBA, crop/pad, palette limits, dithering, nearest-neighbor previews, deterministic native-size metrics, PNG/JSON export, undo/redo project history, and basic sprite-sheet split/pack. Text generation requires an injectable `PixelTextBackend`; the launch command does not yet connect a ComfyUI generation backend.
+
+Retouch supports 1px pencil/eraser/fill, exact palette replacement, bounded palette reduction, partial-alpha edge cleanup, and reviewable conservative isolated-pixel/palette/outline cleanup candidates. Before applying a candidate, users can inspect its nearest-neighbor preview, changed-pixel count, changed regions, and before/after palette size. Accepted edits enter undo/redo history; semantic confidence is reported as unavailable and cleanup is never auto-applied.
 
 Pixel metrics are deterministic heuristics for color count, isolated pixels, likely interpolated colors, and outline candidates. They do not claim semantic readability, category suitability, or objectively judge outline quality; inspect the native-size preview, especially at small sizes. Image conversion applies composition-aware crop/fit and deterministic palette processing, while subject segmentation and model-assisted semantic reconstruction remain backend extension points. This change supplies the shared application core; it does not connect a GUI screen.

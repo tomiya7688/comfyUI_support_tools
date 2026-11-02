@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from PIL import Image, ImageTk
 
@@ -119,8 +119,23 @@ class PixelArtWindow(tk.Tk):
             ttk.Button(
                 tools, text=label, command=lambda selected=action: self.set_editor_tool(selected)
             ).pack(side="left", padx=2)
+        for label, action in (("Line", "line"), ("Rectangle", "rectangle")):
+            ttk.Button(
+                tools, text=label, command=lambda selected=action: self.set_editor_tool(selected)
+            ).pack(side="left", padx=2)
+        ttk.Button(tools, text="Mirror", command=self.mirror_grid).pack(side="left", padx=2)
+        ttk.Button(tools, text="Replace color…", command=self.replace_color).pack(
+            side="left", padx=2
+        )
         ttk.Button(tools, text="Undo", command=self.undo).pack(side="left", padx=(12, 2))
         ttk.Button(tools, text="Redo", command=self.redo).pack(side="left", padx=2)
+        ttk.Button(tools, text="Review cleanup…", command=self.review_cleanup).pack(
+            side="left", padx=2
+        )
+        ttk.Button(tools, text="Reduce palette", command=self.reduce_palette).pack(
+            side="left", padx=2
+        )
+        ttk.Button(tools, text="Clean alpha", command=self.clean_alpha).pack(side="left", padx=2)
         ttk.Checkbutton(tools, text="Grid", variable=self.show_grid, command=self._render).pack(
             side="left", padx=6
         )
@@ -142,6 +157,7 @@ class PixelArtWindow(tk.Tk):
         preview_frame.columnconfigure(0, weight=1)
         self.canvas.bind("<Button-1>", self.edit_pixel)
         self.canvas.bind("<B1-Motion>", self.edit_pixel)
+        self.canvas.bind("<ButtonRelease-1>", self.finish_shape)
         self.zoom.trace_add("write", lambda *_args: self._render())
         ttk.Label(self, textvariable=self.status, padding=8).pack(fill="x")
         self.editor_tool = "pencil"
@@ -291,6 +307,7 @@ class PixelArtWindow(tk.Tk):
     # }
     def set_editor_tool(self, tool: str) -> None:
         self.editor_tool = tool
+        self._drag_start = None
 
     # {
     # 責務: [edit_pixel: map canvas mouse position to one native pixel cell]
@@ -308,12 +325,201 @@ class PixelArtWindow(tk.Tk):
         )
         try:
             color = _hex_rgba(self.color.get())
+            if self.editor_tool in {"line", "rectangle"}:
+                if getattr(self, "_drag_start", None) is None:
+                    self._drag_start = (int(x), int(y))
+                return
             edit = PixelEdit(self.editor_tool, int(x), int(y), color)
             grid = self.project.apply((edit,))
             self.result = self.application.retouch(grid, ())
             self._render()
         except ValueError as error:
             self.status.set(str(error))
+
+    # {
+    # 責務: [finish_shape: commit a line or filled rectangle on mouse release]
+    # 処理: [convert drag endpoints into one undoable native-grid operation]
+    # 引数: [event: Tk canvas release event]
+    # 戻り値: [None: updates active retouch state]
+    # }
+    def finish_shape(self, event) -> None:
+        start = getattr(self, "_drag_start", None)
+        if start is None or self.project is None or self.editor_tool not in {"line", "rectangle"}:
+            return
+        self._drag_start = None
+        scale = int(self.zoom.get().removesuffix("x"))
+        end = (
+            int((self.canvas.canvasx(event.x) - 12) // scale),
+            int((self.canvas.canvasy(event.y) - 12) // scale),
+        )
+        try:
+            self.project.apply(
+                (
+                    PixelEdit(
+                        self.editor_tool,
+                        *start,
+                        _hex_rgba(self.color.get()),
+                        end_x=end[0],
+                        end_y=end[1],
+                    ),
+                )
+            )
+            self.result = self.application.retouch(self.project.grid, ())
+            self._render()
+        except ValueError as error:
+            self.status.set(str(error))
+
+    # {
+    # 責務: [mirror_grid: mirror the active sprite horizontally]
+    # 処理: [append deterministic mirror edit to undoable project history]
+    # 引数: [None: uses active retouch project]
+    # 戻り値: [None: refreshes preview or prompts for an image]
+    # }
+    def mirror_grid(self) -> None:
+        if self.project is None:
+            return
+        self.project.apply((PixelEdit("mirror_horizontal"),))
+        self.result = self.application.retouch(self.project.grid, ())
+        self._render()
+
+    # {
+    # 責務: [replace_color: replace a selected palette entry with the brush color]
+    # 処理: [ask for source color and commit exact RGBA palette substitution]
+    # 引数: [None: reads active project and current brush color]
+    # 戻り値: [None: updates preview or leaves project unchanged]
+    # }
+    def replace_color(self) -> None:
+        if self.project is None:
+            return
+        source = simpledialog.askstring(
+            "Replace palette color", "Source color (#RRGGBB):", parent=self
+        )
+        if source is None:
+            return
+        try:
+            old = _hex_rgba(source)
+            new = _hex_rgba(self.color.get())
+            result = self.application.replace_palette_color(self.project.grid, old, new)
+            self.project.apply_grid(result.grid)
+            self.result = self.application.retouch(self.project.grid, ())
+            self._render()
+        except ValueError as error:
+            messagebox.showerror("Palette replacement", str(error), parent=self)
+
+    # {
+    # 責務: [reduce_palette: apply the selected maximum palette size to the active grid]
+    # 処理: [quantize a candidate and commit it as one undoable operation]
+    # 引数: [None: reads the selected color count]
+    # 戻り値: [None: updates the active preview or reports invalid settings]
+    # }
+    def reduce_palette(self) -> None:
+        if self.project is None:
+            return
+        try:
+            result = self.application.reduce_palette(self.project.grid, int(self.colors.get()))
+            self.project.apply_grid(result.grid)
+            self.result = self.application.retouch(self.project.grid, ())
+            self._render()
+        except (ValueError, RuntimeError) as error:
+            messagebox.showerror("Palette reduction", str(error), parent=self)
+
+    # {
+    # 責務: [clean_alpha: remove partial alpha at sprite edges]
+    # 処理: [use a transparent/opaque threshold and save the change in undo history]
+    # 引数: [None: uses active retouch grid]
+    # 戻り値: [None: refreshes the edited preview]
+    # }
+    def clean_alpha(self) -> None:
+        if self.project is None:
+            return
+        result = self.application.cleanup_transparent_edges(self.project.grid)
+        self.project.apply_grid(result.grid)
+        self.result = self.application.retouch(self.project.grid, ())
+        self._render()
+
+    # {
+    # 責務: [review_cleanup: compare conservative cleanup candidates before applying]
+    # 処理: [show pixel diffs and let the user accept one candidate into undo history]
+    # 引数: [None: uses the active retouch project]
+    # 戻り値: [None: opens review dialog or reports missing source]
+    # }
+    def review_cleanup(self) -> None:
+        if self.workflow.get() != "Retouch" or self.project is None:
+            messagebox.showinfo(
+                "Pixel cleanup", "Open an image and select Retouch first.", parent=self
+            )
+            return
+        candidates = self.application.cleanup_candidates(self.project.grid)
+        dialog = tk.Toplevel(self)
+        dialog.title("Review cleanup candidates")
+        dialog.transient(self)
+        dialog.geometry("520x520")
+        selection = tk.IntVar(dialog, value=0)
+        details = tk.StringVar(dialog)
+        ttk.Label(dialog, text="Choose a candidate; no changes are applied until accepted.").pack(
+            anchor="w", padx=12, pady=(12, 4)
+        )
+        preview_canvas = tk.Canvas(dialog, background="#ececec", height=340)
+        preview_canvas.pack(fill="both", expand=True, padx=12, pady=6)
+        preview_state = {"photo": None}
+
+        # {
+        # 責務: [show_candidate: render a selected cleanup preview and pixel diff]
+        # 処理: [update nearest-neighbor image and palette/change counts]
+        # 引数: [_args: optional Tk variable trace callback values]
+        # 戻り値: [None: refreshes candidate dialog widgets]
+        # }
+        def show_candidate(*_args):
+            index = selection.get()
+            mode, result = candidates[index]
+            scale = next(
+                (
+                    value
+                    for value in (8, 4, 1)
+                    if max(result.grid.width, result.grid.height) * value <= 480
+                ),
+                1,
+            )
+            preview_state["photo"] = ImageTk.PhotoImage(nearest_preview(result.grid, scale))
+            preview_canvas.delete("all")
+            preview_canvas.create_image(8, 8, image=preview_state["photo"], anchor="nw")
+            details.set(
+                f"{mode}: {result.metadata['changed_pixels']} changed pixels; "
+                f"palette {result.metadata['palette_before']} → {result.metadata['palette_after']}; "
+                f"regions {len(result.metadata['changed_regions'])}"
+            )
+
+        for index, (mode, _result) in enumerate(candidates):
+            ttk.Radiobutton(
+                dialog,
+                text=mode.title(),
+                value=index,
+                variable=selection,
+                command=show_candidate,
+            ).pack(anchor="w", padx=12)
+        ttk.Label(dialog, textvariable=details).pack(anchor="w", padx=12, pady=4)
+        buttons = ttk.Frame(dialog)
+        buttons.pack(fill="x", padx=12, pady=10)
+
+        # {
+        # 責務: [accept_candidate: apply the chosen cleanup as one undoable edit]
+        # 処理: [append candidate state to project history and refresh main preview]
+        # 引数: [None: reads selected candidate]
+        # 戻り値: [None: closes dialog on success or presents validation error]
+        # }
+        def accept_candidate():
+            _mode, result = candidates[selection.get()]
+            try:
+                self.project.apply_grid(result.grid)
+                self.result = self.application.retouch(self.project.grid, ())
+                self._render()
+                dialog.destroy()
+            except ValueError as error:
+                messagebox.showerror("Pixel cleanup", str(error), parent=dialog)
+
+        ttk.Button(buttons, text="Apply selected", command=accept_candidate).pack(side="right")
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=6)
+        show_candidate()
 
     # {
     # 責務: [undo: restore previous pixel edit snapshot]

@@ -128,12 +128,18 @@ class PixelArtCreatorTests(unittest.TestCase):
         self.assertEqual(from_grid(edited).getpixel((0, 0)), (255, 10, 10, 255))
         self.assertEqual(project.undo().pixels, source.grid.pixels)
         self.assertEqual(project.redo().pixels, edited.pixels)
+        replacement = PixelArtApplication().retouch(edited, (PixelEdit("eraser", 0, 0),)).grid
+        project.apply_grid(replacement)
+        self.assertEqual(project.grid.pixels[0], (0, 0, 0, 0))
+        self.assertEqual(project.undo().pixels, edited.pixels)
+        with self.assertRaises(ValueError):
+            project.apply_grid(to_grid(Image.new("RGBA", (2, 2))))
         with tempfile.TemporaryDirectory() as temporary:
             saved = project.save(Path(temporary) / "potion-project")
             loaded = type(project).load(saved)
             self.assertEqual(loaded.grid.pixels, edited.pixels)
             self.assertTrue(loaded.can_undo)
-            self.assertEqual(json.loads((saved / "project.json").read_text())["snapshots"], 2)
+            self.assertEqual(json.loads((saved / "project.json").read_text())["snapshots"], 3)
 
     # {
     # 責務: [test_palette_replace_cleanup_and_native_zoom_keep_exact_grid: validate retouch tools]
@@ -160,6 +166,31 @@ class PixelArtCreatorTests(unittest.TestCase):
         self.assertEqual(
             tuple(mode for mode, _ in candidates), ("conservative", "standard", "aggressive")
         )
+        self.assertEqual(candidates[0][1].metadata["changed_pixels"], 1)
+        self.assertEqual(candidates[0][1].metadata["changed_regions"], ((2, 2, 3, 3),))
+        self.assertIsNone(candidates[0][1].metadata["semantic_confidence"])
+
+    # {
+    # 責務: [test_palette_and_alpha_cleanup_are_explicit_and_bounded: cover focused pixel retouch APIs]
+    # 処理: [replace palette colors and remove partial alpha without changing grid dimensions]
+    # 引数: [None: unittest scenario]
+    # 戻り値: [None: assertions pass or raise]
+    # }
+    def test_palette_and_alpha_cleanup_are_explicit_and_bounded(self):
+        image = Image.new("RGBA", (3, 1), (200, 20, 10, 255))
+        image.putpixel((1, 0), (10, 20, 30, 64))
+        image.putpixel((2, 0), (10, 20, 30, 192))
+        grid = to_grid(image)
+        app = PixelArtApplication()
+        replaced = app.replace_palette_color(grid, (200, 20, 10, 255), (0, 0, 0, 255))
+        self.assertEqual(replaced.grid.pixels[0], (0, 0, 0, 255))
+        cleaned = app.cleanup_transparent_edges(grid, threshold=128)
+        self.assertEqual(cleaned.grid.pixels[1], (10, 20, 30, 0))
+        self.assertEqual(cleaned.grid.pixels[2], (10, 20, 30, 255))
+        reduced = app.reduce_palette(grid, 1)
+        self.assertEqual((reduced.grid.width, reduced.grid.height), (3, 1))
+        with self.assertRaises(ValueError):
+            app.cleanup_transparent_edges(grid, threshold=0)
 
     # {
     # 責務: [test_export_is_no_clobber_and_sprite_sheet_cells_roundtrip: exercise export and atlas]

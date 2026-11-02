@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cv2
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 from comfyui_support_tools.shared.capture_assistant import (
@@ -15,6 +17,7 @@ from comfyui_support_tools.shared.capture_assistant import (
     CaptureFrame,
     CaptureSet,
     CaptureSetImporter,
+    register_and_fuse_burst,
 )
 from comfyui_support_tools.shared.weak_signal import (
     EvidenceKind,
@@ -29,6 +32,22 @@ from comfyui_support_tools.shared.weak_signal import (
 #   処理: [exercise each optional capture capability without hardware or network]
 # }
 class CaptureAssistantTests(unittest.TestCase):
+    # {
+    #   責務: [_textured_burst:既知の平行移動を持つ合成frame列を生成する]
+    #   処理: [repeatable texture and one translated observation for registration checks]
+    #   引数: [self: test case]
+    #   戻り値: [tuple[Image.Image, ...]: small registered burst]
+    # }
+    @staticmethod
+    def _textured_burst() -> tuple[Image.Image, ...]:
+        generator = np.random.default_rng(82)
+        reference = generator.integers(20, 235, size=(128, 128, 3), dtype=np.uint8)
+        frames = [reference]
+        for dx, dy in ((3, -2), (-2, 2)):
+            matrix = np.float32([[1, 0, dx], [0, 1, dy]])
+            frames.append(cv2.warpAffine(reference, matrix, (128, 128)))
+        return tuple(Image.fromarray(frame, "RGB") for frame in frames)
+
     # {
     #   責務: [png: RGB image fixtureをPNG bytesへ変換する]
     #   処理: [create deterministic local test payload]
@@ -71,6 +90,123 @@ class CaptureAssistantTests(unittest.TestCase):
         self.assertTrue(capture_set.aligned_frames_assumed)
         self.assertEqual({frame.iso for frame in capture_set.frames}, {100})
         self.assertTrue(all(len(frame.sha256) == 64 for frame in capture_set.frames))
+
+    # {
+    #   責務: [test_burst_registration_fuses_aligned_evidence_and_keeps_fallback: registration acceptanceを検証する]
+    #   処理: [align translated frames, assert confidence/count maps and separate candidate provenance]
+    #   引数: [self: unittest case]
+    #   戻り値: []
+    # }
+    def test_burst_registration_fuses_aligned_evidence_and_keeps_fallback(self) -> None:
+        frames = self._textured_burst()
+        result = register_and_fuse_burst(frames, ("f0", "f1", "f2"), (0.9, 0.8, 0.7))
+        self.assertIsNotNone(result.fused_png)
+        self.assertEqual(len(result.frame_evidence), 3)
+        self.assertGreaterEqual(sum(item.accepted for item in result.frame_evidence), 2)
+        self.assertEqual(
+            [item[0] for item in result.candidate_images()],
+            ["best_single_frame", "multi_frame_fusion"],
+        )
+        with Image.open(io.BytesIO(result.confidence_map_png)) as confidence:
+            self.assertGreater(float(np.asarray(confidence).mean()), 0)
+        fused = np.asarray(Image.open(io.BytesIO(result.fused_png)), dtype=np.float32)
+        reference = np.asarray(frames[0], dtype=np.float32)
+        unaligned_mean = np.mean([np.asarray(frame, dtype=np.float32) for frame in frames], axis=0)
+        region = np.s_[12:-12, 12:-12]
+        fused_error = np.abs(fused[region] - reference[region]).mean()
+        naive_error = np.abs(unaligned_mean[region] - reference[region]).mean()
+        self.assertLess(fused_error, naive_error)
+
+    # {
+    #   責務: [test_capture_assistant_routes_fused_observation_with_provenance: application integrationを検証する]
+    #   処理: [ensure registered burst wins over the former single-frame fallback and is labeled inferred]
+    #   引数: [self: unittest case]
+    #   戻り値: []
+    # }
+    def test_capture_assistant_routes_fused_observation_with_provenance(self) -> None:
+        frames = tuple(
+            CaptureFrame(
+                f"frame-{index}.png",
+                self.png(image),
+                "image",
+                "png",
+                f"digest-{index}",
+            )
+            for index, image in enumerate(self._textured_burst())
+        )
+        app = CaptureAssistantApplication()
+        result = app.process(CaptureSet("burst-integrated", frames), WeakSignalRequest())
+        self.assertEqual(result.route, "multi_frame_fusion")
+        self.assertIsNotNone(result.multi_frame_fusion.fused_png)
+        provenance = result.processing_result.candidates[0].provenance[0]
+        self.assertEqual(provenance.kind, EvidenceKind.INFERRED)
+        self.assertEqual(provenance.generator, result.multi_frame_fusion.generator)
+        manifest = json.loads(app.manifest(result))
+        self.assertTrue(manifest["multi_frame_fusion"]["fused"])
+        self.assertEqual(len(manifest["multi_frame_fusion"]["frames"]), 3)
+        selected_result = app.process(
+            CaptureSet("range-selected", frames), WeakSignalRequest(), (1, 3)
+        )
+        self.assertEqual(
+            selected_result.multi_frame_fusion.source_paths, ("frame-1.png", "frame-2.png")
+        )
+        with self.assertRaisesRegex(ValueError, "frame_range"):
+            app.process(CaptureSet("bad-range", frames), WeakSignalRequest(), (2, 5))
+
+    # {
+    #   責務: [test_local_video_range_imports_and_fuses_extracted_frames: video input pathを検証する]
+    #   処理: [write a tiny local clip, import a selected range, and pass it through registered fusion]
+    #   引数: [self: unittest case]
+    #   戻り値: []
+    # }
+    def test_local_video_range_imports_and_fuses_extracted_frames(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "burst.avi"
+            writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10, (128, 128))
+            if not writer.isOpened():
+                self.skipTest("OpenCV MJPG video writer is unavailable")
+            try:
+                for image in self._textured_burst():
+                    writer.write(cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR))
+            finally:
+                writer.release()
+            capture_set = CaptureSetImporter().load_video(path, 0, 3)
+            self.assertEqual(len(capture_set.frames), 3)
+            self.assertTrue(capture_set.source.startswith("video:burst.avi:"))
+            self.assertTrue(capture_set.frames[1].capture_time.startswith("PT"))
+            result = CaptureAssistantApplication().process(capture_set, WeakSignalRequest())
+            self.assertEqual(result.route, "multi_frame_fusion")
+
+    # {
+    #   責務: [test_low_texture_frames_fall_back_without_inventing_fusion: conservative fallbackを検証する]
+    #   処理: [reject unobservable blank frames and preserve highest-quality original]
+    #   引数: [self: unittest case]
+    #   戻り値: []
+    # }
+    def test_low_texture_frames_fall_back_without_inventing_fusion(self) -> None:
+        frames = (Image.new("RGB", (64, 64), "gray"),) * 3
+        result = register_and_fuse_burst(frames, ("a", "b", "c"), (0.4, 0.9, 0.6))
+        self.assertIsNone(result.fused_png)
+        self.assertEqual(result.warnings, ("insufficient_confident_alignment",))
+        with Image.open(io.BytesIO(result.best_frame_png)) as best:
+            self.assertEqual(best.getpixel((0, 0)), (128, 128, 128))
+
+    # {
+    #   責務: [test_moving_occlusion_is_reported_as_ghosting_risk: motion artifact evidenceを検証する]
+    #   処理: [add a moving colored patch and verify pre-flow disagreement remains visible]
+    #   引数: [self: unittest case]
+    #   戻り値: []
+    # }
+    def test_moving_occlusion_is_reported_as_ghosting_risk(self) -> None:
+        frames = list(self._textured_burst())
+        occluded = frames[0].copy()
+        ImageDraw.Draw(occluded).rectangle((35, 35, 85, 85), fill="red")
+        frames.append(occluded)
+        result = register_and_fuse_burst(
+            tuple(frames), ("f0", "f1", "f2", "occluded"), (0.9, 0.8, 0.7, 0.6)
+        )
+        occlusion_evidence = result.frame_evidence[-1]
+        self.assertIn("ghosting_risk", occlusion_evidence.warnings)
 
     # {
     #   責務: [test_manifest_rejects_path_traversal: manifest path escapeを防ぐ]

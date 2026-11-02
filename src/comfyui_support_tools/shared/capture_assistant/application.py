@@ -21,6 +21,7 @@ from comfyui_support_tools.shared.weak_signal import (
 from .contracts import CaptureQuality, CaptureSet
 from .decode import RawFrameDecoder, decode_frame
 from .quality import score_capture_set
+from .registration import BurstFusionResult, register_and_fuse_burst
 
 
 # {
@@ -87,12 +88,13 @@ class CaptureAssistantResult:
     route: str
     interframe_difference_proxy: float | None = None
     guidance: tuple[str, ...] = ()
+    multi_frame_fusion: BurstFusionResult | None = None
 
 
 # {
 #   責務: [CaptureAssistantApplication: local capture import dataをassessしcompatible backendへrouteする]
 #   フィールド: [weak-signal fallback, optional RAW decoder, specialized backends]
-#   処理: [score frames, fuse exposure brackets, prefer matching polarization backend, and retain single-image fallback]
+#   処理: [score frames, register/fuse selected burst or bracket, prefer compatible polarization backend, and retain single-image fallback]
 # }
 class CaptureAssistantApplication:
     # {
@@ -114,16 +116,31 @@ class CaptureAssistantApplication:
     # {
     #   責務: [process: CaptureSet qualityとdownstream candidate resultを作る]
     #   処理: [evaluate every frame, create bracket fusion when possible, use polarization adapter or generic fallback]
-    #   引数: [capture_set: imported local observations, request: requested weak-signal task]
+    #   引数: [capture_set: imported local observations, request: requested weak-signal task, frame_range: optional half-open selected frame range]
     #   戻り値: [CaptureAssistantResult: quality, fusion, candidate and backend route]
     #   エラー: [RuntimeError or ValueError: required RAW decoder, unsafe image, or invalid alignment]
     # }
     def process(
-        self, capture_set: CaptureSet, request: WeakSignalRequest
+        self,
+        capture_set: CaptureSet,
+        request: WeakSignalRequest,
+        frame_range: tuple[int, int] | None = None,
     ) -> CaptureAssistantResult:
+        capture_set = _select_capture_range(capture_set, frame_range)
         decoded = tuple(decode_frame(frame, self._raw_decoder) for frame in capture_set.frames)
         quality = score_capture_set(capture_set.frames, decoded)
         fusion = _fuse_exposure_bracket(capture_set, decoded)
+        spatial_fusion = None
+        if (
+            fusion is None
+            and 2 <= len(decoded) <= 12
+            and decoded[0].width * decoded[0].height <= 4_000_000
+        ):
+            spatial_fusion = register_and_fuse_burst(
+                tuple(decoded),
+                tuple(frame.relative_path for frame in capture_set.frames),
+                tuple(item.score for item in quality),
+            )
         interframe_difference = _interframe_difference(decoded)
         guidance = (
             ("low_interframe_difference_check_capture_diversity",)
@@ -148,11 +165,13 @@ class CaptureAssistantApplication:
                 polarization_backend.name,
                 interframe_difference,
                 guidance,
+                spatial_fusion,
             )
-        observation = _build_observation(capture_set, decoded, fusion)
+        observation = _build_observation(capture_set, decoded, fusion, spatial_fusion)
         effective_request = request
         if (
             fusion is None
+            and (spatial_fusion is None or spatial_fusion.fused_png is None)
             and capture_set.is_burst
             and not capture_set.aligned_frames_assumed
             and request.mode is WeakSignalMode.AUTO
@@ -174,7 +193,9 @@ class CaptureAssistantApplication:
             )
         result = self._weak_signal.process(observation, effective_request)
         fallback = (
-            "weak_signal_burst"
+            "multi_frame_fusion"
+            if spatial_fusion is not None and spatial_fusion.fused_png is not None
+            else "weak_signal_burst"
             if capture_set.is_burst
             else "weak_signal_multiframe"
             if len(capture_set.frames) > 1
@@ -185,7 +206,14 @@ class CaptureAssistantApplication:
         if capture_set.has_polarization:
             fallback += ":polarization_backend_unavailable"
         return CaptureAssistantResult(
-            capture_set, quality, fusion, result, fallback, interframe_difference, guidance
+            capture_set,
+            quality,
+            fusion,
+            result,
+            fallback,
+            interframe_difference,
+            guidance,
+            spatial_fusion,
         )
 
     # {
@@ -233,19 +261,103 @@ class CaptureAssistantApplication:
                 if result.exposure_fusion
                 else None
             ),
+            "multi_frame_fusion": (
+                {
+                    "generator": result.multi_frame_fusion.generator,
+                    "source_paths": result.multi_frame_fusion.source_paths,
+                    "fused": result.multi_frame_fusion.fused_png is not None,
+                    "warnings": result.multi_frame_fusion.warnings,
+                    "maps": [
+                        "confidence",
+                        "observation_count",
+                        "edge_support",
+                        "texture_support",
+                    ],
+                    "candidates": [
+                        {"name": name, "provenance": provenance}
+                        for name, _payload, provenance in result.multi_frame_fusion.candidate_images()
+                    ],
+                    "frames": [
+                        {
+                            "source": item.source,
+                            "quality": item.quality,
+                            "registration_method": item.registration_method,
+                            "registration_confidence": item.registration_confidence,
+                            "inlier_ratio": item.inlier_ratio,
+                            "visible_fraction": item.visible_fraction,
+                            "photometric_residual": item.photometric_residual,
+                            "ghosting_fraction": item.ghosting_fraction,
+                            "accepted": item.accepted,
+                            "warnings": item.warnings,
+                        }
+                        for item in result.multi_frame_fusion.frame_evidence
+                    ],
+                }
+                if result.multi_frame_fusion
+                else None
+            ),
         }
         return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
 
 
 # {
+#   責務: [_select_capture_range: requested half-open rangeでcapture metadataをfilterする]
+#   処理: [validate indices and preserve capture identity only for selected evidence]
+#   引数: [capture_set: imported frames, frame_range: optional start/end indices]
+#   戻り値: [CaptureSet: selected observations]
+#   エラー: [ValueError: malformed or out-of-range frame range]
+# }
+def _select_capture_range(
+    capture_set: CaptureSet, frame_range: tuple[int, int] | None
+) -> CaptureSet:
+    if frame_range is None:
+        return capture_set
+    if (
+        not isinstance(frame_range, tuple)
+        or len(frame_range) != 2
+        or any(isinstance(index, bool) or not isinstance(index, int) for index in frame_range)
+    ):
+        raise ValueError("frame_range must contain integer start and end indices")
+    start, end = frame_range
+    if start < 0 or end > len(capture_set.frames) or end - start < 2:
+        raise ValueError("frame_range must select at least two available frames")
+    return CaptureSet(
+        capture_set.capture_set_id,
+        capture_set.frames[start:end],
+        capture_set.created_at,
+        capture_set.source,
+        capture_set.aligned_frames_assumed,
+    )
+
+
+# {
 #   責務: [_build_observation: CaptureFrame sequenceをweak-signal contractへ変換する]
-#   処理: [prefer bracket fusion as explicitly inferred evidence while preserving the original CaptureSet separately]
-#   引数: [capture_set: original metadata, decoded: RGB observations, fusion: optional bracket combination]
+#   処理: [prefer registered fusion, then exposure fusion, otherwise retain imported originals]
+#   引数: [capture_set: original metadata, decoded: RGB observations, fusion: exposure fusion, spatial_fusion: optional registration result]
 #   戻り値: [ObservationInput: generic or specialized downstream input]
 # }
 def _build_observation(
-    capture_set: CaptureSet, decoded, fusion: ExposureFusion | None
+    capture_set: CaptureSet,
+    decoded,
+    fusion: ExposureFusion | None,
+    spatial_fusion: BurstFusionResult | None = None,
 ) -> ObservationInput:
+    if spatial_fusion is not None and spatial_fusion.fused_png is not None:
+        return ObservationInput(
+            capture_set.capture_set_id,
+            (spatial_fusion.fused_png,),
+            metadata=(
+                ("capture_set_id", capture_set.capture_set_id),
+                ("source_paths", ",".join(spatial_fusion.source_paths)),
+                ("evidence_maps", "available_on_capture_assistant_result.multi_frame_fusion"),
+            ),
+            input_evidence_kind=EvidenceKind.INFERRED,
+            input_generator=spatial_fusion.generator,
+            input_provenance_note=(
+                "Registered multi-frame evidence with per-pixel confidence and robust consensus. "
+                "Original observations remain in CaptureSet; see the result manifest for rejected frames."
+            ),
+        )
     if fusion is not None:
         return ObservationInput(
             capture_set.capture_set_id,

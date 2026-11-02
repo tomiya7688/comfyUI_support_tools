@@ -10,6 +10,12 @@ from .contracts import CaptureFrame, CaptureQuality, CaptureSet
 from .decode import RawFrameDecoder, RawpyFrameDecoder
 from .importer import CaptureSetImporter
 from .quality import score_capture_quality, score_capture_set
+from .registration import (
+    BurstFusionResult,
+    BurstSuperResolutionBackend,
+    FrameRegistrationEvidence,
+    register_and_fuse_burst,
+)
 
 __all__ = [
     "CaptureAssistantApplication",
@@ -19,9 +25,13 @@ __all__ = [
     "CaptureSet",
     "CaptureSetBackend",
     "CaptureSetImporter",
+    "BurstFusionResult",
+    "BurstSuperResolutionBackend",
     "ExposureFusion",
+    "FrameRegistrationEvidence",
     "RawFrameDecoder",
     "RawpyFrameDecoder",
+    "register_and_fuse_burst",
     "score_capture_quality",
     "score_capture_set",
 ]

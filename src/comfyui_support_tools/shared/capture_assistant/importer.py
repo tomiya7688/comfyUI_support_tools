@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 from pathlib import Path
@@ -24,6 +25,98 @@ _MAX_CAPTURE_SET_BYTES = 512 * 1024 * 1024
 #   処理: [reject traversal and external symlinks, preserve raw bytes and original hashes]
 # }
 class CaptureSetImporter:
+    # {
+    #   責務: [load_video: local short videoから選択範囲のdecoded framesをCaptureSetへ変換する]
+    #   処理: [decode selected frame indices, retain video digest and encode per-frame RGB PNG payloads]
+    #   引数: [path: local video, start_frame: inclusive index, end_frame: exclusive index, frame_step: sampling interval]
+    #   戻り値: [CaptureSet: bounded frame observations with source provenance]
+    #   エラー: [OSError or ValueError: unsupported video, invalid range, or resource cap]
+    # }
+    def load_video(
+        self,
+        path: Path,
+        start_frame: int = 0,
+        end_frame: int | None = None,
+        frame_step: int = 1,
+    ) -> CaptureSet:
+        import cv2
+
+        video_path = Path(path).resolve(strict=True)
+        if not video_path.is_file() or video_path.stat().st_size > _MAX_CAPTURE_SET_BYTES:
+            raise ValueError("video input must be a local file smaller than 512 megabytes")
+        if (
+            isinstance(start_frame, bool)
+            or not isinstance(start_frame, int)
+            or isinstance(frame_step, bool)
+            or not isinstance(frame_step, int)
+            or frame_step < 1
+        ):
+            raise ValueError("video frame range requires non-negative integer indices and step")
+        capture = cv2.VideoCapture(str(video_path))
+        if not capture.isOpened():
+            capture.release()
+            raise ValueError("could not open local video input")
+        try:
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = float(capture.get(cv2.CAP_PROP_FPS))
+            stop = frame_count if end_frame is None else end_frame
+            if (
+                frame_count < 1
+                or start_frame < 0
+                or isinstance(stop, bool)
+                or not isinstance(stop, int)
+                or stop > frame_count
+                or stop - start_frame < 2
+            ):
+                raise ValueError("video frame range must select at least two available frames")
+            selected_indices = tuple(range(start_frame, stop, frame_step))
+            if len(selected_indices) < 2:
+                raise ValueError("video frame range must select at least two available frames")
+            if stop - start_frame > 600:
+                raise ValueError("video frame range is limited to 600 frames")
+            if len(selected_indices) > 12:
+                raise ValueError(
+                    "video import is limited to 12 frames; increase frame_step or narrow the range"
+                )
+            source_digest = _file_sha256(video_path)
+            frames = []
+            selected = set(selected_indices)
+            frame_index = 0
+            while frame_index < stop:
+                success, bgr = capture.read()
+                if not success:
+                    raise ValueError(f"video ended before selected frame {frame_index}")
+                if frame_index in selected:
+                    height, width = bgr.shape[:2]
+                    if height * width > 4_000_000:
+                        raise ValueError("video frame exceeds the 4-megapixel fusion limit")
+                    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                    stream = io.BytesIO()
+                    Image.fromarray(rgb, "RGB").save(stream, format="PNG", optimize=True)
+                    payload = stream.getvalue()
+                    frames.append(
+                        CaptureFrame(
+                            relative_path=f"{video_path.name}@frame-{frame_index:06d}.png",
+                            payload=payload,
+                            media_type="image",
+                            source_format="video_frame_png",
+                            sha256=hashlib.sha256(payload).hexdigest(),
+                            capture_time=(
+                                f"PT{frame_index / fps:.6f}S"
+                                if math.isfinite(fps) and fps > 0
+                                else ""
+                            ),
+                        )
+                    )
+                frame_index += 1
+            return CaptureSet(
+                video_path.stem,
+                tuple(frames),
+                source=f"video:{video_path.name}:{source_digest}",
+            )
+        finally:
+            capture.release()
+
     # {
     #   責務: [load: capture folderからimage/raw observationsとmetadataを読み込む]
     #   処理: [read local files only, apply EXIF orientation for image validation, verify optional manifest]
@@ -162,3 +255,17 @@ def _integer(value: object) -> int | None:
     except (TypeError, ValueError):
         return None
     return result if result > 0 else None
+
+
+# {
+#   責務: [_file_sha256: local videoをbounded memoryでhashする]
+#   処理: [stream one-megabyte chunks into SHA-256]
+#   引数: [path: validated local input file]
+#   戻り値: [str: lowercase content digest]
+# }
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

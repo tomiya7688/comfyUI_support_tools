@@ -23,6 +23,7 @@
 | [1回分の開発ワークフロー](ワークフロー/ワークフロー.md) | [One-cycle development workflow](ワークフロー/workflow.md) |
 | [Pythonの証明書信頼ストア監査](security/python-trust-store.md) | [Python certificate trust-store audit](security/python-trust-store.en.md) |
 | [動画フレームの低情報フィルター](video/low-information-frame-filter.md) | [Low-information video frame filter](video/low-information-frame-filter.en.md) |
+| [LoRA Dataset Curator / Caption Planner](lora_dataset_curator.md) | [LoRA Dataset Curator / Caption Planner](lora_dataset_curator.en.md) |>>>>>>> 4c5f305 (Add LoRA dataset curation planner)
 
 ### 既存文書の移行
 
@@ -52,6 +53,7 @@ Project-owned README files and documentation are maintained in both Japanese and
 | [1回分の開発ワークフロー](ワークフロー/ワークフロー.md) | [One-cycle development workflow](ワークフロー/workflow.md) |
 | [Pythonの証明書信頼ストア監査](security/python-trust-store.md) | [Python certificate trust-store audit](security/python-trust-store.en.md) |
 | [動画フレームの低情報フィルター](video/low-information-frame-filter.md) | [Low-information video frame filter](video/low-information-frame-filter.en.md) |
+| [LoRA Dataset Curator / Caption Planner](lora_dataset_curator.md) | [LoRA Dataset Curator / Caption Planner](lora_dataset_curator.en.md) |>>>>>>> 4c5f305 (Add LoRA dataset curation planner)
 
 ### Legacy migration
 

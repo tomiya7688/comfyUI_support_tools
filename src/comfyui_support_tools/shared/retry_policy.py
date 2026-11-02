@@ -17,16 +17,17 @@ def external_api_backoff(
 ) -> float:
     if type(attempt) is not int or attempt < 1:
         raise ValueError("attempt must be a positive integer")
-    if (
-        not math.isfinite(base_seconds)
-        or not math.isfinite(maximum_seconds)
-        or base_seconds < 0
-        or maximum_seconds < 0
-        or (
-            retry_after_seconds is not None
-            and (not math.isfinite(retry_after_seconds) or retry_after_seconds < 0)
-        )
+    delays = (base_seconds, maximum_seconds) + (
+        () if retry_after_seconds is None else (retry_after_seconds,)
+    )
+    if any(
+        isinstance(delay, bool)
+        or not isinstance(delay, (int, float))
+        or not math.isfinite(delay)
+        or delay < 0
+        for delay in delays
     ):
         raise ValueError("backoff bounds and Retry-After must be finite and nonnegative")
-    hinted = retry_after_seconds or 0.0
-    return min(maximum_seconds, hinted or base_seconds * (2 ** min(attempt - 1, 30)))
+    if retry_after_seconds is not None:
+        return min(maximum_seconds, retry_after_seconds)
+    return min(maximum_seconds, base_seconds * (2 ** min(attempt - 1, 30)))

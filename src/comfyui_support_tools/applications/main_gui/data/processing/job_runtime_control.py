@@ -150,6 +150,7 @@ class JobRuntimeControlMixin:
                 record.message = "checkpointで一時停止しました"
                 record.logs.append("checkpoint saved; paused")
                 self._running.discard(job_id)
+                self._release_resource_lease_locked(job_id)
                 self._condition.notify_all()
                 self._persist_locked()
                 return False
@@ -194,6 +195,9 @@ class JobRuntimeControlMixin:
                         and self._queue[0] == job_id
                         and len(self._running) < self.max_concurrent
                     ):
+                        if not self._try_acquire_resource_lease_locked(job_id):
+                            self._condition.wait(0.05)
+                            continue
                         self._queue.popleft()
                         self._running.add(job_id)
                         record.state = "running"

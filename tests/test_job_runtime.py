@@ -21,6 +21,8 @@ from comfyui_support_tools.shared.contracts.job_contracts import (
 )
 from comfyui_support_tools.shared.contracts.media_item import MediaItem
 from comfyui_support_tools.shared.job_snapshot_store import JobSnapshotStore
+from comfyui_support_tools.shared.contracts.resource_budget import ResourceBudget, ResourceKind
+from comfyui_support_tools.shared.resource_budget import ResourceBudgetManager
 
 
 def wait_for(predicate, timeout=4):
@@ -33,6 +35,47 @@ def wait_for(predicate, timeout=4):
 
 
 class JobRuntimeTests(unittest.TestCase):
+    # {
+    #   責務: [test_separate_runtimes_share_global_resource_admission: 複数JobRuntimeが共通resource capを共有する]
+    #   処理: [1: CPU process budgetを1にする 2: 別Applicationのjob開始をblockする 3: lease解放後に開始する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_separate_runtimes_share_global_resource_admission(self):
+        manager = ResourceBudgetManager(ResourceBudget(cpu_processes=1))
+        first_runtime = JobRuntime(
+            max_concurrent=2, resource_manager=manager, application_id="app-one"
+        )
+        second_runtime = JobRuntime(
+            max_concurrent=2, resource_manager=manager, application_id="app-two"
+        )
+        first = first_runtime.create("cpu", "first")
+        second = second_runtime.create("cpu", "second")
+        self.assertTrue(first_runtime.wait_start(first))
+        started = Event()
+
+        # {
+        #   責務: [wait_for_global_slot: second runtimeでshared resource slotを待つ]
+        #   処理: [1: wait_startを呼ぶ 2: acquisition後にeventをsetする]
+        #   引数: []
+        #   戻り値: []
+        # }
+        def wait_for_global_slot():
+            if second_runtime.wait_start(second):
+                started.set()
+
+        worker = Thread(target=wait_for_global_slot)
+        worker.start()
+        time.sleep(0.08)
+        self.assertFalse(started.is_set())
+        first_runtime.finish(first, "done")
+        self.assertTrue(started.wait(1))
+        second_runtime.finish(second, "done")
+        worker.join(1)
+        self.assertFalse(worker.is_alive())
+        first_runtime.close()
+        second_runtime.close()
+
     def test_lifecycle_progress_logs_times_backend_id_and_error(self):
         runtime = JobRuntime(max_concurrent=1)
         job = runtime.create(

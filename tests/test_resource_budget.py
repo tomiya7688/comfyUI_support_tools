@@ -6,6 +6,7 @@ import time
 import unittest
 
 from comfyui_support_tools.shared.contracts.resource_budget import (
+    CancellationPolicy,
     ResourceBudget,
     ResourceBudgetOverride,
     ResourceKind,
@@ -14,6 +15,7 @@ from comfyui_support_tools.shared.resource_budget import (
     BoundedResourceStage,
     ResourceBudgetCancelled,
     ResourceBudgetManager,
+    ResourceBudgetUnavailable,
     add_resource_budget_arguments,
     resolve_resource_budget_options,
 )
@@ -35,10 +37,23 @@ class ResourceBudgetTests(unittest.TestCase):
     def test_cli_budget_options_share_partial_profile_schema(self):
         parser = argparse.ArgumentParser()
         add_resource_budget_arguments(parser)
-        parsed = parser.parse_args(["--gpu-jobs", "1", "--cpu-threads", "6"])
+        parsed = parser.parse_args(
+            [
+                "--gpu-jobs",
+                "1",
+                "--cpu-threads",
+                "6",
+                "--priority",
+                "-2",
+                "--cancellation-policy",
+                "finish_active",
+            ]
+        )
         profile = resolve_resource_budget_options(parsed)
         self.assertEqual(profile.gpu_jobs, 1)
         self.assertEqual(profile.cpu_threads, 6)
+        self.assertEqual(profile.priority, -2)
+        self.assertEqual(profile.cancellation_policy, CancellationPolicy.FINISH_ACTIVE)
         with self.assertRaises(ValueError):
             resolve_resource_budget_options(parser.parse_args(["--network-jobs", "0"]))
 
@@ -94,6 +109,92 @@ class ResourceBudgetTests(unittest.TestCase):
         worker.join(1)
         self.assertFalse(worker.is_alive())
 
+
+# {
+#   責務: [ResourceBudgetConcurrencyTests: resource wait、stage queue、backpressure/cancelを検証する]
+#   フィールド: [thread synchronization eventsとshared budget manager]
+# }
+class ResourceBudgetConcurrencyTests(unittest.TestCase):
+    # {
+    #   責務: [test_resource_waiters_respect_queue_capacity_and_timeout: global waiter queueをboundedにする]
+    #   処理: [1: leaseを占有する 2: capacity一杯までwaiterを追加する 3: overflowとtimeoutを確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_resource_waiters_respect_queue_capacity_and_timeout(self):
+        manager = ResourceBudgetManager(ResourceBudget(cpu_threads=1, queue_capacity=1))
+        lease = manager.acquire("app", "active", ResourceKind.CPU_THREADS)
+        waiting = threading.Event()
+        cancelled = threading.Event()
+
+        # {
+        #   責務: [wait_for_resource: capacity解放までresource acquireを待つ]
+        #   処理: [1: blocked acquireへ入る 2: cancellationでwaitを終了する]
+        #   引数: []
+        #   戻り値: []
+        # }
+        def wait_for_resource():
+            waiting.set()
+            try:
+                manager.acquire("app", "queued", ResourceKind.CPU_THREADS, cancellation=cancelled)
+            except ResourceBudgetCancelled:
+                pass
+
+        worker = threading.Thread(target=wait_for_resource)
+        worker.start()
+        self.assertTrue(waiting.wait(1))
+        deadline = time.monotonic() + 1
+        while not manager._waiter_scopes and time.monotonic() < deadline:
+            time.sleep(0.005)
+        with self.assertRaises(ResourceBudgetUnavailable):
+            manager.acquire("app", "overflow", ResourceKind.CPU_THREADS, timeout=0.1)
+        cancelled.set()
+        worker.join(1)
+        self.assertFalse(worker.is_alive())
+        with self.assertRaises(ResourceBudgetUnavailable):
+            manager.acquire("app", "timeout", ResourceKind.CPU_THREADS, timeout=0)
+        lease.release()
+
+    # {
+    #   責務: [test_resource_waiters_are_priority_ordered: shared lease waiterをpriority順に処理する]
+    #   処理: [1: resourceを占有する 2: low/high waitersを登録する 3: release後の取得順を確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_resource_waiters_are_priority_ordered(self):
+        manager = ResourceBudgetManager(ResourceBudget(cpu_threads=1))
+        first = manager.acquire("app", "first", ResourceKind.CPU_THREADS)
+        order = []
+        lock = threading.Lock()
+
+        # {
+        #   責務: [request_with_priority: requested priorityでshared resourceを待つ]
+        #   処理: [1: leaseを待つ 2: 取得順を記録する 3: leaseをreleaseする]
+        #   引数: [name: completion label, priority: urgency rank]
+        #   戻り値: []
+        # }
+        def request_with_priority(name, priority):
+            with manager.acquire("app", name, ResourceKind.CPU_THREADS, priority=priority):
+                with lock:
+                    order.append(name)
+
+        low = threading.Thread(target=request_with_priority, args=("low", 10))
+        high = threading.Thread(target=request_with_priority, args=("high", -1))
+        low.start()
+        deadline = time.monotonic() + 1
+        while len(manager._waiter_scopes) < 1 and time.monotonic() < deadline:
+            time.sleep(0.005)
+        high.start()
+        deadline = time.monotonic() + 1
+        while len(manager._waiter_scopes) < 2 and time.monotonic() < deadline:
+            time.sleep(0.005)
+        first.release()
+        low.join(1)
+        high.join(1)
+        self.assertFalse(low.is_alive())
+        self.assertFalse(high.is_alive())
+        self.assertEqual(order, ["high", "low"])
+
     # {
     #   責務: [test_resource_dimensions_are_independent: GPU reservationがCPU preprocessingを塞がない]
     #   処理: [1: GPU leaseを保持する 2: 別resource kindのCPU leaseを同時取得する]
@@ -108,6 +209,58 @@ class ResourceBudgetTests(unittest.TestCase):
                     manager.usage_snapshot()[("global", "", ResourceKind.CPU_THREADS.value)],
                     4,
                 )
+
+    # {
+    #   責務: [test_gpu_stage_reserves_vram_and_gpu_jobs_together: GPU concurrencyをVRAM予算でも制御する]
+    #   処理: [1: GPU job capより低いVRAM capを設定する 2: simultaneous VRAM leaseが超過しないことを確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_gpu_stage_reserves_vram_and_gpu_jobs_together(self):
+        manager = ResourceBudgetManager(ResourceBudget(gpu_jobs=4, vram_budget_mb=500))
+        started = threading.Event()
+        release = threading.Event()
+        count_lock = threading.Lock()
+        active = 0
+        maximum_active = 0
+
+        # {
+        #   責務: [hold_gpu: GPU stageを一時停止して同時実行数を観測する]
+        #   処理: [1: active countを加算する 2: gateを待つ 3: countを戻す]
+        #   引数: [item: stage item, cancellation: cancellation token]
+        #   戻り値: []
+        # }
+        def hold_gpu(item, cancellation):
+            nonlocal active, maximum_active
+            with count_lock:
+                active += 1
+                maximum_active = max(maximum_active, active)
+            started.set()
+            release.wait(1)
+            with count_lock:
+                active -= 1
+
+        stage = BoundedResourceStage(
+            "gpu-vram",
+            hold_gpu,
+            manager,
+            "app",
+            "run",
+            ResourceKind.GPU_JOBS,
+            resource_requirements={ResourceKind.VRAM_MB: 400},
+            concurrency=4,
+            queue_capacity=2,
+        )
+        stage.submit("one")
+        stage.submit("two")
+        self.assertTrue(started.wait(1))
+        time.sleep(0.05)
+        self.assertEqual(manager.usage_snapshot()[("global", "", "vram_budget_mb")], 400)
+        self.assertEqual(maximum_active, 1)
+        release.set()
+        stage.join()
+        self.assertEqual(maximum_active, 1)
+        self.assertTrue(stage.close())
 
     # {
     #   責務: [test_stage_priority_runs_next_and_external_wait_can_cancel: priority queueが高優先itemを先に処理する]
@@ -245,6 +398,49 @@ class ResourceBudgetTests(unittest.TestCase):
         self.assertTrue(stage.close())
 
     # {
+    #   責務: [test_stage_worker_count_respects_resource_budget_and_can_finish_active_item: worker countとcancel policyをbudgetに従わせる]
+    #   処理: [1: concurrencyをresource capacityへclampする 2: finish-active cancellationで処理中itemを完了する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_stage_worker_count_respects_resource_budget_and_can_finish_active_item(self):
+        started = threading.Event()
+        release = threading.Event()
+        completed = []
+
+        # {
+        #   責務: [finish_current: active itemをgate解放後に記録する]
+        #   処理: [1: handler開始を通知する 2: gateを待って完了記録する]
+        #   引数: [item: input, cancellation: shared cancel token]
+        #   戻り値: []
+        # }
+        def finish_current(item, cancellation):
+            started.set()
+            release.wait(1)
+            completed.append(item)
+
+        stage = BoundedResourceStage(
+            "finish-active",
+            finish_current,
+            ResourceBudgetManager(ResourceBudget(cpu_threads=1)),
+            "app",
+            "run",
+            ResourceKind.CPU_THREADS,
+            concurrency=8,
+            queue_capacity=1,
+            budget=ResourceBudgetOverride(cancellation_policy=CancellationPolicy.FINISH_ACTIVE),
+        )
+        self.assertEqual(stage.concurrency, 1)
+        stage.submit("active")
+        self.assertTrue(started.wait(1))
+        stage.submit("pending")
+        self.assertEqual(stage.cancel(), 1)
+        self.assertFalse(stage._cancellation.is_set())
+        release.set()
+        self.assertTrue(stage.close())
+        self.assertEqual(completed, ["active"])
+
+    # {
     #   責務: [test_stage_cancellation_stops_ingress_and_discards_pending: cancellation後はqueued workを破棄する]
     #   処理: [1: workerをactiveにしqueueへpendingを積む 2: cancelしてdiscardとnew submit拒否を検証する]
     #   引数: []
@@ -308,14 +504,24 @@ class ResourceBudgetTests(unittest.TestCase):
         #   引数: [item: stage input]
         #   戻り値: [result: fallback output]
         # }
+        manager = ResourceBudgetManager(ResourceBudget(gpu_jobs=1))
+
+        # {
+        #   責務: [degrade: GPU lease返却後に縮退callbackから同じbudgetを再取得する]
+        #   処理: [1: lease取得可能性を確認する 2: fallback inputを記録して縮退値を返す]
+        #   引数: [item: fallback input, cancellation: cancellation token]
+        #   戻り値: [result: degraded output]
+        # }
         def degrade(item, cancellation):
+            with manager.acquire("app", "fallback", ResourceKind.GPU_JOBS, timeout=0.1):
+                pass
             fallback_calls.append(item)
             return f"small:{item}"
 
         stage = BoundedResourceStage(
             "gpu",
             raise_oom,
-            ResourceBudgetManager(),
+            manager,
             "app",
             "run",
             ResourceKind.GPU_JOBS,
@@ -342,6 +548,15 @@ class ResourceBudgetTests(unittest.TestCase):
         self.assertIsNone(cache.get(first))
         self.assertEqual(cache.clear(), 2)
 
+        byte_cache = BoundedVersionedCache(
+            3, "v1", max_size_bytes=5, size_of=lambda value: len(value)
+        )
+        self.assertEqual(byte_cache.put("first", "abc"), 0)
+        self.assertEqual(byte_cache.put("second", "def"), 1)
+        self.assertEqual(byte_cache.size_bytes, 3)
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            byte_cache.put("too-large", "123456")
+
     # {
     #   責務: [test_external_api_backoff_is_bounded_and_honors_server_hint: exponential backoffを上限とRetry-Afterで制限する]
     #   処理: [1: exponential/capped/hint casesを評価する 2: invalid attemptを拒否する]
@@ -353,8 +568,11 @@ class ResourceBudgetTests(unittest.TestCase):
         self.assertEqual(external_api_backoff(4), 4.0)
         self.assertEqual(external_api_backoff(20), 30.0)
         self.assertEqual(external_api_backoff(2, retry_after_seconds=5), 5)
+        self.assertEqual(external_api_backoff(2, retry_after_seconds=0), 0)
         with self.assertRaises(ValueError):
             external_api_backoff(0)
+        with self.assertRaises(ValueError):
+            external_api_backoff(1, base_seconds="fast")
 
 
 if __name__ == "__main__":

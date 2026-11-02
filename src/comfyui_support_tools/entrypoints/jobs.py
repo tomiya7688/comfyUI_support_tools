@@ -26,6 +26,11 @@ from comfyui_support_tools.applications.main_gui.ui.commander.job_queue_commande
     JobQueueUiCommander,
 )
 from comfyui_support_tools.shared.job_snapshot_store import JobSnapshotStore
+from comfyui_support_tools.shared.contracts.resource_budget import ResourceBudgetOverride
+from comfyui_support_tools.shared.resource_budget import (
+    GLOBAL_RESOURCE_BUDGET_MANAGER,
+    ResourceBudgetManager,
+)
 
 
 # {
@@ -47,17 +52,28 @@ def default_job_store_path() -> Path:
 
 # {
 #   責務: [create_job_runtime: durable snapshot store付きshared Job runtimeを構築する]
-#   処理: [1: concurrency上限を設定する 2: SQLite snapshot storeを注入する]
-#   引数: [max_concurrent: 最大同時Job数, store_path: テストまたはportable環境向けDB path override]
+#   処理: [1: local concurrency上限を設定する 2: shared resource manager/profileを接続する 3: SQLite snapshot storeを注入する]
+#   引数: [max_concurrent: 最大同時Job数, store_path: テストまたはportable環境向けDB path override, resource_manager: cross-application resource arbiter, application_id: application profile key, resource_budget: optional app-level limits]
 #   戻り値: [runtime: GUI/CLI共通Job runtime]
 # }
 def create_job_runtime(
     max_concurrent: int = 2,
     *,
     store_path: Path | None = None,
+    resource_manager: ResourceBudgetManager | None = None,
+    application_id: str = "main-gui",
+    resource_budget: ResourceBudgetOverride | None = None,
 ) -> JobRuntime:
     store = JobSnapshotStore(store_path or default_job_store_path())
-    return JobRuntime(max_concurrent=max_concurrent, store=store)
+    manager = resource_manager or GLOBAL_RESOURCE_BUDGET_MANAGER
+    if resource_budget is not None:
+        manager.set_application_budget(application_id, resource_budget)
+    return JobRuntime(
+        max_concurrent=max_concurrent,
+        store=store,
+        resource_manager=manager,
+        application_id=application_id,
+    )
 
 
 def create_job_queue(runtime: JobRuntime) -> JobQueueUiCommander:

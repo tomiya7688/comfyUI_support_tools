@@ -302,6 +302,56 @@ class C2paAdapter:
         *,
         overwrite: bool = False,
     ) -> C2paVerificationReport:
+        source, destination, sdk, mime_type, source_type, intent, digital_source_type = (
+            self._prepare_signing(
+                source_path, destination_path, record, signer_provider, settings, overwrite
+            )
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{destination.stem}.",
+            suffix=destination.suffix,
+            dir=destination.parent,
+            delete=False,
+        ) as staged_file:
+            staged = Path(staged_file.name)
+        try:
+            report = self._sign_and_verify(
+                sdk,
+                source,
+                staged,
+                destination,
+                mime_type,
+                source_type,
+                digital_source_type,
+                intent,
+                record,
+                signer_provider,
+                settings,
+            )
+            if overwrite:
+                os.replace(staged, destination)
+            else:
+                os.link(staged, destination)
+                staged.unlink(missing_ok=True)
+            return report
+        except C2paVerificationError:
+            raise
+        except Exception as exc:
+            # SDK errors can include signer/configuration details. Do not expose them in logs.
+            raise C2paSigningError("C2PA signing failed; no output was committed") from exc
+        finally:
+            staged.unlink(missing_ok=True)
+
+    # {
+    # 責務: [ _prepare_signing: C2PA入力とSDK設定を検証する ]
+    # 処理: [ 1: 出力先と分類を検証, 2: SDK形式と署名intentを解決する ]
+    # 引数: [self, source_path, destination_path, record, signer_provider, settings, overwrite]
+    # 戻り値: [署名に必要な正規化済み設定]
+    # }
+    def _prepare_signing(
+        self, source_path, destination_path, record, signer_provider, settings, overwrite
+    ):
         source = Path(source_path)
         destination = Path(destination_path)
         if source.resolve() == destination.resolve():
@@ -335,104 +385,132 @@ class C2paAdapter:
             "humanEdits": sdk.C2paDigitalSourceType.HUMAN_EDITS,
         }[source_type]
 
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(
-            prefix=f".{destination.stem}.",
-            suffix=destination.suffix,
-            dir=destination.parent,
-            delete=False,
-        ) as staged_file:
-            staged = Path(staged_file.name)
-        try:
-            manifest = {
-                "claim_generator_info": [
-                    {
-                        "name": record.application,
-                        "version": record.application_version,
-                    }
-                ],
-                "title": destination.name,
-            }
-            ai_disclosure = self.ai_disclosure_assertion(record, settings)
-            if ai_disclosure is not None:
-                manifest["assertions"] = [ai_disclosure]
-            with self._context(sdk) as context:
-                with signer_provider.create_signer(sdk) as signer:
-                    with sdk.Builder(manifest, context=context) as builder:
-                        builder.set_intent(intent, digital_source_type)
-                        existing_ingredient = self._has_manifest(sdk, source, context=context)
-                        if (
-                            existing_ingredient
-                            or record.classification is not MediaClassification.GENERATED
-                        ):
-                            with source.open("rb") as ingredient_stream:
-                                builder.add_ingredient(
-                                    {"title": source.name, "relationship": "parentOf"},
-                                    mime_type,
-                                    ingredient_stream,
-                                )
-                        for action in record.actions:
-                            if (
-                                record.classification is MediaClassification.GENERATED
-                                and action.operation in {"generation", "txt2img"}
-                            ):
-                                continue
-                            action_data = {
-                                "action": "c2pa.edited",
-                                "description": action.operation,
-                                "when": action.timestamp,
-                                "softwareAgent": (
-                                    f"{action.application}/{action.application_version}"
-                                ),
-                            }
-                            if action.ai_involvement:
-                                action_data["digitalSourceType"] = (
-                                    "http://cv.iptc.org/newscodes/digitalsourcetype/"
-                                    "compositeWithTrainedAlgorithmicMedia"
-                                )
-                            builder.add_action(action_data)
-                        builder.sign_file(source, staged, signer)
+        return source, destination, sdk, mime_type, source_type, intent, digital_source_type
 
-                report = self.verify(
-                    staged,
-                    expected_source_type=source_type,
-                    expected_ai_disclosure=(
-                        record.classification
-                        in {
-                            MediaClassification.GENERATED,
-                            MediaClassification.AI_MODIFIED,
-                        }
-                    ),
-                    expected_ingredient=(
-                        record.classification is not MediaClassification.GENERATED
-                    ),
-                    context=context,
-                )
-            if not report.manifest_present or not report.digital_source_type:
-                raise C2paVerificationError(
-                    "C2PA output did not contain the expected signed assertions"
-                )
-            if (
-                settings.verify_export
-                and not report.verified
-                and settings.verification_failure_policy.value == "error"
-            ):
-                raise C2paVerificationError(
-                    "C2PA signature is not trusted by the configured verification trust store"
-                )
-            if overwrite:
-                os.replace(staged, destination)
-            else:
-                os.link(staged, destination)
-                staged.unlink(missing_ok=True)
-            return report
-        except C2paVerificationError:
-            raise
-        except Exception as exc:
-            # SDK errors can include signer/configuration details. Do not expose them in logs.
-            raise C2paSigningError("C2PA signing failed; no output was committed") from exc
-        finally:
-            staged.unlink(missing_ok=True)
+    # {
+    # 責務: [ _sign_and_verify: C2PA署名を作成し検証する ]
+    # 処理: [ 1: manifestを署名, 2: 出力assertionと信頼状態を検証 ]
+    # 引数: [self, sdk, source, staged, destination, mime_type, source_type, digital_source_type, intent, record, signer_provider, settings]
+    # 戻り値: [検証済み署名レポート]
+    # }
+    def _sign_and_verify(
+        self,
+        sdk,
+        source,
+        staged,
+        destination,
+        mime_type,
+        source_type,
+        digital_source_type,
+        intent,
+        record,
+        signer_provider,
+        settings,
+    ):
+        manifest = {
+            "claim_generator_info": [
+                {
+                    "name": record.application,
+                    "version": record.application_version,
+                }
+            ],
+            "title": destination.name,
+        }
+        ai_disclosure = self.ai_disclosure_assertion(record, settings)
+        if ai_disclosure is not None:
+            manifest["assertions"] = [ai_disclosure]
+        with self._context(sdk) as context:
+            self._write_signed_manifest(
+                sdk,
+                source,
+                staged,
+                mime_type,
+                digital_source_type,
+                intent,
+                record,
+                signer_provider,
+                manifest,
+                context,
+            )
+            report = self.verify(
+                staged,
+                expected_source_type=source_type,
+                expected_ai_disclosure=(
+                    record.classification
+                    in {
+                        MediaClassification.GENERATED,
+                        MediaClassification.AI_MODIFIED,
+                    }
+                ),
+                expected_ingredient=(record.classification is not MediaClassification.GENERATED),
+                context=context,
+            )
+        if not report.manifest_present or not report.digital_source_type:
+            raise C2paVerificationError(
+                "C2PA output did not contain the expected signed assertions"
+            )
+        if (
+            settings.verify_export
+            and not report.verified
+            and settings.verification_failure_policy.value == "error"
+        ):
+            raise C2paVerificationError(
+                "C2PA signature is not trusted by the configured verification trust store"
+            )
+        return report
+
+    # {
+    # 責務: [ _write_signed_manifest: C2PA manifestへ署名する ]
+    # 処理: [ 1: ingredientとactionを追加, 2: staged fileへ署名する ]
+    # 引数: [self, sdk, source, staged, mime_type, digital_source_type, intent, record, signer_provider, manifest, context]
+    # 戻り値: [なし]
+    # }
+    def _write_signed_manifest(
+        self,
+        sdk,
+        source,
+        staged,
+        mime_type,
+        digital_source_type,
+        intent,
+        record,
+        signer_provider,
+        manifest,
+        context,
+    ):
+        with signer_provider.create_signer(sdk) as signer:
+            with sdk.Builder(manifest, context=context) as builder:
+                builder.set_intent(intent, digital_source_type)
+                existing_ingredient = self._has_manifest(sdk, source, context=context)
+                if (
+                    existing_ingredient
+                    or record.classification is not MediaClassification.GENERATED
+                ):
+                    with source.open("rb") as ingredient_stream:
+                        builder.add_ingredient(
+                            {"title": source.name, "relationship": "parentOf"},
+                            mime_type,
+                            ingredient_stream,
+                        )
+                for action in record.actions:
+                    if (
+                        record.classification is MediaClassification.GENERATED
+                        and action.operation in {"generation", "txt2img"}
+                    ):
+                        continue
+                    action_data = {
+                        "action": "c2pa.edited",
+                        "description": action.operation,
+                        "when": action.timestamp,
+                        "softwareAgent": f"{action.application}/{action.application_version}",
+                    }
+                    if action.ai_involvement:
+                        action_data["digitalSourceType"] = (
+                            "http://cv.iptc.org/newscodes/digitalsourcetype/"
+                            "compositeWithTrainedAlgorithmicMedia"
+                        )
+                    builder.add_action(action_data)
+                builder.sign_file(source, staged, signer)
 
     # {
     # 責務: [ _has_manifest: 入力を処理して結果を返す ]

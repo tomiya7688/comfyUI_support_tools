@@ -75,112 +75,11 @@ def apply_generation_transparency(
     source = Path(source_path)
     if source.is_symlink() or not source.is_file():
         raise ValueError("generated asset must be a regular file")
-    prompt_level = PromptDisclosure(options.get("prompt_disclosure", "none"))
-    model_level = ModelDisclosure(options.get("model_disclosure", "none"))
-    workflow_level = WorkflowDisclosure(options.get("workflow_disclosure", "none"))
-    if prompt_level is PromptDisclosure.SANITIZED_SUMMARY and not options.get(
-        "sanitized_prompt_summary"
-    ):
-        raise ValueError("sanitized prompt disclosure requires a user-provided summary")
-    if options.get("sanitized_prompt_summary") is not None and not isinstance(
-        options["sanitized_prompt_summary"], str
-    ):
-        raise ValueError("sanitized prompt summary must be text")
-    if model_level is ModelDisclosure.FAMILY and not model_family:
-        raise ValueError("model family disclosure requires a model family")
-    if (
-        model_level in {ModelDisclosure.MODEL_ID, ModelDisclosure.MODEL_ID_AND_VERSION}
-        and not model_id
-    ):
-        raise ValueError("model identifier disclosure requires a model id")
-    if (
-        model_level is ModelDisclosure.MODEL_ID_AND_VERSION
-        and not model_version
-        and not options.get("model_hash")
-    ):
-        raise ValueError("model id plus version/hash disclosure requires a version or hash")
-    if options.get("model_hash") is not None and not isinstance(options["model_hash"], str):
-        raise ValueError("model hash must be text")
-    if workflow_level is WorkflowDisclosure.ID and not options.get("workflow_id"):
-        raise ValueError("workflow id disclosure requires a workflow id")
-    workflow_data = None
-    if (
-        workflow_level in {WorkflowDisclosure.HASH, WorkflowDisclosure.FULL}
-        and workflow is not None
-    ):
-        workflow_data = dict(workflow)
-        if len(json.dumps(workflow_data, ensure_ascii=False).encode("utf-8")) > MAX_WORKFLOW_BYTES:
-            raise ValueError("workflow metadata exceeds 8 MiB")
-    if workflow_level is WorkflowDisclosure.FULL and workflow_data is None:
-        raise ValueError("full workflow disclosure requires an API-format workflow")
-    if workflow_level is WorkflowDisclosure.HASH and workflow_data is None:
-        raise ValueError("workflow hash disclosure requires an API-format workflow")
-
-    sign_c2pa = options.get("sign_c2pa", False)
-    write_png = options.get("write_png_metadata", False)
-    write_sidecar = options.get("write_sidecar", True)
-    if any(not isinstance(value, bool) for value in (sign_c2pa, write_png, write_sidecar)):
-        raise ValueError("transparency output options must be boolean")
-    if not (sign_c2pa or write_png or write_sidecar):
-        raise ValueError("at least one transparency output format must be selected")
-    if sign_c2pa and write_png:
-        raise ValueError("C2PA and PNG text metadata require separate output workflows")
-    visible_disclosure = options.get("visible_disclosure", False)
-    if not isinstance(visible_disclosure, bool):
-        raise ValueError("visible disclosure option must be boolean")
-    if visible_disclosure and not write_png:
-        raise ValueError("visible disclosure requires a separate PNG copy")
-    deepfake_disclosure_assist = options.get("deepfake_disclosure_assist", False)
-    deepfake_applicable = options.get("deepfake_disclosure_applicable", False)
-    represents_real_person = options.get("represents_real_person_place_or_event", False)
-    if any(
-        not isinstance(value, bool)
-        for value in (deepfake_disclosure_assist, deepfake_applicable, represents_real_person)
-    ):
-        raise ValueError("deepfake disclosure options must be boolean")
-    if sign_c2pa and signer_provider is None:
-        raise ValueError("C2PA signing requires an injected secure signer provider")
-
-    classification = MediaClassification.GENERATED
-    label = "AI-generated" if options.get("visible_disclosure", False) else None
-    settings = TransparencySettings(
-        enabled=True,
-        prompt_disclosure=prompt_level,
-        model_disclosure=model_level,
-        workflow_disclosure=workflow_level,
-        write_sidecar=write_sidecar,
-        write_png_metadata=write_png,
-        sign_c2pa=sign_c2pa,
-        visible_disclosure=visible_disclosure,
-        visible_disclosure_label=label,
-        verification_failure_policy=VerificationFailurePolicy(
-            options.get("verification_failure_policy", "error")
-        ),
-        deepfake_disclosure_assist=deepfake_disclosure_assist,
+    configuration = _resolve_transparency_configuration(
+        options, workflow, model_id, model_family, model_version, signer_provider
     )
-    record = ProvenanceRecord(
-        classification=classification,
-        content_type="image",
-        application="comfyUI_support_tools",
-        application_version="unknown",
-        backend=backend,
-        prompt=prompt,
-        sanitized_prompt_summary=options.get("sanitized_prompt_summary"),
-        model_family=model_family,
-        model_id=model_id,
-        model_version=model_version,
-        model_hash=options.get("model_hash"),
-        workflow_id=options.get("workflow_id"),
-        workflow_json=workflow_data,
-        deepfake_disclosure_applicable=deepfake_applicable,
-        represents_real_person_place_or_event=represents_real_person,
-        actions=(
-            ProvenanceAction(
-                operation="txt2img",
-                ai_involvement=True,
-                user_oversight="prompt_guided",
-            ),
-        ),
+    settings, record, sign_c2pa, write_png, write_sidecar, label = _build_transparency_record(
+        configuration, options, backend, prompt, model_id, model_family, model_version
     )
     output_path = source
     output_bytes = None
@@ -237,3 +136,133 @@ def apply_generation_transparency(
         "c2pa_manifest_status": c2pa_status,
         "artifacts": artifacts,
     }
+
+
+# {
+# 責務: [ _resolve_transparency_configuration: 開示と出力設定を検証する ]
+# 処理: [ 1: 開示レベルを検証, 2: workflowと出力形式の制約を検証 ]
+# 引数: [options, workflow, model_id, model_family, model_version, signer_provider]
+# 戻り値: [検証済み設定値]
+# }
+def _resolve_transparency_configuration(
+    options, workflow, model_id, model_family, model_version, signer_provider
+):
+    prompt_level = PromptDisclosure(options.get("prompt_disclosure", "none"))
+    model_level = ModelDisclosure(options.get("model_disclosure", "none"))
+    workflow_level = WorkflowDisclosure(options.get("workflow_disclosure", "none"))
+    summary = options.get("sanitized_prompt_summary")
+    if prompt_level is PromptDisclosure.SANITIZED_SUMMARY and not summary:
+        raise ValueError("sanitized prompt disclosure requires a user-provided summary")
+    if summary is not None and not isinstance(summary, str):
+        raise ValueError("sanitized prompt summary must be text")
+    if model_level is ModelDisclosure.FAMILY and not model_family:
+        raise ValueError("model family disclosure requires a model family")
+    if (
+        model_level in {ModelDisclosure.MODEL_ID, ModelDisclosure.MODEL_ID_AND_VERSION}
+        and not model_id
+    ):
+        raise ValueError("model identifier disclosure requires a model id")
+    model_hash = options.get("model_hash")
+    if model_level is ModelDisclosure.MODEL_ID_AND_VERSION and not model_version and not model_hash:
+        raise ValueError("model id plus version/hash disclosure requires a version or hash")
+    if model_hash is not None and not isinstance(model_hash, str):
+        raise ValueError("model hash must be text")
+    workflow_id = options.get("workflow_id")
+    if workflow_level is WorkflowDisclosure.ID and not workflow_id:
+        raise ValueError("workflow id disclosure requires a workflow id")
+    workflow_data = (
+        dict(workflow)
+        if workflow is not None
+        and workflow_level in {WorkflowDisclosure.HASH, WorkflowDisclosure.FULL}
+        else None
+    )
+    if (
+        workflow_data is not None
+        and len(json.dumps(workflow_data, ensure_ascii=False).encode("utf-8")) > MAX_WORKFLOW_BYTES
+    ):
+        raise ValueError("workflow metadata exceeds 8 MiB")
+    if (
+        workflow_level in {WorkflowDisclosure.HASH, WorkflowDisclosure.FULL}
+        and workflow_data is None
+    ):
+        label = "full" if workflow_level is WorkflowDisclosure.FULL else "hash"
+        raise ValueError(f"{label} workflow disclosure requires an API-format workflow")
+    sign_c2pa = options.get("sign_c2pa", False)
+    write_png = options.get("write_png_metadata", False)
+    write_sidecar = options.get("write_sidecar", True)
+    if any(not isinstance(value, bool) for value in (sign_c2pa, write_png, write_sidecar)):
+        raise ValueError("transparency output options must be boolean")
+    if not (sign_c2pa or write_png or write_sidecar):
+        raise ValueError("at least one transparency output format must be selected")
+    if sign_c2pa and write_png:
+        raise ValueError("C2PA and PNG text metadata require separate output workflows")
+    visible = options.get("visible_disclosure", False)
+    if not isinstance(visible, bool):
+        raise ValueError("visible disclosure option must be boolean")
+    if visible and not write_png:
+        raise ValueError("visible disclosure requires a separate PNG copy")
+    deepfake = options.get("deepfake_disclosure_assist", False)
+    applicable = options.get("deepfake_disclosure_applicable", False)
+    real_person = options.get("represents_real_person_place_or_event", False)
+    if any(not isinstance(value, bool) for value in (deepfake, applicable, real_person)):
+        raise ValueError("deepfake disclosure options must be boolean")
+    if sign_c2pa and signer_provider is None:
+        raise ValueError("C2PA signing requires an injected secure signer provider")
+    return locals()
+
+
+# {
+# 責務: [ _build_transparency_record: 検証済み設定からprovenance recordを組み立てる ]
+# 処理: [ 1: TransparencySettingsを作成, 2: ProvenanceRecordを作成 ]
+# 引数: [configuration, options, backend, prompt, model_id, model_family, model_version]
+# 戻り値: [設定、record、出力方式]
+# }
+def _build_transparency_record(
+    configuration, options, backend, prompt, model_id, model_family, model_version
+):
+    prompt_level = configuration["prompt_level"]
+    model_level = configuration["model_level"]
+    workflow_level = configuration["workflow_level"]
+    sign_c2pa = configuration["sign_c2pa"]
+    write_png = configuration["write_png"]
+    write_sidecar = configuration["write_sidecar"]
+    visible = configuration["visible"]
+    label = "AI-generated" if visible else None
+    settings = TransparencySettings(
+        enabled=True,
+        prompt_disclosure=prompt_level,
+        model_disclosure=model_level,
+        workflow_disclosure=workflow_level,
+        write_sidecar=write_sidecar,
+        write_png_metadata=write_png,
+        sign_c2pa=sign_c2pa,
+        visible_disclosure=visible,
+        visible_disclosure_label=label,
+        verification_failure_policy=VerificationFailurePolicy(
+            options.get("verification_failure_policy", "error")
+        ),
+        deepfake_disclosure_assist=configuration["deepfake"],
+    )
+    record = ProvenanceRecord(
+        classification=MediaClassification.GENERATED,
+        content_type="image",
+        application="comfyUI_support_tools",
+        application_version="unknown",
+        backend=backend,
+        prompt=prompt,
+        sanitized_prompt_summary=options.get("sanitized_prompt_summary"),
+        model_family=model_family,
+        model_id=model_id,
+        model_version=model_version,
+        model_hash=options.get("model_hash"),
+        workflow_id=options.get("workflow_id"),
+        workflow_json=configuration["workflow_data"],
+        deepfake_disclosure_applicable=configuration["applicable"],
+        represents_real_person_place_or_event=configuration["real_person"],
+        actions=(
+            ProvenanceAction(
+                operation="txt2img", ai_involvement=True, user_oversight="prompt_guided"
+            ),
+        ),
+    )
+    return settings, record, sign_c2pa, write_png, write_sidecar, label

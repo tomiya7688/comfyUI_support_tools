@@ -160,147 +160,7 @@ def export_records(records, settings: ExportSettings, progress=None):
                 )
             )
         if settings.transparency_assist:
-            classification = MediaClassification(settings.transparency_classification)
-            prompt_level = PromptDisclosure(settings.transparency_prompt_disclosure)
-            model_level = ModelDisclosure(settings.transparency_model_disclosure)
-            workflow_level = WorkflowDisclosure(settings.transparency_workflow_disclosure)
-            if prompt_level is PromptDisclosure.SANITIZED_SUMMARY and not settings.transparency_prompt_summary.strip():
-                raise ValueError("sanitized summary開示には要約を入力してください")
-            if model_level is ModelDisclosure.FAMILY and not settings.transparency_model_family.strip():
-                raise ValueError("Model family開示にはfamily名を入力してください")
-            if model_level in {ModelDisclosure.MODEL_ID, ModelDisclosure.MODEL_ID_AND_VERSION} and not settings.transparency_model_id.strip():
-                raise ValueError("Model ID開示にはIDを入力してください")
-            if (
-                model_level is ModelDisclosure.MODEL_ID_AND_VERSION
-                and not settings.transparency_model_version.strip()
-                and not settings.transparency_model_hash.strip()
-            ):
-                raise ValueError("Model ID + version/hash開示にはversionまたはSHA256を入力してください")
-            if workflow_level is WorkflowDisclosure.ID and not settings.transparency_workflow_id.strip():
-                raise ValueError("Workflow ID開示にはIDを入力してください")
-            workflow_json = None
-            workflow_file = settings.transparency_workflow_json_path.strip()
-            if workflow_level in {WorkflowDisclosure.HASH, WorkflowDisclosure.FULL} and workflow_file:
-                workflow_path = Path(workflow_file).expanduser()
-                if workflow_path.is_symlink() or not workflow_path.is_file():
-                    raise ValueError("Workflow JSONはsymlinkでないregular fileを指定してください")
-                if workflow_path.stat().st_size > MAX_WORKFLOW_DISCLOSURE_BYTES:
-                    raise ValueError("Workflow JSONは8 MiB以下にしてください")
-                workflow_json = json.loads(workflow_path.read_text(encoding="utf-8"))
-                if not isinstance(workflow_json, dict):
-                    raise ValueError("Workflow JSONのrootはobjectである必要があります")
-            if workflow_level is WorkflowDisclosure.FULL and workflow_json is None:
-                raise ValueError("Workflow全文開示にはWorkflow JSONを指定してください")
-            if workflow_level is WorkflowDisclosure.HASH and workflow_json is None:
-                raise ValueError("Workflow hash開示にはWorkflow JSONを指定してください")
-            visible_label = {
-                MediaClassification.GENERATED: "AI-generated",
-                MediaClassification.AI_MODIFIED: "AI-assisted",
-            }.get(classification)
-            transparency_settings = TransparencySettings(
-                enabled=True,
-                write_sidecar=settings.transparency_sidecar,
-                sign_c2pa=settings.transparency_c2pa_sign,
-                prompt_disclosure=prompt_level,
-                model_disclosure=model_level,
-                workflow_disclosure=workflow_level,
-                visible_disclosure=settings.transparency_visible_disclosure,
-                visible_disclosure_label=visible_label,
-                deepfake_disclosure_assist=settings.transparency_deepfake_assist,
-                verification_failure_policy=VerificationFailurePolicy(
-                    settings.c2pa_verification_failure_policy
-                ),
-            )
-            transparency_record = ProvenanceRecord(
-                classification=classification,
-                prompt=record.notes.prompt,
-                sanitized_prompt_summary=settings.transparency_prompt_summary.strip() or None,
-                model_family=settings.transparency_model_family.strip() or None,
-                model_id=settings.transparency_model_id.strip() or None,
-                model_version=settings.transparency_model_version.strip() or None,
-                model_hash=settings.transparency_model_hash.strip().lower() or None,
-                workflow_id=settings.transparency_workflow_id.strip() or None,
-                workflow_json=workflow_json,
-                deepfake_disclosure_applicable=settings.transparency_deepfake_applicable,
-                represents_real_person_place_or_event=(
-                    settings.transparency_real_person_place_event
-                ),
-                user_overrides=(
-                    (f"classification:{classification.value}",)
-                    if classification is not MediaClassification.UNKNOWN
-                    else ()
-                ),
-                actions=(ProvenanceAction(
-                    operation="metadata_export",
-                    ai_involvement=False,
-                    user_oversight="human_reviewed",
-                ),),
-            )
-            embed_bytes = None
-            c2pa_status = "not_requested"
-            if settings.transparency_c2pa_sign:
-                if classification is MediaClassification.UNKNOWN:
-                    raise ValueError("C2PA署名には明示的な技術分類が必要です")
-                if not settings.c2pa_certificate_path or not settings.c2pa_private_key_path:
-                    raise ValueError("C2PA署名にはPEM証明書と秘密鍵を指定してください")
-                signer = PemFileSignerProvider(
-                    settings.c2pa_certificate_path,
-                    settings.c2pa_private_key_path,
-                    timestamp_authority_url=(settings.c2pa_timestamp_authority_url or None),
-                )
-                signed_copy = source.with_name(
-                    f"{source.stem}.transparency.c2pa{source.suffix}"
-                )
-                with tempfile.TemporaryDirectory(
-                    prefix="c2pa-stage-", dir=source.parent
-                ) as staging:
-                    staged_output = Path(staging) / f"signed{source.suffix}"
-                    report = C2paAdapter().sign(
-                        source,
-                        staged_output,
-                        transparency_record,
-                        signer,
-                        transparency_settings,
-                    )
-                    embed_bytes = staged_output.read_bytes()
-                    c2pa_status = report.to_dict()
-                planned.append((signed_copy, embed_bytes))
-            if settings.transparency_png_copy:
-                embed_payload = build_transparency_sidecar(
-                    transparency_record,
-                    transparency_settings,
-                    output_sha256="",
-                    c2pa_manifest_status="not_requested",
-                )
-                embed_payload.pop("output")
-                embed_bytes = create_png_transparency_copy(
-                    source,
-                    embed_payload,
-                    visible_disclosure_label=(
-                        transparency_settings.visible_disclosure_label
-                        if transparency_settings.visible_disclosure
-                        else None
-                    ),
-                )
-                if not verify_png_transparency(embed_bytes, embed_payload):
-                    raise ValueError("PNG transparency metadata did not survive export verification")
-                planned.append(
-                    (source.with_name(f"{source.stem}.transparency.png"), embed_bytes)
-                )
-
-            payload = build_transparency_sidecar(
-                transparency_record,
-                transparency_settings,
-                output_sha256=sha256_bytes(embed_bytes) if embed_bytes else sha256_file(source),
-                c2pa_manifest_status=c2pa_status,
-            )
-            if settings.transparency_sidecar:
-                planned.append(
-                    (
-                        source.with_suffix(source.suffix + ".transparency.json"),
-                        serialize_transparency_sidecar(payload).decode("utf-8"),
-                    )
-                )
+            planned.extend(_plan_transparency_exports(record, source, settings))
         if settings.batch_txt_path:
             batch_lines.append(f"{record.item.path}\t{caption}")
 
@@ -330,3 +190,169 @@ def export_records(records, settings: ExportSettings, progress=None):
         if progress:
             progress(index, total, path.name)
     return tuple(written)
+
+
+# {
+# 責務: [ _build_transparency_record: Export用provenance設定を組み立てる ]
+# 処理: [ 1: 開示入力を検証, 2: TransparencySettingsとrecordを作成 ]
+# 引数: [record, settings]
+# 戻り値: [分類、設定、provenance record]
+# }
+def _build_transparency_record(record, settings):
+    classification = MediaClassification(settings.transparency_classification)
+    prompt_level = PromptDisclosure(settings.transparency_prompt_disclosure)
+    model_level = ModelDisclosure(settings.transparency_model_disclosure)
+    workflow_level = WorkflowDisclosure(settings.transparency_workflow_disclosure)
+    if (
+        prompt_level is PromptDisclosure.SANITIZED_SUMMARY
+        and not settings.transparency_prompt_summary.strip()
+    ):
+        raise ValueError("sanitized summary開示には要約を入力してください")
+    if model_level is ModelDisclosure.FAMILY and not settings.transparency_model_family.strip():
+        raise ValueError("Model family開示にはfamily名を入力してください")
+    if (
+        model_level in {ModelDisclosure.MODEL_ID, ModelDisclosure.MODEL_ID_AND_VERSION}
+        and not settings.transparency_model_id.strip()
+    ):
+        raise ValueError("Model ID開示にはIDを入力してください")
+    if (
+        model_level is ModelDisclosure.MODEL_ID_AND_VERSION
+        and not settings.transparency_model_version.strip()
+        and not settings.transparency_model_hash.strip()
+    ):
+        raise ValueError("Model ID + version/hash開示にはversionまたはSHA256を入力してください")
+    if workflow_level is WorkflowDisclosure.ID and not settings.transparency_workflow_id.strip():
+        raise ValueError("Workflow ID開示にはIDを入力してください")
+    workflow_json = None
+    workflow_file = settings.transparency_workflow_json_path.strip()
+    if workflow_level in {WorkflowDisclosure.HASH, WorkflowDisclosure.FULL} and workflow_file:
+        workflow_path = Path(workflow_file).expanduser()
+        if workflow_path.is_symlink() or not workflow_path.is_file():
+            raise ValueError("Workflow JSONはsymlinkでないregular fileを指定してください")
+        if workflow_path.stat().st_size > MAX_WORKFLOW_DISCLOSURE_BYTES:
+            raise ValueError("Workflow JSONは8 MiB以下にしてください")
+        workflow_json = json.loads(workflow_path.read_text(encoding="utf-8"))
+        if not isinstance(workflow_json, dict):
+            raise ValueError("Workflow JSONのrootはobjectである必要があります")
+    if workflow_level is WorkflowDisclosure.FULL and workflow_json is None:
+        raise ValueError("Workflow全文開示にはWorkflow JSONを指定してください")
+    if workflow_level is WorkflowDisclosure.HASH and workflow_json is None:
+        raise ValueError("Workflow hash開示にはWorkflow JSONを指定してください")
+    visible_label = {
+        MediaClassification.GENERATED: "AI-generated",
+        MediaClassification.AI_MODIFIED: "AI-assisted",
+    }.get(classification)
+    transparency_settings = TransparencySettings(
+        enabled=True,
+        write_sidecar=settings.transparency_sidecar,
+        sign_c2pa=settings.transparency_c2pa_sign,
+        prompt_disclosure=prompt_level,
+        model_disclosure=model_level,
+        workflow_disclosure=workflow_level,
+        visible_disclosure=settings.transparency_visible_disclosure,
+        visible_disclosure_label=visible_label,
+        deepfake_disclosure_assist=settings.transparency_deepfake_assist,
+        verification_failure_policy=VerificationFailurePolicy(
+            settings.c2pa_verification_failure_policy
+        ),
+    )
+    transparency_record = ProvenanceRecord(
+        classification=classification,
+        prompt=record.notes.prompt,
+        sanitized_prompt_summary=settings.transparency_prompt_summary.strip() or None,
+        model_family=settings.transparency_model_family.strip() or None,
+        model_id=settings.transparency_model_id.strip() or None,
+        model_version=settings.transparency_model_version.strip() or None,
+        model_hash=settings.transparency_model_hash.strip().lower() or None,
+        workflow_id=settings.transparency_workflow_id.strip() or None,
+        workflow_json=workflow_json,
+        deepfake_disclosure_applicable=settings.transparency_deepfake_applicable,
+        represents_real_person_place_or_event=(settings.transparency_real_person_place_event),
+        user_overrides=(
+            (f"classification:{classification.value}",)
+            if classification is not MediaClassification.UNKNOWN
+            else ()
+        ),
+        actions=(
+            ProvenanceAction(
+                operation="metadata_export",
+                ai_involvement=False,
+                user_oversight="human_reviewed",
+            ),
+        ),
+    )
+    return classification, transparency_settings, transparency_record
+
+
+# {
+# 責務: [ _plan_transparency_exports: Transparency Assistの出力を計画する ]
+# 処理: [ 1: 署名/PNG/sidecarを作成, 2: 出力計画を返す ]
+# 引数: [record, source, settings]
+# 戻り値: [出力先と内容の配列]
+# }
+def _plan_transparency_exports(record, source, settings):
+    planned = []
+    if settings.transparency_assist:
+        classification, transparency_settings, transparency_record = _build_transparency_record(
+            record, settings
+        )
+        embed_bytes = None
+        c2pa_status = "not_requested"
+        if settings.transparency_c2pa_sign:
+            if classification is MediaClassification.UNKNOWN:
+                raise ValueError("C2PA署名には明示的な技術分類が必要です")
+            if not settings.c2pa_certificate_path or not settings.c2pa_private_key_path:
+                raise ValueError("C2PA署名にはPEM証明書と秘密鍵を指定してください")
+            signer = PemFileSignerProvider(
+                settings.c2pa_certificate_path,
+                settings.c2pa_private_key_path,
+                timestamp_authority_url=(settings.c2pa_timestamp_authority_url or None),
+            )
+            signed_copy = source.with_name(f"{source.stem}.transparency.c2pa{source.suffix}")
+            with tempfile.TemporaryDirectory(prefix="c2pa-stage-", dir=source.parent) as staging:
+                staged_output = Path(staging) / f"signed{source.suffix}"
+                report = C2paAdapter().sign(
+                    source,
+                    staged_output,
+                    transparency_record,
+                    signer,
+                    transparency_settings,
+                )
+                embed_bytes = staged_output.read_bytes()
+                c2pa_status = report.to_dict()
+            planned.append((signed_copy, embed_bytes))
+        if settings.transparency_png_copy:
+            embed_payload = build_transparency_sidecar(
+                transparency_record,
+                transparency_settings,
+                output_sha256="",
+                c2pa_manifest_status="not_requested",
+            )
+            embed_payload.pop("output")
+            embed_bytes = create_png_transparency_copy(
+                source,
+                embed_payload,
+                visible_disclosure_label=(
+                    transparency_settings.visible_disclosure_label
+                    if transparency_settings.visible_disclosure
+                    else None
+                ),
+            )
+            if not verify_png_transparency(embed_bytes, embed_payload):
+                raise ValueError("PNG transparency metadata did not survive export verification")
+            planned.append((source.with_name(f"{source.stem}.transparency.png"), embed_bytes))
+
+        payload = build_transparency_sidecar(
+            transparency_record,
+            transparency_settings,
+            output_sha256=sha256_bytes(embed_bytes) if embed_bytes else sha256_file(source),
+            c2pa_manifest_status=c2pa_status,
+        )
+        if settings.transparency_sidecar:
+            planned.append(
+                (
+                    source.with_suffix(source.suffix + ".transparency.json"),
+                    serialize_transparency_sidecar(payload).decode("utf-8"),
+                )
+            )
+    return planned

@@ -1,4 +1,5 @@
 """Explicit output choices for caption/TXT/metadata migration."""
+
 import tkinter as tk
 from tkinter import filedialog, ttk
 
@@ -28,7 +29,9 @@ class ExportDialog(tk.Toplevel):
         self.save_transparency_as_application_override = tk.BooleanVar(self, value=False)
         self.transparency_preferences = TransparencyPreferenceStore()
         try:
-            from comfyui_support_tools.shared.transparency_contracts import resolve_transparency_enabled
+            from comfyui_support_tools.shared.transparency_contracts import (
+                resolve_transparency_enabled,
+            )
 
             self.transparency_assist.set(
                 resolve_transparency_enabled(
@@ -60,6 +63,20 @@ class ExportDialog(tk.Toplevel):
         self.c2pa_private_key = tk.StringVar(self)
         self.c2pa_tsa_url = tk.StringVar(self)
         self.c2pa_verification_policy = tk.StringVar(self, value="error")
+        self._build_disclosure_controls(body)
+        self._build_general_controls(body)
+        self._build_c2pa_controls(body)
+        self._build_footer(body)
+        self.transparency_assist.trace_add("write", self._refresh_transparency_controls)
+        self._refresh_transparency_controls()
+
+    # {
+    # 責務: [ _build_disclosure_controls: 開示分類、prompt/model/workflowの入力欄を配置 ]
+    # 処理: [ 1: 対応するUI部品を作成する ]
+    # 引数: [self, body]
+    # 戻り値: [なし]
+    # }
+    def _build_disclosure_controls(self, body):
         ttk.Checkbutton(
             body,
             text="画像と同じ場所へ caption sidecar (.txt)",
@@ -88,7 +105,9 @@ class ExportDialog(tk.Toplevel):
         )
         self.prompt_disclosure_box.pack(side="left", padx=5)
         ttk.Label(prompt_row, text="匿名化要約").pack(side="left")
-        self.prompt_summary_entry = ttk.Entry(prompt_row, textvariable=self.transparency_prompt_summary)
+        self.prompt_summary_entry = ttk.Entry(
+            prompt_row, textvariable=self.transparency_prompt_summary
+        )
         self.prompt_summary_entry.pack(side="left", fill="x", expand=True)
         model_row = ttk.Frame(body)
         model_row.pack(fill="x", pady=2)
@@ -102,16 +121,24 @@ class ExportDialog(tk.Toplevel):
         )
         self.model_disclosure_box.pack(side="left", padx=5)
         ttk.Label(model_row, text="Family").pack(side="left")
-        self.model_family_entry = ttk.Entry(model_row, textvariable=self.transparency_model_family, width=14)
+        self.model_family_entry = ttk.Entry(
+            model_row, textvariable=self.transparency_model_family, width=14
+        )
         self.model_family_entry.pack(side="left", padx=2)
         ttk.Label(model_row, text="ID").pack(side="left")
-        self.model_id_entry = ttk.Entry(model_row, textvariable=self.transparency_model_id, width=14)
+        self.model_id_entry = ttk.Entry(
+            model_row, textvariable=self.transparency_model_id, width=14
+        )
         self.model_id_entry.pack(side="left", padx=2)
         ttk.Label(model_row, text="Version").pack(side="left")
-        self.model_version_entry = ttk.Entry(model_row, textvariable=self.transparency_model_version, width=9)
+        self.model_version_entry = ttk.Entry(
+            model_row, textvariable=self.transparency_model_version, width=9
+        )
         self.model_version_entry.pack(side="left", padx=2)
         ttk.Label(model_row, text="SHA256").pack(side="left")
-        self.model_hash_entry = ttk.Entry(model_row, textvariable=self.transparency_model_hash, width=18)
+        self.model_hash_entry = ttk.Entry(
+            model_row, textvariable=self.transparency_model_hash, width=18
+        )
         self.model_hash_entry.pack(side="left", padx=2)
         workflow_row = ttk.Frame(body)
         workflow_row.pack(fill="x", pady=2)
@@ -144,6 +171,14 @@ class ExportDialog(tk.Toplevel):
             variable=self.transparency_visible_disclosure,
         )
         self.transparency_visible_check.pack(anchor="w", pady=3)
+
+    # {
+    # 責務: [ _build_general_controls: 通常のsidecarとTransparency Assist設定欄を配置 ]
+    # 処理: [ 1: 対応するUI部品を作成する ]
+    # 引数: [self, body]
+    # 戻り値: [なし]
+    # }
+    def _build_general_controls(self, body):
         ttk.Checkbutton(
             body,
             text="画像と同じ場所へ構造化 metadata (.画像拡張子.kadoka.json)",
@@ -152,7 +187,9 @@ class ExportDialog(tk.Toplevel):
         row = ttk.Frame(body)
         row.pack(fill="x", pady=3)
         ttk.Checkbutton(row, text="Batch TXT", variable=self.batch_enabled).pack(side="left")
-        ttk.Entry(row, textvariable=self.batch_path).pack(side="left", fill="x", expand=True, padx=5)
+        ttk.Entry(row, textvariable=self.batch_path).pack(
+            side="left", fill="x", expand=True, padx=5
+        )
         ttk.Button(row, text="選択", command=self._choose_batch).pack(side="left")
         ttk.Checkbutton(
             body,
@@ -189,6 +226,14 @@ class ExportDialog(tk.Toplevel):
             text="PNGに機械可読metadataを埋め込んだ別コピーも作成",
             variable=self.transparency_png_copy,
         ).pack(anchor="w", pady=3)
+
+    # {
+    # 責務: [ _build_c2pa_controls: Deepfake、C2PA署名、鍵と検証設定を配置 ]
+    # 処理: [ 1: 対応するUI部品を作成する ]
+    # 引数: [self, body]
+    # 戻り値: [なし]
+    # }
+    def _build_c2pa_controls(self, body):
         self.transparency_deepfake_assist_check = ttk.Checkbutton(
             body,
             text="Deepfake disclosure assistance（法的判定ではありません）",
@@ -217,9 +262,7 @@ class ExportDialog(tk.Toplevel):
         certificate_row.pack(fill="x", pady=2)
         ttk.Label(certificate_row, text="署名証明書PEM").pack(side="left")
         self.c2pa_certificate_entry = ttk.Entry(certificate_row, textvariable=self.c2pa_certificate)
-        self.c2pa_certificate_entry.pack(
-            side="left", fill="x", expand=True, padx=5
-        )
+        self.c2pa_certificate_entry.pack(side="left", fill="x", expand=True, padx=5)
         self.c2pa_certificate_button = ttk.Button(
             certificate_row,
             text="選択",
@@ -229,10 +272,10 @@ class ExportDialog(tk.Toplevel):
         key_row = ttk.Frame(body)
         key_row.pack(fill="x", pady=2)
         ttk.Label(key_row, text="署名秘密鍵PEM").pack(side="left")
-        self.c2pa_private_key_entry = ttk.Entry(key_row, textvariable=self.c2pa_private_key, show="•")
-        self.c2pa_private_key_entry.pack(
-            side="left", fill="x", expand=True, padx=5
+        self.c2pa_private_key_entry = ttk.Entry(
+            key_row, textvariable=self.c2pa_private_key, show="•"
         )
+        self.c2pa_private_key_entry.pack(side="left", fill="x", expand=True, padx=5)
         self.c2pa_private_key_button = ttk.Button(
             key_row,
             text="選択",
@@ -243,9 +286,7 @@ class ExportDialog(tk.Toplevel):
         tsa_row.pack(fill="x", pady=2)
         ttk.Label(tsa_row, text="RFC 3161 TSA URL (任意)").pack(side="left")
         self.c2pa_tsa_entry = ttk.Entry(tsa_row, textvariable=self.c2pa_tsa_url)
-        self.c2pa_tsa_entry.pack(
-            side="left", fill="x", expand=True, padx=5
-        )
+        self.c2pa_tsa_entry.pack(side="left", fill="x", expand=True, padx=5)
         policy_row = ttk.Frame(body)
         policy_row.pack(fill="x", pady=2)
         ttk.Label(policy_row, text="C2PA検証失敗時").pack(side="left")
@@ -257,6 +298,14 @@ class ExportDialog(tk.Toplevel):
             width=12,
         )
         self.c2pa_policy_box.pack(side="left", padx=5)
+
+    # {
+    # 責務: [ _build_footer: 説明文とダイアログ操作ボタンを配置 ]
+    # 処理: [ 1: 対応するUI部品を作成する ]
+    # 引数: [self, body]
+    # 戻り値: [なし]
+    # }
+    def _build_footer(self, body):
         ttk.Label(
             body,
             text=(
@@ -272,8 +321,6 @@ class ExportDialog(tk.Toplevel):
         buttons.pack(fill="x")
         ttk.Button(buttons, text="書き出す", command=self._submit).pack(side="left")
         ttk.Button(buttons, text="閉じる", command=self.destroy).pack(side="right")
-        self.transparency_assist.trace_add("write", self._refresh_transparency_controls)
-        self._refresh_transparency_controls()
 
     def _refresh_transparency_controls(self, *_):
         enabled = self.transparency_assist.get()

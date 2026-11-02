@@ -3,6 +3,7 @@
 import json
 import pyexpat
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -249,6 +250,9 @@ class LicenseInventoryTests(unittest.TestCase):
     def test_copies_runtime_license_files_and_records_resolved_versions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory)
+            runtime = target / "python-runtime"
+            runtime.mkdir()
+            (runtime / "LICENSE.txt").write_text("Test Python runtime terms", encoding="utf-8")
             executable = target / "KadokaTools.exe"
             executable.parent.mkdir(parents=True, exist_ok=True)
             executable.write_bytes(b"test executable")
@@ -257,7 +261,12 @@ class LicenseInventoryTests(unittest.TestCase):
             extension.write_bytes(b"test native extension")
             (target / "_decimal.pyd").write_bytes(b"test decimal extension")
             (target / "pyexpat.pyd").write_bytes(b"test expat extension")
-            manifest = collect_license_inventory(ROOT, target)
+            with (
+                patch.object(sys, "base_prefix", str(runtime)),
+                patch.object(sys, "version", "3.11.18 (main, Jan  1 2026, 00:00:00) [CPython]"),
+                patch.object(pyexpat, "EXPAT_VERSION", "expat_2.9.0"),
+            ):
+                manifest = collect_license_inventory(ROOT, target)
 
             names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
             self.assertTrue(
@@ -293,7 +302,7 @@ class LicenseInventoryTests(unittest.TestCase):
             )
             self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
             expat = by_name["Expat"]
-            self.assertEqual(expat["version"], pyexpat.EXPAT_VERSION.removeprefix("expat_"))
+            self.assertEqual(expat["version"], "2.9.0")
             self.assertEqual(
                 expat["license_files"],
                 ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"],

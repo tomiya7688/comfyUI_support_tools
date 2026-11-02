@@ -63,3 +63,20 @@ The `AI画像クラスタ` tab analyzes an image folder and previews three group
 To use the detector, install `requirements-ai-image-clustering.txt` and a compatible PyTorch build into the GUI's Python environment. The model weights are downloaded from Hugging Face on first inference and stored under `user_data/cache/ai_origin` by default. The model targets anime images and its score thresholds are uncalibrated. Treat image-only results as estimates and keep ambiguous results in `uncertain`. Images are not sent to an external service. The model weights are Apache-2.0 licensed and are not bundled with the application.
 
 The current PyInstaller onedir build does not bundle PyTorch or Transformers, so OSS model inference is unavailable in the frozen executable. Explicit metadata classification and copying still work, while images requiring model inference remain `uncertain`. To use OSS model inference, launch the source version of the GUI with the supported dependencies installed.
+# Video-to-MMD motion recovery core
+
+Issue #378 adds a backend-neutral video motion pipeline under
+`comfyui_support_tools.shared.video_to_mmd`. Implementations of `PoseRecoveryBackend`
+can wrap GVHMR, WHAM, or another pose model and return tracked 3D bone samples with
+confidence, estimated camera translation, ground height, and foot-contact labels.
+The shared core handles person selection, axis/scale retarget rules, camera translation
+compensation, low-confidence interpolation, temporal smoothing, foot anchoring, speed
+limiting, key reduction, and VMD 0002 bone-key serialization.
+
+`convert_video_to_vmd(video_path, output_dir, backend, profile)` writes a VMD file,
+JSON confidence/finding report, and a small animated 2D mapped-bone preview. It reserves
+all three destination paths without overwriting existing files. Preview is a motion
+debug aid and does not load PMX geometry, bone hierarchy/rest poses, IK, or a 3D renderer.
+The repository does not bundle a video decoder, person detector/tracker, GVHMR model,
+or trained pose weights. Those remain injectable backend responsibilities; detected
+limitations are reported rather than implying geometric accuracy from the 2D preview.

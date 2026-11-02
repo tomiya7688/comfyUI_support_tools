@@ -5,7 +5,18 @@ from ..widgets.preset_store import PresetStore
 from ..subapp_runtime import launch_packaged_executable, packaged_executable
 
 
+# {
+#   責務: [StartWebUITab: local backend lifecycle, resource limits, status checks, packaged GUI launching, and presetsを管理するtab]
+#   処理: [bridge GUI controls to embedded backend lifecycle and API-only policy]
+#   フィールド: [mod, preset_store/name, CPU/RAM/priority/stop timers, flags_text, logbox, status_label]
+# }
 class StartWebUITab(ttk.Frame):
+    # {
+    #   責務: [__init__: backend module, resource-limit fields, and UI stateを初期化する]
+    #   処理: [load embedded module handle, initialize Tk variables, build controls, restore defaults, and schedule status polling]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.mod = EMBEDDED_START_WEBUI
@@ -23,6 +34,12 @@ class StartWebUITab(ttk.Frame):
         self._load_defaults()
         self.after(500, self._poll_status)
 
+    # {
+    #   責務: [_build: backend resource controls, flags, status, lifecycle actions, and preset UIを構築する]
+    #   処理: [respect API-only mode and unavailable module states while composing widgets]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
         if isinstance(self.mod, Exception):
             ttk.Label(self, text=f"start_webui.py を読み込めませんでした: {self.mod}").pack(
@@ -93,6 +110,12 @@ class StartWebUITab(ttk.Frame):
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
 
+    # {
+    #   責務: [_load_defaults: embedded backend defaults and log callbackをGUI controlsへ接続する]
+    #   処理: [restore resource limits and launch flags, wrap backend logging, and refresh presets]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _load_defaults(self):
         if isinstance(self.mod, Exception):
             return
@@ -118,6 +141,12 @@ class StartWebUITab(ttk.Frame):
 
         old_log = getattr(self.mod, "_log_msg", None)
 
+        # {
+        #   責務: [tab_log: backend log callbackをterminal-compatible output and GUI logへforwardする]
+        #   処理: [preserve prior console behavior when present and append to logbox]
+        #   引数: [msg]
+        #   戻り値: [処理結果]
+        # }
         def tab_log(msg: str):
             try:
                 if old_log:
@@ -130,9 +159,21 @@ class StartWebUITab(ttk.Frame):
         self.mod._log_msg = tab_log
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [configure values from PresetStore]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: CPU/RAM/priority/shutdown/launch flagsをpresetへ保存する]
+    #   処理: [serialize GUI state, refresh selector, and log errors]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
             values = {
@@ -150,6 +191,12 @@ class StartWebUITab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: selected presetからbackend resource and launch settingsを復元する]
+    #   処理: [restore known controls and optional flags text]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -169,6 +216,12 @@ class StartWebUITab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [_values: GUI text fieldsをtyped backend launch argument tupleへparseする]
+    #   処理: [split flags and parse integer/float values with blank RAM as None]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _values(self):
         flags = self.flags_text.get("1.0", "end").strip().split() if self.flags_text else []
         return (
@@ -266,6 +319,12 @@ class StartWebUITab(ttk.Frame):
         self.logbox.log("🔍 既に起動しているプロセスを検索中...")
         threading.Thread(target=self._force_kill_thread, daemon=True).start()
 
+    # {
+    #   責務: [_force_kill_thread: unmanaged backend processをbackgroundで検索し終了する]
+    #   処理: [call embedded finder when available and log missing process/module capability]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _force_kill_thread(self):
         """強制停止を別スレッドで実行"""
         if isinstance(self.mod, Exception):
@@ -277,6 +336,12 @@ class StartWebUITab(ttk.Frame):
         else:
             self.logbox.log("❌ _find_and_kill_webui_process が見つかりません")
 
+    # {
+    #   責務: [health_check: backend API health-check workerを開始する]
+    #   処理: [validate module and launch asynchronous callback]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def health_check(self):
         """ヘルスチェックボタンのコールバック"""
         if isinstance(self.mod, Exception):
@@ -286,6 +351,12 @@ class StartWebUITab(ttk.Frame):
         self.logbox.log("🏥 ヘルスチェック実行中...")
         threading.Thread(target=self._health_check_thread, daemon=True).start()
 
+    # {
+    #   責務: [_health_check_thread: backend health responseを問い合わせてonline stateをlogする]
+    #   処理: [validate method availability, call checker, and report status/errors]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _health_check_thread(self):
         """ヘルスチェックを別スレッドで実行"""
         if isinstance(self.mod, Exception):
@@ -305,6 +376,12 @@ class StartWebUITab(ttk.Frame):
         except Exception as e:
             self.logbox.log(f"❌ ヘルスチェックエラー: {e}")
 
+    # {
+    #   責務: [restart: validated local backend settingsでrestart workerを開始する]
+    #   処理: [respect API-only/module state, parse settings, and spawn restart callback]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def restart(self):
         if API_ONLY_MODE:
             self.logbox.log("API専用モードではローカルバックエンドを再起動できません")
@@ -318,6 +395,12 @@ class StartWebUITab(ttk.Frame):
             return
         threading.Thread(target=self.mod._restart_webui, args=args, daemon=True).start()
 
+    # {
+    #   責務: [open_backend_gui: selected backend用packaged KadokaTools GUIを起動する]
+    #   処理: [respect API-only mode, resolve sibling executable, set backend environment, and report OS launch errors]
+    #   引数: [backend]
+    #   戻り値: [処理結果]
+    # }
     def open_backend_gui(self, backend):
         if API_ONLY_MODE:
             self.logbox.log("API専用モードではバックエンドGUIを起動できません")
@@ -334,6 +417,12 @@ class StartWebUITab(ttk.Frame):
         except OSError as error:
             self.logbox.log(f"GUI起動エラー: {error}")
 
+    # {
+    #   責務: [_poll_status: embedded module API statusをlabelへ反映し次回pollをscheduleする]
+    #   処理: [read current status when available and schedule after callback]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _poll_status(self):
         if not isinstance(self.mod, Exception) and hasattr(self, "status_label"):
             self.status_label.config(text=getattr(self.mod, "_api_status", "⚫ オフライン"))

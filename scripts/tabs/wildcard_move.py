@@ -8,11 +8,22 @@ from ..context import *
 from ..services import LogBox, LabeledPathRow
 
 
+# {
+#   責務: [WildcardMoveTab: wildcard TXTをroot内で移動しreferencesを維持するUIを提供する]
+#   処理: [collect root, source, destination, and invoke reference rewriting]
+#   フィールド: [root_dir, source, destination, logbox]
+# }
 class WildcardMoveTab(ttk.Frame):
     """参照を保ったままワイルドカードtxtを移動する。"""
 
     PATTERN = re.compile(r"__([^\r\n]+?)__")
 
+    # {
+    #   責務: [__init__: root, source, and destination path stateを初期化する]
+    #   処理: [create Tk variables and build widgets]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.root_dir = tk.StringVar(value=str(WILDCARDS_DIR))
@@ -20,14 +31,31 @@ class WildcardMoveTab(ttk.Frame):
         self.destination = tk.StringVar()
         self._build()
 
+    # {
+    #   責務: [_build: root/source/destination controls and move actionを構築する]
+    #   処理: [compose path rows and log area]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
         LabeledPathRow(self, "wildcard root", self.root_dir, mode="dir").pack(fill="x", pady=3)
-        LabeledPathRow(self, "移動元txt", self.source, mode="file", filetypes=[("Text", "*.txt")]).pack(fill="x", pady=3)
-        ttk.Label(self, text="移動先（rootからの相対パス。拡張子省略可）").pack(anchor="w", pady=(8, 0))
+        LabeledPathRow(
+            self, "移動元txt", self.source, mode="file", filetypes=[("Text", "*.txt")]
+        ).pack(fill="x", pady=3)
+        ttk.Label(self, text="移動先（rootからの相対パス。拡張子省略可）").pack(
+            anchor="w", pady=(8, 0)
+        )
         ttk.Entry(self, textvariable=self.destination).pack(fill="x", pady=3)
         ttk.Button(self, text="参照を書き換えて移動", command=self.move).pack(anchor="w", pady=6)
-        self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True)
+        self.logbox = LogBox(self)
+        self.logbox.pack(fill="both", expand=True)
 
+    # {
+    #   責務: [_relative: path valueをwildcard rootからのsafe relative stemへ解決する]
+    #   処理: [convert absolute path under root, reject parent traversal, and remove suffix]
+    #   引数: [root, value]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def _relative(root, value):
         path = Path(value.strip())
@@ -37,21 +65,40 @@ class WildcardMoveTab(ttk.Frame):
             raise ValueError("root外のパスは指定できません")
         return path.with_suffix("")
 
+    # {
+    #   責務: [move: selected wildcard fileをmoveしroot内referencesをdestinationへ書き換える]
+    #   処理: [validate source/target, rewrite matching references across TXT files, create parent directory, and move source]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def move(self):
         try:
             root = Path(self.root_dir.get().strip())
             source_rel = self._relative(root, self.source.get())
             target_rel = self._relative(root, self.destination.get())
-            source, target = root / source_rel.with_suffix(".txt"), root / target_rel.with_suffix(".txt")
-            if not root.is_dir() or not source.is_file(): raise ValueError("rootまたは移動元txtがありません")
-            if target.exists(): raise ValueError("移動先が既に存在します")
+            source, target = (
+                root / source_rel.with_suffix(".txt"),
+                root / target_rel.with_suffix(".txt"),
+            )
+            if not root.is_dir() or not source.is_file():
+                raise ValueError("rootまたは移動元txtがありません")
+            if target.exists():
+                raise ValueError("移動先が既に存在します")
             old, new = source_rel.as_posix(), target_rel.as_posix()
             changed = 0
             for path in root.rglob("*.txt"):
                 text = path.read_text(encoding="utf-8")
-                updated = self.PATTERN.sub(lambda m: f"__{new}__" if m.group(1).strip().replace("\\", "/").strip("/") == old else m.group(0), text)
+                updated = self.PATTERN.sub(
+                    lambda m: (
+                        f"__{new}__"
+                        if m.group(1).strip().replace("\\", "/").strip("/") == old
+                        else m.group(0)
+                    ),
+                    text,
+                )
                 if updated != text:
-                    path.write_text(updated, encoding="utf-8"); changed += 1
+                    path.write_text(updated, encoding="utf-8")
+                    changed += 1
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(source), str(target))
             self.logbox.log(f"移動完了: {old} -> {new} / 参照更新 {changed}ファイル")

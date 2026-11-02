@@ -16,6 +16,11 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   責務: [PromptGenerateTab: manual prompt generation, backend capabilities, model choices, LoRA checks, and preset stateを管理するtab]
+#   処理: [connect prompt controls to EmbeddedRandomImage and shared generation routing]
+#   フィールド: [backend_capabilities, generator, prompt/negative editors, generation settings, model_choices, preset state]
+# }
 class PromptGenerateTab(ttk.Frame):
     """手入力プロンプトを現在の生成バックエンドへ送る。"""
 
@@ -60,6 +65,12 @@ class PromptGenerateTab(ttk.Frame):
     #   引数: [self: PromptGenerateTab instance]
     #   戻り値: []
     # }
+    # {
+    #   責務: [_build: prompt, negative prompt, image settings, anime policy, and backend-dependent controlsを構築する]
+    #   処理: [compose editor fields, compatibility/status labels, model selectors, and actions]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
         LabeledPathRow(self, "wildcard root", self.wildcard_root, mode="dir").pack(fill="x", pady=3)
         LabeledPathRow(self, "出力先", self.output_dir, mode="dir").pack(fill="x", pady=3)
@@ -68,7 +79,9 @@ class PromptGenerateTab(ttk.Frame):
         ttk.Label(api_row, text="API URL", width=16).pack(side="left")
         ttk.Entry(api_row, textvariable=self.api_url).pack(side="left", fill="x", expand=True)
 
-        prompt_frame = ttk.LabelFrame(self, text="Prompt（__wildcard__ / <lora:...> / {a|b} 対応）", padding=6)
+        prompt_frame = ttk.LabelFrame(
+            self, text="Prompt（__wildcard__ / <lora:...> / {a|b} 対応）", padding=6
+        )
         prompt_frame.pack(fill="both", expand=True, pady=(6, 3))
         self.prompt = ScrolledText(prompt_frame, height=7, wrap="word")
         self.prompt.pack(fill="both", expand=True)
@@ -79,14 +92,20 @@ class PromptGenerateTab(ttk.Frame):
         lora_frame = ttk.LabelFrame(self, text="LoRA互換性（family-level）", padding=5)
         lora_frame.pack(fill="x", pady=(2, 4))
         self.lora_compatibility_text = tk.StringVar(value="LoRA指定はありません。")
-        ttk.Label(lora_frame, textvariable=self.lora_compatibility_text, wraplength=900).pack(anchor="w")
+        ttk.Label(lora_frame, textvariable=self.lora_compatibility_text, wraplength=900).pack(
+            anchor="w"
+        )
         self.prompt.bind("<KeyRelease>", self._update_lora_compatibility)
 
         settings = ttk.Frame(self)
         settings.pack(fill="x", pady=4)
-        for index, (label, variable) in enumerate((("幅", self.width), ("高さ", self.height), ("steps", self.steps))):
+        for index, (label, variable) in enumerate(
+            (("幅", self.width), ("高さ", self.height), ("steps", self.steps))
+        ):
             ttk.Label(settings, text=label).grid(row=0, column=index * 2, sticky="w", padx=(0, 4))
-            ttk.Entry(settings, textvariable=variable, width=8).grid(row=0, column=index * 2 + 1, sticky="w", padx=(0, 10))
+            ttk.Entry(settings, textvariable=variable, width=8).grid(
+                row=0, column=index * 2 + 1, sticky="w", padx=(0, 10)
+            )
         ttk.Label(settings, text="sampler").grid(row=1, column=0, sticky="w", pady=(4, 0))
         self.sampler_combo = ttk.Combobox(settings, textvariable=self.sampler, width=22)
         self.sampler_combo.grid(row=1, column=1, sticky="w", pady=(4, 0))
@@ -119,7 +138,9 @@ class PromptGenerateTab(ttk.Frame):
             text="Auto-route to a compatible installed anime model",
             variable=self.anime_auto_route,
         ).grid(row=1, column=0, columnspan=4, sticky="w")
-        self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
+        self.model_classification_text = tk.StringVar(
+            value="モデルを選ぶと系統判定と根拠を表示します。"
+        )
         ttk.Label(settings, textvariable=self.model_classification_text, wraplength=900).grid(
             row=4, column=0, columnspan=6, sticky="w", pady=(2, 0)
         )
@@ -128,12 +149,16 @@ class PromptGenerateTab(ttk.Frame):
             ttk.Label(settings, text="Comfyフロー").grid(row=3, column=0, sticky="w", pady=(4, 0))
             self.flow_combo = ttk.Combobox(settings, textvariable=self.comfy_flow, width=42)
             self.flow_combo.grid(row=3, column=1, columnspan=5, sticky="we", pady=(4, 0))
-            self.flow_combo.bind("<<ComboboxSelected>>", lambda _event: self._apply_flow_checkpoint_choices())
+            self.flow_combo.bind(
+                "<<ComboboxSelected>>", lambda _event: self._apply_flow_checkpoint_choices()
+            )
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", pady=8)
         ttk.Button(buttons, text="1枚生成", command=self.start).pack(side="left")
-        ttk.Button(buttons, text="モデル候補更新", command=self.refresh_backend_choices).pack(side="left", padx=4)
+        ttk.Button(buttons, text="モデル候補更新", command=self.refresh_backend_choices).pack(
+            side="left", padx=4
+        )
         ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
         self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
         self.preset_combo.pack(side="left")
@@ -143,15 +168,39 @@ class PromptGenerateTab(ttk.Frame):
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [_log_from_worker: worker log messageをTk event loop経由で表示する]
+    #   処理: [schedule logbox update with after callback]
+    #   引数: [message]
+    #   戻り値: [処理結果]
+    # }
     def _log_from_worker(self, message):
         self.after(0, lambda: self.logbox.log(str(message)))
 
+    # {
+    #   責務: [_prompt_text: prompt editorのtextをtrailing newlineなしで取得する]
+    #   処理: [read text widget content]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _prompt_text(self):
         return self.prompt.get("1.0", "end-1c")
 
+    # {
+    #   責務: [_negative_text: negative prompt editorのtextをtrailing newlineなしで取得する]
+    #   処理: [read text widget content]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _negative_text(self):
         return self.negative.get("1.0", "end-1c")
 
+    # {
+    #   責務: [_set_text: target text widget contentをreplaceする]
+    #   処理: [delete existing text and insert supplied value]
+    #   引数: [widget, value]
+    #   戻り値: [処理結果]
+    # }
     def _set_text(self, widget, value):
         widget.delete("1.0", "end")
         widget.insert("1.0", value)
@@ -160,6 +209,12 @@ class PromptGenerateTab(ttk.Frame):
     #   責務: [_workflow_value: backend capabilityに応じてworkflow設定値を返す]
     #   引数: [self: PromptGenerateTab instance]
     #   戻り値: [str: 対応backendのworkflow名, 非対応backendでは空文字列]
+    # }
+    # {
+    #   責務: [_workflow_value: backend capabilityに応じてworkflow selectionを返す]
+    #   処理: [return blank for unsupported backends and trimmed selection otherwise]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
     # }
     def _workflow_value(self):
         if not self.backend_capabilities.supports("workflow"):
@@ -174,16 +229,38 @@ class PromptGenerateTab(ttk.Frame):
     # }
     def _preset_values(self):
         return {
-            "wildcard_root": self.wildcard_root.get(), "output_dir": self.output_dir.get(), "api_url": self.api_url.get(),
-            "prompt": self._prompt_text(), "negative": self._negative_text(), "width": self.width.get(), "height": self.height.get(),
-            "steps": self.steps.get(), "sampler": self.sampler.get(), "checkpoint": self.checkpoint.get(), "vae_name": self.vae_name.get(), "comfy_flow": self._workflow_value(),
-            "anime_intent": self.anime_intent.get(), "anime_content_mode": self.anime_content_mode.get(),
+            "wildcard_root": self.wildcard_root.get(),
+            "output_dir": self.output_dir.get(),
+            "api_url": self.api_url.get(),
+            "prompt": self._prompt_text(),
+            "negative": self._negative_text(),
+            "width": self.width.get(),
+            "height": self.height.get(),
+            "steps": self.steps.get(),
+            "sampler": self.sampler.get(),
+            "checkpoint": self.checkpoint.get(),
+            "vae_name": self.vae_name.get(),
+            "comfy_flow": self._workflow_value(),
+            "anime_intent": self.anime_intent.get(),
+            "anime_content_mode": self.anime_content_mode.get(),
             "anime_auto_route": self.anime_auto_route.get(),
         }
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [configure values from PresetStore]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: prompt, generation, anime, and backend settingsをpresetへ保存する]
+    #   処理: [serialize current values and refresh selector]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
             path = self.preset_store.save(self.preset_name.get(), self._preset_values())
@@ -193,10 +270,27 @@ class PromptGenerateTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: presetからprompt, generation, anime, and backend settingsを復元する]
+    #   処理: [restore optional keys, update flow choices and compatibility notices, and log result]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("wildcard_root", self.wildcard_root), ("output_dir", self.output_dir), ("api_url", self.api_url), ("width", self.width), ("height", self.height), ("steps", self.steps), ("sampler", self.sampler), ("checkpoint", self.checkpoint), ("vae_name", self.vae_name), ("comfy_flow", self.comfy_flow)):
+            for key, variable in (
+                ("wildcard_root", self.wildcard_root),
+                ("output_dir", self.output_dir),
+                ("api_url", self.api_url),
+                ("width", self.width),
+                ("height", self.height),
+                ("steps", self.steps),
+                ("sampler", self.sampler),
+                ("checkpoint", self.checkpoint),
+                ("vae_name", self.vae_name),
+                ("comfy_flow", self.comfy_flow),
+            ):
                 if key in values:
                     variable.set(values[key])
             for key, variable in (
@@ -214,10 +308,22 @@ class PromptGenerateTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [_load_backend_choices: local backend model choicesを取得しUIへ反映する]
+    #   処理: [load without querying a live API and delegate application]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _load_backend_choices(self):
         choices, _ = load_backend_choices(query_api=False)
         self._apply_backend_choices(choices)
 
+    # {
+    #   責務: [_apply_backend_choices: checkpoint, UNet, LoRA, VAE, sampler, and flow listsをUIへ適用する]
+    #   処理: [store model classification inputs, update comboboxes, and refresh dependent status]
+    #   引数: [choices]
+    #   戻り値: [処理結果]
+    # }
     def _apply_backend_choices(self, choices):
         self.model_choices = {
             "checkpoints": list(choices.get("checkpoints", [])),
@@ -234,13 +340,27 @@ class PromptGenerateTab(ttk.Frame):
             self.flow_combo.configure(values=choices.get("flows", []))
             self._apply_flow_checkpoint_choices()
 
+    # {
+    #   責務: [_apply_flow_checkpoint_choices: selected Comfy workflow model inputsをcheckpoint selectorへ加える]
+    #   処理: [check workflow support and merge extracted model names with existing values]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _apply_flow_checkpoint_choices(self):
         if not hasattr(self, "flow_combo"):
             return
         choices = flow_checkpoint_choices(self.comfy_flow.get())
         if choices:
-            self.checkpoint_combo.configure(values=_unique_choices(choices + list(self.checkpoint_combo.cget("values"))))
+            self.checkpoint_combo.configure(
+                values=_unique_choices(choices + list(self.checkpoint_combo.cget("values")))
+            )
 
+    # {
+    #   責務: [_update_model_classification: selected checkpointのmodel family classification and LoRA compatibilityを更新する]
+    #   処理: [reset empty selection or compute and display classification]
+    #   引数: [*_args]
+    #   戻り値: [処理結果]
+    # }
     def _update_model_classification(self, *_args):
         selected = self.checkpoint.get().strip()
         if not selected:
@@ -251,19 +371,44 @@ class PromptGenerateTab(ttk.Frame):
         self.model_classification_text.set(describe_model_classification(classification))
         self._update_lora_compatibility()
 
+    # {
+    #   責務: [_update_lora_compatibility: prompt内LoRA referencesのfamily compatibilityを評価して表示する]
+    #   処理: [pass prompt, selected checkpoint, and model catalog to compatibility analyzer]
+    #   引数: [_event]
+    #   戻り値: [処理結果]
+    # }
     def _update_lora_compatibility(self, _event=None):
         findings = assess_prompt_loras(
             self._prompt_text(), self.checkpoint.get(), self.model_choices
         )
         self.lora_compatibility_text.set(format_prompt_lora_findings(findings))
 
+    # {
+    #   責務: [refresh_backend_choices: live backend API model choicesのrefreshをbackgroundで開始する]
+    #   処理: [query configured API on worker and schedule result application on Tk loop]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def refresh_backend_choices(self):
+        # {
+        #   責務: [worker: live model choice queryを実行しUI callbackをscheduleする]
+        #   処理: [load API choices and warnings then enqueue completion handler]
+        #   引数: [なし]
+        #   戻り値: [処理結果]
+        # }
         def worker():
             choices, warnings = load_backend_choices(self.api_url.get(), query_api=True)
             self.after(0, lambda: self._finish_backend_refresh(choices, warnings))
+
         threading.Thread(target=worker, daemon=True).start()
         self.logbox.log("モデル候補を更新中...")
 
+    # {
+    #   責務: [_finish_backend_refresh: refreshed choices and query warningsをUIへ表示する]
+    #   処理: [apply choices and log candidate counts and each warning]
+    #   引数: [choices, warnings]
+    #   戻り値: [処理結果]
+    # }
     def _finish_backend_refresh(self, choices, warnings):
         self._apply_backend_choices(choices)
         self.logbox.log(
@@ -274,6 +419,12 @@ class PromptGenerateTab(ttk.Frame):
         for warning in warnings:
             self.logbox.log(f"API候補: {warning}")
 
+    # {
+    #   責務: [start: prompt generationをsafe background workerへdispatchする]
+    #   処理: [call _safe_thread with run and logbox]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def start(self):
         _safe_thread(self.logbox, self.run)
 
@@ -310,7 +461,11 @@ class PromptGenerateTab(ttk.Frame):
         self.generator.anime_content_mode = AnimeContentMode(self.anime_content_mode.get())
         self.generator.anime_auto_route = self.anime_auto_route.get()
         cache = {}
-        prompt = self.generator._expand_text(source_prompt, self.generator.root_dir, wildcard_cache=cache)
-        negative = self.generator._expand_text(self._negative_text(), self.generator.root_dir, wildcard_cache=cache)
+        prompt = self.generator._expand_text(
+            source_prompt, self.generator.root_dir, wildcard_cache=cache
+        )
+        negative = self.generator._expand_text(
+            self._negative_text(), self.generator.root_dir, wildcard_cache=cache
+        )
         self.logbox.log(f"展開済み prompt: {prompt}")
         self.generator._generate(prompt=prompt, negative=negative, wildcard_cache=cache)

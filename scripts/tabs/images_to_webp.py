@@ -3,8 +3,21 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+
+# {
+#   責務: [ImagesToWebpTab: 画像folderをWebP変換するUI state, presets, and workerを管理する]
+#   処理: [create source, quality/lossless controls, preset actions, and conversion log]
+#   フィールド: [input_dir, quality, lossless, worker_thread, preset_store, preset_name, logbox]
+# }
 class ImagesToWebpTab(ttk.Frame):
     DEFAULT_INPUT_DIR = USER_PATHS["images_to_webp_input_dir"]
+
+    # {
+    #   責務: [__init__: conversion defaults and controlsを初期化する]
+    #   処理: [initialize Tk variables and create path, quality, preset, and log widgets]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.input_dir = tk.StringVar(value=self.DEFAULT_INPUT_DIR)
@@ -32,12 +45,28 @@ class ImagesToWebpTab(ttk.Frame):
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [query PresetStore and configure combobox]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: conversion folder and optionsをpresetへ保存する]
+    #   処理: [persist current settings and report outcome]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
-            values = {"input_dir": self.input_dir.get(), "quality": self.quality.get(), "lossless": self.lossless.get()}
+            values = {
+                "input_dir": self.input_dir.get(),
+                "quality": self.quality.get(),
+                "lossless": self.lossless.get(),
+            }
             path = self.preset_store.save(self.preset_name.get(), values)
             self.preset_name.set(path.stem)
             self._refresh_preset_choices()
@@ -45,6 +74,12 @@ class ImagesToWebpTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: presetからconversion folder and optionsを復元する]
+    #   処理: [read saved values with current-state fallbacks and log result]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -55,9 +90,21 @@ class ImagesToWebpTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [clear_log: conversion log textを消去する]
+    #   処理: [delete all content from the text widget]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def clear_log(self):
         self.logbox.delete("1.0", "end")
 
+    # {
+    #   責務: [start: 既存worker確認後にconversionを開始する]
+    #   処理: [avoid duplicate active run and start a daemon worker]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def start(self):
         if self.worker_thread and self.worker_thread.is_alive():
             self.logbox.log("すでに変換中です。停止してから再実行してください。")
@@ -66,14 +113,27 @@ class ImagesToWebpTab(ttk.Frame):
         self.worker_thread = threading.Thread(target=self.run_safe, daemon=True)
         self.worker_thread.start()
 
+    # {
+    #   責務: [run_safe: worker conversion exceptionをGUI logへ報告する]
+    #   処理: [call run and capture exception summary without traceback propagation]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run_safe(self):
         try:
             self.run()
         except Exception as e:
             import traceback
+
             self.logbox.log("❌ 画像変換エラー:")
             self.logbox.log("".join(traceback.format_exception_only(type(e), e)).strip())
 
+    # {
+    #   責務: [_save_webp: single JPEG/PNG sourceをWebPへ保存しsourceを削除する]
+    #   処理: [open with Pillow, apply lossless or quality settings, write sibling .webp, then unlink source]
+    #   引数: [path]
+    #   戻り値: [Path]
+    # }
     def _save_webp(self, path: Path) -> Path:
         pillow_image = _load_pillow_image()
         with pillow_image.open(path) as im:
@@ -86,6 +146,12 @@ class ImagesToWebpTab(ttk.Frame):
         path.unlink()
         return out_path
 
+    # {
+    #   責務: [run: selected directory以下のJPEG/PNG filesをWebP conversionする]
+    #   処理: [validate Pillow/path/quality, recursively process images, write outputs and delete successfully converted sources]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run(self):
         try:
             _load_pillow_image()
@@ -105,7 +171,11 @@ class ImagesToWebpTab(ttk.Frame):
                 self.logbox.log(f"QUALITY は 1-100 の整数にしてください: {self.quality.get()}")
                 return
         self.logbox.log("ファイル探索中...")
-        images = (p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in [".jpg", ".jpeg", ".png"])
+        images = (
+            p
+            for p in root.rglob("*")
+            if p.is_file() and p.suffix.lower() in [".jpg", ".jpeg", ".png"]
+        )
         count = 0
         for img in images:
             count += 1

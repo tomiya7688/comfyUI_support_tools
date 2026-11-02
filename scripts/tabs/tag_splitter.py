@@ -9,9 +9,20 @@ from ..services import LogBox, LabeledPathRow
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   責務: [TagSplitterTab: tag TXT filesをcategory output directoriesへ分割するtabを管理する]
+#   処理: [create input/output, recursion, preset, and log controls]
+#   フィールド: [input_dir, output_dir, recursive, preset_store, logbox]
+# }
 class TagSplitterTab(ttk.Frame):
     """タグtxtを用途別のフォルダ群へ複製して分割する画面。"""
 
+    # {
+    #   責務: [__init__: split source, destination, recursion, and preset stateを初期化する]
+    #   処理: [initialize Tk variables and build controls]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.input_dir = tk.StringVar()
@@ -21,41 +32,96 @@ class TagSplitterTab(ttk.Frame):
         self.preset_store = PresetStore("tag_splitter")
         self._build()
 
+    # {
+    #   責務: [_build: folder inputs, recursion toggle, category help, and preset actionsを構築する]
+    #   処理: [compose split UI and log view]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
         LabeledPathRow(self, "入力タグフォルダ", self.input_dir, mode="dir").pack(fill="x", pady=3)
         LabeledPathRow(self, "出力先", self.output_dir, mode="dir").pack(fill="x", pady=3)
-        ttk.Checkbutton(self, text="サブフォルダも処理", variable=self.recursive).pack(anchor="w", pady=4)
-        ttk.Label(self, text="カテゴリ: 人物 / ポーズ / 服 / 画風 / 背景 / 状況 / 表情 と、それらの複合5種類").pack(anchor="w", pady=(2, 8))
-        buttons = ttk.Frame(self); buttons.pack(fill="x", pady=4)
+        ttk.Checkbutton(self, text="サブフォルダも処理", variable=self.recursive).pack(
+            anchor="w", pady=4
+        )
+        ttk.Label(
+            self,
+            text="カテゴリ: 人物 / ポーズ / 服 / 画風 / 背景 / 状況 / 表情 と、それらの複合5種類",
+        ).pack(anchor="w", pady=(2, 8))
+        buttons = ttk.Frame(self)
+        buttons.pack(fill="x", pady=4)
         ttk.Button(buttons, text="分割開始", command=self.start).pack(side="left", padx=4)
         ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
-        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18); self.preset_combo.pack(side="left")
+        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
+        self.preset_combo.pack(side="left")
         ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
         ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
-        self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True)
+        self.logbox = LogBox(self)
+        self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [configure values from PresetStore]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: input/output paths and recursion settingをpresetへ保存する]
+    #   処理: [persist current values and update selection]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
-            path = self.preset_store.save(self.preset_name.get(), {"input_dir": self.input_dir.get(), "output_dir": self.output_dir.get(), "recursive": self.recursive.get()})
-            self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
+            path = self.preset_store.save(
+                self.preset_name.get(),
+                {
+                    "input_dir": self.input_dir.get(),
+                    "output_dir": self.output_dir.get(),
+                    "recursive": self.recursive.get(),
+                },
+            )
+            self.preset_name.set(path.stem)
+            self._refresh_preset_choices()
+            self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: presetからpaths and recursion settingを復元する]
+    #   処理: [read saved values into Tk controls]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            self.input_dir.set(values.get("input_dir", self.input_dir.get())); self.output_dir.set(values.get("output_dir", self.output_dir.get())); self.recursive.set(values.get("recursive", self.recursive.get()))
+            self.input_dir.set(values.get("input_dir", self.input_dir.get()))
+            self.output_dir.set(values.get("output_dir", self.output_dir.get()))
+            self.recursive.set(values.get("recursive", self.recursive.get()))
             self.logbox.log("プリセットを読み込みました")
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [start: tag split runをdaemon worker threadで開始する]
+    #   処理: [spawn run callback]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
 
+    # {
+    #   責務: [run: selected TXT filesをTagCategorySplitterでcategory outputsへ処理する]
+    #   処理: [validate input, choose recursive scope, sort files, and delegate file writes to splitter]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run(self):
         input_root = Path(self.input_dir.get().strip())
         output_root = Path(self.output_dir.get().strip())
@@ -63,7 +129,9 @@ class TagSplitterTab(ttk.Frame):
             self.logbox.log(f"入力タグフォルダがありません: {input_root}")
             return
         files = input_root.rglob("*.txt") if self.recursive.get() else input_root.glob("*.txt")
-        files = sorted((path for path in files if path.is_file()), key=lambda path: path.as_posix().casefold())
+        files = sorted(
+            (path for path in files if path.is_file()), key=lambda path: path.as_posix().casefold()
+        )
         if not files:
             self.logbox.log("処理対象のtxtがありません")
             return

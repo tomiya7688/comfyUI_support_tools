@@ -8,54 +8,111 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   責務: [TagToPromptTab: tag textをdeduplicated promptへ整形して保存/copyするtabを管理する]
+#   処理: [provide source and output editors, prefix/suffix, and preset actions]
+#   フィールド: [input_file, output_file, prefix, suffix, source, result, preset_store, logbox]
+# }
 class TagToPromptTab(ttk.Frame):
     """タグ列を重複のない生成プロンプトへ整形する。"""
 
+    # {
+    #   責務: [__init__: input, output, prefix/suffix, and preset stateを初期化する]
+    #   処理: [create Tk variables and build controls]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.input_file = tk.StringVar()
-        self.output_file = tk.StringVar(value=str(USER_DATA_DIR / "output" / "tag_to_prompt" / "prompt.txt"))
+        self.output_file = tk.StringVar(
+            value=str(USER_DATA_DIR / "output" / "tag_to_prompt" / "prompt.txt")
+        )
         self.prefix = tk.StringVar()
         self.suffix = tk.StringVar()
         self.preset_store = PresetStore("tag_to_prompt")
         self.preset_name = tk.StringVar()
         self._build()
 
+    # {
+    #   責務: [_build: source/output editors, file load, format, clipboard, and preset actionsを構築する]
+    #   処理: [compose prompt editing widgets and log view]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
-        LabeledPathRow(self, "tagファイル（任意）", self.input_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
-        LabeledPathRow(self, "出力ファイル", self.output_file, mode="save", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
+        LabeledPathRow(
+            self,
+            "tagファイル（任意）",
+            self.input_file,
+            mode="file",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        ).pack(fill="x", pady=3)
+        LabeledPathRow(
+            self,
+            "出力ファイル",
+            self.output_file,
+            mode="save",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        ).pack(fill="x", pady=3)
         for label, variable in (("先頭に追加", self.prefix), ("末尾に追加", self.suffix)):
-            row = ttk.Frame(self); row.pack(fill="x", pady=3)
+            row = ttk.Frame(self)
+            row.pack(fill="x", pady=3)
             ttk.Label(row, text=label, width=16).pack(side="left")
             ttk.Entry(row, textvariable=variable).pack(side="left", fill="x", expand=True)
-        source_frame = ttk.LabelFrame(self, text="タグ入力（tagファイルを指定した場合は、その内容をここへ読み込みます）", padding=6)
+        source_frame = ttk.LabelFrame(
+            self,
+            text="タグ入力（tagファイルを指定した場合は、その内容をここへ読み込みます）",
+            padding=6,
+        )
         source_frame.pack(fill="both", expand=True, pady=(5, 3))
         self.source = ScrolledText(source_frame, height=8, wrap="word")
         self.source.pack(fill="both", expand=True)
-        buttons = ttk.Frame(self); buttons.pack(fill="x", pady=6)
+        buttons = ttk.Frame(self)
+        buttons.pack(fill="x", pady=6)
         ttk.Button(buttons, text="ファイルを読込", command=self.read_file).pack(side="left")
         ttk.Button(buttons, text="整形・保存", command=self.process).pack(side="left", padx=4)
         ttk.Button(buttons, text="結果をコピー", command=self.copy_result).pack(side="left", padx=4)
         ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
-        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18); self.preset_combo.pack(side="left")
+        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
+        self.preset_combo.pack(side="left")
         ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
         ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
         output_frame = ttk.LabelFrame(self, text="生成プロンプト", padding=6)
         output_frame.pack(fill="both", expand=True, pady=3)
         self.result = ScrolledText(output_frame, height=7, wrap="word")
         self.result.pack(fill="both", expand=True)
-        self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True, pady=(4, 0))
+        self.logbox = LogBox(self)
+        self.logbox.pack(fill="both", expand=True, pady=(4, 0))
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [_text: Tk text widgetのcurrent contentを取得する]
+    #   処理: [read text range excluding Tk trailing newline]
+    #   引数: [widget]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def _text(widget):
         return widget.get("1.0", "end-1c")
 
+    # {
+    #   責務: [_set_text: Tk text widget contentをreplaceする]
+    #   処理: [delete current text then insert requested value]
+    #   引数: [widget, value]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def _set_text(widget, value):
         widget.delete("1.0", "end")
         widget.insert("1.0", value)
 
+    # {
+    #   責務: [normalize_tags: comma/newline separated tagsをstable unique listへnormalizeする]
+    #   処理: [trim tokens, canonicalize case/whitespace/underscores for duplicate detection, and retain first spelling]
+    #   引数: [text]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def normalize_tags(text):
         tokens = [token.strip() for token in re.split(r"[,\n\r]+", text) if token.strip()]
@@ -68,6 +125,12 @@ class TagToPromptTab(ttk.Frame):
                 unique.append(token)
         return unique
 
+    # {
+    #   責務: [read_file: selected tag fileをsource editorへ読み込む]
+    #   処理: [validate file, read UTF-8 content, and log I/O errors]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def read_file(self):
         path = Path(self.input_file.get().strip())
         if not path.is_file():
@@ -79,9 +142,19 @@ class TagToPromptTab(ttk.Frame):
         except OSError as error:
             self.logbox.log(f"読込エラー: {error}")
 
+    # {
+    #   責務: [process: source tagsをdeduplicateしprefix/suffix付きpromptとして保存する]
+    #   処理: [format editor result, ensure output path, create parent directory, write UTF-8 text, and report status]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def process(self):
         tags = self.normalize_tags(self._text(self.source))
-        result = ", ".join(part for part in (self.prefix.get().strip(), ", ".join(tags), self.suffix.get().strip()) if part)
+        result = ", ".join(
+            part
+            for part in (self.prefix.get().strip(), ", ".join(tags), self.suffix.get().strip())
+            if part
+        )
         self._set_text(self.result, result)
         path = Path(self.output_file.get().strip())
         if not path.name:
@@ -94,29 +167,67 @@ class TagToPromptTab(ttk.Frame):
         except OSError as error:
             self.logbox.log(f"保存エラー: {error}")
 
+    # {
+    #   責務: [copy_result: nonempty resultをsystem clipboardへcopyする]
+    #   処理: [clear and append clipboard content, or log missing result]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def copy_result(self):
         value = self._text(self.result)
         if not value:
             self.logbox.log("コピーする結果がありません")
             return
-        self.clipboard_clear(); self.clipboard_append(value)
+        self.clipboard_clear()
+        self.clipboard_append(value)
         self.logbox.log("結果をクリップボードへコピーしました")
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [configure values from PresetStore]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: paths, prefix/suffix, and source textをpresetへ保存する]
+    #   処理: [serialize controls and refresh selected preset]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
-            values = {"input_file": self.input_file.get(), "output_file": self.output_file.get(), "prefix": self.prefix.get(), "suffix": self.suffix.get(), "source": self._text(self.source)}
+            values = {
+                "input_file": self.input_file.get(),
+                "output_file": self.output_file.get(),
+                "prefix": self.prefix.get(),
+                "suffix": self.suffix.get(),
+                "source": self._text(self.source),
+            }
             path = self.preset_store.save(self.preset_name.get(), values)
-            self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
+            self.preset_name.set(path.stem)
+            self._refresh_preset_choices()
+            self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: selected presetからpaths, prefix/suffix, and source textを復元する]
+    #   処理: [populate Tk variables and replace source editor text]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("input_file", self.input_file), ("output_file", self.output_file), ("prefix", self.prefix), ("suffix", self.suffix)):
+            for key, variable in (
+                ("input_file", self.input_file),
+                ("output_file", self.output_file),
+                ("prefix", self.prefix),
+                ("suffix", self.suffix),
+            ):
                 variable.set(values.get(key, variable.get()))
             self._set_text(self.source, values.get("source", self._text(self.source)))
             self.logbox.log("プリセットを読み込みました")

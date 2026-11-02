@@ -3,17 +3,30 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+
+# {
+#   責務: [RandomLinePickerTab: wildcard/choice expansionを繰り返しrandom prompt lineとして出力するtabを管理する]
+#   処理: [provide input/output, loop count, root resolution, cancellation, and progress controls]
+#   フィールド: [stop_event, worker_thread, preset_store, input/output paths, loops, root_dir, auto_root_dir, show_each_line]
+# }
 class RandomLinePickerTab(ttk.Frame):
     """random_line_picker.py を統合版に内包したタブ。
 
     ターミナルには出さず、このタブのログ欄だけに進捗を表示します。
     元スクリプトの初期値は維持しています。
     """
+
     DEFAULT_INPUT_FILE = str(WILDCARDS_DIR / "1girl_bestquality.txt")
     DEFAULT_OUTPUT_FILE = str(A1111_DIR / "outputs" / "text" / "1girl_bestquality_output4.txt")
     DEFAULT_LOOPS = "100000"
     MAX_DEPTH = 20
 
+    # {
+    #   責務: [__init__: random generation, cancellation, path, loop, and preset stateを初期化する]
+    #   処理: [create Tk variables and build UI]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.stop_event = threading.Event()
@@ -30,6 +43,12 @@ class RandomLinePickerTab(ttk.Frame):
 
         self._build()
 
+    # {
+    #   責務: [_build: input/output, root, loops, per-line logging, and preset controlsを構築する]
+    #   処理: [compose widgets, display defaults, and initialize presets]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
         top = ttk.LabelFrame(self, text="Random Line Picker", padding=8)
         top.pack(fill="x")
@@ -54,13 +73,17 @@ class RandomLinePickerTab(ttk.Frame):
         row.pack(fill="x", pady=3)
         ttk.Label(row, text="loops", width=22).pack(side="left", padx=(0, 6))
         ttk.Entry(row, textvariable=self.loops, width=12).pack(side="left")
-        ttk.Checkbutton(row, text="各行をログ表示", variable=self.show_each_line).pack(side="left", padx=(16, 0))
+        ttk.Checkbutton(row, text="各行をログ表示", variable=self.show_each_line).pack(
+            side="left", padx=(16, 0)
+        )
 
         root_row = ttk.Frame(top)
         root_row.pack(fill="x", pady=3)
         ttk.Label(root_row, text="root_dir", width=22).pack(side="left", padx=(0, 6))
         ttk.Entry(root_row, textvariable=self.root_dir).pack(side="left", fill="x", expand=True)
-        ttk.Button(root_row, text="参照", command=self.select_root_dir).pack(side="left", padx=(6, 0))
+        ttk.Button(root_row, text="参照", command=self.select_root_dir).pack(
+            side="left", padx=(6, 0)
+        )
 
         ttk.Checkbutton(
             top,
@@ -87,9 +110,21 @@ class RandomLinePickerTab(ttk.Frame):
         self.logbox.log(f"loops 初期値: {self.DEFAULT_LOOPS}")
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [configure values from PresetStore]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: input/output, loop, root, and display optionsをpresetへ保存する]
+    #   処理: [serialize controls and update selector]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
             values = {
@@ -107,6 +142,12 @@ class RandomLinePickerTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: selected presetからrandom picker settingsを復元する]
+    #   処理: [restore all supported values and report outcome]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -120,14 +161,32 @@ class RandomLinePickerTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [select_root_dir: wildcard root directoryをdialogから選択する]
+    #   処理: [open directory chooser using current root and update if selected]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def select_root_dir(self):
         path = filedialog.askdirectory(initialdir=self.root_dir.get().strip() or os.getcwd())
         if path:
             self.root_dir.set(path)
 
+    # {
+    #   責務: [clear_log: progress logをclearする]
+    #   処理: [delete all text widget content]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def clear_log(self):
         self.logbox.delete("1.0", "end")
 
+    # {
+    #   責務: [start: duplicate jobを防ぎnew generation workerを開始する]
+    #   処理: [check active thread, clear stop event, and spawn run_safe]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def start(self):
         if self.worker_thread and self.worker_thread.is_alive():
             self.logbox.log("すでに実行中です。停止してから再実行してください。")
@@ -136,18 +195,37 @@ class RandomLinePickerTab(ttk.Frame):
         self.worker_thread = threading.Thread(target=self.run_safe, daemon=True)
         self.worker_thread.start()
 
+    # {
+    #   責務: [stop: generation workerへcooperative stop requestを送る]
+    #   処理: [set event and log request]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def stop(self):
         self.stop_event.set()
         self.logbox.log("停止要求を送信しました")
 
+    # {
+    #   責務: [run_safe: generation exceptionsをGUI logへ報告する]
+    #   処理: [invoke run and display exception details]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run_safe(self):
         try:
             self.run()
         except Exception as e:
             import traceback
+
             self.logbox.log("❌ Random Line Picker エラー:")
             self.logbox.log("".join(traceback.format_exception_only(type(e), e)).strip())
 
+    # {
+    #   責務: [_resolve_output_path: output settingをfile pathへresolveしてparentを作る]
+    #   処理: [create timestamped TXT in directory/extensionless destination or ensure explicit file parent exists]
+    #   引数: [output_path]
+    #   戻り値: [str]
+    # }
     def _resolve_output_path(self, output_path: str) -> str:
         output_path = output_path.strip()
         if not output_path:
@@ -164,6 +242,12 @@ class RandomLinePickerTab(ttk.Frame):
             os.makedirs(out_dir, exist_ok=True)
         return output_path
 
+    # {
+    #   責務: [_expand_choices: brace-delimited alternativesをrandomly resolveする]
+    #   処理: [repeatedly replace innermost simple {a|b} groups with secure random choice]
+    #   引数: [text]
+    #   戻り値: [str]
+    # }
     @staticmethod
     def _expand_choices(text: str) -> str:
         pattern = re.compile(r"\{([^{}]+)\}")
@@ -173,10 +257,18 @@ class RandomLinePickerTab(ttk.Frame):
                 break
             options = [part.strip() for part in match.group(1).split("|")]
             choice = secrets.choice(options) if options else ""
-            text = text[:match.start()] + choice + text[match.end():]
+            text = text[: match.start()] + choice + text[match.end() :]
         return text
 
-    def process_file(self, rel_path: str, root_dir: str, parent: str | None = None, depth: int = 0) -> str:
+    # {
+    #   責務: [process_file: wildcard text fileをrandom line and nested referencesでexpandする]
+    #   処理: [honor stop/depth limit, read nonempty lines, select and expand choices, recursively replace references]
+    #   引数: [rel_path, root_dir, parent, depth]
+    #   戻り値: [str]
+    # }
+    def process_file(
+        self, rel_path: str, root_dir: str, parent: str | None = None, depth: int = 0
+    ) -> str:
         if self.stop_event.is_set():
             return ""
         if depth > self.MAX_DEPTH:
@@ -188,7 +280,9 @@ class RandomLinePickerTab(ttk.Frame):
                 lines = [line.strip() for line in f if line.strip()]
         except FileNotFoundError:
             ref_from = parent if parent else "(top-level)"
-            raise FileNotFoundError(f"No such file or directory: '{filepath}' (referenced in '{ref_from}')")
+            raise FileNotFoundError(  # noqa: B904 - retain the original referenced-file message
+                f"No such file or directory: '{filepath}' (referenced in '{ref_from}')"
+            )
 
         if not lines:
             return ""
@@ -196,6 +290,12 @@ class RandomLinePickerTab(ttk.Frame):
         chosen_line = secrets.choice(lines)
         chosen_line = self._expand_choices(chosen_line)
 
+        # {
+        #   責務: [repl: matched wildcard referenceをnested file outputへ置換する]
+        #   処理: [build referenced TXT path and recurse with parent/depth tracking]
+        #   引数: [match]
+        #   戻り値: [処理結果]
+        # }
         def repl(match):
             key = match.group(1)
             nested_rel = f"{key}.txt"
@@ -204,6 +304,12 @@ class RandomLinePickerTab(ttk.Frame):
         result = re.sub(r"__(.*?)__", repl, chosen_line)
         return self._expand_choices(result)
 
+    # {
+    #   責務: [run: validated loop count分prompt linesをgenerateしoutput fileへ書く]
+    #   処理: [resolve root/output, truncate destination, expand each iteration, honor stop/errors, and log progress]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run(self):
         input_file = self.input_file.get().strip()
         output_file = self.output_file.get().strip()
@@ -254,13 +360,15 @@ class RandomLinePickerTab(ttk.Frame):
                     self.logbox.log(f"FileNotFoundError: {e}")
                     break
                 except Exception as e:
-                    self.logbox.log(f"❌ Iteration {i+1}/{loops} でエラー: {type(e).__name__}: {e}")
+                    self.logbox.log(
+                        f"❌ Iteration {i + 1}/{loops} でエラー: {type(e).__name__}: {e}"
+                    )
                     break
 
                 f_out.write(result + "\n")
                 generated += 1
                 if self.show_each_line.get():
-                    self.logbox.log(f"Iteration {i+1}/{loops}: {result}")
+                    self.logbox.log(f"Iteration {i + 1}/{loops}: {result}")
                 elif generated == 1 or generated % 100 == 0:
                     self.logbox.log(f"進捗: {generated}/{loops}")
 

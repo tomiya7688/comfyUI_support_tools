@@ -9,11 +9,22 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   責務: [WildcardCheckerTab: wildcard TXT referencesを検証しoptional safe case/path repairを行うtab]
+#   処理: [scan wildcard files against a canonical name index and report missing references]
+#   フィールド: [root_dir, auto_fix, preset_store, preset_name, logbox]
+# }
 class WildcardCheckerTab(ttk.Frame):
     """ワイルドカード参照の存在確認と、表記ゆれの安全な修正を行う。"""
 
     REFERENCE_PATTERN = re.compile(r"__([^\r\n]+?)__")
 
+    # {
+    #   責務: [__init__: wildcard root, auto-fix option, and preset stateを初期化する]
+    #   処理: [initialize Tk variables and build controls]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.root_dir = tk.StringVar(value=str(WILDCARDS_DIR))
@@ -22,9 +33,17 @@ class WildcardCheckerTab(ttk.Frame):
         self.preset_name = tk.StringVar()
         self._build()
 
+    # {
+    #   責務: [_build: root path, auto-fix toggle, and audit actionsを構築する]
+    #   処理: [compose UI and load preset choices]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
         LabeledPathRow(self, "wildcard root", self.root_dir, mode="dir").pack(fill="x", pady=4)
-        ttk.Checkbutton(self, text="確認できた表記ゆれ（大小文字・\\ /）を自動修正", variable=self.auto_fix).pack(anchor="w", pady=4)
+        ttk.Checkbutton(
+            self, text="確認できた表記ゆれ（大小文字・\\ /）を自動修正", variable=self.auto_fix
+        ).pack(anchor="w", pady=4)
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", pady=8)
         ttk.Button(buttons, text="参照を検査", command=self.start).pack(side="left")
@@ -37,18 +56,39 @@ class WildcardCheckerTab(ttk.Frame):
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [configure PresetStore names]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: root and auto-fix settingsをpresetへ保存する]
+    #   処理: [persist values and refresh selector]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
-            path = self.preset_store.save(self.preset_name.get(), {"root_dir": self.root_dir.get(), "auto_fix": self.auto_fix.get()})
+            path = self.preset_store.save(
+                self.preset_name.get(),
+                {"root_dir": self.root_dir.get(), "auto_fix": self.auto_fix.get()},
+            )
             self.preset_name.set(path.stem)
             self._refresh_preset_choices()
             self.logbox.log(f"プリセットを保存しました: {path}")
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: presetからroot and auto-fix settingsを復元する]
+    #   処理: [load values into controls and log result]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -58,9 +98,21 @@ class WildcardCheckerTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [start: wildcard reference scanをbackground workerで開始する]
+    #   処理: [spawn run callback without blocking UI]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def start(self):
         threading.Thread(target=self.run, daemon=True).start()
 
+    # {
+    #   責務: [_reference_key: reference pathをsafe normalized key and canonical formへ変換する]
+    #   処理: [normalize separators and reject empty, LORA_, dot, or parent traversal forms]
+    #   引数: [value]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def _reference_key(value):
         normalized = value.strip().replace("\\", "/").strip("/")
@@ -70,6 +122,12 @@ class WildcardCheckerTab(ttk.Frame):
             return "", ""
         return normalized, normalized.casefold()
 
+    # {
+    #   責務: [_index: wildcard files and directoriesからcase-insensitive canonical indexを構築する]
+    #   処理: [map relative file stems and parent directories to original casing]
+    #   引数: [root, files]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def _index(root, files):
         index = {}
@@ -83,12 +141,21 @@ class WildcardCheckerTab(ttk.Frame):
                 index.setdefault(directory.casefold(), directory)
         return index
 
+    # {
+    #   責務: [run: wildcard root内referencesの存在を検査しoptional表記修正を適用する]
+    #   処理: [read recursive TXT files, find references, report misses, and write modified sources only when auto-fix is enabled]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run(self):
         root = Path(self.root_dir.get().strip()).expanduser()
         if not root.is_dir():
             self.logbox.log(f"wildcard rootが存在しません: {root}")
             return
-        files = sorted((path for path in root.rglob("*.txt") if path.is_file()), key=lambda path: path.as_posix().casefold())
+        files = sorted(
+            (path for path in root.rglob("*.txt") if path.is_file()),
+            key=lambda path: path.as_posix().casefold(),
+        )
         index = self._index(root, files)
         missing = 0
         repaired = 0

@@ -3,11 +3,23 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+
+# {
+#   責務: [FlatFileCopyTab: recursive flat copy/move operation and presetsを管理するtab]
+#   処理: [create operation and directory controls, run action, and log view]
+#   フィールド: [operation, input_dir, output_dir, preset_store, logbox]
+# }
 class FlatFileCopyTab(ttk.Frame):
     DEFAULT_OPERATION = "move"
     DEFAULT_INPUT_DIR = USER_PATHS["flat_copy_input_dir"]
     DEFAULT_OUTPUT_DIR = USER_PATHS["flat_copy_output_dir"]
 
+    # {
+    #   責務: [__init__: operation and input/output directory stateを初期化する]
+    #   処理: [initialize Tk variables and build widgets]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.operation = tk.StringVar(value=self.DEFAULT_OPERATION)
@@ -17,37 +29,97 @@ class FlatFileCopyTab(ttk.Frame):
         self.output_dir = tk.StringVar(value=self.DEFAULT_OUTPUT_DIR)
         self._build()
 
+    # {
+    #   責務: [_build: operation selectors, path rows, preset controls, and logを構築する]
+    #   処理: [compose GUI controls and initialize preset choices]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
         row = ttk.Frame(self)
         row.pack(fill="x", pady=4)
         ttk.Label(row, text="操作", width=22).pack(side="left")
         ttk.Radiobutton(row, text="コピー", variable=self.operation, value="copy").pack(side="left")
-        ttk.Radiobutton(row, text="移動", variable=self.operation, value="move").pack(side="left", padx=(10, 0))
+        ttk.Radiobutton(row, text="移動", variable=self.operation, value="move").pack(
+            side="left", padx=(10, 0)
+        )
 
         LabeledPathRow(self, "input_dir", self.input_dir, mode="dir").pack(fill="x", pady=4)
         LabeledPathRow(self, "output_dir", self.output_dir, mode="dir").pack(fill="x", pady=4)
-        buttons = ttk.Frame(self); buttons.pack(fill="x", pady=8)
+        buttons = ttk.Frame(self)
+        buttons.pack(fill="x", pady=8)
         ttk.Button(buttons, text="実行", command=self.run_thread).pack(side="left")
-        ttk.Label(buttons, text="preset").pack(side="left", padx=(16,4)); self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18); self.preset_combo.pack(side="left"); ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4); ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
+        ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
+        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
+        self.preset_combo.pack(side="left")
+        ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
+        ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
-    def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdown choicesを更新する]
+    #   処理: [read available preset names and configure combobox]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
+    def _refresh_preset_choices(self):
+        self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: operation and directory valuesをpresetへ保存する]
+    #   処理: [persist current settings, refresh dropdown, and log failures]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
-            path = self.preset_store.save(self.preset_name.get(), {"operation": self.operation.get(), "input_dir": self.input_dir.get(), "output_dir": self.output_dir.get()}); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
-        except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
+            path = self.preset_store.save(
+                self.preset_name.get(),
+                {
+                    "operation": self.operation.get(),
+                    "input_dir": self.input_dir.get(),
+                    "output_dir": self.output_dir.get(),
+                },
+            )
+            self.preset_name.set(path.stem)
+            self._refresh_preset_choices()
+            self.logbox.log(f"プリセットを保存しました: {path}")
+        except Exception as error:
+            self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: selected presetからoperation and directory valuesを復元する]
+    #   処理: [load values with current-state fallbacks and report outcome]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
-            values = self.preset_store.load(self.preset_name.get()); self.operation.set(values.get("operation", self.operation.get())); self.input_dir.set(values.get("input_dir", self.input_dir.get())); self.output_dir.set(values.get("output_dir", self.output_dir.get())); self.logbox.log("プリセットを読み込みました")
-        except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
+            values = self.preset_store.load(self.preset_name.get())
+            self.operation.set(values.get("operation", self.operation.get()))
+            self.input_dir.set(values.get("input_dir", self.input_dir.get()))
+            self.output_dir.set(values.get("output_dir", self.output_dir.get()))
+            self.logbox.log("プリセットを読み込みました")
+        except Exception as error:
+            self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [run_thread: copy/move operationをdaemon worker threadで開始する]
+    #   処理: [spawn run callback to keep Tk responsive]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run_thread(self):
         threading.Thread(target=self.run, daemon=True).start()
 
+    # {
+    #   責務: [run: input tree内filesを一つのoutput directoryへcopy or moveする]
+    #   処理: [validate settings, create output, disambiguate collisions, preserve metadata on copy, and log processed/skipped items]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run(self):
         operation = self.operation.get().strip()
         input_dir = self.input_dir.get().strip()
@@ -89,7 +161,9 @@ class FlatFileCopyTab(ttk.Frame):
                         while True:
                             candidate_name = f"{base}_{i}{ext}"
                             candidate_path = os.path.join(output_dir, candidate_name)
-                            if candidate_name not in used_names and not os.path.exists(candidate_path):
+                            if candidate_name not in used_names and not os.path.exists(
+                                candidate_path
+                            ):
                                 dst_name = candidate_name
                                 dst_path = candidate_path
                                 name_counters[file] = i + 1

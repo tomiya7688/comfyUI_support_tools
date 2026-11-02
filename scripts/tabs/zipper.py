@@ -8,11 +8,18 @@ from ..widgets.preset_store import PresetStore
 # thread can evaluate the CPU-affinity branch without a NameError.
 try:
     import psutil  # type: ignore[import-not-found]
+
     _HAS_PSUTIL = True
 except Exception:
     psutil = None
     _HAS_PSUTIL = False
 
+
+# {
+#   責務: [ZipperTab: 7-Zip archive creation, split size, CPU/priority settings, and presetsを管理するtab]
+#   処理: [create source/destination/tool/options controls and process archives]
+#   フィールド: [input_dir, output_dir, seven_zip, split_size, max_cpu_percent, priority_mode, preset_store, preset_name, logbox]
+# }
 class ZipperTab(ttk.Frame):
     DEFAULT_INPUT_DIR = USER_PATHS["zipper_input_dir"]
     DEFAULT_OUTPUT_DIR = USER_PATHS["zipper_output_dir"]
@@ -21,6 +28,12 @@ class ZipperTab(ttk.Frame):
     DEFAULT_MAX_CPU_PERCENT = 10
     DEFAULT_PRIORITY_MODE = "below_normal"
 
+    # {
+    #   責務: [__init__: archive paths, split/CPU/priority settings, and presetsを初期化する]
+    #   処理: [initialize Tk variables and build controls]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.input_dir = tk.StringVar(value=self.DEFAULT_INPUT_DIR)
@@ -33,6 +46,12 @@ class ZipperTab(ttk.Frame):
         self.preset_name = tk.StringVar()
         self._build()
 
+    # {
+    #   責務: [_build: input/output/tool chooser, archive options, and preset UIを構築する]
+    #   処理: [compose controls and refresh saved preset names]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
         # 入力フォルダ
         LabeledPathRow(self, "入力フォルダ", self.input_dir, mode="dir").pack(fill="x", pady=4)
@@ -49,11 +68,20 @@ class ZipperTab(ttk.Frame):
         settings = ttk.LabelFrame(self, text="設定", padding=8)
         settings.pack(fill="x", pady=6)
         ttk.Label(settings, text="分割サイズ").grid(row=0, column=0, sticky="w", padx=4, pady=3)
-        ttk.Entry(settings, textvariable=self.split_size, width=10).grid(row=0, column=1, sticky="w", padx=4, pady=3)
+        ttk.Entry(settings, textvariable=self.split_size, width=10).grid(
+            row=0, column=1, sticky="w", padx=4, pady=3
+        )
         ttk.Label(settings, text="Max CPU %").grid(row=1, column=0, sticky="w", padx=4, pady=3)
-        ttk.Entry(settings, textvariable=self.max_cpu_percent, width=10).grid(row=1, column=1, sticky="w", padx=4, pady=3)
+        ttk.Entry(settings, textvariable=self.max_cpu_percent, width=10).grid(
+            row=1, column=1, sticky="w", padx=4, pady=3
+        )
         ttk.Label(settings, text="優先度").grid(row=2, column=0, sticky="w", padx=4, pady=3)
-        ttk.Combobox(settings, textvariable=self.priority_mode, values=["idle", "below_normal", "normal"], state="readonly").grid(row=2, column=1, sticky="w", padx=4, pady=3)
+        ttk.Combobox(
+            settings,
+            textvariable=self.priority_mode,
+            values=["idle", "below_normal", "normal"],
+            state="readonly",
+        ).grid(row=2, column=1, sticky="w", padx=4, pady=3)
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", pady=8)
@@ -67,14 +95,30 @@ class ZipperTab(ttk.Frame):
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [configure values from PresetStore]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: archive operation optionsをpresetへ保存する]
+    #   処理: [persist paths, split size, CPU percent, and priority]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
             values = {
-                "input_dir": self.input_dir.get(), "output_dir": self.output_dir.get(), "seven_zip": self.seven_zip.get(),
-                "split_size": self.split_size.get(), "max_cpu_percent": self.max_cpu_percent.get(), "priority_mode": self.priority_mode.get(),
+                "input_dir": self.input_dir.get(),
+                "output_dir": self.output_dir.get(),
+                "seven_zip": self.seven_zip.get(),
+                "split_size": self.split_size.get(),
+                "max_cpu_percent": self.max_cpu_percent.get(),
+                "priority_mode": self.priority_mode.get(),
             }
             path = self.preset_store.save(self.preset_name.get(), values)
             self.preset_name.set(path.stem)
@@ -83,6 +127,12 @@ class ZipperTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: selected presetからarchive settingsを復元する]
+    #   処理: [restore values into Tk variables and report outcome]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
@@ -96,14 +146,32 @@ class ZipperTab(ttk.Frame):
         except Exception as error:
             self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [choose_seven_zip: 7z.exeをfile dialogで選択する]
+    #   処理: [show executable chooser and update path if selected]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def choose_seven_zip(self):
         path = filedialog.askopenfilename(filetypes=[("7z.exe", "7z.exe"), ("All files", "*.*")])
         if path:
             self.seven_zip.set(path)
 
+    # {
+    #   責務: [run_thread: archive preparationをdaemon worker threadで開始する]
+    #   処理: [spawn start callback]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run_thread(self):
         threading.Thread(target=self.start, daemon=True).start()
 
+    # {
+    #   責務: [start: input/output and 7-Zip settingsを検証してcompressionを開始する]
+    #   処理: [validate directories and executable, create destination, and invoke compression]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def start(self):
         src = self.input_dir.get().strip()
         dst = self.output_dir.get().strip()
@@ -130,7 +198,15 @@ class ZipperTab(ttk.Frame):
         self.compress_files(src, dst, seven_zip_path, split_size_val, max_cpu, priority)
         self.logbox.log("圧縮処理が終了しました")
 
-    def compress_files(self, input_dir, output_dir, seven_zip, split_size, max_cpu_percent, priority_mode):
+    # {
+    #   責務: [compress_files: input directory直下のfilesをindividual 7z archivesへ圧縮する]
+    #   処理: [skip valid existing archives, sanitize names, apply split/CPU/priority settings, stream 7-Zip output, and report status]
+    #   引数: [input_dir, output_dir, seven_zip, split_size, max_cpu_percent, priority_mode]
+    #   戻り値: [処理結果]
+    # }
+    def compress_files(
+        self, input_dir, output_dir, seven_zip, split_size, max_cpu_percent, priority_mode
+    ):
         os.makedirs(output_dir, exist_ok=True)
         for filename in os.listdir(input_dir):
             file_path = os.path.join(input_dir, filename)
@@ -153,12 +229,14 @@ class ZipperTab(ttk.Frame):
             if isinstance(max_cpu_percent, int) and 1 <= max_cpu_percent <= 100:
                 threads = self.compute_threads_from_percent(max_cpu_percent)
                 options.insert(0, f"-mmt={threads}")
-                self.logbox.log(f"💡 max CPU {max_cpu_percent}% を設定: 7z に -mmt={threads} を指定します")
+                self.logbox.log(
+                    f"💡 max CPU {max_cpu_percent}% を設定: 7z に -mmt={threads} を指定します"
+                )
 
             if file_size > 3 * 1024 * 1024 * 1024:
-                options.append('-v' + split_size)
+                options.append("-v" + split_size)
 
-            cmd = [seven_zip, 'a'] + options + [zip_path, file_path]
+            cmd = [seven_zip, "a"] + options + [zip_path, file_path]
 
             creationflags = 0
             if os.name == "nt":
@@ -175,7 +253,7 @@ class ZipperTab(ttk.Frame):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                creationflags=creationflags
+                creationflags=creationflags,
             )
 
             if isinstance(max_cpu_percent, int) and 1 <= max_cpu_percent <= 100 and _HAS_PSUTIL:
@@ -183,9 +261,15 @@ class ZipperTab(ttk.Frame):
                 allowed = max(1, round(cpu_count * max_cpu_percent / 100.0))
                 cores = list(range(allowed))
                 self.set_affinity_for_pid(proc.pid, cores)
-                self.logbox.log(f"🔧 プロセスPID {proc.pid} のCPUアフィニティを {cores} に設定しました")
-            elif isinstance(max_cpu_percent, int) and 1 <= max_cpu_percent <= 100 and not _HAS_PSUTIL:
-                self.logbox.log("⚠️ psutil が見つかりません。-mmt によるスレッド制限のみ行います。psutil を入れるとプロセスアフィニティも設定できます。")
+                self.logbox.log(
+                    f"🔧 プロセスPID {proc.pid} のCPUアフィニティを {cores} に設定しました"
+                )
+            elif (
+                isinstance(max_cpu_percent, int) and 1 <= max_cpu_percent <= 100 and not _HAS_PSUTIL
+            ):
+                self.logbox.log(
+                    "⚠️ psutil が見つかりません。-mmt によるスレッド制限のみ行います。psutil を入れるとプロセスアフィニティも設定できます。"
+                )
 
             for line in proc.stdout or ():
                 line = line.rstrip()
@@ -197,33 +281,51 @@ class ZipperTab(ttk.Frame):
             else:
                 self.logbox.log(f"❌ 圧縮失敗: {filename} (code={return_code})")
 
+    # {
+    #   責務: [compute_threads_from_percent: CPU percentageから7-Zip thread countを計算する]
+    #   処理: [scale available logical CPU count and clamp to at least one]
+    #   引数: [percent]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def compute_threads_from_percent(percent):
         cpu_count = os.cpu_count() or 1
         threads = max(1, round(cpu_count * percent / 100.0))
         return threads
 
+    # {
+    #   責務: [sanitize_filename: archive basenameをWindows-safeなfilenameへ変換する]
+    #   処理: [replace forbidden control/path characters and emoji with underscores]
+    #   引数: [name]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def sanitize_filename(name):
         # Windows 対応: 禁止文字をアンダースコアに置換
-        name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name)
+        name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)
         # 絵文字をアンダースコアに置換
         emoji_pattern = re.compile(
-            '[\U0001F300-\U0001F5FF'
-            '\U0001F600-\U0001F64F'
-            '\U0001F680-\U0001F6FF'
-            '\U0001F700-\U0001F77F'
-            '\U0001F780-\U0001F7FF'
-            '\U0001F800-\U0001F8FF'
-            '\U0001F900-\U0001F9FF'
-            '\U0001FA00-\U0001FA6F'
-            '\U0001FA70-\U0001FAFF'
-            '\u2600-\u26FF'
-            '\u2700-\u27BF]+'
+            "[\U0001f300-\U0001f5ff"
+            "\U0001f600-\U0001f64f"
+            "\U0001f680-\U0001f6ff"
+            "\U0001f700-\U0001f77f"
+            "\U0001f780-\U0001f7ff"
+            "\U0001f800-\U0001f8ff"
+            "\U0001f900-\U0001f9ff"
+            "\U0001fa00-\U0001fa6f"
+            "\U0001fa70-\U0001faff"
+            "\u2600-\u26ff"
+            "\u2700-\u27bf]+"
         )
-        name = emoji_pattern.sub('_', name)
-        return name or '_'
+        name = emoji_pattern.sub("_", name)
+        return name or "_"
 
+    # {
+    #   責務: [set_affinity_for_pid: 7-Zip processへallowed CPU affinityを適用する]
+    #   処理: [set psutil affinity and print failure without stopping compression]
+    #   引数: [pid, allowed_cores]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def set_affinity_for_pid(pid, allowed_cores):
         try:

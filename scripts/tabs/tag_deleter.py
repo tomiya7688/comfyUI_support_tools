@@ -3,9 +3,21 @@ from ..context import _safe_thread
 from ..services import *
 from ..widgets.preset_store import PresetStore
 
+
+# {
+#   責務: [TagDeleterTab: prompt TXT filesからdelete tagsを削除するworkflowとpresetsを管理する]
+#   処理: [provide delete-tag and target path controls, normalization helpers, and file processing]
+#   フィールド: [delete_tag_path, prompt_target_path, preset_store, preset_name, logbox]
+# }
 class TagDeleterTab(ttk.Frame):
     DEFAULT_DELETE_TAG = str(INPUT_MODELS_DIR / "tag_deleter" / "tagger_ng_tags_for_character.txt")
 
+    # {
+    #   責務: [__init__: delete-tag path, prompt target, and preset controlsを初期化する]
+    #   処理: [initialize Tk state and build the tab UI]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.delete_tag_path = tk.StringVar(value=self.DEFAULT_DELETE_TAG)
@@ -14,58 +26,155 @@ class TagDeleterTab(ttk.Frame):
         self.preset_name = tk.StringVar()
         self._build()
 
+    # {
+    #   責務: [_build: delete-tag input, prompt target selectors, presets, and log areaを構築する]
+    #   処理: [compose controls and show default tag file]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
-        LabeledPathRow(self, "delete_tag_input", self.delete_tag_path, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=4)
+        LabeledPathRow(
+            self,
+            "delete_tag_input",
+            self.delete_tag_path,
+            mode="file",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        ).pack(fill="x", pady=4)
 
         frame = ttk.Frame(self)
         frame.pack(fill="x", pady=4)
         ttk.Label(frame, text="prompt_file_input / dir", width=22).pack(side="left", padx=(0, 6))
-        ttk.Entry(frame, textvariable=self.prompt_target_path).pack(side="left", fill="x", expand=True)
-        ttk.Button(frame, text="ファイル参照", command=self.select_prompt_file).pack(side="left", padx=(6, 0))
-        ttk.Button(frame, text="フォルダ参照", command=self.select_prompt_dir).pack(side="left", padx=(6, 0))
+        ttk.Entry(frame, textvariable=self.prompt_target_path).pack(
+            side="left", fill="x", expand=True
+        )
+        ttk.Button(frame, text="ファイル参照", command=self.select_prompt_file).pack(
+            side="left", padx=(6, 0)
+        )
+        ttk.Button(frame, text="フォルダ参照", command=self.select_prompt_dir).pack(
+            side="left", padx=(6, 0)
+        )
 
-        buttons = ttk.Frame(self); buttons.pack(fill="x", pady=8)
+        buttons = ttk.Frame(self)
+        buttons.pack(fill="x", pady=8)
         ttk.Button(buttons, text="実行", command=self.run_thread).pack(side="left")
-        ttk.Label(buttons, text="preset").pack(side="left", padx=(16,4)); self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18); self.preset_combo.pack(side="left"); ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4); ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
+        ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
+        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
+        self.preset_combo.pack(side="left")
+        ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
+        ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
         self.logbox.log(f"delete_tag_input 初期値: {self.DEFAULT_DELETE_TAG}")
         self._refresh_preset_choices()
 
-    def _refresh_preset_choices(self): self.preset_combo.configure(values=self.preset_store.names())
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [configure values from PresetStore]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
+    def _refresh_preset_choices(self):
+        self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [save_preset: delete-tag and prompt target pathsをpresetへ保存する]
+    #   処理: [persist current settings and report outcome]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
-            path = self.preset_store.save(self.preset_name.get(), {"delete_tag_path": self.delete_tag_path.get(), "prompt_target_path": self.prompt_target_path.get()}); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
-        except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
+            path = self.preset_store.save(
+                self.preset_name.get(),
+                {
+                    "delete_tag_path": self.delete_tag_path.get(),
+                    "prompt_target_path": self.prompt_target_path.get(),
+                },
+            )
+            self.preset_name.set(path.stem)
+            self._refresh_preset_choices()
+            self.logbox.log(f"プリセットを保存しました: {path}")
+        except Exception as error:
+            self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: selected presetからdelete-tag and prompt target pathsを復元する]
+    #   処理: [load current values with fallbacks and log result]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
-            values = self.preset_store.load(self.preset_name.get()); self.delete_tag_path.set(values.get("delete_tag_path", self.delete_tag_path.get())); self.prompt_target_path.set(values.get("prompt_target_path", self.prompt_target_path.get())); self.logbox.log("プリセットを読み込みました")
-        except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
+            values = self.preset_store.load(self.preset_name.get())
+            self.delete_tag_path.set(values.get("delete_tag_path", self.delete_tag_path.get()))
+            self.prompt_target_path.set(
+                values.get("prompt_target_path", self.prompt_target_path.get())
+            )
+            self.logbox.log("プリセットを読み込みました")
+        except Exception as error:
+            self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [select_prompt_file: prompt targetとしてTXT fileを選択する]
+    #   処理: [show text-file dialog and update target when selected]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def select_prompt_file(self):
         path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
         if path:
             self.prompt_target_path.set(path)
 
+    # {
+    #   責務: [select_prompt_dir: prompt targetとしてdirectoryを選択する]
+    #   処理: [show directory dialog and update target when selected]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def select_prompt_dir(self):
         path = filedialog.askdirectory()
         if path:
             self.prompt_target_path.set(path)
 
+    # {
+    #   責務: [run_thread: file processingをdaemon workerで開始する]
+    #   処理: [spawn process_files callback without blocking UI]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run_thread(self):
         threading.Thread(target=self.process_files, daemon=True).start()
 
+    # {
+    #   責務: [normalize_tag: tag textをcase-insensitive normalized keyへ変換する]
+    #   処理: [trim, casefold, and replace whitespace or underscores with spaces]
+    #   引数: [tag]
+    #   戻り値: [str]
+    # }
     @staticmethod
     def normalize_tag(tag: str) -> str:
         return re.sub(r"[\s_]+", " ", tag.strip().casefold())
 
+    # {
+    #   責務: [is_protected_prompt_token: wildcard and embedding syntaxを削除対象外と判定する]
+    #   処理: [match reserved wildcard or model-token forms]
+    #   引数: [tag]
+    #   戻り値: [bool]
+    # }
     @staticmethod
     def is_protected_prompt_token(tag: str) -> bool:
         token = tag.strip()
-        return bool(re.fullmatch(r"__.+__", token) or re.fullmatch(r"<\s*(?:lora|lyco|hypernet|embedding)\s*:[^>]+>", token, re.IGNORECASE))
+        return bool(
+            re.fullmatch(r"__.+__", token)
+            or re.fullmatch(r"<\s*(?:lora|lyco|hypernet|embedding)\s*:[^>]+>", token, re.IGNORECASE)
+        )
 
+    # {
+    #   責務: [load_delete_tags: delete-tag fileをnormalized setへ読み込む]
+    #   処理: [strip blank lines and trailing commas, then normalize tags]
+    #   引数: [file_path]
+    #   戻り値: [set[str]]
+    # }
     @staticmethod
     def load_delete_tags(file_path: str) -> set[str]:
         tags: set[str] = set()
@@ -80,6 +189,12 @@ class TagDeleterTab(ttk.Frame):
                     tags.add(TagDeleterTab.normalize_tag(tag))
         return tags
 
+    # {
+    #   責務: [clean_prompt_line: prompt lineから一致tagを除き改行状態を保つ]
+    #   処理: [split comma tokens, preserve protected tokens, filter normalized matches, and restore newline]
+    #   引数: [line, delete_tags]
+    #   戻り値: [str]
+    # }
     @staticmethod
     def clean_prompt_line(line: str, delete_tags: set[str]) -> str:
         has_newline = line.endswith("\n")
@@ -88,14 +203,25 @@ class TagDeleterTab(ttk.Frame):
             return "\n" if has_newline else ""
         parts = [p.strip() for p in stripped_line.split(",")]
         filtered_parts = [
-            part for part in parts
-            if part and (TagDeleterTab.is_protected_prompt_token(part) or TagDeleterTab.normalize_tag(part) not in delete_tags)
+            part
+            for part in parts
+            if part
+            and (
+                TagDeleterTab.is_protected_prompt_token(part)
+                or TagDeleterTab.normalize_tag(part) not in delete_tags
+            )
         ]
         new_line = ",".join(filtered_parts)
         if has_newline:
             new_line += "\n"
         return new_line
 
+    # {
+    #   責務: [get_target_txt_files: single TXT file or immediate directory entriesをresolveする]
+    #   処理: [return valid .txt files without recursive traversal]
+    #   引数: [target_path]
+    #   戻り値: [list[Path]]
+    # }
     @staticmethod
     def get_target_txt_files(target_path: str) -> list[Path]:
         path = Path(target_path)
@@ -105,6 +231,12 @@ class TagDeleterTab(ttk.Frame):
             return sorted([p for p in path.iterdir() if p.is_file() and p.suffix.lower() == ".txt"])
         return []
 
+    # {
+    #   責務: [process_files: selected prompt filesへdelete tag rulesを適用し上書きする]
+    #   処理: [load tag set, process each line, overwrite source files, and log aggregate changes]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def process_files(self):
         delete_tag_file = self.delete_tag_path.get().strip()
         prompt_target = self.prompt_target_path.get().strip()
@@ -141,7 +273,9 @@ class TagDeleterTab(ttk.Frame):
                     f.writelines(new_lines)
                 total_changed += changed_count
                 total_lines += len(lines)
-                self.logbox.log(f"完了: {file_path} / 変更行数: {changed_count} / 総行数: {len(lines)}")
+                self.logbox.log(
+                    f"完了: {file_path} / 変更行数: {changed_count} / 総行数: {len(lines)}"
+                )
 
             self.logbox.log("----")
             self.logbox.log("全処理完了")

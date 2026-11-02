@@ -56,6 +56,7 @@ class CompletionGateTests(unittest.TestCase):
                 "scripts/widgets",
                 "tabbed_tools_gui.py",
                 "tabbed_tool_gui.py",
+                "scripts/tabs",
             ],
         )
         self.assertIn("--strict", command)

@@ -9,14 +9,27 @@ from ..services import *
 from ..widgets.preset_store import PresetStore
 
 
+# {
+#   責務: [MovieToTextTab: video frame sampling and PixAI tag-to-text workflowを管理する]
+#   処理: [create video/API/tag controls, cancellation event, preset actions, and result logging]
+#   フィールド: [stop_event, input_file, output_file, api_url, model, frame_count, threshold, minimum_coverage, output_mode, preset_store, preset_name, logbox]
+# }
 class MovieToTextTab(ttk.Frame):
     """動画の代表フレームをPixAI Taggerへ送り、共通タグをプロンプト化する。"""
 
+    # {
+    #   責務: [__init__: sampling, API, output, and preset stateを初期化する]
+    #   処理: [initialize controls and build tab UI]
+    #   引数: [master]
+    #   戻り値: [処理結果]
+    # }
     def __init__(self, master):
         super().__init__(master, padding=10)
         self.stop_event = threading.Event()
         self.input_file = tk.StringVar()
-        self.output_file = tk.StringVar(value=str(USER_DATA_DIR / "output" / "movie_to_text" / "movie_tags.txt"))
+        self.output_file = tk.StringVar(
+            value=str(USER_DATA_DIR / "output" / "movie_to_text" / "movie_tags.txt")
+        )
         self.api_url = tk.StringVar(value=PIXAI_TAGGER_API_URL)
         self.model = tk.StringVar(value=PIXAI_TAGGER_MODEL)
         self.frame_count = tk.IntVar(value=12)
@@ -27,63 +40,172 @@ class MovieToTextTab(ttk.Frame):
         self.preset_name = tk.StringVar()
         self._build()
 
+    # {
+    #   責務: [_build: video path, PixAI controls, sampling options, and action widgetsを構築する]
+    #   処理: [compose path rows, model/threshold fields, output mode, and actions]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _build(self):
-        LabeledPathRow(self, "入力動画", self.input_file, mode="file", filetypes=[("動画", "*.mp4 *.mkv *.mov *.avi *.webm *.m4v"), ("All files", "*.*")]).pack(fill="x", pady=3)
-        LabeledPathRow(self, "出力TXT", self.output_file, mode="save", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
-        api_row = ttk.Frame(self); api_row.pack(fill="x", pady=3)
+        LabeledPathRow(
+            self,
+            "入力動画",
+            self.input_file,
+            mode="file",
+            filetypes=[("動画", "*.mp4 *.mkv *.mov *.avi *.webm *.m4v"), ("All files", "*.*")],
+        ).pack(fill="x", pady=3)
+        LabeledPathRow(
+            self,
+            "出力TXT",
+            self.output_file,
+            mode="save",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        ).pack(fill="x", pady=3)
+        api_row = ttk.Frame(self)
+        api_row.pack(fill="x", pady=3)
         ttk.Label(api_row, text="PixAI API", width=16).pack(side="left")
         ttk.Entry(api_row, textvariable=self.api_url).pack(side="left", fill="x", expand=True)
         ttk.Button(api_row, text="API起動", command=self.start_api).pack(side="left", padx=4)
         ttk.Button(api_row, text="API停止", command=self.stop_api).pack(side="left")
-        options = ttk.Frame(self); options.pack(fill="x", pady=3)
-        for label, variable, width in (("モデル", self.model, 32), ("フレーム数", self.frame_count, 6), ("閾値", self.threshold, 6), ("出現率", self.minimum_coverage, 6)):
+        options = ttk.Frame(self)
+        options.pack(fill="x", pady=3)
+        for label, variable, width in (
+            ("モデル", self.model, 32),
+            ("フレーム数", self.frame_count, 6),
+            ("閾値", self.threshold, 6),
+            ("出現率", self.minimum_coverage, 6),
+        ):
             ttk.Label(options, text=label).pack(side="left", padx=(0, 4))
             ttk.Entry(options, textvariable=variable, width=width).pack(side="left", padx=(0, 10))
         ttk.Label(options, text="出力").pack(side="left", padx=(0, 4))
-        ttk.Combobox(options, textvariable=self.output_mode, values=["common", "wildcard_frames"], state="readonly", width=18).pack(side="left")
-        buttons = ttk.Frame(self); buttons.pack(fill="x", pady=6)
+        ttk.Combobox(
+            options,
+            textvariable=self.output_mode,
+            values=["common", "wildcard_frames"],
+            state="readonly",
+            width=18,
+        ).pack(side="left")
+        buttons = ttk.Frame(self)
+        buttons.pack(fill="x", pady=6)
         ttk.Button(buttons, text="動画をタグ化", command=self.start).pack(side="left")
         ttk.Button(buttons, text="停止", command=self.stop).pack(side="left", padx=4)
         ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
-        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18); self.preset_combo.pack(side="left")
+        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
+        self.preset_combo.pack(side="left")
         ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
         ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
-        self.logbox = LogBox(self); self.logbox.pack(fill="both", expand=True)
+        self.logbox = LogBox(self)
+        self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
 
+    # {
+    #   責務: [start_api: PixAI tagger server startをbackground threadで要求する]
+    #   処理: [delegate server startup through safe worker helper and logbox]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def start_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.start, self.logbox.log)
 
+    # {
+    #   責務: [stop_api: PixAI tagger server stopをbackground threadで要求する]
+    #   処理: [delegate server shutdown through safe worker helper and logbox]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def stop_api(self):
         _safe_thread(self.logbox, PIXAI_TAGGER_SERVER.stop, self.logbox.log)
 
+    # {
+    #   責務: [_refresh_preset_choices: preset dropdownをavailable namesで更新する]
+    #   処理: [query PresetStore and configure combobox]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
 
+    # {
+    #   責務: [_preset_values: current controlsをpreset document dictionaryへまとめる]
+    #   処理: [read Tk variable values without filesystem side effects]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def _preset_values(self):
-        return {"input_file": self.input_file.get(), "output_file": self.output_file.get(), "api_url": self.api_url.get(), "model": self.model.get(), "frame_count": self.frame_count.get(), "threshold": self.threshold.get(), "minimum_coverage": self.minimum_coverage.get(), "output_mode": self.output_mode.get()}
+        return {
+            "input_file": self.input_file.get(),
+            "output_file": self.output_file.get(),
+            "api_url": self.api_url.get(),
+            "model": self.model.get(),
+            "frame_count": self.frame_count.get(),
+            "threshold": self.threshold.get(),
+            "minimum_coverage": self.minimum_coverage.get(),
+            "output_mode": self.output_mode.get(),
+        }
 
+    # {
+    #   責務: [save_preset: current video tagger settingsをpresetへ保存する]
+    #   処理: [write settings, update selected preset name, refresh list, and log result]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def save_preset(self):
         try:
-            path = self.preset_store.save(self.preset_name.get(), self._preset_values()); self.preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
-        except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
+            path = self.preset_store.save(self.preset_name.get(), self._preset_values())
+            self.preset_name.set(path.stem)
+            self._refresh_preset_choices()
+            self.logbox.log(f"プリセットを保存しました: {path}")
+        except Exception as error:
+            self.logbox.log(f"プリセット保存エラー: {error}")
 
+    # {
+    #   責務: [load_preset: selected presetからvideo tagger settingsを復元する]
+    #   処理: [read saved keys into corresponding controls and report outcome]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("input_file", self.input_file), ("output_file", self.output_file), ("api_url", self.api_url), ("model", self.model), ("frame_count", self.frame_count), ("threshold", self.threshold), ("minimum_coverage", self.minimum_coverage)):
-                if key in values: variable.set(values[key])
+            for key, variable in (
+                ("input_file", self.input_file),
+                ("output_file", self.output_file),
+                ("api_url", self.api_url),
+                ("model", self.model),
+                ("frame_count", self.frame_count),
+                ("threshold", self.threshold),
+                ("minimum_coverage", self.minimum_coverage),
+            ):
+                if key in values:
+                    variable.set(values[key])
             self.output_mode.set(values.get("output_mode", "common"))
             self.logbox.log("プリセットを読み込みました")
-        except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
+        except Exception as error:
+            self.logbox.log(f"プリセット読込エラー: {error}")
 
+    # {
+    #   責務: [_scores: PixAI resultをnormalized tag-to-score mappingへ変換する]
+    #   処理: [unwrap tags payload, coerce numeric scores, or assign unit scores to extracted tags]
+    #   引数: [result]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def _scores(result):
         tags = result.get("tags", result) if isinstance(result, dict) else result
         if isinstance(tags, dict):
-            return {str(tag).strip(): float(score) for tag, score in tags.items() if isinstance(score, (int, float)) and str(tag).strip()}
+            return {
+                str(tag).strip(): float(score)
+                for tag, score in tags.items()
+                if isinstance(score, (int, float)) and str(tag).strip()
+            }
         return {tag: 1.0 for tag in extract_tagger_tags(result)}
 
+    # {
+    #   責務: [aggregate: frame-level scoresからcoverage and mean-score thresholdsを満たすcommon tagsを選ぶ]
+    #   処理: [sum scores and appearances, apply filters, and rank deterministically]
+    #   引数: [frame_scores, minimum_coverage, threshold]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def aggregate(frame_scores, minimum_coverage, threshold):
         totals, appearances = {}, {}
@@ -92,24 +214,64 @@ class MovieToTextTab(ttk.Frame):
                 totals[tag] = totals.get(tag, 0.0) + score
                 appearances[tag] = appearances.get(tag, 0) + 1
         count = max(1, len(frame_scores))
-        return [tag for tag in sorted(totals, key=lambda tag: (-appearances[tag], -totals[tag], tag.casefold())) if appearances[tag] / count >= minimum_coverage and totals[tag] / appearances[tag] >= threshold]
+        return [
+            tag
+            for tag in sorted(
+                totals, key=lambda tag: (-appearances[tag], -totals[tag], tag.casefold())
+            )
+            if appearances[tag] / count >= minimum_coverage
+            and totals[tag] / appearances[tag] >= threshold
+        ]
 
+    # {
+    #   責務: [frame_tags: one frame score mappingからthreshold以上のsorted tag listを返す]
+    #   処理: [sort by descending score and case-insensitive label then filter]
+    #   引数: [scores, threshold]
+    #   戻り値: [処理結果]
+    # }
     @staticmethod
     def frame_tags(scores, threshold):
-        return [tag for tag, score in sorted(scores.items(), key=lambda item: (-item[1], item[0].casefold())) if score >= threshold]
+        return [
+            tag
+            for tag, score in sorted(
+                scores.items(), key=lambda item: (-item[1], item[0].casefold())
+            )
+            if score >= threshold
+        ]
 
+    # {
+    #   責務: [start: stop eventをclearしてtagging workerを開始する]
+    #   処理: [reset cancellation state and delegate run to safe background helper]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def start(self):
         self.stop_event.clear()
         _safe_thread(self.logbox, self.run)
 
+    # {
+    #   責務: [stop: active tagging jobへcooperative cancellation requestを送る]
+    #   処理: [set stop event and log the request]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def stop(self):
-        self.stop_event.set(); self.logbox.log("停止要求を送信しました")
+        self.stop_event.set()
+        self.logbox.log("停止要求を送信しました")
 
+    # {
+    #   責務: [run: videoからsampled framesをPixAI APIへ送りtag text fileを生成する]
+    #   処理: [decode selected frames in CPU memory, POST encoded JPEGs, release capture, and write common or per-frame output]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def run(self):
         try:
             import cv2
         except ImportError as error:
-            raise RuntimeError("cv2 が見つかりません。Tabbed GUIをrun.batから起動してください") from error
+            raise RuntimeError(
+                "cv2 が見つかりません。Tabbed GUIをrun.batから起動してください"
+            ) from error
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
         source = Path(self.input_file.get().strip())
@@ -123,16 +285,26 @@ class MovieToTextTab(ttk.Frame):
             total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
             if total < 1:
                 raise ValueError(f"動画を読めません: {source}")
-            indices = sorted({round((total - 1) * index / max(1, count - 1)) for index in range(count)})
+            indices = sorted(
+                {round((total - 1) * index / max(1, count - 1)) for index in range(count)}
+            )
             scores = []
             for order, index in enumerate(indices, 1):
-                if self.stop_event.is_set(): break
+                if self.stop_event.is_set():
+                    break
                 capture.set(cv2.CAP_PROP_POS_FRAMES, index)
                 ok, frame = capture.read()
-                if not ok: continue
+                if not ok:
+                    continue
                 ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
-                if not ok: continue
-                payload = {"image": base64.b64encode(encoded.tobytes()).decode("ascii"), "model": self.model.get().strip(), "threshold": threshold, "character_threshold": threshold}
+                if not ok:
+                    continue
+                payload = {
+                    "image": base64.b64encode(encoded.tobytes()).decode("ascii"),
+                    "model": self.model.get().strip(),
+                    "threshold": threshold,
+                    "character_threshold": threshold,
+                }
                 response = requests.post(self.api_url.get().strip(), json=payload, timeout=300)
                 response.raise_for_status()
                 scores.append(self._scores(response.json()))

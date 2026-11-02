@@ -106,6 +106,7 @@ classDiagram
         +_save_failure_report()
         +_resolve_generation_parameters()
         +_save_generation_metadata()
+        +_prepare_profiled_request()
         +_save_prompt()
         +_encoded_output()
         +_correct_prompt()
@@ -127,6 +128,8 @@ classDiagram
         +_restart_webui()
         +request_stop()
         +request_start()
+    }
+    class FastGenerationResolution {
     }
     class WorkflowModelInput {
     }
@@ -457,6 +460,7 @@ classDiagram
         +_build_file_controls()
         +_build_wildcard_controls()
         +_build_generation_controls()
+        +_build_fast_generation_controls()
         +_build_model_controls()
         +_build_parameter_controls()
         +_build_isolation_and_actions()

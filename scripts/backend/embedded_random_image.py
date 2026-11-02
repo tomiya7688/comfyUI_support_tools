@@ -1,10 +1,20 @@
 import io
 import json
 import re
+import time
+from dataclasses import replace
 
 from PIL import Image
 
 from comfyui_support_tools.shared.anime_generation import AnimeContentMode
+from comfyui_support_tools.shared.fast_generation import (
+    ComfyUIPeakMemorySampler,
+    GenerationHistory,
+    GenerationIntent,
+    GenerationMeasurement,
+    GenerationMode,
+    Quantization,
+)
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from comfyui_support_tools.shared.contracts.resolved_generation_parameters import (
     ResolvedGenerationParameters,
@@ -23,6 +33,7 @@ from comfyui_support_tools.shared.prompt_stability.planner import PromptAdjustme
 
 from ..context import *
 from .anime_generation_backend import AnimeGenerationBackend
+from .fast_generation_policy import FastGenerationResolution, resolve_fast_generation
 from .generation_parameter_resolver import GenerationParameterResolver
 from .image_failure_inspector import ImageFailureInspector
 from .model_choice_classification import classify_base_model_choice
@@ -87,6 +98,10 @@ class EmbeddedRandomImage:
     anime_intent = None
     anime_content_mode = AnimeContentMode.UNSPECIFIED
     anime_auto_route = False
+    fast_generation_mode = GenerationMode.QUALITY.value
+    fast_generation_intent = GenerationIntent.PREVIEW.value
+    fast_generation_auto_route = False
+    fast_generation_quantizations = []
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -102,6 +117,7 @@ class EmbeddedRandomImage:
         self._pending_settings = None
         self._log = print
         self._anime_resolution = None
+        self._fast_resolution: FastGenerationResolution | None = None
 
     # {
     #   責務: [queue_settings_update: 実行中workerへ次の画像用設定を予約する]
@@ -340,18 +356,113 @@ class EmbeddedRandomImage:
             }
         return GenerationParameterResolver().resolve(configuration)
 
-    def _save_generation_metadata(self, image_path, parameters):
+    def _save_generation_metadata(
+        self, image_path, parameters, duration_seconds=None, peak_vram_gib=None
+    ):
         metadata_path = image_path.with_suffix(".generation.json")
         metadata = {
             "backend": self.generation_profile.backend,
             "checkpoint": self.sd_model_checkpoint,
             **parameters,
         }
+        if self._anime_resolution is not None:
+            metadata["anime_generation"] = {
+                "profile_id": self._anime_resolution.profile_id,
+                "reason": self._anime_resolution.reason,
+                "intent": self.anime_intent.value,
+                "content_mode": self.anime_content_mode.value,
+            }
+        if self._fast_resolution is not None:
+            metadata["fast_generation"] = {
+                "profile_id": self._fast_resolution.profile_id,
+                "quantization": (
+                    self._fast_resolution.quantization.value
+                    if self._fast_resolution.quantization is not None
+                    else None
+                ),
+                "reason": self._fast_resolution.reason,
+                "duration_seconds": duration_seconds,
+                "sampled_peak_vram_gib": peak_vram_gib,
+                "gpu_vram_capacity_gib": self._fast_resolution.gpu_vram_gib,
+                "system_ram_capacity_gib": self._fast_resolution.system_ram_gib,
+                "available_vram_gib": self._fast_resolution.available_vram_gib,
+                "available_ram_gib": self._fast_resolution.available_ram_gib,
+                "device_name": self._fast_resolution.device_name,
+                "cuda_available": self._fast_resolution.cuda_available,
+                "cuda_version": self._fast_resolution.cuda_version,
+                "runtime_quantizations": sorted(
+                    item.value for item in self._fast_resolution.runtime_quantizations
+                ),
+            }
         metadata_path.write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         return metadata_path
+
+    # {
+    #   責務: [_prepare_profiled_request: resolve fast and anime policies before model validation]
+    #   処理: [apply resource route first, then anime prompt policy, and validate LoRA compatibility]
+    #   引数: [self: generator settings, backend: selected image backend, request: typed txt2img request, workflow_has_model_overrides: explicit workflow model choice]
+    #   戻り値: [tuple: profiled backend, request, anime adapter]
+    # }
+    def _prepare_profiled_request(self, backend, request, workflow_has_model_overrides):
+        self._anime_resolution = None
+        self._fast_resolution = None
+        fast_mode = GenerationMode(self.fast_generation_mode)
+        if fast_mode is not GenerationMode.QUALITY or self.fast_generation_auto_route:
+            if not backend.capabilities.supports("workflow"):
+                raise ValueError("Fast / Low-VRAM profiles currently require the ComfyUI backend")
+            self._fast_resolution = resolve_fast_generation(
+                request.checkpoint,
+                request.steps,
+                self.model_catalog,
+                self.api_url,
+                intent=GenerationIntent(self.fast_generation_intent),
+                mode=fast_mode,
+                auto_route=self.fast_generation_auto_route,
+                has_explicit_model_overrides=workflow_has_model_overrides,
+                request_get=requests.get,
+                quantizations=frozenset(
+                    Quantization(value) for value in self.fast_generation_quantizations
+                ),
+            )
+            request = replace(
+                request,
+                checkpoint=self._fast_resolution.checkpoint,
+                steps=self._fast_resolution.steps,
+            )
+            self._log(f"⚡ Fast model policy: {self._fast_resolution.reason}")
+        anime_backend = None
+        if self.anime_intent is not None:
+            if self.fast_generation_auto_route or (
+                self.anime_auto_route and fast_mode is not GenerationMode.QUALITY
+            ):
+                raise ValueError("Anime and Fast model auto-routing cannot be enabled together")
+            anime_backend = AnimeGenerationBackend(
+                backend,
+                model_catalog=self.model_catalog,
+                intent=self.anime_intent,
+                content_mode=self.anime_content_mode,
+                auto_route=self.anime_auto_route,
+                has_explicit_model_overrides=workflow_has_model_overrides,
+            )
+            backend = anime_backend
+            request = anime_backend.prepare_request(request)
+            self._anime_resolution = anime_backend.last_resolution
+            self._log(f"🎨 Anime model policy: {self._anime_resolution.reason}")
+        validate_prompt_loras(
+            request.prompt,
+            None if workflow_has_model_overrides else request.checkpoint,
+            self.model_catalog,
+            self._log,
+            base_model_reason=(
+                "The ComfyUI workflow has per-node model overrides; the LoRA's active base node is ambiguous."
+                if workflow_has_model_overrides
+                else None
+            ),
+        )
+        return backend, request, anime_backend
 
     def _save_prompt(self, image_output, prompt):
         if not self.save_prompts or not self.prompt_output:
@@ -521,23 +632,9 @@ class EmbeddedRandomImage:
             workflow_path,
             backend,
         ) = self._plan_prompt_stability(prompt, negative)
-        anime_backend = None
-        self._anime_resolution = None
-        if self.anime_intent is not None:
-            anime_backend = AnimeGenerationBackend(
-                backend,
-                model_catalog=self.model_catalog,
-                intent=self.anime_intent,
-                content_mode=self.anime_content_mode,
-                auto_route=self.anime_auto_route,
-                has_explicit_model_overrides=any(
-                    key.rsplit(":", 1)[-1] in {"ckpt_name", "unet_name"}
-                    for key in self.comfy_model_overrides
-                ),
-            )
-            backend = anime_backend
-        workflow_has_model_overrides = backend.capabilities.supports("model_overrides") and bool(
-            self.comfy_model_overrides
+        workflow_has_model_overrides = backend.capabilities.supports("model_overrides") and any(
+            key.rsplit(":", 1)[-1] in {"ckpt_name", "unet_name"}
+            for key in self.comfy_model_overrides
         )
         self._log(
             "🎛️ 生成パラメータ: "
@@ -568,24 +665,13 @@ class EmbeddedRandomImage:
             workflow_path=workflow_path,
             model_overrides=self.comfy_model_overrides,
         )
-        if anime_backend is not None:
-            generation_request = anime_backend.prepare_request(generation_request)
-            self._anime_resolution = anime_backend.last_resolution
-            self._log(f"🎨 Anime model policy: {self._anime_resolution.reason}")
+        backend, generation_request, anime_backend = self._prepare_profiled_request(
+            backend, generation_request, workflow_has_model_overrides
+        )
+        if self._anime_resolution is not None:
             self.sd_model_checkpoint = generation_request.checkpoint
             prompt = generation_request.prompt
             negative = generation_request.negative
-        validate_prompt_loras(
-            generation_request.prompt,
-            None if workflow_has_model_overrides else generation_request.checkpoint,
-            self.model_catalog,
-            self._log,
-            base_model_reason=(
-                "The ComfyUI workflow has per-node model overrides; the LoRA's active base node is ambiguous."
-                if workflow_has_model_overrides
-                else None
-            ),
-        )
         candidate_total = max(1, plan.candidate_count)
         attempt_limit = (
             min(candidate_total, plan.retry_limit + 1) if plan.retry_limit else candidate_total
@@ -594,13 +680,24 @@ class EmbeddedRandomImage:
             if self._stop_event.is_set():
                 break
             self._active_backend = backend
+            sampler = None
+            if self._fast_resolution is not None:
+                sampler = ComfyUIPeakMemorySampler(self.api_url, requests.get)
+                sampler.start()
+            started_at = time.perf_counter()
+            sampled_peak_vram_gib = None
             try:
                 image_bytes = backend.generate(generation_request, stop_event=self._stop_event)
             finally:
+                duration_seconds = time.perf_counter() - started_at
+                if sampler is not None:
+                    sampled_peak_vram_gib = sampler.stop()
                 if self._active_backend is backend:
                     self._active_backend = None
             if not image_bytes:
                 continue
+            if self._fast_resolution is not None:
+                self.sd_model_checkpoint = generation_request.checkpoint
             image_bytes = self._apply_nsfw_mosaic(image_bytes, backend)
             image_bytes, output_extension = self._encoded_output(image_bytes)
             failure = None
@@ -624,6 +721,7 @@ class EmbeddedRandomImage:
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(image_bytes)
             metadata = parameters.to_dict()
+            metadata["steps"] = generation_request.steps
             metadata["prompt_stability"] = {
                 "content_mode": guard_mode.value,
                 "risk": risk_report.overall_risk.value,
@@ -632,13 +730,26 @@ class EmbeddedRandomImage:
                 "candidate_count": candidate_total,
                 "adjustments": list(plan.adjustment_log),
             }
-            if self._anime_resolution is not None:
-                metadata["anime_generation"] = {
-                    "profile_id": self._anime_resolution.profile_id,
-                    "reason": self._anime_resolution.reason,
-                    "checkpoint": self._anime_resolution.checkpoint,
-                }
-            metadata_path = self._save_generation_metadata(output, metadata)
+            metadata_path = self._save_generation_metadata(
+                output,
+                metadata,
+                duration_seconds=duration_seconds,
+                peak_vram_gib=sampled_peak_vram_gib,
+            )
+            if self._fast_resolution is not None:
+                GenerationHistory(Path(self.output_dir) / "generation_history.jsonl").append(
+                    GenerationMeasurement(
+                        profile_id=self._fast_resolution.profile_id,
+                        model=generation_request.checkpoint,
+                        duration_seconds=duration_seconds,
+                        peak_vram_gib=sampled_peak_vram_gib,
+                        system_ram_gib=self._fast_resolution.system_ram_gib,
+                        available_vram_gib=self._fast_resolution.available_vram_gib,
+                        available_ram_gib=self._fast_resolution.available_ram_gib,
+                        gpu_name=self._fast_resolution.device_name,
+                        cuda_version=self._fast_resolution.cuda_version,
+                    )
+                )
             prompt_path = self._save_prompt(output, prompt)
             if failure:
                 report_path = self._save_failure_report(output, failure, prompt, negative, metadata)

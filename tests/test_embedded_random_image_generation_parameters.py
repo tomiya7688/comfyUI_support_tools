@@ -7,7 +7,9 @@ from unittest.mock import patch
 from PIL import Image
 
 from comfyui_support_tools.shared.anime_generation import AnimeContentMode, AnimeIntent
+from comfyui_support_tools.shared.fast_generation import GenerationMode, Quantization
 from scripts.backend.embedded_random_image import EmbeddedRandomImage
+from scripts.backend.fast_generation_policy import FastGenerationResolution
 from scripts.backend.generation_capabilities import GenerationCapabilities
 
 
@@ -23,7 +25,9 @@ class _Backend:
     # }
     def __init__(self):
         self.request = None
-        self.capabilities = GenerationCapabilities(frozenset({"txt2img"}))
+        self.capabilities = GenerationCapabilities(
+            frozenset({"txt2img", "workflow", "model_overrides"})
+        )
 
     def generate(self, request, stop_event=None):
         self.request = request
@@ -163,6 +167,91 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
             self.assertEqual(metadata["resolution"], {"width": 512, "height": 768})
             self.assertEqual(metadata["sampler"], "DPM++ 2M Karras")
             self.assertTrue(any("CFG=5.5" in message for message in messages))
+
+    def test_fast_profile_routes_model_records_metadata_and_history(self):
+        backend = _Backend()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            generator = EmbeddedRandomImage()
+            generator.api_url = "http://127.0.0.1:8188"
+            generator.output_dir = temporary_directory
+            generator.comfy_flow = "draft.json"
+            generator.enable_hr = False
+            generator.enable_failure_isolation = False
+            generator.enable_nsfw_mosaic = False
+            generator.enable_prompt_correction = False
+            generator.save_prompts = False
+            generator.additional_inputs = []
+            generator.additional_input_files = []
+            generator.action_wildcards = []
+            generator.comfy_model_overrides = {}
+            generator.model_catalog = {
+                "checkpoints": ["base.safetensors"],
+                "unets": [],
+                "loras": [],
+            }
+            generator.sd_model_checkpoint = "base.safetensors"
+            generator.fast_generation_mode = GenerationMode.FAST.value
+            generator.generation_parameter_config = {
+                "cfg": {"mode": "fixed", "value": 5.5},
+                "steps": {"mode": "fixed", "value": 18},
+                "resolution": {"mode": "fixed", "value": {"width": 512, "height": 768}},
+                "sampler": {"mode": "fixed", "value": "Euler"},
+            }
+            resolution = FastGenerationResolution(
+                checkpoint="draft.safetensors",
+                steps=4,
+                profile_id="draft-test",
+                quantization=Quantization.FP8,
+                gpu_vram_gib=12,
+                system_ram_gib=32,
+                available_vram_gib=10,
+                available_ram_gib=24,
+                device_name="test GPU",
+                cuda_available=True,
+                cuda_version="12.4",
+                runtime_quantizations=frozenset({Quantization.FP8}),
+                reason="test route",
+            )
+
+            class _Sampler:
+                def __init__(self, *_args):
+                    pass
+
+                def start(self):
+                    return None
+
+                def stop(self):
+                    return 7.5
+
+            with (
+                patch(
+                    "scripts.backend.embedded_random_image.create_configured_image_generation_backend",
+                    return_value=backend,
+                ),
+                patch(
+                    "scripts.backend.embedded_random_image.resolve_fast_generation",
+                    return_value=resolution,
+                ) as resolve,
+                patch("scripts.backend.embedded_random_image.ComfyUIPeakMemorySampler", _Sampler),
+            ):
+                generator._generate(prompt="a simple test prompt", negative="")
+
+            resolve.assert_called_once()
+            self.assertEqual(backend.request.checkpoint, "draft.safetensors")
+            self.assertEqual(backend.request.steps, 4)
+            output = next(Path(temporary_directory).glob("*.png"))
+            metadata = json.loads(
+                output.with_suffix(".generation.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(metadata["fast_generation"]["profile_id"], "draft-test")
+            self.assertEqual(metadata["fast_generation"]["sampled_peak_vram_gib"], 7.5)
+            history = json.loads(
+                (Path(temporary_directory) / "generation_history.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()[0]
+            )
+            self.assertEqual(history["profile_id"], "draft-test")
+            self.assertEqual(history["model"], "draft.safetensors")
 
     # {
     #   責務: [test_anime_policy_prepares_the_selected_model_request: verify policy integration in the real generator]

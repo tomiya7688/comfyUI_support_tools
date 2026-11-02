@@ -28,6 +28,7 @@
 | [Manga Creator / Storyboard](manga_creator.md) | [Manga Creator / Storyboard](manga_creator.en.md) |
 | [Expression Retouch](expression_retouch.md) | [Expression Retouch](expression_retouch.en.md) |
 | [Anime / Illustration Prompt Routing](anime_generation.md) | [Anime / Illustration Prompt Routing](anime_generation.en.md) |
+| [Fast / Low-VRAM Txt2Img](fast_generation.md) | [Fast / Low-VRAM Txt2Img](fast_generation.en.md) |
 
 ### 既存文書の移行
 
@@ -62,6 +63,7 @@ Project-owned README files and documentation are maintained in both Japanese and
 | [Manga Creator / Storyboard](manga_creator.md) | [Manga Creator / Storyboard](manga_creator.en.md) |
 | [Expression Retouch](expression_retouch.md) | [Expression Retouch](expression_retouch.en.md) |
 | [Anime / Illustration Prompt Routing](anime_generation.md) | [Anime / Illustration Prompt Routing](anime_generation.en.md) |
+| [Fast / Low-VRAM Txt2Img](fast_generation.md) | [Fast / Low-VRAM Txt2Img](fast_generation.en.md) |
 
 ### Legacy migration
 

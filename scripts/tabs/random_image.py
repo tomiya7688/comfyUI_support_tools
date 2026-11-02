@@ -1,16 +1,24 @@
-from ..context import *
-from ..context import _safe_thread
-from ..context import _unique_choices
+from comfyui_support_tools.shared.capability_router import (
+    GenerationUseCase as CapabilityUseCase,
+)
+from comfyui_support_tools.shared.fast_generation import (
+    GenerationIntent,
+    GenerationMode,
+    Quantization,
+)
+from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+
 from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
 )
 from ..backend.ollama_prompt_corrector import OllamaPromptCorrector
-from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+from ..context import *
+from ..context import _unique_choices
 from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
-from comfyui_support_tools.shared.fast_generation import GenerationIntent, GenerationMode, Quantization
+
 
 class RandomImageTab(ttk.Frame):
     # {
@@ -79,6 +87,11 @@ class RandomImageTab(ttk.Frame):
         self.var_fast_generation_mode = tk.StringVar(value=GenerationMode.QUALITY.value)
         self.var_fast_generation_intent = tk.StringVar(value=GenerationIntent.PREVIEW.value)
         self.var_fast_generation_auto_route = tk.BooleanVar(value=False)
+        self.var_capability_auto_route = tk.BooleanVar(value=False)
+        self.var_capability_use_case = tk.StringVar(value=CapabilityUseCase.GENERAL.value)
+        self.var_capability_commercial_required = tk.BooleanVar(value=False)
+        self.var_capability_offline_required = tk.BooleanVar(value=False)
+        self.var_capability_allow_unverified_resource = tk.BooleanVar(value=False)
         self.var_fast_quantizations = {
             value: tk.BooleanVar(value=False)
             for value in Quantization
@@ -94,7 +107,7 @@ class RandomImageTab(ttk.Frame):
         self.additional_file_rows = []
         self.action_wildcard_rows = []
         self.flow_model_vars = []
-        self.model_choices = {"checkpoints": [], "unets": []}
+        self.model_choices = {"checkpoints": [], "unets": [], "flows": []}
 
         top = ttk.LabelFrame(self, text="ファイル", padding=8)
         top.pack(fill="x")
@@ -172,6 +185,7 @@ class RandomImageTab(ttk.Frame):
             self.flow_models_frame.pack(fill="x", pady=4)
 
             self._build_fast_generation_controls()
+            self._build_capability_routing_controls()
 
         parameter_options = ttk.LabelFrame(self, text="生成ごとのパラメータ抽選", padding=8)
         parameter_options.pack(fill="x", pady=6)
@@ -258,6 +272,33 @@ class RandomImageTab(ttk.Frame):
         ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(3, 0))
 
     # {
+    #   責務: [_build_capability_routing_controls: 用途・license・offline制約を指定するtask router UIを描画する]
+    #   処理: [task use case and routing constraintsをpersistable controlとして構成する]
+    #   引数: [self: Random Image tab]
+    #   戻り値: []
+    # }
+    def _build_capability_routing_controls(self):
+        router = ttk.LabelFrame(self, text="用途別 Capability Router", padding=8)
+        router.pack(fill="x", pady=6)
+        ttk.Label(router, text="Use case").grid(row=0, column=0, sticky="w")
+        ttk.Combobox(
+            router,
+            state="readonly",
+            textvariable=self.var_capability_use_case,
+            values=[item.value for item in CapabilityUseCase],
+            width=20,
+        ).grid(row=0, column=1, padx=4, sticky="w")
+        ttk.Checkbutton(router, text="Auto-select compatible model and workflow", variable=self.var_capability_auto_route).grid(row=1, column=0, columnspan=3, sticky="w")
+        ttk.Checkbutton(router, text="Require verified commercial license evidence", variable=self.var_capability_commercial_required).grid(row=2, column=0, columnspan=3, sticky="w")
+        ttk.Checkbutton(router, text="Offline-only", variable=self.var_capability_offline_required).grid(row=3, column=0, columnspan=3, sticky="w")
+        ttk.Checkbutton(router, text="Allow models with unknown memory requirements (except Low-VRAM use)", variable=self.var_capability_allow_unverified_resource).grid(row=4, column=0, columnspan=3, sticky="w")
+        ttk.Label(
+            router,
+            text="Auto routing uses installed checkpoint/workflow names and current ComfyUI free memory. Unknown license or resource evidence is excluded when required.",
+            wraplength=900,
+        ).grid(row=5, column=0, columnspan=4, sticky="w", pady=(3, 0))
+
+    # {
     #   責務: [_build_nsfw_mosaic_controls: NudeNet設定UIをbackend capabilityに応じて構築する]
     #   処理: [1: capability非対応なら設定を表示せず終了する, 2: 対応backend用モザイク設定を描画する]
     #   引数: [self: Random Image tab]
@@ -304,6 +345,11 @@ class RandomImageTab(ttk.Frame):
         self.var_fast_generation_mode.set(getattr(self.mod, "fast_generation_mode", GenerationMode.QUALITY.value))
         self.var_fast_generation_intent.set(getattr(self.mod, "fast_generation_intent", GenerationIntent.PREVIEW.value))
         self.var_fast_generation_auto_route.set(getattr(self.mod, "fast_generation_auto_route", False))
+        self.var_capability_auto_route.set(getattr(self.mod, "capability_auto_route", False))
+        self.var_capability_use_case.set(getattr(self.mod, "capability_use_case", CapabilityUseCase.GENERAL.value))
+        self.var_capability_commercial_required.set(getattr(self.mod, "capability_commercial_required", False))
+        self.var_capability_offline_required.set(getattr(self.mod, "capability_offline_required", False))
+        self.var_capability_allow_unverified_resource.set(getattr(self.mod, "capability_allow_unverified_resource", False))
         configured_quantizations = set(getattr(self.mod, "fast_generation_quantizations", ()))
         for value, variable in self.var_fast_quantizations.items():
             variable.set(value.value in configured_quantizations)
@@ -320,7 +366,7 @@ class RandomImageTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "fast_generation_mode": self.var_fast_generation_mode.get(), "fast_generation_intent": self.var_fast_generation_intent.get(), "fast_generation_auto_route": self.var_fast_generation_auto_route.get(), "fast_generation_quantizations": [value.value for value, variable in self.var_fast_quantizations.items() if variable.get()], "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
+        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "fast_generation_mode": self.var_fast_generation_mode.get(), "fast_generation_intent": self.var_fast_generation_intent.get(), "fast_generation_auto_route": self.var_fast_generation_auto_route.get(), "capability_auto_route": self.var_capability_auto_route.get(), "capability_use_case": self.var_capability_use_case.get(), "capability_commercial_required": self.var_capability_commercial_required.get(), "capability_offline_required": self.var_capability_offline_required.get(), "capability_allow_unverified_resource": self.var_capability_allow_unverified_resource.get(), "fast_generation_quantizations": [value.value for value, variable in self.var_fast_quantizations.items() if variable.get()], "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -348,6 +394,11 @@ class RandomImageTab(ttk.Frame):
             self.var_fast_generation_mode.set(values.get("fast_generation_mode", GenerationMode.QUALITY.value))
             self.var_fast_generation_intent.set(values.get("fast_generation_intent", GenerationIntent.PREVIEW.value))
             self.var_fast_generation_auto_route.set(values.get("fast_generation_auto_route", False))
+            self.var_capability_auto_route.set(values.get("capability_auto_route", False))
+            self.var_capability_use_case.set(values.get("capability_use_case", CapabilityUseCase.GENERAL.value))
+            self.var_capability_commercial_required.set(values.get("capability_commercial_required", False))
+            self.var_capability_offline_required.set(values.get("capability_offline_required", False))
+            self.var_capability_allow_unverified_resource.set(values.get("capability_allow_unverified_resource", False))
             quantizations = set(values.get("fast_generation_quantizations", []))
             for quantization, variable in self.var_fast_quantizations.items(): variable.set(quantization.value in quantizations)
             self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.var_vae_name.set(values.get("vae_name", "")); self.logbox.log("プリセットを読み込みました")
@@ -489,6 +540,7 @@ class RandomImageTab(ttk.Frame):
             "unets": list(choices.get("unets", [])),
             "loras": list(choices.get("loras", [])),
             "vaes": list(choices.get("vaes", [])),
+            "flows": list(choices.get("flows", [])),
         }
         self.checkpoint_combo.configure(values=base_model_choices(choices))
         self.vae_combo.configure(values=choices.get("vaes", []))
@@ -582,13 +634,18 @@ class RandomImageTab(ttk.Frame):
             "fast_generation_mode": self.var_fast_generation_mode.get(),
             "fast_generation_intent": self.var_fast_generation_intent.get(),
             "fast_generation_auto_route": self.var_fast_generation_auto_route.get(),
+            "capability_auto_route": self.var_capability_auto_route.get(),
+            "capability_use_case": self.var_capability_use_case.get(),
+            "capability_commercial_required": self.var_capability_commercial_required.get(),
+            "capability_offline_required": self.var_capability_offline_required.get(),
+            "capability_allow_unverified_resource": self.var_capability_allow_unverified_resource.get(),
             "fast_generation_quantizations": [
                 value.value for value, variable in self.var_fast_quantizations.items() if variable.get()
             ],
             "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},
             "model_catalog": {
                 key: list(self.model_choices.get(key, []))
-                for key in ("checkpoints", "unets", "loras", "vaes")
+                for key in ("checkpoints", "unets", "loras", "vaes", "flows")
             },
             "additional_inputs": additional_inputs, "additional_input_files": [item["path"] for item in additional_inputs],
             "action_wildcards": [{**item, "condition": item["condition"].strip(), "path": item["path"].strip()} for item in self._action_wildcard_specs() if item["condition"].strip() and item["path"].strip()],

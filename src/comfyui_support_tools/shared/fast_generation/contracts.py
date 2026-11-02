@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
-import math
 
 
 # {
 #   責務: [GenerationIntent: fast generatorが選択できる生成用途を表す]
+#   フィールド: [PREVIEW, ITERATION, BATCH_DRAFT, BACKGROUND]
 #   許可値: [preview, iteration, batch_draft, background]
 # }
 class GenerationIntent(str, Enum):
@@ -20,6 +21,7 @@ class GenerationIntent(str, Enum):
 
 # {
 #   責務: [GenerationMode: 品質と速度の利用者優先度を表す]
+#   フィールド: [QUALITY, BALANCED, FAST]
 #   許可値: [quality, balanced, fast]
 # }
 class GenerationMode(str, Enum):
@@ -30,6 +32,7 @@ class GenerationMode(str, Enum):
 
 # {
 #   責務: [Quantization: model profileで明示できるprecision variantを制約する]
+#   フィールド: [FP16, BF16, FP8, INT8, INT4]
 #   許可値: [fp16, bf16, fp8, int8, int4]
 # }
 class Quantization(str, Enum):
@@ -42,6 +45,7 @@ class Quantization(str, Enum):
 
 # {
 #   責務: [ModelCapability: efficient model profileが公開するtask capabilityを列挙する]
+#   フィールド: [TXT2IMG, IMG2IMG, LORA_FINETUNE]
 #   許可値: [txt2img, img2img, lora_finetune]
 # }
 class ModelCapability(str, Enum):
@@ -68,6 +72,13 @@ class RuntimeResources:
     quantizations: frozenset[Quantization] = frozenset()
     cpu_offload: bool = False
 
+    # {
+    #   責務: [__post_init__: resource observationの数値、backend名、precision宣言をvalidateする]
+    #   処理: [known resource values are finite positive numbers and backend/quantizations are declared]
+    #   引数: [self: immutable runtime snapshot]
+    #   戻り値: []
+    #   エラー: [TypeError or ValueError: malformed resource evidence]
+    # }
     def __post_init__(self) -> None:
         for name, value in (
             ("gpu_vram_gib", self.gpu_vram_gib),
@@ -107,6 +118,13 @@ class FastModelProfile:
     fast_route: bool = True
     minimum_vram_by_quantization: tuple[tuple[Quantization, float], ...] = ()
 
+    # {
+    #   責務: [__post_init__: fast model requirementsとsupported intents/precisionをvalidateする]
+    #   処理: [resource, steps, intent, capability and quantization declarations are consistent]
+    #   引数: [self: declarative fast model profile]
+    #   戻り値: []
+    #   エラー: [ValueError: malformed profile metadata]
+    # }
     def __post_init__(self) -> None:
         if not self.profile_id.strip() or not self.aliases:
             raise ValueError("fast model profiles require an ID and aliases")
@@ -152,6 +170,7 @@ class FastRouteRequest:
 
     # {
     #   責務: [__post_init__: invalid model names and routing enum valuesを拒否する]
+    #   処理: [ensure immutable installed names and typed resource/mode selections]
     #   引数: [self: immutable routing request]
     #   戻り値: []
     #   エラー: [TypeError: resource or enum type mismatch, ValueError: empty model identifier]

@@ -23,6 +23,7 @@ from .contracts import (
 class FastGenerationRouter:
     # {
     #   責務: [__init__: profile IDの重複を検証してrouterを初期化する]
+    #   処理: [materialize descriptors and reject duplicate IDs]
     #   引数: [profiles: route可能なmodel variant descriptor]
     #   戻り値: []
     # }
@@ -103,6 +104,7 @@ class FastGenerationRouter:
 
 # {
 #   責務: [_resources_fit: 宣言済みmemory要件に対してruntime余裕を確認する]
+#   処理: [compare observed capacities against declared VRAM and RAM headroom]
 #   引数: [profile: model resource declaration, request: observed runtime resources]
 #   戻り値: [bool: both system RAM and VRAM have 1 GiB safety headroom]
 # }
@@ -132,6 +134,7 @@ def _resources_fit(
 
 # {
 #   責務: [_compatible_quantization: runtimeが宣言したprecisionの中からvariant対応値を選ぶ]
+#   処理: [accept unmarked native files and gate marked variants against both declarations]
 #   引数: [profile: model variant, request: hardware-supported quantizations, model: installed file name]
 #   戻り値: [Quantization | None: declared precision, native precision, or no safe choice]
 # }
@@ -148,6 +151,7 @@ def _compatible_quantization(
 
 # {
 #   責務: [_filename_quantization: installed variant filenameから明示されたprecisionを読む]
+#   処理: [recognize explicit precision tokens without inferring runtime support]
 #   引数: [model: checkpoint or UNet file name]
 #   戻り値: [Quantization | None: explicit quant suffix or native/unmarked variant]
 # }
@@ -169,6 +173,7 @@ def _filename_quantization(model: str) -> Quantization | None:
 
 # {
 #   責務: [_classify: 重複family aliasを最長token matchで一つのvariantへ解決する]
+#   処理: [select the most-specific unambiguous registered alias]
 #   引数: [model_name: installed checkpoint name, profiles: registered descriptors]
 #   戻り値: [FastModelProfile | None: unambiguous most-specific profile]
 # }
@@ -188,6 +193,7 @@ def _classify(model_name: str, profiles: tuple[FastModelProfile, ...]) -> FastMo
 
 # {
 #   責務: [_normalize: filename variantをcase-insensitiveなspace-separated textに変換する]
+#   処理: [case-fold the identifier and replace punctuation with spaces]
 #   引数: [value: model name or alias]
 #   戻り値: [str: normalized identifier]
 # }
@@ -197,6 +203,7 @@ def _normalize(value: str) -> str:
 
 # {
 #   責務: [_contains_alias: identifier内でaliasをtoken boundary付きで検索する]
+#   処理: [match full tokens instead of arbitrary substrings]
 #   引数: [identifier: normalized checkpoint name, alias: normalized profile alias]
 #   戻り値: [bool: alias is present as complete tokens]
 # }

@@ -1,0 +1,13 @@
+# Txt2Img Capability Router
+
+Random Imageの「用途別 Capability Router」は、用途、ComfyUIに導入済みのモデルとworkflow、空きVRAM/RAM、商用利用、オフライン条件から候補を選びます。既定では無効です。有効にすると、ComfyUIの`/system_stats`を参照し、対応するモデルとworkflowが両方見つかった候補だけを使います。選択結果、用途、workflow、メモリ観測値、選択理由と除外理由は画像の`.generation.json`に保存します。
+
+`GenerationCapability`はモデルの別名、用途、prompt policy、workflow ID、対応機能、資源量、ライセンス根拠、導入状態を宣言します。`GenerationIntent`は実行時制約を表し、`CapabilityRouter`はハード制約で候補を絞ってから説明可能な順序で並べます。用途追加やモデル登録はdescriptor追加で拡張でき、未知の能力は推測しません。
+
+商用利用を必須にすると、ライセンスが商用利用可で、かつ`verified=True`のprofileだけが対象です。現在の組み込みprofileはモデル重みの個別ライセンス検証が未完了のため、商用条件ではfail-closedになります。リポジトリコードのライセンスは重みのライセンスを証明しません。資源量が不明なモデルも通常は除外されます。明示的に「unknown memory requirements」を許可できますが、Low-VRAM用途では未知のVRAM/RAM要件を常に除外します。
+
+workflow JSONはこの機能では同梱していません。profileの`workflow_profile_id`と同名のローカルworkflow（`.json`を含む）が必要です。モデルやworkflowがない場合は黙って別用途へフォールバックせず、理由を示して停止します。モデルの推奨品質tierは記述用metadataであり、実測結果ではありません。
+
+`EvaluatorRegistry`は用途別のnamed metricsを登録し、`run_cross_family_best_of_n`は同一promptで生成した異なるfamilyの候補を指定metricで比較します。ベンチマークmatrixは比較用promptを定義するだけで、モデルの測定値や推薦順位を含みません。プロジェクトに実装済みの画像品質evaluatorがないため、UI経由の自動Best-of-N比較と実機スコア収集は未提供です。架空の品質スコアによる自動推薦更新は行いません。
+
+対応候補にはFLUX.2 Klein/Dev、Qwen Image 2.1、HunyuanImage 3 Instruct、HiDream-I1、Sana Sprint、SDXL anime系統を宣言しています。VRAM/RAM値、workflow互換性、重みライセンスが未検証のprofileは未検証のまま扱われます。checkpoint名の分類は別名に基づくため、未知または曖昧な名前は自動選択されません。

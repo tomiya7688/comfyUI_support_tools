@@ -10,9 +10,7 @@ from pathlib import Path
 from statistics import fmean
 from threading import Lock
 
-
 _GENERATION_HISTORY_LOCK = Lock()
-from threading import Lock
 
 
 # {
@@ -35,6 +33,13 @@ class GenerationMeasurement:
     artifact: bool | None = None
     created_at: str = ""
 
+    # {
+    #   責務: [__post_init__: observed metricsのrangeと必須identityをvalidateする]
+    #   処理: [measurement fields are validated without substituting missing observations]
+    #   引数: [self: one generation observation]
+    #   戻り値: []
+    #   エラー: [TypeError or ValueError: malformed measurement]
+    # }
     def __post_init__(self) -> None:
         if not self.profile_id.strip() or not self.model.strip():
             raise ValueError("measurement profile and model must not be empty")
@@ -68,6 +73,7 @@ class GenerationMeasurement:
 class GenerationHistory:
     # {
     #   責務: [__init__: generation metricの保存先を設定する]
+    #   処理: [normalize the JSONL destination path]
     #   引数: [path: JSONL履歴ファイル]
     #   戻り値: []
     # }
@@ -76,6 +82,7 @@ class GenerationHistory:
 
     # {
     #   責務: [append: 検証済みmeasurementをJSONLへ追記する]
+    #   処理: [serialize the observation and append under the process lock]
     #   引数: [measurement: 実測値と不明値を保持するrecord]
     #   戻り値: [Path: 書き込んだ履歴ファイル]
     # }
@@ -94,6 +101,7 @@ class GenerationHistory:
 
 # {
 #   責務: [quality_per_second: alignment scoreをlatencyで割った参考効率を算出する]
+#   処理: [divide measured prompt alignment by measured nonzero duration]
 #   引数: [measurement: prompt alignmentが採点済みのrun]
 #   戻り値: [float | None: score未採点またはlatency 0ならNone]
 #   注意: [異なるtaskを跨ぐ品質metricとして扱わない]
@@ -106,6 +114,7 @@ def quality_per_second(measurement: GenerationMeasurement) -> float | None:
 
 # {
 #   責務: [quality_per_gib: alignment scoreをsampled peak VRAMで割った参考効率を算出する]
+#   処理: [divide measured prompt alignment by observed nonzero peak VRAM]
 #   引数: [measurement: prompt alignmentとpeak memoryが記録されたrun]
 #   戻り値: [float | None: 必要なmetricが不明またはVRAMがzeroの場合None]
 #   注意: [異なるprompt task間の品質順位として扱わない]

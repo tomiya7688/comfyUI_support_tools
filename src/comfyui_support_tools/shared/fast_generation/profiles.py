@@ -8,6 +8,7 @@ from .contracts import FastModelProfile, GenerationIntent, ModelCapability, Quan
 # {
 #   責務: [create_default_fast_model_profiles: FLUX.2 KleinとSanaの効率variantを登録する]
 #   処理: [issue記載の対象familyをモデル名ベースで識別できるdescriptorとして返す]
+#   引数: []
 #   戻り値: [tuple[FastModelProfile, ...]: 拡張可能なbuilt-in descriptor]
 #   注意: [VRAM要件は保守的な導入目安であり, 実測値や画質保証ではない]
 # }

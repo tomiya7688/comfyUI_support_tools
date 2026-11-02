@@ -18,6 +18,13 @@ class ScoredDraft:
     image_bytes: bytes
     score: float
 
+    # {
+    #   責務: [__post_init__: candidate identity, image data and evaluator scoreをvalidateする]
+    #   処理: [reject invalid candidate IDs, empty images and non-finite scores]
+    #   引数: [self: generated/scored draft image]
+    #   戻り値: []
+    #   エラー: [ValueError: malformed image candidate or score]
+    # }
     def __post_init__(self) -> None:
         if self.candidate_id < 0 or not self.image_bytes:
             raise ValueError("draft candidates require a non-negative ID and image data")

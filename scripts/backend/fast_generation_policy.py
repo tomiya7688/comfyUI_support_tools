@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from comfyui_support_tools.shared.fast_generation import (
     FastGenerationRouter,
@@ -12,8 +13,8 @@ from comfyui_support_tools.shared.fast_generation import (
     GenerationIntent,
     GenerationMode,
     Quantization,
-    probe_comfyui_resources,
     create_default_fast_model_profiles,
+    probe_comfyui_resources,
 )
 
 

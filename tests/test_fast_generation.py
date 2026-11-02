@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import json
 import tempfile
-from threading import Event
 import unittest
 from pathlib import Path
-from scripts.backend.fast_generation_policy import resolve_fast_generation
+from threading import Event
 
 from comfyui_support_tools.shared.fast_generation import (
-    FastGenerationRouter,
     ComfyUIPeakMemorySampler,
+    FastGenerationRouter,
     FastRouteRequest,
     GenerationHistory,
-    GenerationIntent,
     GenerationMeasurement,
     GenerationMode,
     ModelCapability,
@@ -27,6 +25,7 @@ from comfyui_support_tools.shared.fast_generation import (
     run_draft_to_final,
     summarize_generation_history,
 )
+from scripts.backend.fast_generation_policy import resolve_fast_generation
 
 
 # {
@@ -37,6 +36,7 @@ from comfyui_support_tools.shared.fast_generation import (
 class FastGenerationTests(unittest.TestCase):
     # {
     #   責務: [setUp: built-in variant descriptorでrouterを作る]
+    #   処理: [initialize the router used by test methods]
     #   引数: [self: unittest case]
     #   戻り値: []
     # }
@@ -167,9 +167,14 @@ class FastGenerationTests(unittest.TestCase):
     #   戻り値: []
     # }
     def test_comfyui_resource_probe_keeps_missing_quantization_unknown(self) -> None:
+        # {
+        #   責務: [Response: fake HTTP resource payloadを構築する]
+        #   フィールド: [representative ComfyUI stats response]
+        # }
         class Response:
             # {
             #   責務: [raise_for_status: fake successful HTTP response]
+            #   処理: [represent successful response status]
             #   引数: [self: response]
             #   戻り値: []
             # }
@@ -178,6 +183,7 @@ class FastGenerationTests(unittest.TestCase):
 
             # {
             #   責務: [json: return a ComfyUI system_stats fixture]
+            #   処理: [return GPU and system capacity fixture]
             #   引数: [self: response]
             #   戻り値: [dict: GPU and system capacities]
             # }
@@ -198,6 +204,12 @@ class FastGenerationTests(unittest.TestCase):
 
         calls = []
 
+        # {
+        #   責務: [request_get: resource probe callを記録してfixture responseを返す]
+        #   処理: [record endpoint arguments and return the fake stats payload]
+        #   引数: [url: endpoint, timeout: HTTP deadline]
+        #   戻り値: [Response: fake system_stats payload]
+        # }
         def request_get(url, timeout):
             calls.append((url, timeout))
             return Response()
@@ -221,9 +233,14 @@ class FastGenerationTests(unittest.TestCase):
         samples = iter((8, 2))
         sampler = None
 
+        # {
+        #   責務: [Response: samplerのfree VRAMを保持するfake response]
+        #   フィールド: [one available-memory sample]
+        # }
         class Response:
             # {
             #   責務: [__init__: one VRAM free-memory observationを設定する]
+            #   処理: [store one fake available-memory sample]
             #   引数: [self: response, free_gib: available GPU memory]
             #   戻り値: []
             # }
@@ -232,6 +249,7 @@ class FastGenerationTests(unittest.TestCase):
 
             # {
             #   責務: [raise_for_status: fake HTTP request successを表す]
+            #   処理: [return a successful response status]
             #   引数: [self: response]
             #   戻り値: []
             # }
@@ -240,6 +258,7 @@ class FastGenerationTests(unittest.TestCase):
 
             # {
             #   責務: [json: current free memory valueをComfyUI payloadとして返す]
+            #   処理: [encode the available memory as a system_stats response]
             #   引数: [self: response]
             #   戻り値: [dict: one device memory payload]
             # }
@@ -254,6 +273,12 @@ class FastGenerationTests(unittest.TestCase):
                     ]
                 }
 
+        # {
+        #   責務: [request_get: 次のfake VRAM sampleを返す]
+        #   処理: [advance the sample iterator and signal the observed second sample]
+        #   引数: [url: sampler endpoint, timeout: request deadline]
+        #   戻り値: [Response: memory payload]
+        # }
         def request_get(_url, timeout):
             self.assertEqual(timeout, 2)
             free_gib = next(samples)
@@ -273,9 +298,14 @@ class FastGenerationTests(unittest.TestCase):
     #   戻り値: []
     # }
     def test_fast_policy_routes_only_installed_profiles_and_guards_workflow_overrides(self) -> None:
+        # {
+        #   責務: [Response: policy test用のfake ComfyUI resource payload]
+        #   フィールド: [fixed CUDA and host memory totals/free values]
+        # }
         class Response:
             # {
             #   責務: [raise_for_status: fake resource response is successful]
+            #   処理: [return a successful response status]
             #   引数: [self: response]
             #   戻り値: []
             # }
@@ -284,6 +314,7 @@ class FastGenerationTests(unittest.TestCase):
 
             # {
             #   責務: [json: provide a representative 12-GiB runtime]
+            #   処理: [return the ComfyUI device and host memory fixture]
             #   引数: [self: response]
             #   戻り値: [dict: ComfyUI system resource payload]
             # }
@@ -376,7 +407,8 @@ class FastGenerationTests(unittest.TestCase):
         self.assertEqual(result.final_image, b"final")
 
     # {
-    #   責務: [test_draft_pipeline_rejects_invalid_candidate_counts: batch boundsを検証する]
+    #   責務: [test_draft_pipeline_rejects_invalid_candidate_counts: candidate batch boundsを検証する]
+    #   処理: [zero candidate count is rejected before invoking generation/evaluator callbacks]
     #   引数: [self: unittest case]
     #   戻り値: []
     # }

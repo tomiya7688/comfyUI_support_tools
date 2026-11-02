@@ -5,8 +5,9 @@ from dataclasses import replace
 
 from PIL import Image
 
-from ..context import *
-from comfyui_support_tools.shared.anime_generation import AnimeContentMode
+from comfyui_support_tools.shared.anime_generation import AnimeContentMode, AnimeIntent
+from comfyui_support_tools.shared.capability_router import GenerationUseCase as CapabilityUseCase
+from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from comfyui_support_tools.shared.fast_generation import (
     ComfyUIPeakMemorySampler,
     GenerationHistory,
@@ -15,14 +16,16 @@ from comfyui_support_tools.shared.fast_generation import (
     GenerationMode,
     Quantization,
 )
-from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+
+from ..context import *
 from .anime_generation_backend import AnimeGenerationBackend
+from .capability_routing_policy import CapabilityRoutingResolution, resolve_generation_capability
 from .fast_generation_policy import FastGenerationResolution, resolve_fast_generation
-from .text_to_image_request import TextToImageRequest
+from .generation_parameter_resolver import GenerationParameterResolver
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
-from .generation_parameter_resolver import GenerationParameterResolver
 from .prompt_lora_compatibility import validate_prompt_loras
+from .text_to_image_request import TextToImageRequest
 
 _GENERATION_PROFILE = create_configured_image_generation_profile(datetime.now().strftime("%Y%m%d"))
 
@@ -56,7 +59,7 @@ class EmbeddedRandomImage:
     enable_failure_isolation = False
     image_failure_min_variance = 8.0
     comfy_model_overrides = {}
-    model_catalog = {"checkpoints": [], "unets": [], "loras": []}
+    model_catalog = {"checkpoints": [], "unets": [], "loras": [], "vaes": [], "flows": []}
     generation_parameter_config = None
     use_model_vae = True
     vae_name = ""
@@ -75,6 +78,11 @@ class EmbeddedRandomImage:
     fast_generation_intent = GenerationIntent.PREVIEW.value
     fast_generation_auto_route = False
     fast_generation_quantizations = []
+    capability_auto_route = False
+    capability_use_case = CapabilityUseCase.GENERAL.value
+    capability_commercial_required = False
+    capability_offline_required = False
+    capability_allow_unverified_resource = False
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -87,6 +95,7 @@ class EmbeddedRandomImage:
         self._active_backend = None
         self._anime_resolution = None
         self._fast_resolution: FastGenerationResolution | None = None
+        self._capability_resolution: CapabilityRoutingResolution | None = None
         self._worker_thread = None
         self._settings_lock = threading.Lock()
         self._pending_settings = None
@@ -310,7 +319,7 @@ class EmbeddedRandomImage:
             metadata["anime_generation"] = {
                 "profile_id": self._anime_resolution.profile_id,
                 "reason": self._anime_resolution.reason,
-                "intent": self.anime_intent.value,
+                "intent": (self.anime_intent or AnimeIntent.CHARACTER).value,
                 "content_mode": self.anime_content_mode.value,
             }
         if self._fast_resolution is not None:
@@ -334,6 +343,23 @@ class EmbeddedRandomImage:
                     item.value for item in self._fast_resolution.runtime_quantizations
                 ),
             }
+        if self._capability_resolution is not None:
+            route = self._capability_resolution.route
+            metadata["capability_routing"] = {
+                "profile_id": route.capability.profile_id,
+                "family": route.capability.family,
+                "workflow": self._capability_resolution.workflow,
+                "use_case": self.capability_use_case,
+                "evaluator_id": route.evaluator_id,
+                "prompt_policy_id": route.capability.prompt_policy_id,
+                "reason": route.reason,
+                "excluded_models": [
+                    {"model": model, "reason": reason} for model, reason in route.excluded
+                ],
+                "available_vram_gib": self._capability_resolution.available_vram_gib,
+                "available_ram_gib": self._capability_resolution.available_ram_gib,
+                "device_name": self._capability_resolution.device_name,
+            }
         metadata_path.write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
@@ -341,16 +367,45 @@ class EmbeddedRandomImage:
         return metadata_path
 
     # {
-    #   責務: [_prepare_profiled_request: fast/anime profileを生成要求へ適用しLoRA互換性を検証する]
-    #   処理: [1: fast resource routeを解決, 2: 任意anime prompt adapterを適用, 3: resolved modelでLoRAを検証]
+    #   責務: [_prepare_profiled_request: capability/fast/anime profileを生成要求へ適用しLoRA互換性を検証する]
+    #   処理: [1: optional task router, 2: fast resource route, 3: optional anime prompt adapter, 4: resolved modelでLoRAを検証]
     #   引数: [self: generator settings, backend: selected image backend, request: typed txt2img request, workflow_has_model_overrides: explicit workflow model choice]
     #   戻り値: [tuple[backend, request, anime adapter]: validation済みのdelegateとrequest]
     # }
     def _prepare_profiled_request(self, backend, request, workflow_has_model_overrides):
         self._anime_resolution = None
         self._fast_resolution = None
+        self._capability_resolution = None
         fast_mode = GenerationMode(self.fast_generation_mode)
+        capability_anime = False
+        if self.capability_auto_route:
+            if not backend.capabilities.supports("workflow"):
+                raise ValueError("task capability routing currently requires the ComfyUI backend")
+            if self.fast_generation_auto_route or self.anime_auto_route:
+                raise ValueError("task capability routing cannot run with Fast or Anime auto-routing")
+            if workflow_has_model_overrides:
+                raise ValueError("task capability routing cannot override explicit workflow model selections")
+            self._capability_resolution = resolve_generation_capability(
+                CapabilityUseCase(self.capability_use_case),
+                self.model_catalog,
+                self.api_url,
+                request_get=requests.get,
+                resolution=(request.width, request.height),
+                commercial_required=self.capability_commercial_required,
+                offline_required=self.capability_offline_required,
+                allow_unverified_resource=self.capability_allow_unverified_resource,
+            )
+            route = self._capability_resolution.route
+            request = replace(
+                request,
+                checkpoint=route.selected_model,
+                workflow_path=resolve_comfy_flow_path(self._capability_resolution.workflow),
+            )
+            capability_anime = route.capability.prompt_policy_id == "anime_booru_tags_v1"
+            self._log(f"🧭 Capability route: {route.reason}; workflow={self._capability_resolution.workflow}")
         if fast_mode is not GenerationMode.QUALITY or self.fast_generation_auto_route:
+            if self.capability_auto_route:
+                raise ValueError("task capability routing and Fast / Low-VRAM routing cannot run together")
             if not backend.capabilities.supports("workflow"):
                 raise ValueError("Fast / Low-VRAM profiles currently require the ComfyUI backend")
             self._fast_resolution = resolve_fast_generation(
@@ -375,7 +430,10 @@ class EmbeddedRandomImage:
             self._log(f"⚡ Fast model policy: {self._fast_resolution.reason}")
 
         anime_backend = None
-        if self.anime_intent is not None:
+        anime_intent = self.anime_intent
+        if capability_anime and anime_intent is None:
+            anime_intent = AnimeIntent.CHARACTER
+        if anime_intent is not None:
             if self.fast_generation_auto_route or (
                 self.anime_auto_route and fast_mode is not GenerationMode.QUALITY
             ):
@@ -383,7 +441,7 @@ class EmbeddedRandomImage:
             anime_backend = AnimeGenerationBackend(
                 backend,
                 model_catalog=self.model_catalog,
-                intent=self.anime_intent,
+                intent=anime_intent,
                 content_mode=self.anime_content_mode,
                 auto_route=self.anime_auto_route,
                 has_explicit_model_overrides=workflow_has_model_overrides,
@@ -524,6 +582,9 @@ class EmbeddedRandomImage:
             if self._active_backend is backend:
                 self._active_backend = None
         if image_bytes:
+            if self._capability_resolution is not None:
+                self.sd_model_checkpoint = self._capability_resolution.route.selected_model
+                self.comfy_flow = self._capability_resolution.workflow
             if self._fast_resolution is not None:
                 self.sd_model_checkpoint = generation_request.checkpoint
             if anime_backend is not None:

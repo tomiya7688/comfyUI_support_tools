@@ -45,6 +45,7 @@ def probe_comfyui_resources(
 
 # {
 #   責務: [_bytes_to_gib: ComfyUI byte countをfinite positive GiBへ変換する]
+#   処理: [reject invalid/non-positive values before converting bytes to GiB]
 #   引数: [value: ComfyUI system_statsのraw byte field]
 #   戻り値: [float | None: 不正値ならunknown]
 # }
@@ -56,6 +57,7 @@ def _bytes_to_gib(value: object) -> float | None:
 
 # {
 #   責務: [_optional_text: nullable runtime metadataを空文字なしで保持する]
+#   処理: [trim known text and preserve missing values as None]
 #   引数: [value: raw metadata field]
 #   戻り値: [str | None: non-empty text or unknown]
 # }
@@ -67,6 +69,7 @@ def _optional_text(value: object) -> str | None:
 
 # {
 #   責務: [_nonnegative_bytes_to_gib: zero-byte free-memory observationを含むbyte値を変換する]
+#   処理: [accept zero and positive byte counts and reject invalid payload values]
 #   引数: [value: ComfyUI free memory field]
 #   戻り値: [float | None: zero or positive GiB, invalid valueならunknown]
 # }
@@ -78,6 +81,7 @@ def _nonnegative_bytes_to_gib(value: object) -> float | None:
 
 # {
 #   責務: [_select_comfyui_device: system_statsからVRAMを持つCUDA deviceを優先して選択する]
+#   処理: [prefer CUDA device and otherwise choose first valid device with memory]
 #   引数: [devices: ComfyUI devices payload]
 #   戻り値: [dict: first CUDA device, otherwise first device with a VRAM capacity]
 # }
@@ -100,6 +104,7 @@ def _select_comfyui_device(devices: object) -> dict:
 class ComfyUIPeakMemorySampler:
     # {
     #   責務: [__init__: memory polling samplerを設定する]
+    #   処理: [create bounded polling state for the ComfyUI stats endpoint]
     #   引数: [api_url: ComfyUI endpoint, request_get: HTTP GET, interval_seconds: polling周期]
     #   戻り値: []
     # }
@@ -115,9 +120,11 @@ class ComfyUIPeakMemorySampler:
         self._lock = Lock()
         self._peak_vram_gib: float | None = None
         self._thread: Thread | None = None
+        self._last_error: str | None = None
 
     # {
     #   責務: [start: daemon sampler threadを起動する]
+    #   処理: [start one background sampling loop]
     #   引数: [self: memory sampler]
     #   戻り値: []
     # }
@@ -129,6 +136,7 @@ class ComfyUIPeakMemorySampler:
 
     # {
     #   責務: [stop: pollingを停止して観測済みpeakを返す]
+    #   処理: [signal worker, join briefly, and return the observed peak]
     #   引数: [self: memory sampler]
     #   戻り値: [float | None: sampling interval内に観測したVRAM usage]
     # }
@@ -140,7 +148,18 @@ class ComfyUIPeakMemorySampler:
             return self._peak_vram_gib
 
     # {
+    #   責務: [last_error: best-effort samplerで最後に発生した通信問題を公開する]
+    #   処理: [return the most recent probe error without masking generation]
+    #   引数: [self: memory sampler]
+    #   戻り値: [str | None: latest error message or no error]
+    # }
+    @property
+    def last_error(self) -> str | None:
+        return self._last_error
+
+    # {
     #   責務: [_sample_until_stopped: memory endpointを周期pollしてVRAM使用量を最大化する]
+    #   処理: [poll available VRAM, retain peak used memory, and record request failures]
     #   引数: [self: memory sampler]
     #   戻り値: []
     # }
@@ -158,6 +177,6 @@ class ComfyUIPeakMemorySampler:
                     used = total - free
                     with self._lock:
                         self._peak_vram_gib = max(self._peak_vram_gib or 0, used)
-            except Exception:
-                pass
+            except Exception as error:
+                self._last_error = str(error)
             self._stop.wait(self._interval)

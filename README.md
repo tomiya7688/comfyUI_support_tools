@@ -219,3 +219,9 @@ The default backend is not a trained full-body dance model and does not guarante
 `comfyui_support_tools.shared.mmd_character` provides stable-humanoid/free-3D adapter contracts, mesh/standard-bone/skin-weight/morph/physics validation, up to three local repair rounds, provenance/license checks, and PMX export/preview adapter boundaries. Candidates with remaining validation errors are not exported.
 
 This repository does not include CharacterGen/Hunyuan3D/VRM/SkinTokens generation or auto-rigging adapters, a default PMX binary writer, or a PMX renderer/physics preview. `MmdCharacterCreator` requires an external backend to create a PMX; standalone end-to-end character generation is not configured yet. Hair/clothing physics and Japanese vowel morphs also depend on adapter-generated data.
+
+### Image-to-Pixel structure-aware workflow
+
+The shared image workflow now offers `faithful`, `simplified`, `sprite`, `icon`, and `palette_constrained` conversions, four human-reviewable candidates, crop and dither controls, and recursive batch conversion with a JSON manifest that preserves relative paths. `sprite` uses transparent-alpha bounds to crop margins; it does not run an object detector. Candidate metrics and readability remain deterministic proxies, not semantic-quality judgments.
+
+共通Image workflowは `faithful` / `simplified` / `sprite` / `icon` / `palette_constrained`、レビュー可能な4候補、crop/dither選択、relative pathとJSON manifestを保持するrecursive batch変換を提供します。`sprite` modeは透明alpha boundsを使って余白をcropします。object detectorは実行しません。候補metric/readabilityはsemantic品質の判定ではなくdeterministic proxyです。

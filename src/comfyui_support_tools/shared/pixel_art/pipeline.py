@@ -76,13 +76,17 @@ def render_pixel_grid(image: Image.Image, settings: PixelArtSettings) -> PixelGr
     validate_settings(settings)
     width, height = settings.custom_size or (settings.size, settings.size)
     source = image.convert("RGBA")
+    binary_source_alpha = all(value in {0, 255} for value in source.getchannel("A").getdata())
     source = _prepare_canvas(source, width, height, settings.crop_policy)
     resampling = (
         Image.Resampling.NEAREST if source.size == (width, height) else Image.Resampling.LANCZOS
     )
     reduced = source.resize((width, height), resampling)
     # Keep source alpha coverage crisp; filtering it would introduce halo alpha values.
-    reduced.putalpha(source.getchannel("A").resize((width, height), Image.Resampling.NEAREST))
+    alpha = source.getchannel("A").resize((width, height), Image.Resampling.NEAREST)
+    if binary_source_alpha:
+        alpha = alpha.point(lambda value: 255 if value >= 128 else 0)
+    reduced.putalpha(alpha)
     reduced = _quantize(reduced, settings)
     if not settings.transparent:
         opaque = Image.new("RGBA", reduced.size, (0, 0, 0, 255))

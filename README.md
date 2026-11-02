@@ -58,6 +58,12 @@ Toukaの動画候補scoreは、候補生成中のmetricから独立したversion
 
 Tensor検出器は `ModelFamilyDetectorRegistry` へ登録でき、結果にdetector ID/versionと一致confidenceを保持します。path・metadata・tensor evidenceが衝突した場合や未対応layoutの場合は `unknown` を維持します。追加detectorは既存のtensor detectorを編集せずfixtureから登録できます。
 
+### Pixiv Dataset Downloader
+
+`comfyui_support_tools.shared.pixiv_dataset` はPixivPy3 source adapter、refresh-token auth/health、tag・creator・bookmark・ranking・ID query、filter、rate limit/retry、JobRuntime bridge、resume checkpoint、ページ順を維持したillustration/mangaとugoira archive収集、任意GIF/WebP preview、work/provenance JSON、exact/perceptual duplicate grouping、#356 handoffを提供します。`PixivRateLimitProfile`で毎分上限、API/download並列上限、interval、retry/backoff、429 cooldown、自動pauseをapp/query/job単位に設定でき、effective設定とbounded retry/429履歴をcheckpointへ記録します。使う場合は別環境に `pip install -r requirements-pixiv.txt` でPixivPy3を導入し、呼び出し元のsecure secret storeからrefresh tokenを実行時に渡してください。tokenをpresetやdatasetへ保存しません。
+
+このbackendはAPI接続型で、認証情報と実Pixiv応答がない環境では実アカウントへの通信を実行しません。GUIのquery builder/preview controls、CLI command、非original派生画像の取得、動画(MP4)変換は未実装です。権利許可は常に`unknown`として保存され、duplicateはgroup化のみで自動削除しません。詳細は[Pixiv Dataset Downloader](doc/dataset/pixiv_dataset.md)を参照してください。
+
 ### Image Dataset Classifier / Sorter
 
 `comfyui_support_tools.shared.dataset_classifier.DatasetClassifierApplication` は再帰inventory、axis classifier registry、複数evidenceの重み付きfusion、metadata優先、alternate label/disagreement/uncertain分類、manual review保存、AND/OR/NOT query、style embedding clustering adapter、dry-run/copy/move/manifest-only、collision回避、caption/metadata sidecar検証付き転送を提供します。JSON sidecarのlabelは既定priorityで他model evidenceより優先し、queryは必要なaxisだけを分類できます。結果manifestにはsource/output、labels、confidence、evidence provenance、manual overrideを記録し、#356向けhandoff payloadも作れます。
@@ -135,6 +141,12 @@ Touka video candidate scores are computed by a separate, versioned evaluator fro
 ### Model family detection
 
 Tensor detectors register through `ModelFamilyDetectorRegistry`, and classifications retain detector ID/version and match confidence. Conflicting path, metadata, and tensor evidence, as well as unsupported layouts, remain `unknown`. A fixture can register an additional detector without editing the existing tensor detector.
+
+### Pixiv Dataset Downloader
+
+`comfyui_support_tools.shared.pixiv_dataset` provides a PixivPy3 adapter, refresh-token authentication and health checks, tag/creator/bookmark/ranking/ID queries, filtering, throttling and bounded retries, JobRuntime integration, resumable checkpoints, ordered illustration/manga pages and ugoira archives, optional GIF/WebP previews, work/provenance JSON, exact/perceptual duplicate grouping, and a #356 handoff. `PixivRateLimitProfile` configures requests/minute, API/download concurrency caps, interval, retries/backoff, 429 cooldown, and automatic pause at application/query/job scope; the effective policy and bounded retry/429 history are recorded in the checkpoint. Install PixivPy3 separately with `pip install -r requirements-pixiv.txt`; supply the refresh token at runtime through the caller's secure secret store. Presets and dataset files never store it.
+
+This backend requires live Pixiv credentials and API responses for account-level validation, which are not available in the offline test suite. The query-builder GUI, CLI command, non-original rendition selection, and MP4 conversion are not implemented. Rights remain `unknown`; duplicate handling groups records and never deletes files. See [Pixiv Dataset Downloader](doc/dataset/pixiv_dataset.md).
 
 ### Image Dataset Classifier / Sorter
 

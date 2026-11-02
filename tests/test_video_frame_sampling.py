@@ -1,5 +1,6 @@
 """Deterministic movie frame count, refill, and lineage regression tests."""
 
+import json
 import unittest
 from fractions import Fraction
 
@@ -103,6 +104,9 @@ class VideoFrameSamplingTests(unittest.TestCase):
         self.assertEqual(result.exhausted_reason, "target_reached")
         self.assertEqual(len(result.kept), 100)
         self.assertEqual(result.options, options)
+        manifest = json.loads(json.dumps(result.to_dict(), allow_nan=False))
+        self.assertEqual(manifest["count_mode"], "target_kept")
+        self.assertEqual(manifest["kept"][0]["time_base"], {"numerator": 1, "denominator": 25})
         self.assertEqual(len(result.bins), 10)
         self.assertGreaterEqual(len(result.attempts), 130)
         self.assertEqual(sum(item.sample_generation == "initial" for item in result.attempts), 100)
@@ -352,6 +356,29 @@ class VideoFrameSamplingTests(unittest.TestCase):
                 2,
                 lambda _timestamp: FrameEvaluation(None, False),
                 bins=(SamplingBin("incomplete", 0, 9),),
+            )
+        with self.assertRaises(ValueError):
+            sample_video_frames(
+                "video-5",
+                "10",
+                2,
+                lambda _timestamp: FrameEvaluation(None, False),
+            )
+        with self.assertRaises(ValueError):
+            sample_video_frames(
+                "video-5",
+                10,
+                2,
+                lambda _timestamp: FrameEvaluation(None, False),
+                FrameSamplingOptions(max_wall_time_seconds="1"),
+            )
+        with self.assertRaises(ValueError):
+            sample_video_frames(
+                "video-5",
+                10,
+                2,
+                lambda _timestamp: FrameEvaluation(None, False),
+                bins=(SamplingBin([], 0, 10),),
             )
 
 

@@ -86,3 +86,54 @@ class FrameSamplingResult:
     attempts: tuple[FrameSampleRecord, ...]
     kept: tuple[FrameSampleRecord, ...]
     exhausted_reason: str
+
+    # {
+    #   責務: [to_dict: sampling planとattempt lineageをJSON-compatible mappingへ変換する]
+    #   処理: [1: enumとoptionsをserializeする 2: Fractionをnumerator/denominatorへ変換する]
+    #   引数: [self: result]
+    #   戻り値: [payload: manifest保存用mapping]
+    # }
+    def to_dict(self) -> dict[str, object]:
+        # {
+        #   責務: [record_dict: frame attempt lineageをJSON値へ変換する]
+        #   処理: [1: sample metadataをmappingへ写す 2: time_baseを整数pairへ変換する]
+        #   引数: [record: attempt record]
+        #   戻り値: [record payload]
+        # }
+        def record_dict(record: FrameSampleRecord) -> dict[str, object]:
+            time_base = record.time_base
+            return {
+                "candidate_id": record.candidate_id,
+                "source_video_id": record.source_video_id,
+                "requested_timestamp": record.requested_timestamp,
+                "actual_timestamp": record.actual_timestamp,
+                "pts": record.pts,
+                "time_base": None
+                if time_base is None
+                else {"numerator": time_base.numerator, "denominator": time_base.denominator},
+                "bin_id": record.bin_id,
+                "sample_generation": record.sample_generation,
+                "filter_result": record.filter_result,
+                "parent_candidate_id": record.parent_candidate_id,
+            }
+
+        return {
+            "schema_version": 1,
+            "source_video_id": self.source_video_id,
+            "duration": self.duration,
+            "count_mode": self.count_mode.value,
+            "requested_count": self.requested_count,
+            "sampling_seed": self.sampling_seed,
+            "options": {
+                "count_mode": self.options.count_mode.value,
+                "sampling_seed": self.options.sampling_seed,
+                "bin_count": self.options.bin_count,
+                "max_attempts": self.options.max_attempts,
+                "max_candidate_multiplier": self.options.max_candidate_multiplier,
+                "max_wall_time_seconds": self.options.max_wall_time_seconds,
+            },
+            "bins": [{"id": item.id, "start": item.start, "end": item.end} for item in self.bins],
+            "attempts": [record_dict(item) for item in self.attempts],
+            "kept": [record_dict(item) for item in self.kept],
+            "exhausted_reason": self.exhausted_reason,
+        }

@@ -7,7 +7,10 @@ from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 
-from comfyui_support_tools.shared.contracts.frame_analysis import FrameDecodeStatus
+from comfyui_support_tools.shared.contracts.frame_analysis import (
+    FrameAnalysisInput,
+    FrameDecodeStatus,
+)
 from comfyui_support_tools.shared.contracts.frame_sampling import (
     FrameCountMode,
     FrameEvaluation,
@@ -16,6 +19,21 @@ from comfyui_support_tools.shared.contracts.frame_sampling import (
     FrameSamplingResult,
     SamplingBin,
 )
+
+
+# {
+#   責務: [_is_finite_number: boolを除くint/floatのfinite性を安全に判定する]
+#   処理: [1: 数値型を確認する 2: OverflowErrorをinvalid値として扱う]
+#   引数: [value: candidate number]
+#   戻り値: [finite: 有限数の場合true]
+# }
+def _is_finite_number(value: object) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 # {
@@ -39,7 +57,7 @@ def sample_video_frames(
     if (
         not isinstance(source_video_id, str)
         or not source_video_id.strip()
-        or not math.isfinite(duration)
+        or not _is_finite_number(duration)
         or duration <= 0
     ):
         raise ValueError("source ID and finite positive duration are required")
@@ -53,7 +71,7 @@ def sample_video_frames(
         or not 1 <= options.max_attempts <= 100_000
         or type(options.max_candidate_multiplier) is not int
         or not 1 <= options.max_candidate_multiplier <= 100
-        or not math.isfinite(options.max_wall_time_seconds)
+        or not _is_finite_number(options.max_wall_time_seconds)
         or options.max_wall_time_seconds <= 0
         or not callable(evaluator)
         or not callable(clock)
@@ -174,14 +192,17 @@ def _time_bins(duration: float, bin_count: int) -> tuple[SamplingBin, ...]:
 def _validate_bins(bins: tuple[SamplingBin, ...], duration: float) -> None:
     if not bins or len(bins) > 10_000:
         raise ValueError("one or more sampling bins are required")
+    if any(not isinstance(item, SamplingBin) for item in bins):
+        raise ValueError("sampling bins must use SamplingBin descriptors")
+    if any(not isinstance(item.id, str) or not item.id for item in bins):
+        raise ValueError("sampling bin IDs must be non-empty text")
     if len({item.id for item in bins}) != len(bins):
         raise ValueError("sampling bin IDs must be unique")
     cursor = 0.0
     for item in bins:
         if (
-            not item.id
-            or not math.isfinite(item.start)
-            or not math.isfinite(item.end)
+            not _is_finite_number(item.start)
+            or not _is_finite_number(item.end)
             or item.end <= item.start
             or abs(item.start - cursor) > 1e-9
         ):
@@ -277,7 +298,11 @@ def _evaluate_candidate(
     if not isinstance(evaluation, FrameEvaluation):
         evaluation = FrameEvaluation(None, False, "invalid_evaluation_result")
     frame = evaluation.frame
-    valid = frame is not None and frame.has_pixels and frame.decode_status is FrameDecodeStatus.OK
+    valid = (
+        isinstance(frame, FrameAnalysisInput)
+        and frame.has_pixels
+        and frame.decode_status is FrameDecodeStatus.OK
+    )
     if not valid:
         result = evaluation.reason or (
             f"decode:{frame.decode_status.value}" if frame is not None else "decode:missing_frame"

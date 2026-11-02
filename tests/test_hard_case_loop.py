@@ -157,6 +157,13 @@ class HardCaseLoopTests(unittest.TestCase):
     def test_fixed_regression_runner_compares_top_n_user_preference(self) -> None:
         record = self._record("case-a", HardCaseFeatures(0.2, 0.6, 0.7, 0.1, 0.2))
 
+        # {
+        #   責務: [FakeEvaluator: fixed regression用のdeterministic candidate scoresを提供する]
+        #   処理: [入力record/model/configに対してテスト用candidate evidenceを返す]
+        #   フィールド: []
+        #   引数: []
+        #   戻り値: [FakeEvaluator instance: HardCaseEvaluator protocol implementation]
+        # }
         class FakeEvaluator:
             # {
             #   責務: [evaluate: test-only deterministic model/config候補を返す]

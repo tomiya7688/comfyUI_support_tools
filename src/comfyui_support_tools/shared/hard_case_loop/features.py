@@ -5,8 +5,8 @@ from __future__ import annotations
 import io
 import math
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 import numpy as np
 from PIL import Image

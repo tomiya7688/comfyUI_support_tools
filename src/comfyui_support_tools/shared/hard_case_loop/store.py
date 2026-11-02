@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from typing import Iterator
 
 from .contracts import HardCaseRecord
 

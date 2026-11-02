@@ -39,7 +39,9 @@ class RandomImageTab(ttk.Frame):
     # }
     def _build(self):
         if isinstance(self.mod, Exception):
-            ttk.Label(self, text=f"random_image_creater_gui.py を読み込めませんでした: {self.mod}").pack(anchor="w")
+            ttk.Label(
+                self, text=f"random_image_creater_gui.py を読み込めませんでした: {self.mod}"
+            ).pack(anchor="w")
             return
 
         self.var_input_file = tk.StringVar()
@@ -98,66 +100,203 @@ class RandomImageTab(ttk.Frame):
         self.flow_model_vars = []
         self.model_choices = {"checkpoints": [], "unets": []}
 
+        self._build_file_controls()
+
+        self._build_wildcard_controls()
+
+        self._build_generation_controls()
+
+        self._build_nsfw_mosaic_controls()
+
+        self._build_isolation_and_actions()
+
+    # {
+    # 責務: [ _build_file_controls: 入力、出力、prompt補助とguard UIを構築する ]
+    # 処理: [ 1: 該当するRandom Image設定部品を構築する ]
+    # 引数: [self]
+    # 戻り値: [なし]
+    # }
+    def _build_file_controls(self):
         top = ttk.LabelFrame(self, text="ファイル", padding=8)
         top.pack(fill="x")
-        LabeledPathRow(top, "wildcard root", self.var_wildcard_root_dir, mode="dir").pack(fill="x", pady=3)
-        LabeledPathRow(top, "wildcard", self.var_input_file, mode="file_or_dir", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
-        LabeledPathRow(top, "negative wildcard", self.var_negative_input_file, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=3)
+        LabeledPathRow(top, "wildcard root", self.var_wildcard_root_dir, mode="dir").pack(
+            fill="x", pady=3
+        )
+        LabeledPathRow(
+            top,
+            "wildcard",
+            self.var_input_file,
+            mode="file_or_dir",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        ).pack(fill="x", pady=3)
+        LabeledPathRow(
+            top,
+            "negative wildcard",
+            self.var_negative_input_file,
+            mode="file",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        ).pack(fill="x", pady=3)
         LabeledPathRow(top, "出力先", self.var_output_dir, mode="dir").pack(fill="x", pady=3)
-        ttk.Checkbutton(top, text="メインWildcardを停止まで固定（無限生成）", variable=self.var_keep_main_wildcard_until_stop).pack(anchor="w", pady=(4, 0))
-        ttk.Checkbutton(top, text="生成プロンプトを保存", variable=self.var_save_prompts).pack(anchor="w", pady=(4, 0))
-        LabeledPathRow(top, "prompt保存先（txt/フォルダ）", self.var_prompt_output, mode="file", filetypes=[("Text", "*.txt"), ("All", "*.*")]).pack(fill="x", pady=3)
-        prompt_correct_row = ttk.Frame(top); prompt_correct_row.pack(fill="x", pady=3)
-        ttk.Checkbutton(prompt_correct_row, text="Ollamaでプロンプトを補正", variable=self.var_enable_prompt_correction).pack(side="left")
+        ttk.Checkbutton(
+            top,
+            text="メインWildcardを停止まで固定（無限生成）",
+            variable=self.var_keep_main_wildcard_until_stop,
+        ).pack(anchor="w", pady=(4, 0))
+        ttk.Checkbutton(top, text="生成プロンプトを保存", variable=self.var_save_prompts).pack(
+            anchor="w", pady=(4, 0)
+        )
+        LabeledPathRow(
+            top,
+            "prompt保存先（txt/フォルダ）",
+            self.var_prompt_output,
+            mode="file",
+            filetypes=[("Text", "*.txt"), ("All", "*.*")],
+        ).pack(fill="x", pady=3)
+        prompt_correct_row = ttk.Frame(top)
+        prompt_correct_row.pack(fill="x", pady=3)
+        ttk.Checkbutton(
+            prompt_correct_row,
+            text="Ollamaでプロンプトを補正",
+            variable=self.var_enable_prompt_correction,
+        ).pack(side="left")
         ttk.Label(prompt_correct_row, text=" API").pack(side="left")
-        ttk.Entry(prompt_correct_row, textvariable=self.var_ollama_api_url, width=28).pack(side="left", padx=3)
+        ttk.Entry(prompt_correct_row, textvariable=self.var_ollama_api_url, width=28).pack(
+            side="left", padx=3
+        )
         ttk.Label(prompt_correct_row, text=" モデル").pack(side="left")
-        self.ollama_model_combo = ttk.Combobox(prompt_correct_row, textvariable=self.var_ollama_model, width=24); self.ollama_model_combo.pack(side="left", padx=3, fill="x", expand=True)
-        ttk.Button(prompt_correct_row, text="Ollamaモデル更新", command=self.refresh_ollama_models).pack(side="left")
-        prompt_guard = ttk.LabelFrame(top, text="Prompt Stability Guard（生成品質の調整・任意）", padding=5)
+        self.ollama_model_combo = ttk.Combobox(
+            prompt_correct_row, textvariable=self.var_ollama_model, width=24
+        )
+        self.ollama_model_combo.pack(side="left", padx=3, fill="x", expand=True)
+        ttk.Button(
+            prompt_correct_row, text="Ollamaモデル更新", command=self.refresh_ollama_models
+        ).pack(side="left")
+        prompt_guard = ttk.LabelFrame(
+            top, text="Prompt Stability Guard（生成品質の調整・任意）", padding=5
+        )
         prompt_guard.pack(fill="x", pady=3)
-        ttk.Checkbutton(prompt_guard, text="有効化", variable=self.var_prompt_guard_enabled).pack(side="left")
+        ttk.Checkbutton(prompt_guard, text="有効化", variable=self.var_prompt_guard_enabled).pack(
+            side="left"
+        )
         ttk.Label(prompt_guard, text="今回の内容").pack(side="left", padx=(8, 3))
-        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_mode, values=["sfw", "nsfw"], state="readonly", width=7).pack(side="left")
-        ttk.Checkbutton(prompt_guard, text="SFWへ適用", variable=self.var_prompt_guard_sfw).pack(side="left", padx=4)
-        ttk.Checkbutton(prompt_guard, text="NSFWへ適用", variable=self.var_prompt_guard_nsfw).pack(side="left", padx=4)
-        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_apply_mode, values=["suggest_only", "auto_apply", "auto_evaluate_retry"], state="readonly", width=23).pack(side="left", padx=4)
-        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_budget, values=["fast", "standard", "quality", "overnight"], state="readonly", width=11).pack(side="left")
-        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_intent, values=["strict", "normal", "flexible"], state="readonly", width=9).pack(side="left", padx=4)
-        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_tolerance, values=["conservative", "balanced", "aggressive"], state="readonly", width=12).pack(side="left")
-        ttk.Checkbutton(prompt_guard, text="調整案を表示", variable=self.var_prompt_guard_preview).pack(side="left", padx=4)
-        ttk.Label(prompt_guard, text="OFF時は変更しません。自動調整前に変更案をログへ表示します。", wraplength=800).pack(side="left", padx=6)
+        ttk.Combobox(
+            prompt_guard,
+            textvariable=self.var_prompt_guard_mode,
+            values=["sfw", "nsfw"],
+            state="readonly",
+            width=7,
+        ).pack(side="left")
+        ttk.Checkbutton(prompt_guard, text="SFWへ適用", variable=self.var_prompt_guard_sfw).pack(
+            side="left", padx=4
+        )
+        ttk.Checkbutton(prompt_guard, text="NSFWへ適用", variable=self.var_prompt_guard_nsfw).pack(
+            side="left", padx=4
+        )
+        ttk.Combobox(
+            prompt_guard,
+            textvariable=self.var_prompt_guard_apply_mode,
+            values=["suggest_only", "auto_apply", "auto_evaluate_retry"],
+            state="readonly",
+            width=23,
+        ).pack(side="left", padx=4)
+        ttk.Combobox(
+            prompt_guard,
+            textvariable=self.var_prompt_guard_budget,
+            values=["fast", "standard", "quality", "overnight"],
+            state="readonly",
+            width=11,
+        ).pack(side="left")
+        ttk.Combobox(
+            prompt_guard,
+            textvariable=self.var_prompt_guard_intent,
+            values=["strict", "normal", "flexible"],
+            state="readonly",
+            width=9,
+        ).pack(side="left", padx=4)
+        ttk.Combobox(
+            prompt_guard,
+            textvariable=self.var_prompt_guard_tolerance,
+            values=["conservative", "balanced", "aggressive"],
+            state="readonly",
+            width=12,
+        ).pack(side="left")
+        ttk.Checkbutton(
+            prompt_guard, text="調整案を表示", variable=self.var_prompt_guard_preview
+        ).pack(side="left", padx=4)
+        ttk.Label(
+            prompt_guard,
+            text="OFF時は変更しません。自動調整前に変更案をログへ表示します。",
+            wraplength=800,
+        ).pack(side="left", padx=6)
         api_row = ttk.Frame(top)
         api_row.pack(fill="x", pady=3)
         ttk.Label(api_row, text="API URL", width=16).pack(side="left", padx=(0, 6))
         ttk.Entry(api_row, textvariable=self.var_api_url).pack(side="left", fill="x", expand=True)
 
+    # {
+    # 責務: [ _build_wildcard_controls: 追加wildcard/action設定を構築する ]
+    # 処理: [ 1: 該当するRandom Image設定部品を構築する ]
+    # 引数: [self]
+    # 戻り値: [なし]
+    # }
+    def _build_wildcard_controls(self):
         wildcard_options = ttk.LabelFrame(self, text="追加ワイルドカード", padding=8)
         wildcard_options.pack(fill="x", pady=6)
         self.additional_files_frame = ttk.Frame(wildcard_options)
         self.additional_files_frame.pack(fill="x")
-        ttk.Button(wildcard_options, text="追加ファイルを増やす", command=self._add_additional_file_row).pack(anchor="w", pady=(4, 0))
+        ttk.Button(
+            wildcard_options, text="追加ファイルを増やす", command=self._add_additional_file_row
+        ).pack(anchor="w", pady=(4, 0))
         self._add_additional_file_row()
 
-        actions = ttk.LabelFrame(self, text="Action wildcard（展開後Promptのタグ条件で追加）", padding=8)
+        actions = ttk.LabelFrame(
+            self, text="Action wildcard（展開後Promptのタグ条件で追加）", padding=8
+        )
         actions.pack(fill="x", pady=6)
         self.action_wildcards_frame = ttk.Frame(actions)
         self.action_wildcards_frame.pack(fill="x")
-        ttk.Button(actions, text="Actionを増やす", command=self._add_action_wildcard_row).pack(anchor="w", pady=(4, 0))
+        ttk.Button(actions, text="Actionを増やす", command=self._add_action_wildcard_row).pack(
+            anchor="w", pady=(4, 0)
+        )
         self._add_action_wildcard_row()
 
+    # {
+    # 責務: [ _build_generation_controls: モデルとgeneration parameter設定を構築する ]
+    # 処理: [ 1: 該当するRandom Image設定部品を構築する ]
+    # 引数: [self]
+    # 戻り値: [なし]
+    # }
+    def _build_generation_controls(self):
+        self._build_model_controls()
+        self._build_parameter_controls()
+
+    # {
+    # 責務: [ _build_model_controls: backendとmodel固有の生成設定を構築する ]
+    # 処理: [ 1: steps、model、sampler、VAE、workflow controlsを配置する ]
+    # 引数: [self]
+    # 戻り値: [なし]
+    # }
+    def _build_model_controls(self):
         settings = ttk.LabelFrame(self, text="生成設定", padding=8)
         settings.pack(fill="x", pady=6)
         pairs = [
-            ("幅", self.var_width), ("高さ", self.var_height), ("steps", self.var_steps),
-            ("hr_scale", self.var_hr_scale), ("2nd pass", self.var_hr_second_pass_steps),
-            ("denoise", self.var_denoising_strength), ("timeout(s)", self.var_api_timeout),
+            ("幅", self.var_width),
+            ("高さ", self.var_height),
+            ("steps", self.var_steps),
+            ("hr_scale", self.var_hr_scale),
+            ("2nd pass", self.var_hr_second_pass_steps),
+            ("denoise", self.var_denoising_strength),
+            ("timeout(s)", self.var_api_timeout),
         ]
         for i, (label, var) in enumerate(pairs):
             r, c = divmod(i, 4)
-            ttk.Label(settings, text=label).grid(row=r, column=c*2, sticky="w", padx=4, pady=3)
-            ttk.Entry(settings, textvariable=var, width=10).grid(row=r, column=c*2+1, sticky="w", padx=4, pady=3)
-        ttk.Checkbutton(settings, text="hires fix", variable=self.var_enable_hr).grid(row=2, column=0, columnspan=2, sticky="w")
+            ttk.Label(settings, text=label).grid(row=r, column=c * 2, sticky="w", padx=4, pady=3)
+            ttk.Entry(settings, textvariable=var, width=10).grid(
+                row=r, column=c * 2 + 1, sticky="w", padx=4, pady=3
+            )
+        ttk.Checkbutton(settings, text="hires fix", variable=self.var_enable_hr).grid(
+            row=2, column=0, columnspan=2, sticky="w"
+        )
         ttk.Label(settings, text="upscaler").grid(row=2, column=2, sticky="w")
         self.upscaler_combo = ttk.Combobox(settings, textvariable=self.var_hr_upscaler, width=28)
         self.upscaler_combo.grid(row=2, column=3, columnspan=2, sticky="we")
@@ -165,59 +304,149 @@ class RandomImageTab(ttk.Frame):
         self.sampler_combo = ttk.Combobox(settings, textvariable=self.var_sampler_index, width=18)
         self.sampler_combo.grid(row=3, column=1, sticky="w")
         ttk.Label(settings, text="checkpoint / UNet").grid(row=3, column=2, sticky="w")
-        self.checkpoint_combo = ttk.Combobox(settings, textvariable=self.var_sd_model_checkpoint, width=40)
+        self.checkpoint_combo = ttk.Combobox(
+            settings, textvariable=self.var_sd_model_checkpoint, width=40
+        )
         self.checkpoint_combo.grid(row=3, column=3, columnspan=5, sticky="we")
-        self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
+        self.model_classification_text = tk.StringVar(
+            value="モデルを選ぶと系統判定と根拠を表示します。"
+        )
         ttk.Label(settings, textvariable=self.model_classification_text, wraplength=900).grid(
             row=7, column=0, columnspan=8, sticky="w", padx=4, pady=(2, 4)
         )
         self.var_sd_model_checkpoint.trace_add("write", self._update_model_classification)
-        ttk.Checkbutton(settings, text="モデル付属VAEを使う", variable=self.var_use_model_vae).grid(row=4, column=0, columnspan=3, sticky="w")
+        ttk.Checkbutton(settings, text="モデル付属VAEを使う", variable=self.var_use_model_vae).grid(
+            row=4, column=0, columnspan=3, sticky="w"
+        )
         ttk.Label(settings, text="VAE（任意）").grid(row=5, column=0, sticky="w")
         self.vae_combo = ttk.Combobox(settings, textvariable=self.var_vae_name, width=40)
         self.vae_combo.grid(row=5, column=1, columnspan=5, sticky="we")
         ttk.Label(settings, text="出力形式").grid(row=4, column=3, sticky="w")
-        ttk.Combobox(settings, textvariable=self.var_output_format, values=["png", "webp", "jpg", "gif"], state="readonly", width=10).grid(row=4, column=4, sticky="w")
+        ttk.Combobox(
+            settings,
+            textvariable=self.var_output_format,
+            values=["png", "webp", "jpg", "gif"],
+            state="readonly",
+            width=10,
+        ).grid(row=4, column=4, sticky="w")
         if self.backend_capabilities.supports("workflow"):
             ttk.Label(settings, text="Comfyフロー").grid(row=6, column=0, sticky="w")
             self.flow_combo = ttk.Combobox(settings, textvariable=self.var_comfy_flow, width=40)
             self.flow_combo.grid(row=6, column=1, columnspan=7, sticky="we")
-            self.flow_combo.bind("<<ComboboxSelected>>", lambda _event: self._apply_flow_model_choices())
+            self.flow_combo.bind(
+                "<<ComboboxSelected>>", lambda _event: self._apply_flow_model_choices()
+            )
             self.flow_models_frame = ttk.LabelFrame(self, text="フロー固有モデル", padding=6)
             self.flow_models_frame.pack(fill="x", pady=4)
 
+    # {
+    # 責務: [ _build_parameter_controls: per-image generation candidate設定を構築する ]
+    # 処理: [ 1: CFG/steps/resolution/sampler candidate controlsを配置する ]
+    # 引数: [self]
+    # 戻り値: [なし]
+    # }
+    def _build_parameter_controls(self):
         parameter_options = ttk.LabelFrame(self, text="生成ごとのパラメータ抽選", padding=8)
         parameter_options.pack(fill="x", pady=6)
-        ttk.Label(parameter_options, text="CFG（固定値 または min..max）").grid(row=0, column=0, sticky="w", padx=4, pady=2)
-        ttk.Entry(parameter_options, textvariable=self.var_cfg_spec, width=18).grid(row=0, column=1, sticky="w", padx=4, pady=2)
-        ttk.Label(parameter_options, text="steps").grid(row=0, column=2, sticky="w", padx=(16, 4), pady=2)
-        ttk.Combobox(parameter_options, textvariable=self.var_steps_mode, values=["fixed", "range"], state="readonly", width=9).grid(row=0, column=3, sticky="w", padx=4, pady=2)
-        ttk.Entry(parameter_options, textvariable=self.var_steps_range, width=18).grid(row=0, column=4, sticky="w", padx=4, pady=2)
-        ttk.Label(parameter_options, text="range時は min..max（fixed時は上のsteps値）").grid(row=0, column=5, sticky="w", padx=4, pady=2)
-        ttk.Label(parameter_options, text="解像度").grid(row=1, column=0, sticky="w", padx=4, pady=2)
-        ttk.Combobox(parameter_options, textvariable=self.var_resolution_mode, values=["fixed", "candidate"], state="readonly", width=9).grid(row=1, column=1, sticky="w", padx=4, pady=2)
-        ttk.Entry(parameter_options, textvariable=self.var_resolution_candidates, width=30).grid(row=1, column=2, columnspan=2, sticky="we", padx=4, pady=2)
-        ttk.Label(parameter_options, text="candidate例: 512x768|768x1024（fixed時は幅/高さを使用）").grid(row=1, column=4, columnspan=2, sticky="w", padx=4, pady=2)
-        ttk.Label(parameter_options, text="sampler").grid(row=2, column=0, sticky="w", padx=4, pady=2)
-        ttk.Combobox(parameter_options, textvariable=self.var_sampler_mode, values=["fixed", "candidate"], state="readonly", width=9).grid(row=2, column=1, sticky="w", padx=4, pady=2)
-        ttk.Entry(parameter_options, textvariable=self.var_sampler_candidates, width=30).grid(row=2, column=2, columnspan=2, sticky="we", padx=4, pady=2)
-        ttk.Label(parameter_options, text="candidate例: Euler a|DPM++ 2M Karras（fixed時はsampler欄を使用）").grid(row=2, column=4, columnspan=2, sticky="w", padx=4, pady=2)
-        ttk.Label(parameter_options, text="候補設定はRandom Imageプリセットに保存されます。各画像で一度だけ抽選し、値をメタデータへ記録します。", wraplength=1000).grid(row=3, column=0, columnspan=6, sticky="w", padx=4, pady=(4, 0))
+        ttk.Label(parameter_options, text="CFG（固定値 または min..max）").grid(
+            row=0, column=0, sticky="w", padx=4, pady=2
+        )
+        ttk.Entry(parameter_options, textvariable=self.var_cfg_spec, width=18).grid(
+            row=0, column=1, sticky="w", padx=4, pady=2
+        )
+        ttk.Label(parameter_options, text="steps").grid(
+            row=0, column=2, sticky="w", padx=(16, 4), pady=2
+        )
+        ttk.Combobox(
+            parameter_options,
+            textvariable=self.var_steps_mode,
+            values=["fixed", "range"],
+            state="readonly",
+            width=9,
+        ).grid(row=0, column=3, sticky="w", padx=4, pady=2)
+        ttk.Entry(parameter_options, textvariable=self.var_steps_range, width=18).grid(
+            row=0, column=4, sticky="w", padx=4, pady=2
+        )
+        ttk.Label(parameter_options, text="range時は min..max（fixed時は上のsteps値）").grid(
+            row=0, column=5, sticky="w", padx=4, pady=2
+        )
+        ttk.Label(parameter_options, text="解像度").grid(
+            row=1, column=0, sticky="w", padx=4, pady=2
+        )
+        ttk.Combobox(
+            parameter_options,
+            textvariable=self.var_resolution_mode,
+            values=["fixed", "candidate"],
+            state="readonly",
+            width=9,
+        ).grid(row=1, column=1, sticky="w", padx=4, pady=2)
+        ttk.Entry(parameter_options, textvariable=self.var_resolution_candidates, width=30).grid(
+            row=1, column=2, columnspan=2, sticky="we", padx=4, pady=2
+        )
+        ttk.Label(
+            parameter_options, text="candidate例: 512x768|768x1024（fixed時は幅/高さを使用）"
+        ).grid(row=1, column=4, columnspan=2, sticky="w", padx=4, pady=2)
+        ttk.Label(parameter_options, text="sampler").grid(
+            row=2, column=0, sticky="w", padx=4, pady=2
+        )
+        ttk.Combobox(
+            parameter_options,
+            textvariable=self.var_sampler_mode,
+            values=["fixed", "candidate"],
+            state="readonly",
+            width=9,
+        ).grid(row=2, column=1, sticky="w", padx=4, pady=2)
+        ttk.Entry(parameter_options, textvariable=self.var_sampler_candidates, width=30).grid(
+            row=2, column=2, columnspan=2, sticky="we", padx=4, pady=2
+        )
+        ttk.Label(
+            parameter_options,
+            text="candidate例: Euler a|DPM++ 2M Karras（fixed時はsampler欄を使用）",
+        ).grid(row=2, column=4, columnspan=2, sticky="w", padx=4, pady=2)
+        ttk.Label(
+            parameter_options,
+            text="候補設定はRandom Imageプリセットに保存されます。各画像で一度だけ抽選し、値をメタデータへ記録します。",
+            wraplength=1000,
+        ).grid(row=3, column=0, columnspan=6, sticky="w", padx=4, pady=(4, 0))
 
-        self._build_nsfw_mosaic_controls()
-
+    # {
+    # 責務: [ _build_isolation_and_actions: failure isolation、操作ボタン、ログ領域を構築する ]
+    # 処理: [ 1: 該当するRandom Image設定部品を構築する ]
+    # 引数: [self]
+    # 戻り値: [なし]
+    # }
+    def _build_isolation_and_actions(self):
         isolation = ttk.LabelFrame(self, text="画像破綻隔離（保守的な単色化検出）", padding=8)
         isolation.pack(fill="x", pady=6)
-        ttk.Checkbutton(isolation, text="極端に単色な生成結果を _image_failure へ隔離", variable=self.var_enable_failure_isolation).pack(side="left")
+        ttk.Checkbutton(
+            isolation,
+            text="極端に単色な生成結果を _image_failure へ隔離",
+            variable=self.var_enable_failure_isolation,
+        ).pack(side="left")
         ttk.Label(isolation, text="最小分散").pack(side="left", padx=(18, 4))
-        ttk.Entry(isolation, textvariable=self.var_image_failure_min_variance, width=7).pack(side="left")
+        ttk.Entry(isolation, textvariable=self.var_image_failure_min_variance, width=7).pack(
+            side="left"
+        )
 
         buttons = ResponsiveButtonRow(self)
         buttons.pack(fill="x", pady=6)
-        for text, command in (("1枚生成", self.one), ("無限生成", self.infinite), ("順次生成", self.sequential), ("実行中へ設定を反映", self.update_running_generation), ("停止", self.stop), ("モデル候補更新", self.refresh_backend_choices)):
+        for text, command in (
+            ("1枚生成", self.one),
+            ("無限生成", self.infinite),
+            ("順次生成", self.sequential),
+            ("実行中へ設定を反映", self.update_running_generation),
+            ("停止", self.stop),
+            ("モデル候補更新", self.refresh_backend_choices),
+        ):
             buttons.add(ttk.Button(buttons, text=text, command=command))
-        buttons.add(ttk.Checkbutton(buttons, text="順次を無限ループ", variable=self.var_sequential_loop))
-        buttons.add(ttk.Checkbutton(buttons, text="順次中のWildcardを固定", variable=self.var_sequential_reuse_wildcards))
+        buttons.add(
+            ttk.Checkbutton(buttons, text="順次を無限ループ", variable=self.var_sequential_loop)
+        )
+        buttons.add(
+            ttk.Checkbutton(
+                buttons, text="順次中のWildcardを固定", variable=self.var_sequential_reuse_wildcards
+            )
+        )
         buttons.add(ttk.Label(buttons, text="preset"))
         self.preset_combo = ttk.Combobox(buttons, textvariable=self.var_preset_name, width=18)
         buttons.add(self.preset_combo)
@@ -239,9 +468,15 @@ class RandomImageTab(ttk.Frame):
 
         mosaic = ttk.LabelFrame(self, text="NSFWモザイク", padding=8)
         mosaic.pack(fill="x", pady=6)
-        ttk.Checkbutton(mosaic, text="NudeNetで検出した領域にモザイクを適用", variable=self.var_enable_nsfw_mosaic).pack(side="left")
+        ttk.Checkbutton(
+            mosaic,
+            text="NudeNetで検出した領域にモザイクを適用",
+            variable=self.var_enable_nsfw_mosaic,
+        ).pack(side="left")
         ttk.Label(mosaic, text="強度").pack(side="left", padx=(18, 4))
-        ttk.Spinbox(mosaic, from_=1, to=10, textvariable=self.var_nsfw_mosaic_factor, width=5).pack(side="left")
+        ttk.Spinbox(mosaic, from_=1, to=10, textvariable=self.var_nsfw_mosaic_factor, width=5).pack(
+            side="left"
+        )
 
     def _load_defaults(self):
         if isinstance(self.mod, Exception):
@@ -267,34 +502,90 @@ class RandomImageTab(ttk.Frame):
         self.var_save_prompts.set(getattr(self.mod, "save_prompts", False))
         self.var_prompt_output.set(getattr(self.mod, "prompt_output", ""))
         self.var_sequential_loop.set(getattr(self.mod, "sequential_loop", False))
-        self.var_sequential_reuse_wildcards.set(getattr(self.mod, "sequential_reuse_wildcards", True))
+        self.var_sequential_reuse_wildcards.set(
+            getattr(self.mod, "sequential_reuse_wildcards", True)
+        )
         self.var_output_format.set(getattr(self.mod, "output_format", "png"))
         self.var_api_timeout.set(getattr(self.mod, "api_timeout"))
         self.var_comfy_flow.set(getattr(self.mod, "comfy_flow", ""))
         self.var_additional_position.set(getattr(self.mod, "additional_position", "prefix"))
         self.var_wildcard_cache_scope.set(getattr(self.mod, "wildcard_cache_scope", "each_image"))
-        self.var_keep_main_wildcard_until_stop.set(getattr(self.mod, "wildcard_cache_scope", "each_image") == "until_stop")
+        self.var_keep_main_wildcard_until_stop.set(
+            getattr(self.mod, "wildcard_cache_scope", "each_image") == "until_stop"
+        )
         self.var_enable_nsfw_mosaic.set(getattr(self.mod, "enable_nsfw_mosaic", False))
         self.var_nsfw_mosaic_factor.set(getattr(self.mod, "nsfw_mosaic_factor", 5))
         self.var_enable_failure_isolation.set(getattr(self.mod, "enable_failure_isolation", False))
-        self.var_image_failure_min_variance.set(getattr(self.mod, "image_failure_min_variance", 8.0))
+        self.var_image_failure_min_variance.set(
+            getattr(self.mod, "image_failure_min_variance", 8.0)
+        )
         self.var_prompt_guard_enabled.set(getattr(self.mod, "prompt_guard_enabled", False))
         self.var_prompt_guard_mode.set(getattr(self.mod, "prompt_guard_mode", "sfw"))
         self.var_prompt_guard_sfw.set(getattr(self.mod, "prompt_guard_sfw", True))
         self.var_prompt_guard_nsfw.set(getattr(self.mod, "prompt_guard_nsfw", True))
-        self.var_prompt_guard_apply_mode.set(getattr(self.mod, "prompt_guard_apply_mode", "suggest_only"))
+        self.var_prompt_guard_apply_mode.set(
+            getattr(self.mod, "prompt_guard_apply_mode", "suggest_only")
+        )
         self.var_prompt_guard_budget.set(getattr(self.mod, "prompt_guard_budget", "standard"))
         self.var_prompt_guard_preview.set(getattr(self.mod, "prompt_guard_preview", True))
         self.var_prompt_guard_intent.set(getattr(self.mod, "prompt_guard_intent", "strict"))
         self.var_prompt_guard_tolerance.set(getattr(self.mod, "prompt_guard_tolerance", "balanced"))
-        self._set_additional_file_rows(getattr(self.mod, "additional_inputs", []) or getattr(self.mod, "additional_input_files", []))
+        self._set_additional_file_rows(
+            getattr(self.mod, "additional_inputs", [])
+            or getattr(self.mod, "additional_input_files", [])
+        )
         self._set_action_wildcard_rows(getattr(self.mod, "action_wildcards", []))
         self._apply_flow_model_choices()
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        values = {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
-        values.update({"prompt_guard_enabled": self.var_prompt_guard_enabled.get(), "prompt_guard_mode": self.var_prompt_guard_mode.get(), "prompt_guard_sfw": self.var_prompt_guard_sfw.get(), "prompt_guard_nsfw": self.var_prompt_guard_nsfw.get(), "prompt_guard_apply_mode": self.var_prompt_guard_apply_mode.get(), "prompt_guard_budget": self.var_prompt_guard_budget.get(), "prompt_guard_preview": self.var_prompt_guard_preview.get(), "prompt_guard_intent": self.var_prompt_guard_intent.get(), "prompt_guard_tolerance": self.var_prompt_guard_tolerance.get()})
+        values = {
+            "input_file": self.var_input_file.get(),
+            "negative_input_file": self.var_negative_input_file.get(),
+            "wildcard_root_dir": self.var_wildcard_root_dir.get(),
+            "output_dir": self.var_output_dir.get(),
+            "api_url": self.var_api_url.get(),
+            "width": self.var_width.get(),
+            "height": self.var_height.get(),
+            "steps": self.var_steps.get(),
+            "generation_parameter_input": self._generation_parameter_input(),
+            "enable_hr": self.var_enable_hr.get(),
+            "hr_scale": self.var_hr_scale.get(),
+            "hr_upscaler": self.var_hr_upscaler.get(),
+            "hr_second_pass_steps": self.var_hr_second_pass_steps.get(),
+            "denoising_strength": self.var_denoising_strength.get(),
+            "sampler_index": self.var_sampler_index.get(),
+            "sd_model_checkpoint": self.var_sd_model_checkpoint.get(),
+            "api_timeout": self.var_api_timeout.get(),
+            "comfy_flow": self.var_comfy_flow.get(),
+            "additional_position": self.var_additional_position.get(),
+            "wildcard_cache_scope": self.var_wildcard_cache_scope.get(),
+            "additional_files": self._additional_specs(),
+            "action_wildcards": self._action_wildcard_specs(),
+            "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(),
+            "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(),
+            "enable_failure_isolation": self.var_enable_failure_isolation.get(),
+            "image_failure_min_variance": self.var_image_failure_min_variance.get(),
+            "enable_prompt_correction": self.var_enable_prompt_correction.get(),
+            "ollama_api_url": self.var_ollama_api_url.get(),
+            "ollama_model": self.var_ollama_model.get(),
+            "flow_model_overrides": {
+                key: variable.get() for key, _, variable in self.flow_model_vars
+            },
+        }
+        values.update(
+            {
+                "prompt_guard_enabled": self.var_prompt_guard_enabled.get(),
+                "prompt_guard_mode": self.var_prompt_guard_mode.get(),
+                "prompt_guard_sfw": self.var_prompt_guard_sfw.get(),
+                "prompt_guard_nsfw": self.var_prompt_guard_nsfw.get(),
+                "prompt_guard_apply_mode": self.var_prompt_guard_apply_mode.get(),
+                "prompt_guard_budget": self.var_prompt_guard_budget.get(),
+                "prompt_guard_preview": self.var_prompt_guard_preview.get(),
+                "prompt_guard_intent": self.var_prompt_guard_intent.get(),
+                "prompt_guard_tolerance": self.var_prompt_guard_tolerance.get(),
+            }
+        )
         return values
 
     def _refresh_preset_choices(self):
@@ -310,26 +601,80 @@ class RandomImageTab(ttk.Frame):
             values["sequential_reuse_wildcards"] = self.var_sequential_reuse_wildcards.get()
             values["keep_main_wildcard_until_stop"] = self.var_keep_main_wildcard_until_stop.get()
             values["output_format"] = self.var_output_format.get()
-            values["enable_prompt_correction"] = self.var_enable_prompt_correction.get(); values["ollama_api_url"] = self.var_ollama_api_url.get(); values["ollama_model"] = self.var_ollama_model.get()
+            values["enable_prompt_correction"] = self.var_enable_prompt_correction.get()
+            values["ollama_api_url"] = self.var_ollama_api_url.get()
+            values["ollama_model"] = self.var_ollama_model.get()
             path = self.preset_store.save(self.var_preset_name.get(), values)
-            self.var_preset_name.set(path.stem); self._refresh_preset_choices(); self.logbox.log(f"プリセットを保存しました: {path}")
-        except Exception as error: self.logbox.log(f"プリセット保存エラー: {error}")
+            self.var_preset_name.set(path.stem)
+            self._refresh_preset_choices()
+            self.logbox.log(f"プリセットを保存しました: {path}")
+        except Exception as error:
+            self.logbox.log(f"プリセット保存エラー: {error}")
 
     def load_preset(self):
         try:
             values = self.preset_store.load(self.var_preset_name.get())
-            for key, variable in (("input_file", self.var_input_file), ("negative_input_file", self.var_negative_input_file), ("wildcard_root_dir", self.var_wildcard_root_dir), ("output_dir", self.var_output_dir), ("api_url", self.var_api_url), ("width", self.var_width), ("height", self.var_height), ("steps", self.var_steps), ("enable_hr", self.var_enable_hr), ("hr_scale", self.var_hr_scale), ("hr_upscaler", self.var_hr_upscaler), ("hr_second_pass_steps", self.var_hr_second_pass_steps), ("denoising_strength", self.var_denoising_strength), ("sampler_index", self.var_sampler_index), ("sd_model_checkpoint", self.var_sd_model_checkpoint), ("api_timeout", self.var_api_timeout), ("comfy_flow", self.var_comfy_flow), ("additional_position", self.var_additional_position), ("wildcard_cache_scope", self.var_wildcard_cache_scope), ("enable_nsfw_mosaic", self.var_enable_nsfw_mosaic), ("nsfw_mosaic_factor", self.var_nsfw_mosaic_factor), ("enable_failure_isolation", self.var_enable_failure_isolation), ("image_failure_min_variance", self.var_image_failure_min_variance)):
-                if key in values: variable.set(values[key])
-            self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.var_vae_name.set(values.get("vae_name", "")); self.logbox.log("プリセットを読み込みました")
-            self.var_save_prompts.set(values.get("save_prompts", False)); self.var_prompt_output.set(values.get("prompt_output", ""))
+            for key, variable in (
+                ("input_file", self.var_input_file),
+                ("negative_input_file", self.var_negative_input_file),
+                ("wildcard_root_dir", self.var_wildcard_root_dir),
+                ("output_dir", self.var_output_dir),
+                ("api_url", self.var_api_url),
+                ("width", self.var_width),
+                ("height", self.var_height),
+                ("steps", self.var_steps),
+                ("enable_hr", self.var_enable_hr),
+                ("hr_scale", self.var_hr_scale),
+                ("hr_upscaler", self.var_hr_upscaler),
+                ("hr_second_pass_steps", self.var_hr_second_pass_steps),
+                ("denoising_strength", self.var_denoising_strength),
+                ("sampler_index", self.var_sampler_index),
+                ("sd_model_checkpoint", self.var_sd_model_checkpoint),
+                ("api_timeout", self.var_api_timeout),
+                ("comfy_flow", self.var_comfy_flow),
+                ("additional_position", self.var_additional_position),
+                ("wildcard_cache_scope", self.var_wildcard_cache_scope),
+                ("enable_nsfw_mosaic", self.var_enable_nsfw_mosaic),
+                ("nsfw_mosaic_factor", self.var_nsfw_mosaic_factor),
+                ("enable_failure_isolation", self.var_enable_failure_isolation),
+                ("image_failure_min_variance", self.var_image_failure_min_variance),
+            ):
+                if key in values:
+                    variable.set(values[key])
+            self._set_additional_file_rows(values.get("additional_files", []))
+            self._set_action_wildcard_rows(values.get("action_wildcards", []))
+            self._apply_flow_model_choices(values.get("flow_model_overrides", {}))
+            self.var_use_model_vae.set(values.get("use_model_vae", True))
+            self.var_vae_name.set(values.get("vae_name", ""))
+            self.logbox.log("プリセットを読み込みました")
+            self.var_save_prompts.set(values.get("save_prompts", False))
+            self.var_prompt_output.set(values.get("prompt_output", ""))
             self.var_sequential_loop.set(values.get("sequential_loop", False))
             self.var_sequential_reuse_wildcards.set(values.get("sequential_reuse_wildcards", True))
-            self.var_keep_main_wildcard_until_stop.set(values.get("keep_main_wildcard_until_stop", values.get("wildcard_cache_scope") == "until_stop"))
-            self.var_enable_prompt_correction.set(values.get("enable_prompt_correction", False)); self.var_ollama_api_url.set(values.get("ollama_api_url", "http://127.0.0.1:11434")); self.var_ollama_model.set(values.get("ollama_model", ""))
-            self.var_prompt_guard_enabled.set(values.get("prompt_guard_enabled", False)); self.var_prompt_guard_mode.set(values.get("prompt_guard_mode", "sfw")); self.var_prompt_guard_sfw.set(values.get("prompt_guard_sfw", True)); self.var_prompt_guard_nsfw.set(values.get("prompt_guard_nsfw", True)); self.var_prompt_guard_apply_mode.set(values.get("prompt_guard_apply_mode", "suggest_only")); self.var_prompt_guard_budget.set(values.get("prompt_guard_budget", "standard")); self.var_prompt_guard_preview.set(values.get("prompt_guard_preview", True)); self.var_prompt_guard_intent.set(values.get("prompt_guard_intent", "strict")); self.var_prompt_guard_tolerance.set(values.get("prompt_guard_tolerance", "balanced"))
+            self.var_keep_main_wildcard_until_stop.set(
+                values.get(
+                    "keep_main_wildcard_until_stop",
+                    values.get("wildcard_cache_scope") == "until_stop",
+                )
+            )
+            self.var_enable_prompt_correction.set(values.get("enable_prompt_correction", False))
+            self.var_ollama_api_url.set(values.get("ollama_api_url", "http://127.0.0.1:11434"))
+            self.var_ollama_model.set(values.get("ollama_model", ""))
+            self.var_prompt_guard_enabled.set(values.get("prompt_guard_enabled", False))
+            self.var_prompt_guard_mode.set(values.get("prompt_guard_mode", "sfw"))
+            self.var_prompt_guard_sfw.set(values.get("prompt_guard_sfw", True))
+            self.var_prompt_guard_nsfw.set(values.get("prompt_guard_nsfw", True))
+            self.var_prompt_guard_apply_mode.set(
+                values.get("prompt_guard_apply_mode", "suggest_only")
+            )
+            self.var_prompt_guard_budget.set(values.get("prompt_guard_budget", "standard"))
+            self.var_prompt_guard_preview.set(values.get("prompt_guard_preview", True))
+            self.var_prompt_guard_intent.set(values.get("prompt_guard_intent", "strict"))
+            self.var_prompt_guard_tolerance.set(values.get("prompt_guard_tolerance", "balanced"))
             self.var_output_format.set(values.get("output_format", "png"))
             self._apply_generation_parameter_input(values.get("generation_parameter_input", {}))
-        except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
+        except Exception as error:
+            self.logbox.log(f"プリセット読込エラー: {error}")
 
     def _add_additional_file_row(self, value=None):
         value = value if isinstance(value, dict) else {"path": value or ""}
@@ -338,24 +683,57 @@ class RandomImageTab(ttk.Frame):
         path = tk.StringVar(value=value.get("path", ""))
         label = tk.StringVar(value=value.get("label", ""))
         position = tk.StringVar(value=value.get("position", self.var_additional_position.get()))
-        cache_scope = tk.StringVar(value=value.get("cache_scope", self.var_wildcard_cache_scope.get()))
-        LabeledPathRow(row, "ファイル", path, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x")
-        settings = ttk.Frame(row); settings.pack(fill="x", pady=(3, 0))
-        ttk.Label(settings, text="用途メモ").pack(side="left"); ttk.Entry(settings, textvariable=label, width=18).pack(side="left", padx=(4, 12))
-        ttk.Label(settings, text="位置").pack(side="left"); ttk.Combobox(settings, textvariable=position, values=["prefix", "suffix"], state="readonly", width=8).pack(side="left", padx=4)
-        ttk.Label(settings, text="抽選").pack(side="left", padx=(8, 0)); ttk.Combobox(settings, textvariable=cache_scope, values=["each_image", "until_stop"], state="readonly", width=13).pack(side="left", padx=4)
-        item = {"row": row, "path": path, "label": label, "position": position, "cache_scope": cache_scope}
-        ttk.Button(settings, text="削除", command=lambda: self._remove_additional_file_row(item)).pack(side="right")
+        cache_scope = tk.StringVar(
+            value=value.get("cache_scope", self.var_wildcard_cache_scope.get())
+        )
+        LabeledPathRow(
+            row,
+            "ファイル",
+            path,
+            mode="file",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        ).pack(fill="x")
+        settings = ttk.Frame(row)
+        settings.pack(fill="x", pady=(3, 0))
+        ttk.Label(settings, text="用途メモ").pack(side="left")
+        ttk.Entry(settings, textvariable=label, width=18).pack(side="left", padx=(4, 12))
+        ttk.Label(settings, text="位置").pack(side="left")
+        ttk.Combobox(
+            settings, textvariable=position, values=["prefix", "suffix"], state="readonly", width=8
+        ).pack(side="left", padx=4)
+        ttk.Label(settings, text="抽選").pack(side="left", padx=(8, 0))
+        ttk.Combobox(
+            settings,
+            textvariable=cache_scope,
+            values=["each_image", "until_stop"],
+            state="readonly",
+            width=13,
+        ).pack(side="left", padx=4)
+        item = {
+            "row": row,
+            "path": path,
+            "label": label,
+            "position": position,
+            "cache_scope": cache_scope,
+        }
+        ttk.Button(
+            settings, text="削除", command=lambda: self._remove_additional_file_row(item)
+        ).pack(side="right")
         self.additional_file_rows.append(item)
 
     def _remove_additional_file_row(self, item):
         item["row"].destroy()
-        self.additional_file_rows = [current for current in self.additional_file_rows if current is not item]
+        self.additional_file_rows = [
+            current for current in self.additional_file_rows if current is not item
+        ]
         if not self.additional_file_rows:
             self._add_additional_file_row()
 
     def _additional_specs(self):
-        return [{key: item[key].get() for key in ("path", "label", "position", "cache_scope")} for item in self.additional_file_rows]
+        return [
+            {key: item[key].get() for key in ("path", "label", "position", "cache_scope")}
+            for item in self.additional_file_rows
+        ]
 
     def _set_additional_file_rows(self, values):
         for item in self.additional_file_rows:
@@ -374,23 +752,54 @@ class RandomImageTab(ttk.Frame):
         path = tk.StringVar(value=value.get("path", ""))
         position = tk.StringVar(value=value.get("position", "suffix"))
         cache_scope = tk.StringVar(value=value.get("cache_scope", "each_image"))
-        fields = ttk.Frame(row); fields.pack(fill="x")
-        ttk.Label(fields, text="条件タグ（,=AND / |=OR）").pack(side="left"); ttk.Entry(fields, textvariable=condition, width=24).pack(side="left", padx=(4, 10))
-        ttk.Label(fields, text="位置").pack(side="left"); ttk.Combobox(fields, textvariable=position, values=["prefix", "suffix"], state="readonly", width=8).pack(side="left", padx=4)
-        ttk.Label(fields, text="抽選").pack(side="left", padx=(8, 0)); ttk.Combobox(fields, textvariable=cache_scope, values=["each_image", "until_stop"], state="readonly", width=13).pack(side="left", padx=4)
-        LabeledPathRow(row, "追加 wildcard", path, mode="file", filetypes=[("Text files", "*.txt"), ("All files", "*.*")]).pack(fill="x", pady=(3, 0))
-        item = {"row": row, "condition": condition, "path": path, "position": position, "cache_scope": cache_scope}
-        ttk.Button(fields, text="削除", command=lambda: self._remove_action_wildcard_row(item)).pack(side="right")
+        fields = ttk.Frame(row)
+        fields.pack(fill="x")
+        ttk.Label(fields, text="条件タグ（,=AND / |=OR）").pack(side="left")
+        ttk.Entry(fields, textvariable=condition, width=24).pack(side="left", padx=(4, 10))
+        ttk.Label(fields, text="位置").pack(side="left")
+        ttk.Combobox(
+            fields, textvariable=position, values=["prefix", "suffix"], state="readonly", width=8
+        ).pack(side="left", padx=4)
+        ttk.Label(fields, text="抽選").pack(side="left", padx=(8, 0))
+        ttk.Combobox(
+            fields,
+            textvariable=cache_scope,
+            values=["each_image", "until_stop"],
+            state="readonly",
+            width=13,
+        ).pack(side="left", padx=4)
+        LabeledPathRow(
+            row,
+            "追加 wildcard",
+            path,
+            mode="file",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        ).pack(fill="x", pady=(3, 0))
+        item = {
+            "row": row,
+            "condition": condition,
+            "path": path,
+            "position": position,
+            "cache_scope": cache_scope,
+        }
+        ttk.Button(
+            fields, text="削除", command=lambda: self._remove_action_wildcard_row(item)
+        ).pack(side="right")
         self.action_wildcard_rows.append(item)
 
     def _remove_action_wildcard_row(self, item):
         item["row"].destroy()
-        self.action_wildcard_rows = [current for current in self.action_wildcard_rows if current is not item]
+        self.action_wildcard_rows = [
+            current for current in self.action_wildcard_rows if current is not item
+        ]
         if not self.action_wildcard_rows:
             self._add_action_wildcard_row()
 
     def _action_wildcard_specs(self):
-        return [{key: item[key].get() for key in ("condition", "path", "position", "cache_scope")} for item in self.action_wildcard_rows]
+        return [
+            {key: item[key].get() for key in ("condition", "path", "position", "cache_scope")}
+            for item in self.action_wildcard_rows
+        ]
 
     def _set_action_wildcard_rows(self, values):
         for item in self.action_wildcard_rows:
@@ -409,7 +818,10 @@ class RandomImageTab(ttk.Frame):
         self.flow_model_vars = []
         flow_name = self.var_comfy_flow.get().strip()
         if not flow_name:
-            ttk.Label(self.flow_models_frame, text="Comfyフローを選ぶと、フロー内のモデル入力を表示します。").pack(anchor="w")
+            ttk.Label(
+                self.flow_models_frame,
+                text="Comfyフローを選ぶと、フロー内のモデル入力を表示します。",
+            ).pack(anchor="w")
             return
         try:
             fields = create_configured_generation_backend_catalog().workflow_model_inputs(
@@ -431,16 +843,25 @@ class RandomImageTab(ttk.Frame):
                 choices = base_model_choices(base_choices)
             value = (values or {}).get(field["id"], field["value"])
             variable = tk.StringVar(value=value)
-            row = ttk.Frame(self.flow_models_frame); row.pack(fill="x", pady=2)
+            row = ttk.Frame(self.flow_models_frame)
+            row.pack(fill="x", pady=2)
             ttk.Label(row, text=field["label"], width=36).pack(side="left")
-            ttk.Combobox(row, textvariable=variable, values=_unique_choices([field["value"], *choices]), width=55).pack(side="left", fill="x", expand=True)
+            ttk.Combobox(
+                row,
+                textvariable=variable,
+                values=_unique_choices([field["value"], *choices]),
+                width=55,
+            ).pack(side="left", fill="x", expand=True)
             self.flow_model_vars.append((field["id"], field["label"], variable))
         if not fields:
-            ttk.Label(self.flow_models_frame, text="モデル入力は検出されませんでした。").pack(anchor="w")
+            ttk.Label(self.flow_models_frame, text="モデル入力は検出されませんでした。").pack(
+                anchor="w"
+            )
 
     def _attach_backend_logger(self):
         if isinstance(self.mod, Exception):
             return
+
         def tab_log(msg: str):
             message = str(msg)
             try:
@@ -451,6 +872,7 @@ class RandomImageTab(ttk.Frame):
                 except queue.Empty:
                     pass
                 self._queue.put_nowait(message)
+
         self.mod._log = tab_log
         self.logbox.log("画像生成タブを起動しました")
 
@@ -488,22 +910,30 @@ class RandomImageTab(ttk.Frame):
         def worker():
             choices, warnings = load_backend_choices(self.var_api_url.get(), query_api=True)
             self.after(0, lambda: self._finish_backend_refresh(choices, warnings))
+
         threading.Thread(target=worker, daemon=True).start()
         self.logbox.log("🔄 モデル候補をフォルダとAPIから更新中...")
 
     def refresh_ollama_models(self):
         def worker():
             try:
-                if requests is None: raise RuntimeError("requests がありません")
+                if requests is None:
+                    raise RuntimeError("requests がありません")
                 models = OllamaPromptCorrector().models(self.var_ollama_api_url.get(), requests)
                 self.after(0, lambda: self._finish_ollama_models(models, None))
-            except Exception as error: self.after(0, lambda error=error: self._finish_ollama_models([], error))
-        threading.Thread(target=worker, daemon=True).start(); self.logbox.log("🔄 Ollamaモデルを更新中...")
+            except Exception as error:
+                self.after(0, lambda error=error: self._finish_ollama_models([], error))
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.logbox.log("🔄 Ollamaモデルを更新中...")
 
     def _finish_ollama_models(self, models, error):
-        if error is not None: self.logbox.log(f"Ollamaモデル取得エラー: {error}"); return
+        if error is not None:
+            self.logbox.log(f"Ollamaモデル取得エラー: {error}")
+            return
         self.ollama_model_combo.configure(values=models)
-        if not self.var_ollama_model.get() and models: self.var_ollama_model.set(models[0])
+        if not self.var_ollama_model.get() and models:
+            self.var_ollama_model.set(models[0])
         self.logbox.log(f"✅ Ollamaモデル候補: {len(models)}")
 
     def _finish_backend_refresh(self, choices, warnings):
@@ -531,41 +961,82 @@ class RandomImageTab(ttk.Frame):
             self.var_wildcard_root_dir.set(wildcard_root_dir)
         if not os.path.isdir(wildcard_root_dir):
             raise ValueError(f"wildcard rootディレクトリが存在しません: {wildcard_root_dir}")
-        additional_inputs = [{**item, "path": item["path"].strip()} for item in self._additional_specs() if item["path"].strip()]
-        return FeatureSettings("generation.random_image", {
-            "input_file": input_file, "negative_input_file": self.var_negative_input_file.get().strip(),
-            "wildcard_root_dir": wildcard_root_dir, "root_dir": wildcard_root_dir,
-            "output_dir": self.var_output_dir.get().strip(), "api_url": self.var_api_url.get().strip().rstrip("/"),
-            "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(),
-            "generation_parameter_config": self._generation_parameter_config(),
-            "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(),
-            "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(),
-            "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(),
-            "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "use_model_vae": self.var_use_model_vae.get(), "vae_name": self.var_vae_name.get(),
-            "save_prompts": self.var_save_prompts.get(), "prompt_output": self.var_prompt_output.get().strip(),
-            "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get().strip(), "ollama_model": self.var_ollama_model.get().strip(),
-            "sequential_loop": self.var_sequential_loop.get(), "sequential_reuse_wildcards": self.var_sequential_reuse_wildcards.get(), "output_format": self.var_output_format.get(),
-            "api_timeout": self.var_api_timeout.get(),
-            "comfy_flow": (
-                self.var_comfy_flow.get().strip()
-                if self.backend_capabilities.supports("workflow") else ""
-            ),
-            "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},
-            "model_catalog": {
-                key: list(self.model_choices.get(key, []))
-                for key in ("checkpoints", "unets", "loras", "vaes")
+        additional_inputs = [
+            {**item, "path": item["path"].strip()}
+            for item in self._additional_specs()
+            if item["path"].strip()
+        ]
+        return FeatureSettings(
+            "generation.random_image",
+            {
+                "input_file": input_file,
+                "negative_input_file": self.var_negative_input_file.get().strip(),
+                "wildcard_root_dir": wildcard_root_dir,
+                "root_dir": wildcard_root_dir,
+                "output_dir": self.var_output_dir.get().strip(),
+                "api_url": self.var_api_url.get().strip().rstrip("/"),
+                "width": self.var_width.get(),
+                "height": self.var_height.get(),
+                "steps": self.var_steps.get(),
+                "generation_parameter_config": self._generation_parameter_config(),
+                "enable_hr": self.var_enable_hr.get(),
+                "hr_scale": self.var_hr_scale.get(),
+                "hr_upscaler": self.var_hr_upscaler.get(),
+                "hr_second_pass_steps": self.var_hr_second_pass_steps.get(),
+                "denoising_strength": self.var_denoising_strength.get(),
+                "sampler_index": self.var_sampler_index.get(),
+                "sd_model_checkpoint": self.var_sd_model_checkpoint.get(),
+                "use_model_vae": self.var_use_model_vae.get(),
+                "vae_name": self.var_vae_name.get(),
+                "save_prompts": self.var_save_prompts.get(),
+                "prompt_output": self.var_prompt_output.get().strip(),
+                "enable_prompt_correction": self.var_enable_prompt_correction.get(),
+                "ollama_api_url": self.var_ollama_api_url.get().strip(),
+                "ollama_model": self.var_ollama_model.get().strip(),
+                "sequential_loop": self.var_sequential_loop.get(),
+                "sequential_reuse_wildcards": self.var_sequential_reuse_wildcards.get(),
+                "output_format": self.var_output_format.get(),
+                "api_timeout": self.var_api_timeout.get(),
+                "comfy_flow": (
+                    self.var_comfy_flow.get().strip()
+                    if self.backend_capabilities.supports("workflow")
+                    else ""
+                ),
+                "comfy_model_overrides": {
+                    key: variable.get().strip()
+                    for key, _, variable in self.flow_model_vars
+                    if variable.get().strip()
+                },
+                "model_catalog": {
+                    key: list(self.model_choices.get(key, []))
+                    for key in ("checkpoints", "unets", "loras", "vaes")
+                },
+                "additional_inputs": additional_inputs,
+                "additional_input_files": [item["path"] for item in additional_inputs],
+                "action_wildcards": [
+                    {**item, "condition": item["condition"].strip(), "path": item["path"].strip()}
+                    for item in self._action_wildcard_specs()
+                    if item["condition"].strip() and item["path"].strip()
+                ],
+                "additional_position": self.var_additional_position.get(),
+                "wildcard_cache_scope": "until_stop"
+                if self.var_keep_main_wildcard_until_stop.get()
+                else "each_image",
+                "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(),
+                "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(),
+                "enable_failure_isolation": self.var_enable_failure_isolation.get(),
+                "image_failure_min_variance": self.var_image_failure_min_variance.get(),
+                "prompt_guard_enabled": self.var_prompt_guard_enabled.get(),
+                "prompt_guard_mode": self.var_prompt_guard_mode.get(),
+                "prompt_guard_sfw": self.var_prompt_guard_sfw.get(),
+                "prompt_guard_nsfw": self.var_prompt_guard_nsfw.get(),
+                "prompt_guard_apply_mode": self.var_prompt_guard_apply_mode.get(),
+                "prompt_guard_budget": self.var_prompt_guard_budget.get(),
+                "prompt_guard_preview": self.var_prompt_guard_preview.get(),
+                "prompt_guard_intent": self.var_prompt_guard_intent.get(),
+                "prompt_guard_tolerance": self.var_prompt_guard_tolerance.get(),
             },
-            "additional_inputs": additional_inputs, "additional_input_files": [item["path"] for item in additional_inputs],
-            "action_wildcards": [{**item, "condition": item["condition"].strip(), "path": item["path"].strip()} for item in self._action_wildcard_specs() if item["condition"].strip() and item["path"].strip()],
-            "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": "until_stop" if self.var_keep_main_wildcard_until_stop.get() else "each_image",
-            "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(),
-            "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(),
-            "prompt_guard_enabled": self.var_prompt_guard_enabled.get(), "prompt_guard_mode": self.var_prompt_guard_mode.get(),
-            "prompt_guard_sfw": self.var_prompt_guard_sfw.get(), "prompt_guard_nsfw": self.var_prompt_guard_nsfw.get(),
-            "prompt_guard_apply_mode": self.var_prompt_guard_apply_mode.get(), "prompt_guard_budget": self.var_prompt_guard_budget.get(),
-            "prompt_guard_preview": self.var_prompt_guard_preview.get(),
-            "prompt_guard_intent": self.var_prompt_guard_intent.get(), "prompt_guard_tolerance": self.var_prompt_guard_tolerance.get(),
-        })
+        )
 
     def _generation_parameter_input(self):
         return {
@@ -608,7 +1079,11 @@ class RandomImageTab(ttk.Frame):
             raise ValueError("stepsの選択方式が不正です")
 
         if self.var_resolution_mode.get() == "candidate":
-            sizes = [item.strip() for item in self.var_resolution_candidates.get().split("|") if item.strip()]
+            sizes = [
+                item.strip()
+                for item in self.var_resolution_candidates.get().split("|")
+                if item.strip()
+            ]
             if not sizes:
                 raise ValueError("解像度候補を 512x768|768x1024 の形式で入力してください")
             resolutions = []
@@ -622,12 +1097,19 @@ class RandomImageTab(ttk.Frame):
                     raise ValueError(f"解像度候補の形式が不正です: {size}") from error
             resolution = {"mode": "candidate", "values": resolutions}
         elif self.var_resolution_mode.get() == "fixed":
-            resolution = {"mode": "fixed", "value": {"width": self.var_width.get(), "height": self.var_height.get()}}
+            resolution = {
+                "mode": "fixed",
+                "value": {"width": self.var_width.get(), "height": self.var_height.get()},
+            }
         else:
             raise ValueError("解像度の選択方式が不正です")
 
         if self.var_sampler_mode.get() == "candidate":
-            samplers = [item.strip() for item in self.var_sampler_candidates.get().split("|") if item.strip()]
+            samplers = [
+                item.strip()
+                for item in self.var_sampler_candidates.get().split("|")
+                if item.strip()
+            ]
             if not samplers:
                 raise ValueError("sampler候補を | 区切りで入力してください")
             sampler = {"mode": "candidate", "values": samplers}

@@ -23,11 +23,13 @@ from comfyui_support_tools.shared.prompt_stability.planner import PromptAdjustme
 from ..context import *
 from .generation_parameter_resolver import GenerationParameterResolver
 from .image_failure_inspector import ImageFailureInspector
+from .model_choice_classification import classify_base_model_choice
 from .ollama_prompt_corrector import OllamaPromptCorrector
 from .prompt_lora_compatibility import validate_prompt_loras
 from .text_to_image_request import TextToImageRequest
 
 _GENERATION_PROFILE = create_configured_image_generation_profile(datetime.now().strftime("%Y%m%d"))
+
 
 # {
 #   責務: [EmbeddedRandomImage: wildcard promptから画像生成要求を組み立てて保存する]
@@ -137,7 +139,10 @@ class EmbeddedRandomImage:
                 path = directory_candidate
         if not path.is_dir():
             return path
-        candidates = sorted((item for item in path.rglob("*.txt") if item.is_file()), key=lambda item: item.as_posix().casefold())
+        candidates = sorted(
+            (item for item in path.rglob("*.txt") if item.is_file()),
+            key=lambda item: item.as_posix().casefold(),
+        )
         if not candidates:
             self._log(f"⚠️ ワイルドカード用txtがありません: {path}")
             return None
@@ -157,9 +162,17 @@ class EmbeddedRandomImage:
         pattern = re.compile(r"\{([^{}]+)\}")
         while pattern.search(text):
             match = pattern.search(text)
-            text = text[:match.start()] + secrets.choice(match.group(1).split("|")) + text[match.end():]
+            text = (
+                text[: match.start()]
+                + secrets.choice(match.group(1).split("|"))
+                + text[match.end() :]
+            )
         placeholders = {}
-        text = re.sub(r"<[^>]*>", lambda match: placeholders.setdefault(f"__LORA_{len(placeholders)}__", match.group(0)), text)
+        text = re.sub(
+            r"<[^>]*>",
+            lambda match: placeholders.setdefault(f"__LORA_{len(placeholders)}__", match.group(0)),
+            text,
+        )
 
         def expand_wildcard(match):
             name = match.group(1)
@@ -196,8 +209,14 @@ class EmbeddedRandomImage:
         if self.additional_inputs:
             return [item for item in self.additional_inputs if item.get("path")]
         return [
-            {"path": path, "label": "", "position": self.additional_position, "cache_scope": self.wildcard_cache_scope}
-            for path in self.additional_input_files if path
+            {
+                "path": path,
+                "label": "",
+                "position": self.additional_position,
+                "cache_scope": self.wildcard_cache_scope,
+            }
+            for path in self.additional_input_files
+            if path
         ]
 
     def _additional_prompts(self, wildcard_cache=None):
@@ -222,7 +241,10 @@ class EmbeddedRandomImage:
     def _action_condition_matches(condition, normalized_prompt):
         """`,` はAND、`|` はORとして展開済みプロンプトのタグを照合する。"""
         alternatives = [item.strip() for item in condition.split("|") if item.strip()]
-        return any(all(tag.strip() in normalized_prompt for tag in item.split(",") if tag.strip()) for item in alternatives)
+        return any(
+            all(tag.strip() in normalized_prompt for tag in item.split(",") if tag.strip())
+            for item in alternatives
+        )
 
     def _with_action_prompt(self, prompt, wildcard_cache=None):
         prefix, suffix = [], []
@@ -230,7 +252,11 @@ class EmbeddedRandomImage:
         for action in self.action_wildcards:
             condition = str(action.get("condition", "")).strip().casefold().replace("_", " ")
             path = str(action.get("path", "")).strip()
-            if not condition or not path or not self._action_condition_matches(condition, normalized_prompt):
+            if (
+                not condition
+                or not path
+                or not self._action_condition_matches(condition, normalized_prompt)
+            ):
                 continue
             cache = wildcard_cache if action.get("cache_scope") == "until_stop" else None
             part = self.process_file(path, self.root_dir, wildcard_cache=cache)
@@ -276,14 +302,22 @@ class EmbeddedRandomImage:
         report_dir = USER_DATA_DIR / "output" / "image_generate" / "log" / "image_failure"
         report_dir.mkdir(parents=True, exist_ok=True)
         report = {
-            "output": str(output), "failure": failure, "backend": self.generation_profile.backend,
-            "checkpoint": self.sd_model_checkpoint, "sampler": self.sampler_index,
-            "width": self.width, "height": self.height, "steps": self.steps,
+            "output": str(output),
+            "failure": failure,
+            "backend": self.generation_profile.backend,
+            "checkpoint": self.sd_model_checkpoint,
+            "sampler": self.sampler_index,
+            "width": self.width,
+            "height": self.height,
+            "steps": self.steps,
             "generation_parameters": parameters,
-            "prompt": prompt, "negative_prompt": negative,
+            "prompt": prompt,
+            "negative_prompt": negative,
         }
         report_path = report_dir / f"{output.stem}.json"
-        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        report_path.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         return report_path
 
     def _resolve_generation_parameters(self):
@@ -341,7 +375,9 @@ class EmbeddedRandomImage:
             if image_format == "webp":
                 converted.save(buffer, format="WEBP", quality=95, method=6)
             elif image_format == "gif":
-                converted.convert("P", palette=Image.Palette.ADAPTIVE, colors=256).save(buffer, format="GIF")
+                converted.convert("P", palette=Image.Palette.ADAPTIVE, colors=256).save(
+                    buffer, format="GIF"
+                )
             else:
                 converted.save(buffer, format="JPEG", quality=95, optimize=True)
         return buffer.getvalue(), image_format
@@ -350,25 +386,19 @@ class EmbeddedRandomImage:
         """Correct the fully expanded prompt only when the user enabled Ollama."""
         if not self.enable_prompt_correction:
             return prompt
-        corrected = OllamaPromptCorrector().correct(self.ollama_api_url, self.ollama_model, prompt, requests)
+        corrected = OllamaPromptCorrector().correct(
+            self.ollama_api_url, self.ollama_model, prompt, requests
+        )
         self._log(f"🪄 Ollamaでプロンプトを補正しました: {corrected}")
         return corrected
 
     # {
-    #   責務: [_generate: promptと設定snapshotから画像1枚を生成する]
-    #   処理: [設定候補を解決済みparameter objectへ変換し, API backendへTextToImageRequestとして渡す]
-    #   引数: [self: generator, prompt: 任意の展開済みprompt, negative: 任意のnegative prompt, wildcard_cache: wildcard結果cache]
-    #   戻り値: []
+    # 責務: [_plan_prompt_stability: risk settingsを解析し必要なprompt/config adjustmentを計画する]
+    # 処理: [1: GuardSettingsとrisk requestを作成する, 2: previewとopt-in adjustmentを適用する]
+    # 引数: [self, prompt, negative]
+    # 戻り値: [prompt, negative, parameters, plan, risk report, content mode, workflow, backend]
     # }
-    def _generate(self, prompt=None, negative=None, wildcard_cache=None):
-        if requests is None:
-            raise RuntimeError("requests がインストールされていません")
-        if negative is None:
-            negative = self.process_file(self.negative_input_file, self.root_dir, wildcard_cache=wildcard_cache) if self.negative_input_file else ""
-        if prompt is None:
-            prompt = self.process_file(self.input_file, self.root_dir, wildcard_cache=wildcard_cache)
-        prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
-        prompt = self._correct_prompt(prompt)
+    def _plan_prompt_stability(self, prompt, negative):
         guard_mode = ContentMode(self.prompt_guard_mode)
         guard_settings = GuardSettings(
             enabled=bool(self.prompt_guard_enabled),
@@ -383,9 +413,8 @@ class EmbeddedRandomImage:
         workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
         backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
         backend.capabilities.require("txt2img")
-        workflow_has_model_overrides = (
-            backend.capabilities.supports("model_overrides")
-            and bool(self.comfy_model_overrides)
+        workflow_has_model_overrides = backend.capabilities.supports("model_overrides") and bool(
+            self.comfy_model_overrides
         )
         validate_prompt_loras(
             prompt,
@@ -394,12 +423,23 @@ class EmbeddedRandomImage:
             self._log,
             base_model_reason=(
                 "The ComfyUI workflow has per-node model overrides; the LoRA's active base node is ambiguous."
-                if workflow_has_model_overrides else None
+                if workflow_has_model_overrides
+                else None
             ),
         )
         parameters = self._resolve_generation_parameters()
         loras = tuple(
-            (name, float(weight), "style" if "style" in name.casefold() else "pose" if "pose" in name.casefold() else "character" if "char" in name.casefold() else "")
+            (
+                name,
+                float(weight),
+                "style"
+                if "style" in name.casefold()
+                else "pose"
+                if "pose" in name.casefold()
+                else "character"
+                if "char" in name.casefold()
+                else "",
+            )
             for name, weight in re.findall(r"<lora:([^:>]+):([0-9.]+)>", prompt, re.IGNORECASE)
         )
         risk_request = PromptRiskRequest(
@@ -409,6 +449,9 @@ class EmbeddedRandomImage:
             settings=guard_settings,
             backend=self.generation_profile.backend,
             model=self.sd_model_checkpoint,
+            model_family=classify_base_model_choice(
+                self.sd_model_checkpoint, self.model_catalog
+            ).family.value,
             loras=loras,
             parameters={"candidate_count": 1, "steps": parameters.steps, "cfg": parameters.cfg},
         )
@@ -449,6 +492,43 @@ class EmbeddedRandomImage:
                 parameters=parameters.parameters,
                 backend_parameters=parameters.backend_parameters,
             )
+        return prompt, negative, parameters, plan, risk_report, guard_mode, workflow_path, backend
+
+    # {
+    #   責務: [_generate: promptと設定snapshotから画像1枚を生成する]
+    #   処理: [設定候補を解決済みparameter objectへ変換し, API backendへTextToImageRequestとして渡す]
+    #   引数: [self: generator, prompt: 任意の展開済みprompt, negative: 任意のnegative prompt, wildcard_cache: wildcard結果cache]
+    #   戻り値: []
+    # }
+    def _generate(self, prompt=None, negative=None, wildcard_cache=None):
+        if requests is None:
+            raise RuntimeError("requests がインストールされていません")
+        if negative is None:
+            negative = (
+                self.process_file(
+                    self.negative_input_file, self.root_dir, wildcard_cache=wildcard_cache
+                )
+                if self.negative_input_file
+                else ""
+            )
+        if prompt is None:
+            prompt = self.process_file(
+                self.input_file, self.root_dir, wildcard_cache=wildcard_cache
+            )
+        prompt = self._with_action_prompt(
+            self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache
+        )
+        prompt = self._correct_prompt(prompt)
+        (
+            prompt,
+            negative,
+            parameters,
+            plan,
+            risk_report,
+            guard_mode,
+            workflow_path,
+            backend,
+        ) = self._plan_prompt_stability(prompt, negative)
         self._log(
             "🎛️ 生成パラメータ: "
             f"CFG={parameters.cfg:g}, Steps={parameters.steps}, "
@@ -479,7 +559,9 @@ class EmbeddedRandomImage:
             model_overrides=self.comfy_model_overrides,
         )
         candidate_total = max(1, plan.candidate_count)
-        attempt_limit = min(candidate_total, plan.retry_limit + 1) if plan.retry_limit else candidate_total
+        attempt_limit = (
+            min(candidate_total, plan.retry_limit + 1) if plan.retry_limit else candidate_total
+        )
         for candidate_index in range(attempt_limit):
             if self._stop_event.is_set():
                 break
@@ -495,15 +577,22 @@ class EmbeddedRandomImage:
             image_bytes, output_extension = self._encoded_output(image_bytes)
             failure = None
             if self.enable_failure_isolation or plan.retry_limit:
-                failure = ImageFailureInspector(self.image_failure_min_variance).inspect(image_bytes)
+                failure = ImageFailureInspector(self.image_failure_min_variance).inspect(
+                    image_bytes
+                )
             if failure and plan.retry_limit:
-                self._log(f"⚠️ stability retry {candidate_index + 1}/{attempt_limit}: {failure['reason']}")
+                self._log(
+                    f"⚠️ stability retry {candidate_index + 1}/{attempt_limit}: {failure['reason']}"
+                )
                 if candidate_index + 1 < attempt_limit:
                     continue
             output_dir = Path(self.output_dir)
             if failure:
                 output_dir = output_dir / "_image_failure"
-            output = output_dir / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{candidate_index + 1}.{output_extension}"
+            output = (
+                output_dir
+                / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{candidate_index + 1}.{output_extension}"
+            )
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(image_bytes)
             metadata = parameters.to_dict()
@@ -532,12 +621,19 @@ class EmbeddedRandomImage:
         source = Path(self.input_file)
         if not source.is_absolute():
             source = Path(self.root_dir) / source
-        if not source.exists() and source.suffix.lower() == ".txt" and source.with_suffix("").is_dir():
+        if (
+            not source.exists()
+            and source.suffix.lower() == ".txt"
+            and source.with_suffix("").is_dir()
+        ):
             source = source.with_suffix("")
         if source.is_file():
             return [source]
         if source.is_dir():
-            return sorted((path for path in source.rglob("*.txt") if path.is_file()), key=lambda path: path.as_posix().casefold())
+            return sorted(
+                (path for path in source.rglob("*.txt") if path.is_file()),
+                key=lambda path: path.as_posix().casefold(),
+            )
         return []
 
     def _generate_sequential(self):
@@ -549,22 +645,32 @@ class EmbeddedRandomImage:
 
         total = len(prompts)
         completed = 0
-        self._log(f"▶️ 順次生成開始: {total}件" + "（無限ループ）" if self.sequential_loop else f"▶️ 順次生成開始: {total}件")
+        self._log(
+            f"▶️ 順次生成開始: {total}件" + "（無限ループ）"
+            if self.sequential_loop
+            else f"▶️ 順次生成開始: {total}件"
+        )
         while not self._stop_event.is_set():
             shared_wildcard_cache = {} if self.sequential_reuse_wildcards else None
             for index, (source_path, source_text) in enumerate(prompts, start=1):
-                if self._stop_event.is_set(): break
+                if self._stop_event.is_set():
+                    break
                 try:
                     self._apply_pending_settings()
-                    prompt = self._expand_text(source_text, self.root_dir, wildcard_cache=shared_wildcard_cache)
+                    prompt = self._expand_text(
+                        source_text, self.root_dir, wildcard_cache=shared_wildcard_cache
+                    )
                     try:
                         source_label = source_path.relative_to(self.root_dir).as_posix()
                     except ValueError:
                         source_label = str(source_path)
                     self._log(f"📝 [{index}/{total}] {source_label}: {prompt}")
-                    self._generate(prompt=prompt, wildcard_cache=shared_wildcard_cache); completed += 1
-                except Exception as e: self._log(f"❌ [{index}/{total}] 生成エラー: {e}")
-            if not self.sequential_loop: break
+                    self._generate(prompt=prompt, wildcard_cache=shared_wildcard_cache)
+                    completed += 1
+                except Exception as e:
+                    self._log(f"❌ [{index}/{total}] 生成エラー: {e}")
+            if not self.sequential_loop:
+                break
 
         if self._stop_event.is_set():
             self._log(f"⏹️ 順次生成を停止しました: {completed}/{total}件完了")
@@ -576,6 +682,7 @@ class EmbeddedRandomImage:
             self._log("実行中: すでに生成中です。停止してから開始してください。")
             return
         self._stop_event.clear()
+
         def worker():
             try:
                 backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
@@ -595,6 +702,7 @@ class EmbeddedRandomImage:
                     self._log(f"❌ 生成エラー: {e}")
                 if mode == "once":
                     break
+
         self._worker_thread = threading.Thread(target=worker, daemon=True)
         self._worker_thread.start()
 

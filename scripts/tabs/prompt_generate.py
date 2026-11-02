@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from comfyui_support_tools.shared.anime_generation import AnimeContentMode, AnimeIntent
+
 from ..context import *
 from ..context import _unique_choices
 from ..backend.model_choice_classification import (
@@ -43,6 +45,9 @@ class PromptGenerateTab(ttk.Frame):
         self.sampler = tk.StringVar(value=self.generator.sampler_index)
         self.checkpoint = tk.StringVar(value=self.generator.sd_model_checkpoint)
         self.vae_name = tk.StringVar(value=getattr(self.generator, "vae_name", ""))
+        self.anime_intent = tk.StringVar(value=AnimeIntent.GENERAL.value)
+        self.anime_content_mode = tk.StringVar(value=AnimeContentMode.UNSPECIFIED.value)
+        self.anime_auto_route = tk.BooleanVar(value=False)
         self.comfy_flow = tk.StringVar(value=self.generator.comfy_flow)
         self.preset_store = PresetStore("prompt_generate")
         self.preset_name = tk.StringVar()
@@ -91,6 +96,29 @@ class PromptGenerateTab(ttk.Frame):
         ttk.Label(settings, text="VAE（任意）").grid(row=2, column=0, sticky="w", pady=(4, 0))
         self.vae_combo = ttk.Combobox(settings, textvariable=self.vae_name, width=42)
         self.vae_combo.grid(row=2, column=1, columnspan=5, sticky="we", pady=(4, 0))
+        anime_settings = ttk.LabelFrame(settings, text="Anime / Illustration policy", padding=4)
+        anime_settings.grid(row=5, column=0, columnspan=6, sticky="we", pady=(6, 0))
+        ttk.Label(anime_settings, text="Use case").grid(row=0, column=0, sticky="w")
+        ttk.Combobox(
+            anime_settings,
+            state="readonly",
+            textvariable=self.anime_intent,
+            values=[item.value for item in AnimeIntent],
+            width=16,
+        ).grid(row=0, column=1, padx=(4, 12), sticky="w")
+        ttk.Label(anime_settings, text="Content profile").grid(row=0, column=2, sticky="w")
+        ttk.Combobox(
+            anime_settings,
+            state="readonly",
+            textvariable=self.anime_content_mode,
+            values=[item.value for item in AnimeContentMode],
+            width=14,
+        ).grid(row=0, column=3, padx=4, sticky="w")
+        ttk.Checkbutton(
+            anime_settings,
+            text="Auto-route to a compatible installed anime model",
+            variable=self.anime_auto_route,
+        ).grid(row=1, column=0, columnspan=4, sticky="w")
         self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
         ttk.Label(settings, textvariable=self.model_classification_text, wraplength=900).grid(
             row=4, column=0, columnspan=6, sticky="w", pady=(2, 0)
@@ -149,6 +177,8 @@ class PromptGenerateTab(ttk.Frame):
             "wildcard_root": self.wildcard_root.get(), "output_dir": self.output_dir.get(), "api_url": self.api_url.get(),
             "prompt": self._prompt_text(), "negative": self._negative_text(), "width": self.width.get(), "height": self.height.get(),
             "steps": self.steps.get(), "sampler": self.sampler.get(), "checkpoint": self.checkpoint.get(), "vae_name": self.vae_name.get(), "comfy_flow": self._workflow_value(),
+            "anime_intent": self.anime_intent.get(), "anime_content_mode": self.anime_content_mode.get(),
+            "anime_auto_route": self.anime_auto_route.get(),
         }
 
     def _refresh_preset_choices(self):
@@ -167,6 +197,13 @@ class PromptGenerateTab(ttk.Frame):
         try:
             values = self.preset_store.load(self.preset_name.get())
             for key, variable in (("wildcard_root", self.wildcard_root), ("output_dir", self.output_dir), ("api_url", self.api_url), ("width", self.width), ("height", self.height), ("steps", self.steps), ("sampler", self.sampler), ("checkpoint", self.checkpoint), ("vae_name", self.vae_name), ("comfy_flow", self.comfy_flow)):
+                if key in values:
+                    variable.set(values[key])
+            for key, variable in (
+                ("anime_intent", self.anime_intent),
+                ("anime_content_mode", self.anime_content_mode),
+                ("anime_auto_route", self.anime_auto_route),
+            ):
                 if key in values:
                     variable.set(values[key])
             self._set_text(self.prompt, values.get("prompt", self._prompt_text()))
@@ -269,6 +306,9 @@ class PromptGenerateTab(ttk.Frame):
             for key in ("checkpoints", "unets", "loras", "vaes")
         }
         self.generator.comfy_flow = self._workflow_value()
+        self.generator.anime_intent = AnimeIntent(self.anime_intent.get())
+        self.generator.anime_content_mode = AnimeContentMode(self.anime_content_mode.get())
+        self.generator.anime_auto_route = self.anime_auto_route.get()
         cache = {}
         prompt = self.generator._expand_text(source_prompt, self.generator.root_dir, wildcard_cache=cache)
         negative = self.generator._expand_text(self._negative_text(), self.generator.root_dir, wildcard_cache=cache)

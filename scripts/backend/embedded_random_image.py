@@ -4,6 +4,7 @@ import re
 
 from PIL import Image
 
+from comfyui_support_tools.shared.anime_generation import AnimeContentMode
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
 from comfyui_support_tools.shared.contracts.resolved_generation_parameters import (
     ResolvedGenerationParameters,
@@ -21,6 +22,7 @@ from comfyui_support_tools.shared.prompt_stability.contracts import (
 from comfyui_support_tools.shared.prompt_stability.planner import PromptAdjustmentPlanner
 
 from ..context import *
+from .anime_generation_backend import AnimeGenerationBackend
 from .generation_parameter_resolver import GenerationParameterResolver
 from .image_failure_inspector import ImageFailureInspector
 from .model_choice_classification import classify_base_model_choice
@@ -82,6 +84,9 @@ class EmbeddedRandomImage:
     prompt_guard_tolerance = "balanced"
     ollama_api_url = "http://127.0.0.1:11434"
     ollama_model = ""
+    anime_intent = None
+    anime_content_mode = AnimeContentMode.UNSPECIFIED
+    anime_auto_route = False
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -96,6 +101,7 @@ class EmbeddedRandomImage:
         self._settings_lock = threading.Lock()
         self._pending_settings = None
         self._log = print
+        self._anime_resolution = None
 
     # {
     #   責務: [queue_settings_update: 実行中workerへ次の画像用設定を予約する]
@@ -413,20 +419,6 @@ class EmbeddedRandomImage:
         workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
         backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
         backend.capabilities.require("txt2img")
-        workflow_has_model_overrides = backend.capabilities.supports("model_overrides") and bool(
-            self.comfy_model_overrides
-        )
-        validate_prompt_loras(
-            prompt,
-            None if workflow_has_model_overrides else self.sd_model_checkpoint,
-            self.model_catalog,
-            self._log,
-            base_model_reason=(
-                "The ComfyUI workflow has per-node model overrides; the LoRA's active base node is ambiguous."
-                if workflow_has_model_overrides
-                else None
-            ),
-        )
         parameters = self._resolve_generation_parameters()
         loras = tuple(
             (
@@ -529,6 +521,24 @@ class EmbeddedRandomImage:
             workflow_path,
             backend,
         ) = self._plan_prompt_stability(prompt, negative)
+        anime_backend = None
+        self._anime_resolution = None
+        if self.anime_intent is not None:
+            anime_backend = AnimeGenerationBackend(
+                backend,
+                model_catalog=self.model_catalog,
+                intent=self.anime_intent,
+                content_mode=self.anime_content_mode,
+                auto_route=self.anime_auto_route,
+                has_explicit_model_overrides=any(
+                    key.rsplit(":", 1)[-1] in {"ckpt_name", "unet_name"}
+                    for key in self.comfy_model_overrides
+                ),
+            )
+            backend = anime_backend
+        workflow_has_model_overrides = backend.capabilities.supports("model_overrides") and bool(
+            self.comfy_model_overrides
+        )
         self._log(
             "🎛️ 生成パラメータ: "
             f"CFG={parameters.cfg:g}, Steps={parameters.steps}, "
@@ -557,6 +567,24 @@ class EmbeddedRandomImage:
             denoising_strength=self.denoising_strength,
             workflow_path=workflow_path,
             model_overrides=self.comfy_model_overrides,
+        )
+        if anime_backend is not None:
+            generation_request = anime_backend.prepare_request(generation_request)
+            self._anime_resolution = anime_backend.last_resolution
+            self._log(f"🎨 Anime model policy: {self._anime_resolution.reason}")
+            self.sd_model_checkpoint = generation_request.checkpoint
+            prompt = generation_request.prompt
+            negative = generation_request.negative
+        validate_prompt_loras(
+            generation_request.prompt,
+            None if workflow_has_model_overrides else generation_request.checkpoint,
+            self.model_catalog,
+            self._log,
+            base_model_reason=(
+                "The ComfyUI workflow has per-node model overrides; the LoRA's active base node is ambiguous."
+                if workflow_has_model_overrides
+                else None
+            ),
         )
         candidate_total = max(1, plan.candidate_count)
         attempt_limit = (
@@ -604,6 +632,12 @@ class EmbeddedRandomImage:
                 "candidate_count": candidate_total,
                 "adjustments": list(plan.adjustment_log),
             }
+            if self._anime_resolution is not None:
+                metadata["anime_generation"] = {
+                    "profile_id": self._anime_resolution.profile_id,
+                    "reason": self._anime_resolution.reason,
+                    "checkpoint": self._anime_resolution.checkpoint,
+                }
             metadata_path = self._save_generation_metadata(output, metadata)
             prompt_path = self._save_prompt(output, prompt)
             if failure:

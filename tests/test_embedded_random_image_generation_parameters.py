@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
+from comfyui_support_tools.shared.anime_generation import AnimeContentMode, AnimeIntent
 from scripts.backend.embedded_random_image import EmbeddedRandomImage
 from scripts.backend.generation_capabilities import GenerationCapabilities
 
@@ -107,7 +108,9 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
                             "scripts.backend.embedded_random_image.create_configured_image_generation_backend",
                             return_value=backend,
                         ),
-                        patch("scripts.backend.embedded_random_image.validate_prompt_loras") as validate_loras,
+                        patch(
+                            "scripts.backend.embedded_random_image.validate_prompt_loras"
+                        ) as validate_loras,
                     ):
                         generator._generate(prompt="a simple test prompt", negative="")
 
@@ -151,13 +154,60 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
             self.assertEqual(backend.request.sampler, "DPM++ 2M Karras")
             images = list(Path(temporary_directory).glob("*.png"))
             self.assertEqual(len(images), 1)
-            metadata = json.loads(images[0].with_suffix(".generation.json").read_text(encoding="utf-8"))
+            metadata = json.loads(
+                images[0].with_suffix(".generation.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(metadata["cfg"], 5.5)
             self.assertEqual(metadata["backend"], generator.generation_profile.backend)
             self.assertEqual(metadata["steps"], 18)
             self.assertEqual(metadata["resolution"], {"width": 512, "height": 768})
             self.assertEqual(metadata["sampler"], "DPM++ 2M Karras")
             self.assertTrue(any("CFG=5.5" in message for message in messages))
+
+    # {
+    #   責務: [test_anime_policy_prepares_the_selected_model_request: verify policy integration in the real generator]
+    #   処理: [apply registered prompt tags, retain the explicit model, and save route provenance]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_anime_policy_prepares_the_selected_model_request(self):
+        backend = _Backend()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            generator = EmbeddedRandomImage()
+            generator.api_url = "http://127.0.0.1:8188"
+            generator.output_dir = temporary_directory
+            generator.comfy_flow = ""
+            generator.enable_hr = False
+            generator.enable_failure_isolation = False
+            generator.enable_nsfw_mosaic = False
+            generator.enable_prompt_correction = False
+            generator.save_prompts = False
+            generator.additional_inputs = []
+            generator.additional_input_files = []
+            generator.action_wildcards = []
+            generator.sd_model_checkpoint = "models/checkpoints/animagineXL40.safetensors"
+            generator.model_catalog = {
+                "checkpoints": [generator.sd_model_checkpoint],
+                "unets": [],
+                "loras": [],
+            }
+            generator.anime_intent = AnimeIntent.CHARACTER
+            generator.anime_content_mode = AnimeContentMode.SFW
+            generator._log = lambda _message: None
+            with patch(
+                "scripts.backend.embedded_random_image.create_configured_image_generation_backend",
+                return_value=backend,
+            ):
+                generator._generate(prompt="a smiling traveler", negative="blurry")
+
+            self.assertEqual(backend.request.checkpoint, generator.sd_model_checkpoint)
+            self.assertIn("masterpiece", backend.request.prompt)
+            self.assertIn("character illustration", backend.request.prompt)
+            self.assertIn("safe", backend.request.prompt)
+            self.assertIn("watermark", backend.request.negative)
+            files = list(Path(temporary_directory).glob("*.json"))
+            metadata = json.loads(files[0].read_text(encoding="utf-8"))
+            self.assertEqual(metadata["anime_generation"]["profile_id"], "animagine_xl")
 
     # {
     #   責務: [test_prompt_stability_guard_applies_bounded_candidates_and_records_provenance: opt-in guardを生成backendまで接続する]
@@ -203,7 +253,9 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
             outputs = list(Path(temporary_directory).glob("*.png"))
             self.assertEqual(len(outputs), 8)
             self.assertEqual(backend.request.steps, 22)
-            metadata = json.loads(outputs[0].with_suffix(".generation.json").read_text(encoding="utf-8"))
+            metadata = json.loads(
+                outputs[0].with_suffix(".generation.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(metadata["prompt_stability"]["content_mode"], "sfw")
             self.assertEqual(metadata["prompt_stability"]["candidate_count"], 8)
 

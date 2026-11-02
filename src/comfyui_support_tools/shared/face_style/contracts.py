@@ -162,6 +162,7 @@ class FaceStyleMetrics:
             self.identity_preservation,
             self.expression_preservation,
             self.pose_preservation,
+            self.gaze_preservation,
             self.non_target_preservation,
         )
         return all(value is not None and value >= 0.8 for value in required)

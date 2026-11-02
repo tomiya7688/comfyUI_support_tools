@@ -112,10 +112,13 @@ class FaceStyleService:
                     warnings = ()
                 accepted = (
                     metrics.safe_to_accept
+                    and metrics.style_match is not None
+                    and metrics.style_match >= self.acceptance_threshold
                     and min(
                         metrics.identity_preservation or 0,
                         metrics.expression_preservation or 0,
                         metrics.pose_preservation or 0,
+                        metrics.gaze_preservation or 0,
                         metrics.non_target_preservation,
                     )
                     >= self.acceptance_threshold

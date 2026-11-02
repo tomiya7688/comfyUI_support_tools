@@ -114,6 +114,26 @@ class FaceStylePipelineTests(unittest.TestCase):
         self.assertIn("below", result.warnings[0])
 
     # {
+    # 責務: [test_style_and_gaze_must_both_pass_before_candidate_acceptance: styleとgaze評価を独立して検証する]
+    # 処理: [1: style未達candidateを評価, 2: gaze未計測candidateを評価, 3: いずれも未承認を確認]
+    # 引数: [self: test case]
+    # 戻り値: []
+    # }
+    def test_style_and_gaze_must_both_pass_before_candidate_acceptance(self) -> None:
+        backend = CallableFaceStyleBackend("test", lambda image, mask, target, prompt: image)
+        for metrics in (
+            FaceStyleMetrics(0.2, 0.95, 0.96, 0.97, 0.95, 1.0),
+            FaceStyleMetrics(0.95, 0.95, 0.96, 0.97, None, 1.0),
+        ):
+            service = FaceStyleService(
+                [backend],
+                evaluator=CallableFaceStyleEvaluator(lambda *args, metrics=metrics: metrics),
+            )
+            result = service.run(FaceStyleRequest(self.source, self.target, self.faces))
+            self.assertIsNone(result.selected_index)
+            self.assertFalse(result.candidates[0].accepted)
+
+    # {
     # 責務: [test_target_rejects_conflicting_hair_controls: face style retouchの処理または検証を行う]
     # 処理: [1: 入力を検証する, 2: 結果を返す]
     # 引数: [self]

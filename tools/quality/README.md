@@ -54,5 +54,8 @@ Files over 1000 lines and functions over 120 lines are not automatically forbidd
 
 The gate also blocks new direct application-processing imports from legacy UI
 modules, duplicated tool metadata outside `TOOL_REGISTRY`, and precision or
-ranking changes without a changed test module. CI runs every Python test module
+ranking changes without a related changed test module and a changed
+`docs/quality/evidence/*.json` record. Each record includes the baseline,
+validation set, metric before and after, representative failure cases, related
+changed tests, and changed production files. CI runs every Python test module
 changed from the PR base so those validation cases execute.

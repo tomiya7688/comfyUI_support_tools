@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import ast
 import importlib.util
+import json
+import math
 import os
 import re
 import subprocess
@@ -12,7 +14,7 @@ from pathlib import Path
 
 EXCLUDED_PREFIXES = ("external/", "licenses/", "doc/generated/")
 STRICT_NEW_RULES = "E4,E7,E9,F,I,B,UP"
-HUNK_RE = re.compile(r"^@@ -\\d+(?:,\\d+)? \\+(\\d+)(?:,(\\d+))? @@")
+HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 PRECISION_TERMS = ("evaluator", "ranking", "calibration", "metric", "precision", "scoring")
 
 
@@ -40,6 +42,7 @@ class ChangeSet:
     files: tuple[str, ...]
     new_files: frozenset[str]
     base_commit: str | None
+    changed_paths: tuple[str, ...] = ()
 
 
 # {
@@ -125,7 +128,7 @@ def _changed_python_files(
                 if _project_python_path(path)
             )
         )
-        return ChangeSet(files, frozenset(), None)
+        return ChangeSet(files, frozenset(), None, files)
 
     base_ref = _choose_base_ref(root, requested_base_ref)
     base_commit = _merge_base(root, base_ref) if base_ref else None
@@ -135,10 +138,20 @@ def _changed_python_files(
         parts = raw.split("\t")
         if len(parts) >= 2 and _project_python_path(parts[-1]):
             statuses[parts[-1]] = parts[0]
+    changed_paths = tuple(
+        sorted(
+            parts[-1]
+            for raw in _run_git(
+                root, ["diff", "--name-status", "--diff-filter=ACMR", base_commit or "HEAD", "--"]
+            ).stdout.splitlines()
+            if len(parts := raw.split("\t")) >= 2
+        )
+    )
     return ChangeSet(
         tuple(sorted(statuses)),
         frozenset(path for path, status in statuses.items() if status.startswith("A")),
         base_commit,
+        changed_paths,
     )
 
 
@@ -305,32 +318,48 @@ def _ui_boundary_findings(
 
     if isinstance(node, ast.Call) and _line_in_ranges(node.lineno, added_ranges):
         called = _call_name(node.func)
-        is_legacy_side_effect = normalized_path.startswith("scripts/tabs/") and (
-            called.startswith("subprocess.")
-            or called.startswith("requests.")
-            or called
-            in {
-                "urlopen",
-                "open",
-                "write_text",
-                "write_bytes",
-                "unlink",
-                "rename",
-                "replace",
-                "mkdir",
-                "rmdir",
-            }
-            or called.endswith(
-                (
-                    ".write_text",
-                    ".write_bytes",
-                    ".unlink",
-                    ".rename",
-                    ".replace",
-                    ".mkdir",
-                    ".rmdir",
-                )
+        is_network = called.startswith(("requests.", "httpx.", "aiohttp.")) or called in {
+            "urlopen",
+            "urllib.request.urlopen",
+            "socket.create_connection",
+        } or called.endswith(".connect")
+        is_file_mutation = called in {
+            "write_text",
+            "write_bytes",
+            "unlink",
+            "rename",
+            "replace",
+            "mkdir",
+            "makedirs",
+            "rmdir",
+            "remove",
+            "copy",
+            "copy2",
+            "copyfile",
+            "copytree",
+            "move",
+            "touch",
+        } or called.endswith(
+            (
+                ".write_text",
+                ".write_bytes",
+                ".unlink",
+                ".rename",
+                ".replace",
+                ".mkdir",
+                ".makedirs",
+                ".rmdir",
+                ".remove",
+                ".copy",
+                ".copy2",
+                ".copyfile",
+                ".copytree",
+                ".move",
+                ".touch",
             )
+        ) or _is_write_open(node, called)
+        is_legacy_side_effect = normalized_path.startswith("scripts/tabs/") and (
+            called.startswith("subprocess.") or is_network or is_file_mutation
         )
         if is_legacy_side_effect:
             findings.append(
@@ -346,19 +375,155 @@ def _ui_boundary_findings(
 
 
 # {
-# 責務: [ scan_source: 1つのPython sourceを品質監査する ]
-# 処理: [ 1: sizeと構文を確認する, 2: 新規宣言commentを確認する, 3: 危険patternを確認する ]
-# 引数: [ path: file, source: source text, added_ranges: 追加行range ]
-# 戻り値: [ findings: 検査結果 ]
+# 責務: [_is_write_open: open callがfileを変更するmodeか判定する]
+# 処理: [builtin and Path.openのmodeを読む。mode省略時のread-only defaultは許可する]
+# 引数: [node: call expression, called: dotted call name]
+# 戻り値: [bool: write/append/create/update modeか]
+# }
+def _is_write_open(node: ast.Call, called: str) -> bool:
+    if called != "open" and not called.endswith(".open"):
+        return False
+    is_builtin = isinstance(node.func, ast.Name) and node.func.id == "open"
+    mode_index = 1 if is_builtin else 0
+    mode = next((item.value for item in node.keywords if item.arg == "mode"), None)
+    if mode is None and len(node.args) > mode_index:
+        mode = node.args[mode_index]
+    if mode is None:
+        return False
+    if isinstance(mode, ast.Constant) and isinstance(mode.value, str):
+        return any(flag in mode.value for flag in "wax+")
+    return True
+
+
+# {
+# 責務: [_declaration_findings: 新規宣言と責務サイズを検査する]
+# 処理: [mega-module declarations, function/class size, and JSON-like declaration contractsを確認する]
+# 引数: [path: repository path, lines: source lines, added_ranges: inserted code ranges, node: AST node]
+# 戻り値: [list[Finding]: declaration findings]
+# }
+def _declaration_findings(
+    path: str,
+    lines: list[str],
+    added_ranges: tuple[tuple[int, int], ...],
+    node: ast.AST,
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        size = (node.end_lineno or node.lineno) - node.lineno + 1
+        if len(lines) > 1000 and _line_in_ranges(_declaration_start(node), added_ranges):
+            findings.append(
+                Finding(
+                    "E", "QUA240", path, _declaration_start(node),
+                    f"new function {node.name!r} added to a file over 1000 lines; split responsibilities or document an approved exception",
+                )
+            )
+        if size > 120:
+            severity = "E" if size > 200 and _line_in_ranges(node.lineno, added_ranges) else "W"
+            findings.append(
+                Finding(severity, "QUA110", path, node.lineno, f"function {node.name!r} spans {size} lines")
+            )
+    elif isinstance(node, ast.ClassDef):
+        size = (node.end_lineno or node.lineno) - node.lineno + 1
+        if len(lines) > 1000 and _line_in_ranges(_declaration_start(node), added_ranges):
+            findings.append(
+                Finding(
+                    "E", "QUA240", path, _declaration_start(node),
+                    f"new class {node.name!r} added to a file over 1000 lines; split responsibilities or document an approved exception",
+                )
+            )
+        if size > 500:
+            findings.append(
+                Finding("W", "QUA120", path, node.lineno, f"class {node.name!r} spans {size} lines")
+            )
+
+    if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+        start = _declaration_start(node)
+        if _line_in_ranges(start, added_ranges) and not _has_json_like_comment(lines, node):
+            findings.append(
+                Finding(
+                    "E", "QUA200", path, start,
+                    f"new declaration {node.name!r} lacks JSON-like Comment Outs",
+                )
+            )
+    return findings
+
+
+# {
+# 責務: [_risk_findings: 新規例外握り潰しと危険callを検査する]
+# 処理: [bare/broad except, shell=True, eval, and exec patternsを検出する]
+# 引数: [path: repository path, node: AST node, added_ranges: inserted code ranges]
+# 戻り値: [list[Finding]: risk findings]
+# }
+def _risk_findings(
+    path: str, node: ast.AST, added_ranges: tuple[tuple[int, int], ...]
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if isinstance(node, ast.ExceptHandler) and _line_in_ranges(node.lineno, added_ranges):
+        if node.type is None:
+            findings.append(Finding("E", "QUA210", path, node.lineno, "new bare except is not allowed"))
+        elif (
+            isinstance(node.type, ast.Name)
+            and node.type.id in {"Exception", "BaseException"}
+            and node.body
+            and all(isinstance(item, ast.Pass) for item in node.body)
+        ):
+            findings.append(
+                Finding("E", "QUA211", path, node.lineno, "broad exception must not be silently swallowed")
+            )
+
+    if isinstance(node, ast.Call) and _line_in_ranges(node.lineno, added_ranges):
+        called = _call_name(node.func)
+        if any(
+            keyword.arg == "shell"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is True
+            for keyword in node.keywords
+        ):
+            findings.append(
+                Finding("E", "QUA220", path, node.lineno, f"{called or 'subprocess call'} uses shell=True")
+            )
+        if called in {"eval", "exec"}:
+            findings.append(
+                Finding("W", "QUA221", path, node.lineno, f"new {called}() requires trust-boundary review")
+            )
+    return findings
+
+
+# {
+# 責務: [_mega_module_audit_findings: 巨大moduleへの変更でresponsibility reviewを要求する]
+# 処理: [added ranges内の最初の実コード行を見つけてaudit findingを返す]
+# 引数: [path: repository path, lines: source lines, added_ranges: inserted code ranges]
+# 戻り値: [list[Finding]: audit findings]
+# }
+def _mega_module_audit_findings(
+    path: str, lines: list[str], added_ranges: tuple[tuple[int, int], ...]
+) -> list[Finding]:
+    if len(lines) <= 1000:
+        return []
+    for line_number, source_line in enumerate(lines, start=1):
+        line = source_line.strip()
+        if line and not line.startswith("#") and _line_in_ranges(line_number, added_ranges):
+            return [
+                Finding(
+                    "A", "QUA241", path, line_number,
+                    "substantive additions in a mega-module require responsibility-boundary review",
+                )
+            ]
+    return []
+
+
+# {
+# 責務: [scan_source: 1つのPython sourceを品質監査する]
+# 処理: [size, declaration contracts, UI boundaries, and risky additionsを各ruleへ委譲する]
+# 引数: [path: file, source: source text, added_ranges: added line ranges]
+# 戻り値: [findings: 検査結果]
 # }
 def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...]) -> list[Finding]:
     lines = source.splitlines()
     findings: list[Finding] = []
     if len(lines) > 1000:
         findings.append(
-            Finding(
-                "A", "QUA100", path, 1, f"{len(lines)} lines: responsibility split audit required"
-            )
+            Finding("A", "QUA100", path, 1, f"{len(lines)} lines: responsibility split audit required")
         )
     try:
         tree = ast.parse(source, filename=path)
@@ -367,119 +532,85 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
 
     for node in ast.walk(tree):
         findings.extend(_ui_boundary_findings(path, node, added_ranges))
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            size = (node.end_lineno or node.lineno) - node.lineno + 1
-            if len(lines) > 1000 and _line_in_ranges(_declaration_start(node), added_ranges):
-                findings.append(
-                    Finding(
-                        "E",
-                        "QUA240",
-                        path,
-                        _declaration_start(node),
-                        f"new function {node.name!r} added to a file over 1000 lines; split responsibilities or document an approved exception",
-                    )
-                )
-            if size > 120:
-                severity = "E" if size > 200 and _line_in_ranges(node.lineno, added_ranges) else "W"
-                findings.append(
-                    Finding(
-                        severity,
-                        "QUA110",
-                        path,
-                        node.lineno,
-                        f"function {node.name!r} spans {size} lines",
-                    )
-                )
-        elif isinstance(node, ast.ClassDef):
-            size = (node.end_lineno or node.lineno) - node.lineno + 1
-            if len(lines) > 1000 and _line_in_ranges(_declaration_start(node), added_ranges):
-                findings.append(
-                    Finding(
-                        "E",
-                        "QUA240",
-                        path,
-                        _declaration_start(node),
-                        f"new class {node.name!r} added to a file over 1000 lines; split responsibilities or document an approved exception",
-                    )
-                )
-            if size > 500:
-                findings.append(
-                    Finding(
-                        "W", "QUA120", path, node.lineno, f"class {node.name!r} spans {size} lines"
-                    )
-                )
-
-        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            start = _declaration_start(node)
-            if _line_in_ranges(start, added_ranges) and not _has_json_like_comment(lines, node):
-                findings.append(
-                    Finding(
-                        "E",
-                        "QUA200",
-                        path,
-                        start,
-                        f"new declaration {node.name!r} lacks JSON-like Comment Outs",
-                    )
-                )
-
-        if isinstance(node, ast.ExceptHandler) and _line_in_ranges(node.lineno, added_ranges):
-            if node.type is None:
-                findings.append(
-                    Finding("E", "QUA210", path, node.lineno, "new bare except is not allowed")
-                )
-            elif (
-                isinstance(node.type, ast.Name)
-                and node.type.id in {"Exception", "BaseException"}
-                and node.body
-                and all(isinstance(item, ast.Pass) for item in node.body)
-            ):
-                findings.append(
-                    Finding(
-                        "E",
-                        "QUA211",
-                        path,
-                        node.lineno,
-                        "broad exception must not be silently swallowed",
-                    )
-                )
-
-        if isinstance(node, ast.Call) and _line_in_ranges(node.lineno, added_ranges):
-            called = _call_name(node.func)
-            if any(
-                keyword.arg == "shell"
-                and isinstance(keyword.value, ast.Constant)
-                and keyword.value.value is True
-                for keyword in node.keywords
-            ):
-                findings.append(
-                    Finding(
-                        "E",
-                        "QUA220",
-                        path,
-                        node.lineno,
-                        f"{called or 'subprocess call'} uses shell=True",
-                    )
-                )
-            if called in {"eval", "exec"}:
-                findings.append(
-                    Finding(
-                        "W",
-                        "QUA221",
-                        path,
-                        node.lineno,
-                        f"new {called}() requires trust-boundary review",
-                    )
-                )
+        findings.extend(_declaration_findings(path, lines, added_ranges, node))
+        findings.extend(_risk_findings(path, node, added_ranges))
+    findings.extend(_mega_module_audit_findings(path, lines, added_ranges))
     return findings
 
 
 # {
-# 責務: [precision_validation_findings: precision-sensitive changesに対応するtest追加を要求する]
-# 処理: [1: changed production filesを検索する 2: test fileが無ければerrorを返す]
-# 引数: [root: repository root, changed_files: changed Python paths]
-# 戻り値: [findings: missing test requirement]
+# 責務: [_valid_precision_evidence: changed evidence recordが必須validation dataを持つか判定する]
+# 処理: [baseline, validation set, finite before/after metric, failure case, related test, and changed fileを検証する]
+# 引数: [root: repository root, production_path: 対象production file, test_files: changed tests, changed_paths: changed paths]
+# 戻り値: [bool: 有効なevidence recordが存在する場合true]
 # }
-def precision_validation_findings(root: Path, changed_files: tuple[str, ...]) -> list[Finding]:
+def _valid_precision_evidence(
+    root: Path,
+    production_path: str,
+    test_files: tuple[str, ...],
+    changed_paths: tuple[str, ...],
+) -> bool:
+    evidence_paths = tuple(
+        path
+        for path in changed_paths
+        if path.startswith("docs/quality/evidence/") and path.endswith(".json")
+    )
+    for evidence_path in evidence_paths:
+        try:
+            evidence = json.loads((root / evidence_path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(evidence, dict):
+            continue
+        metric = evidence.get("metric")
+        before = metric.get("before") if isinstance(metric, dict) else None
+        after = metric.get("after") if isinstance(metric, dict) else None
+        failures = evidence.get("representative_failures")
+        related_tests = evidence.get("test_modules")
+        changed_files = evidence.get("changed_files")
+        if (
+            isinstance(evidence.get("feature"), str)
+            and evidence["feature"].strip()
+            and isinstance(evidence.get("baseline"), (str, dict, list))
+            and bool(evidence["baseline"])
+            and isinstance(evidence.get("validation_set"), (str, list))
+            and bool(evidence["validation_set"])
+            and isinstance(metric, dict)
+            and isinstance(metric.get("name"), str)
+            and metric["name"].strip()
+            and isinstance(before, (int, float))
+            and not isinstance(before, bool)
+            and math.isfinite(before)
+            and isinstance(after, (int, float))
+            and not isinstance(after, bool)
+            and math.isfinite(after)
+            and isinstance(failures, list)
+            and any(
+                isinstance(item, (str, dict)) and bool(item)
+                for item in failures
+            )
+            and isinstance(related_tests, list)
+            and any(test in test_files for test in related_tests)
+            and isinstance(changed_files, list)
+            and production_path in changed_files
+        ):
+            return True
+    return False
+
+
+# {
+# 責務: [precision_validation_findings: precision-sensitive changesに対応するvalidation evidenceとtestを要求する]
+# 処理: [1: baseline/evaluation/ranking変更を検索する 2: related testとmachine-readable evidenceを検証する]
+# 引数: [root: repository root, changed_files: changed Python paths, changed_paths: PRで変更された全path, include_evidence: evidenceを要求するか]
+# 戻り値: [findings: missing validation requirement]
+# }
+def precision_validation_findings(
+    root: Path,
+    changed_files: tuple[str, ...],
+    changed_paths: tuple[str, ...] = (),
+    *,
+    include_evidence: bool = True,
+) -> list[Finding]:
     test_files = tuple(path for path in changed_files if path.startswith("tests/"))
     test_names = tuple(Path(path).stem.casefold() for path in test_files)
     findings: list[Finding] = []
@@ -499,7 +630,10 @@ def precision_validation_findings(root: Path, changed_files: tuple[str, ...]) ->
                 module_terms.intersection(re.split(r"[^a-z0-9]+", test_name))
                 for test_name in test_names
             )
-            if has_related_test:
+            if has_related_test and (
+                not include_evidence
+                or _valid_precision_evidence(root, path, test_files, changed_paths)
+            ):
                 continue
             findings.append(
                 Finding(
@@ -507,7 +641,7 @@ def precision_validation_findings(root: Path, changed_files: tuple[str, ...]) ->
                     "QUA250",
                     path,
                     1,
-                    "precision/evaluation/ranking changes require a changed test module with validation cases",
+                    "precision changes require a related changed test and docs/quality/evidence JSON with baseline, validation set, metric before/after, failure cases, test module, and changed file",
                 )
             )
     return findings
@@ -594,7 +728,15 @@ def main(argv: list[str] | None = None) -> int:
             line_count=len(source.splitlines()),
         )
         findings.extend(scan_source(path, source, ranges))
-    findings.extend(precision_validation_findings(root, changes.files))
+    if not args.all:
+        findings.extend(
+            precision_validation_findings(
+                root,
+                changes.files,
+                changes.changed_paths,
+                include_evidence=True,
+            )
+        )
     for finding in findings:
         print(f"{finding.severity} {finding.rule} {finding.path}:{finding.line} {finding.message}")
 

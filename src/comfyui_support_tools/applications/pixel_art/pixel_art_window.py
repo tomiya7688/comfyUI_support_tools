@@ -1,0 +1,434 @@
+"""Tk interface for choosing Text, Image, and Retouch pixel-art workflows."""
+
+from __future__ import annotations
+
+import tkinter as tk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
+
+from PIL import Image, ImageTk
+
+from comfyui_support_tools.shared.pixel_art import (
+    SIZE_PRESETS,
+    PixelArtApplication,
+    PixelArtRequest,
+    PixelArtSettings,
+    PixelEdit,
+    PixelTextBackend,
+    load_palette,
+    nearest_preview,
+)
+
+
+# {
+# 責務: [PixelArtWindow: standalone UI for all Pixel Art Creator entry workflows]
+# フィールド: [workflow/settings controls, preview canvas, project and shared application]
+# 処理: [allow text/image/retouch selection from one pixel-focused window]
+# }
+class PixelArtWindow(tk.Tk):
+    # {
+    # 責務: [__init__: create the pixel art desktop application window]
+    # 処理: [wire common controls, editor canvas, and injected generation backend]
+    # 引数: [text_backend: optional Text workflow adapter]
+    # 戻り値: [None: initialized Tk application]
+    # }
+    def __init__(self, text_backend: PixelTextBackend | None = None):
+        super().__init__()
+        self.title("Pixel Art Creator")
+        self.geometry("1050x760")
+        self.minsize(760, 560)
+        self.application = PixelArtApplication(text_backend)
+        self.result = None
+        self.project = None
+        self.palette = ()
+        self._preview_photo = None
+        self.workflow = tk.StringVar(self, value="Image")
+        self.size = tk.StringVar(self, value="64")
+        self.colors = tk.StringVar(self, value="16")
+        self.palette_mode = tk.StringVar(self, value="count")
+        self.zoom = tk.StringVar(self, value="8x")
+        self.category = tk.StringVar(self, value="character")
+        self.prompt = tk.StringVar(self)
+        self.color = tk.StringVar(self, value="#202020")
+        self.show_grid = tk.BooleanVar(self, value=True)
+        self.status = tk.StringVar(self, value="Text / Image / Retouchを選択してください。")
+        self._build()
+
+    # {
+    # 責務: [_build: layout shared settings and crisp pixel canvas]
+    # 処理: [provide three workflow choices, pixel settings, import, edit, and export actions]
+    # 引数: [None: uses initialized Tk variables]
+    # 戻り値: [None: updates UI layout]
+    # }
+    def _build(self) -> None:
+        controls = ttk.Frame(self, padding=10)
+        controls.pack(fill="x")
+        self._combo(controls, "Workflow", self.workflow, ("Text", "Image", "Retouch"), 0)
+        self._combo(controls, "Grid", self.size, tuple(str(size) for size in SIZE_PRESETS), 1)
+        self._combo(
+            controls,
+            "Colors",
+            self.colors,
+            tuple(str(size) for size in (4, 8, 16, 32, 64, 128, 256)),
+            2,
+        )
+        self._combo(
+            controls,
+            "Palette",
+            self.palette_mode,
+            ("auto", "count", "unlimited", "monochrome", "custom"),
+            3,
+        )
+        self._combo(
+            controls,
+            "Category",
+            self.category,
+            (
+                "character",
+                "monster",
+                "portrait",
+                "face_icon",
+                "item",
+                "equipment",
+                "effect",
+                "ui_icon",
+                "background",
+                "tile",
+            ),
+            4,
+        )
+        self._combo(controls, "Preview", self.zoom, ("1x", "4x", "8x", "16x", "32x"), 5)
+        prompt_row = ttk.Frame(self, padding=(10, 0, 10, 8))
+        prompt_row.pack(fill="x")
+        ttk.Label(prompt_row, text="Prompt").pack(side="left")
+        ttk.Entry(prompt_row, textvariable=self.prompt).pack(
+            side="left", fill="x", expand=True, padx=8
+        )
+        ttk.Button(prompt_row, text="Open image", command=self.open_image).pack(side="left")
+        ttk.Button(prompt_row, text="Palette…", command=self.open_palette).pack(
+            side="left", padx=(6, 0)
+        )
+        ttk.Button(prompt_row, text="Create / Convert", command=self.run_workflow).pack(
+            side="left", padx=(6, 0)
+        )
+        tools = ttk.Frame(self, padding=(10, 0, 10, 8))
+        tools.pack(fill="x")
+        ttk.Label(tools, text="Brush color").pack(side="left")
+        ttk.Entry(tools, textvariable=self.color, width=10).pack(side="left", padx=6)
+        for label, action in (("Pencil", "pencil"), ("Erase", "eraser"), ("Fill", "fill")):
+            ttk.Button(
+                tools, text=label, command=lambda selected=action: self.set_editor_tool(selected)
+            ).pack(side="left", padx=2)
+        ttk.Button(tools, text="Undo", command=self.undo).pack(side="left", padx=(12, 2))
+        ttk.Button(tools, text="Redo", command=self.redo).pack(side="left", padx=2)
+        ttk.Checkbutton(tools, text="Grid", variable=self.show_grid, command=self._render).pack(
+            side="left", padx=6
+        )
+        ttk.Button(tools, text="Save project", command=self.save_project).pack(
+            side="left", padx=(10, 2)
+        )
+        ttk.Button(tools, text="Load project", command=self.load_project).pack(side="left", padx=2)
+        ttk.Button(tools, text="Export PNG + metadata", command=self.export).pack(side="right")
+        preview_frame = ttk.Frame(self, padding=(10, 0, 10, 0))
+        preview_frame.pack(fill="both", expand=True)
+        self.canvas = tk.Canvas(preview_frame, background="#ececec", highlightthickness=0)
+        vertical = ttk.Scrollbar(preview_frame, orient="vertical", command=self.canvas.yview)
+        horizontal = ttk.Scrollbar(preview_frame, orient="horizontal", command=self.canvas.xview)
+        self.canvas.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+        preview_frame.rowconfigure(0, weight=1)
+        preview_frame.columnconfigure(0, weight=1)
+        self.canvas.bind("<Button-1>", self.edit_pixel)
+        self.canvas.bind("<B1-Motion>", self.edit_pixel)
+        self.zoom.trace_add("write", lambda *_args: self._render())
+        ttk.Label(self, textvariable=self.status, padding=8).pack(fill="x")
+        self.editor_tool = "pencil"
+        self.source_path = None
+
+    # {
+    # 責務: [_combo: add a labeled readonly shared setting control]
+    # 処理: [place combobox in settings row]
+    # 引数: [parent: control frame, label: visible setting, variable/values: selection state]
+    # 戻り値: [None: control is packed]
+    # }
+    def _combo(self, parent, label, variable, values, index):
+        group = ttk.Frame(parent)
+        group.grid(row=0, column=index, sticky="w", padx=(0, 8))
+        ttk.Label(group, text=label).pack(anchor="w")
+        ttk.Combobox(group, textvariable=variable, values=values, state="readonly", width=13).pack(
+            anchor="w"
+        )
+
+    # {
+    # 責務: [open_image: select and load artwork for image conversion or retouch]
+    # 処理: [keep source path and prepare a strict-grid candidate]
+    # 引数: [None: obtains path from file dialog]
+    # 戻り値: [None: updates current preview or status]
+    # }
+    def open_image(self) -> None:
+        selected = filedialog.askopenfilename(
+            filetypes=(("Images", "*.png *.jpg *.jpeg *.webp *.bmp"), ("All files", "*.*"))
+        )
+        if not selected:
+            return
+        try:
+            self.source_path = Path(selected)
+            with Image.open(self.source_path) as image:
+                self._set_result(self.application.image_to_pixel(image.copy(), self._settings()))
+            self.status.set(
+                f"Loaded {self.source_path.name}; select Retouch to edit individual cells."
+            )
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Image error", str(error), parent=self)
+
+    # {
+    # 責務: [open_palette: load a shared RGBA color palette]
+    # 処理: [parse palette JSON and switch common palette mode to custom]
+    # 引数: [None: obtains path from file dialog]
+    # 戻り値: [None: updates palette state]
+    # }
+    def open_palette(self) -> None:
+        selected = filedialog.askopenfilename(filetypes=(("Palette JSON", "*.json"),))
+        if selected:
+            try:
+                self.palette = load_palette(Path(selected))
+                self.palette_mode.set("custom")
+                self.status.set(f"Loaded {len(self.palette)} palette colors.")
+            except (OSError, ValueError) as error:
+                messagebox.showerror("Palette error", str(error), parent=self)
+
+    # {
+    # 責務: [_settings: read and validate one shared workflow settings object]
+    # 処理: [combine grid/category/palette selections into reusable settings]
+    # 引数: [None: reads Tk variables]
+    # 戻り値: [PixelArtSettings: validated common configuration]
+    # }
+    def _settings(self) -> PixelArtSettings:
+        return PixelArtSettings(
+            size=int(self.size.get()),
+            category=self.category.get(),
+            palette_mode=self.palette_mode.get(),
+            color_count=int(self.colors.get()),
+            palette=self.palette,
+            transparent=True,
+            preview_scale=int(self.zoom.get().removesuffix("x")),
+        )
+
+    # {
+    # 責務: [run_workflow: execute the selected Text/Image/Retouch entry]
+    # 処理: [route prompt candidates or an imported source image through shared processing]
+    # 引数: [None: reads UI values]
+    # 戻り値: [None: displays result or user-facing validation error]
+    # }
+    def run_workflow(self) -> None:
+        try:
+            settings = self._settings()
+            mode = self.workflow.get()
+            if mode == "Text":
+                request = PixelArtRequest(self.prompt.get(), settings, candidate_count=4)
+                candidates = self.application.text_to_pixel(request)
+                self._set_result(candidates[0])
+                self.status.set(
+                    f"Ranked {len(candidates)} text candidates; top deterministic score {candidates[0].metric.score:.3f}."
+                )
+            elif mode == "Retouch":
+                if self.project is None:
+                    raise ValueError("Open an image or load a project before retouching.")
+                self.result = self.application.retouch(self.project.grid, ())
+                self._render()
+                self.status.set("Retouching the current pixel project; undo history is preserved.")
+            elif self.source_path is None:
+                raise ValueError("Open a source image first for Image mode.")
+            else:
+                with Image.open(self.source_path) as image:
+                    self._set_result(self.application.image_to_pixel(image.copy(), settings))
+                self.status.set("Converted on the shared strict pixel grid.")
+        except (OSError, ValueError, RuntimeError) as error:
+            messagebox.showerror("Pixel Art Creator", str(error), parent=self)
+
+    # {
+    # 責務: [_set_result: attach a new immutable image result to editor state]
+    # 処理: [create undo history and refresh nearest-neighbor preview]
+    # 引数: [result: shared pipeline result]
+    # 戻り値: [None: stores and renders result]
+    # }
+    def _set_result(self, result) -> None:
+        self.result = result
+        self.project = self.application.new_project(result)
+        self._render()
+
+    # {
+    # 責務: [_render: show a crisp scaled preview and native-size metrics]
+    # 処理: [use nearest-neighbor scale and retain ImageTk reference]
+    # 引数: [None: renders current result]
+    # 戻り値: [None: updates preview canvas]
+    # }
+    def _render(self) -> None:
+        if self.project is None:
+            return
+        scale = int(self.zoom.get().removesuffix("x"))
+        preview = nearest_preview(self.project.grid, scale)
+        self._preview_photo = ImageTk.PhotoImage(preview)
+        self.canvas.delete("all")
+        self.canvas.create_image(12, 12, image=self._preview_photo, anchor="nw")
+        self.canvas.configure(scrollregion=(0, 0, preview.width + 24, preview.height + 24))
+        if self.show_grid.get() and scale >= 4:
+            width, height = self.project.grid.width, self.project.grid.height
+            for x in range(width + 1):
+                edge = 12 + x * scale
+                self.canvas.create_line(
+                    edge, 12, edge, 12 + height * scale, fill="#777777", width=1
+                )
+            for y in range(height + 1):
+                edge = 12 + y * scale
+                self.canvas.create_line(12, edge, 12 + width * scale, edge, fill="#777777", width=1)
+        metric = self.result.metric
+        self.status.set(
+            f"{self.project.grid.width}×{self.project.grid.height} | {dict(metric.counts).get('color_count', 0)} colors | score proxy {metric.score:.3f}"
+        )
+
+    # {
+    # 責務: [set_editor_tool: select pencil/eraser/fill editor operation]
+    # 処理: [store active mouse editing mode]
+    # 引数: [tool: editing operation name]
+    # 戻り値: [None: updates active tool]
+    # }
+    def set_editor_tool(self, tool: str) -> None:
+        self.editor_tool = tool
+
+    # {
+    # 責務: [edit_pixel: map canvas mouse position to one native pixel cell]
+    # 処理: [convert zoomed coordinates and append reversible project edit]
+    # 引数: [event: Tk canvas mouse event]
+    # 戻り値: [None: updates current retouch result]
+    # }
+    def edit_pixel(self, event) -> None:
+        if self.workflow.get() != "Retouch" or self.project is None:
+            return
+        scale = int(self.zoom.get().removesuffix("x"))
+        x, y = (
+            (self.canvas.canvasx(event.x) - 12) // scale,
+            (self.canvas.canvasy(event.y) - 12) // scale,
+        )
+        try:
+            color = _hex_rgba(self.color.get())
+            edit = PixelEdit(self.editor_tool, int(x), int(y), color)
+            grid = self.project.apply((edit,))
+            self.result = self.application.retouch(grid, ())
+            self._render()
+        except ValueError as error:
+            self.status.set(str(error))
+
+    # {
+    # 責務: [undo: restore previous pixel edit snapshot]
+    # 処理: [move history cursor and rerender]
+    # 引数: [None: no inputs]
+    # 戻り値: [None: updates editor]
+    # }
+    def undo(self) -> None:
+        if self.project is not None:
+            self.project.undo()
+            self.result = self.application.retouch(self.project.grid, ())
+            self._render()
+
+    # {
+    # 責務: [redo: restore next pixel edit snapshot]
+    # 処理: [move history cursor and rerender]
+    # 引数: [None: no inputs]
+    # 戻り値: [None: updates editor]
+    # }
+    def redo(self) -> None:
+        if self.project is not None:
+            self.project.redo()
+            self.result = self.application.retouch(self.project.grid, ())
+            self._render()
+
+    # {
+    # 責務: [save_project: persist current grid and edit undo history]
+    # 処理: [select a new project directory and save snapshot history]
+    # 引数: [None: reads project and path dialog]
+    # 戻り値: [None: shows save status or error dialog]
+    # }
+    def save_project(self) -> None:
+        if self.project is None:
+            messagebox.showinfo(
+                "Pixel Art Creator", "Create or convert an image first.", parent=self
+            )
+            return
+        selected = filedialog.asksaveasfilename(
+            title="Save Pixel Art project as folder name", defaultextension=".pixelproj"
+        )
+        if selected:
+            try:
+                self.project.save(Path(selected))
+                self.status.set(f"Saved project history to {Path(selected).name}.")
+            except (OSError, ValueError) as error:
+                messagebox.showerror("Project save error", str(error), parent=self)
+
+    # {
+    # 責務: [load_project: restore editable grid and persisted undo history]
+    # 処理: [load selected project directory without resetting its history]
+    # 引数: [None: obtains project directory from dialog]
+    # 戻り値: [None: refreshes editor or displays error]
+    # }
+    def load_project(self) -> None:
+        selected = filedialog.askdirectory(title="Open Pixel Art project")
+        if selected:
+            try:
+                from comfyui_support_tools.shared.pixel_art.application import PixelProject
+
+                self.project = PixelProject.load(Path(selected))
+                self.result = self.application.retouch(self.project.grid, ())
+                self.workflow.set("Retouch")
+                self._render()
+            except (OSError, ValueError, KeyError) as error:
+                messagebox.showerror("Project load error", str(error), parent=self)
+
+    # {
+    # 責務: [export: write current lossless pixel PNG and metadata sidecars]
+    # 処理: [choose folder and refuse overwrite through application export service]
+    # 引数: [None: reads current result and folder dialog]
+    # 戻り値: [None: status or error dialog]
+    # }
+    def export(self) -> None:
+        if self.project is None:
+            messagebox.showinfo(
+                "Pixel Art Creator", "Create or convert an image first.", parent=self
+            )
+            return
+        folder = filedialog.askdirectory()
+        if folder:
+            try:
+                result = self.application.retouch(self.project.grid, ())
+                paths = self.application.export(result, Path(folder), "pixel-art")
+                self.status.set(f"Exported {paths[0].name} and metadata.")
+            except (OSError, ValueError) as error:
+                messagebox.showerror("Export error", str(error), parent=self)
+
+
+# {
+# 責務: [_hex_rgba: parse a user RGB brush color]
+# 処理: [require six hex digits and return opaque RGBA bytes]
+# 引数: [value: entry color string]
+# 戻り値: [tuple[int, int, int, int]: brush color]
+# }
+def _hex_rgba(value: str) -> tuple[int, int, int, int]:
+    candidate = value.strip().removeprefix("#")
+    if len(candidate) != 6:
+        raise ValueError("Brush color must be #RRGGBB.")
+    try:
+        return (*bytes.fromhex(candidate), 255)
+    except ValueError as error:
+        raise ValueError("Brush color must be #RRGGBB.") from error
+
+
+# {
+# 責務: [main: launch the standalone Tk root]
+# 処理: [start the owning UI event loop]
+# 引数: [None: no inputs]
+# 戻り値: [None: application exits with window close]
+# }
+def main() -> None:
+    PixelArtWindow().mainloop()

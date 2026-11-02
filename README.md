@@ -179,3 +179,15 @@ GVHMR/WHAM/DWPoseなどのvideo inference、本物のcamera estimation、person 
 `comfyui_support_tools.shared.video_to_mmd` selects a tracked 3D skeleton by person ID from an injected pose-recovery backend, then applies camera-translation compensation, confidence-based interpolation, temporal smoothing, foot-contact correction, retargeting, speed limiting, and keyframe reduction. It writes a VMD, confidence report, and GIF preview. `RetargetProfile` defines source-to-target bone mappings and coordinate conversion. The three outputs are created without overwriting existing files.
 
 Video inference such as GVHMR/WHAM/DWPose, actual camera estimation, person tracking, and a PMX IK/geometry preview are not included. Foot-contact correction is a conservative translation adjustment that depends on backend contact labels and retarget bone names. The GIF shows mapped bones in 2D; it does not render an MMD scene. Registering the result as a #376 reference motion is also not automatic.
+
+### Pixel Art Creator共通基盤
+
+`comfyui_support_tools.shared.pixel_art` はText/Image/Retouchの共通grid、palette、size presets（8〜256）、transparent RGBA export、nearest-neighbor preview、deterministic metric/evaluator、sprite sheet cell utilities、undo/redo project historyを提供します。`PixelArtWindow` は3入口を一つのUIで選び、Image変換とRetouchは共通pipelineを使います。Text生成は差し替え可能な `PixelTextBackend` を注入します。native readabilityやoutline指標はheuristic proxyで、semantic qualityは人の確認が必要です。
+
+standalone `python -m comfyui_support_tools.applications.pixel_art` の既定起動ではText backendを設定しないためText生成には対応backendの注入が必要です。#372/#373/#374の独立した生成器を自動で呼び出すadapterはまだ接続していません。palette-aware diffusion、生成AIのsemantic judge、tile/sprite編集UIも同梱していません。
+
+### Shared Pixel Art Creator foundation
+
+`comfyui_support_tools.shared.pixel_art` provides common Text/Image/Retouch grids, palettes, 8–256 size presets, transparent RGBA export, nearest-neighbor previews, deterministic metrics/evaluation, sprite-sheet cell utilities, and undo/redo project history. `PixelArtWindow` exposes all three entries in one UI; Image conversion and Retouch share the same pipeline. Text generation uses an injected replaceable `PixelTextBackend`. Native readability and outline measures are heuristic proxies; semantic quality still needs human review.
+
+The standalone `python -m comfyui_support_tools.applications.pixel_art` launch does not configure a Text backend by default, so text generation requires an injected compatible backend. Adapters that call the independent #372/#373/#374 generators are not wired automatically. Palette-aware diffusion, an AI semantic judge, and tile/sprite editing UI are not bundled.

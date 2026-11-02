@@ -30,14 +30,15 @@ class MovieFrameFilterUiTests(unittest.TestCase):
         #   引数: [source/destination/options/dry_run]
         #   戻り値: [fake manifest summary]
         # }
-        def fake_filter(source, destination, options, *, dry_run):
-            calls.append((source, destination, options, dry_run))
+        def fake_filter(source, destination, options, *, dry_run, text_detector):
+            calls.append((source, destination, options, dry_run, text_detector))
             return SimpleNamespace(kept_count=1, dropped_count=2, review_count=3, error_count=0)
 
         tab = SimpleNamespace(
             existing_frames_dir=SimpleNamespace(get=lambda: "/tmp/source-frames"),
             output_dir=SimpleNamespace(get=lambda: "/tmp/movie-output"),
             _filter_options=lambda: "options",
+            _filter_text_detector=lambda _options: None,
             filter_preview_only=SimpleNamespace(get=lambda: True),
             logbox=SimpleNamespace(log=lambda _message: None),
         )
@@ -52,6 +53,7 @@ class MovieFrameFilterUiTests(unittest.TestCase):
                     Path("/tmp/movie-output/filtered_frames"),
                     "options",
                     True,
+                    None,
                 )
             ],
         )

@@ -13,6 +13,7 @@ from comfyui_support_tools.shared.contracts.frame_filter import (
     FrameFilterPreset,
 )
 from comfyui_support_tools.shared.frame_filter_application import filter_existing_frame_folder
+from comfyui_support_tools.shared.tesseract_text_detector import default_tesseract_text_detector
 
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
 from ..context import USER_PATHS, _safe_thread
@@ -83,6 +84,33 @@ class ScreenshotFromMovieTab(ttk.Frame):
         ttk.Entry(row2, textvariable=self.cpu_cores, width=8).pack(side="left", padx=(4, 12))
         ttk.Label(row2, text="空欄なら制限なし").pack(side="left")
         ttk.Checkbutton(self, text="ffmpeg低優先度", variable=self.low_priority).pack(anchor="w")
+        self._build_filter_controls()
+        buttons = ttk.Frame(self)
+        buttons.pack(fill="x", pady=8)
+        ttk.Button(buttons, text="Start", command=lambda: _safe_thread(self.logbox, self.run)).pack(
+            side="left"
+        )
+        ttk.Button(
+            buttons,
+            text="Filter existing frames",
+            command=lambda: _safe_thread(self.logbox, self.filter_existing_frames),
+        ).pack(side="left", padx=4)
+        ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
+        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
+        self.preset_combo.pack(side="left")
+        ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
+        ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
+        self.logbox = LogBox(self)
+        self.logbox.pack(fill="both", expand=True)
+        self._refresh_preset_choices()
+
+    # {
+    #   責務: [_build_filter_controls: low-information filter optionsをMovie Frames UIへ組み立てる]
+    #   処理: [1: enable/preset/actionを表示する 2: rule toggles/custom thresholdsを配置する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def _build_filter_controls(self):
         filter_row = ttk.Frame(self)
         filter_row.pack(fill="x", pady=4)
         ttk.Checkbutton(
@@ -143,24 +171,6 @@ class ScreenshotFromMovieTab(ttk.Frame):
         ):
             ttk.Label(threshold_row, text=label).pack(side="left", padx=(4, 2))
             ttk.Entry(threshold_row, textvariable=variable, width=6).pack(side="left", padx=(0, 6))
-        buttons = ttk.Frame(self)
-        buttons.pack(fill="x", pady=8)
-        ttk.Button(buttons, text="Start", command=lambda: _safe_thread(self.logbox, self.run)).pack(
-            side="left"
-        )
-        ttk.Button(
-            buttons,
-            text="Filter existing frames",
-            command=lambda: _safe_thread(self.logbox, self.filter_existing_frames),
-        ).pack(side="left", padx=4)
-        ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
-        self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
-        self.preset_combo.pack(side="left")
-        ttk.Button(buttons, text="保存", command=self.save_preset).pack(side="left", padx=4)
-        ttk.Button(buttons, text="読込", command=self.load_preset).pack(side="left", padx=4)
-        self.logbox = LogBox(self)
-        self.logbox.pack(fill="both", expand=True)
-        self._refresh_preset_choices()
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -283,6 +293,23 @@ class ScreenshotFromMovieTab(ttk.Frame):
         )
 
     # {
+    #   責務: [_filter_text_detector: OCR依存ruleが有効な場合にlocal Tesseractを解決する]
+    #   処理: [1: optionsがOCR evidenceを要求するか確認する 2: local detectorを返す]
+    #   引数: [options: resolved filter configuration]
+    #   戻り値: [detector: local OCR adapter or None]
+    # }
+    def _filter_text_detector(self, options):
+        if not (options.detect_text_only or options.detect_title_credits):
+            return None
+        try:
+            return default_tesseract_text_detector()
+        except (FileNotFoundError, RuntimeError, ValueError) as error:
+            raise RuntimeError(
+                "Text-only/title filtering requires Tesseract with language data; "
+                "install Tesseract or disable both OCR rules."
+            ) from error
+
+    # {
     #   責務: [filter_existing_frames: 既存frame folderをpreviewまたは非破壊copy filterする]
     #   処理: [1: input/output pathを解決する 2: shared filter serviceを呼ぶ 3: result summaryをlogへ出す]
     #   引数: []
@@ -296,11 +323,13 @@ class ScreenshotFromMovieTab(ttk.Frame):
         source = Path(source_value).expanduser()
         output = Path(self.output_dir.get().strip()).expanduser() / "filtered_frames"
         try:
+            options = self._filter_options()
             report = filter_existing_frame_folder(
                 source,
                 output,
-                self._filter_options(),
+                options,
                 dry_run=self.filter_preview_only.get(),
+                text_detector=self._filter_text_detector(options),
             )
             self.logbox.log(
                 f"existing frame filter{' preview' if self.filter_preview_only.get() else ''}: "
@@ -370,6 +399,7 @@ class ScreenshotFromMovieTab(ttk.Frame):
                         filtered_dir,
                         filter_options,
                         dry_run=self.filter_preview_only.get(),
+                        text_detector=self._filter_text_detector(filter_options),
                     )
                     self.logbox.log(
                         f"filter{' preview' if self.filter_preview_only.get() else ''}: "

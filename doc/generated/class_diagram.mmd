@@ -514,6 +514,7 @@ classDiagram
     ttk.Frame <|-- RandomLinePickerTab
     class ScreenshotFromMovieTab {
         +__init__()
+        +_build_filter_controls()
         +_refresh_preset_choices()
         +save_preset()
         +load_preset()
@@ -521,6 +522,7 @@ classDiagram
         +_low_kwargs()
         +_extract()
         +_filter_options()
+        +_filter_text_detector()
         +filter_existing_frames()
         +run()
     }

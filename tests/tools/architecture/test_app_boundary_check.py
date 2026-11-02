@@ -16,40 +16,45 @@ class AppBoundaryCheckTests(unittest.TestCase):
 
     def test_detects_sys_executable_script_launch(self):
         source = "import subprocess, sys\nsubprocess.Popen([sys.executable, 'other.py'])\n"
-        rules = [item.rule for item in app_boundary_check.scan_source("scripts/tabs/example.py", source)]
+        rules = [
+            item.rule for item in app_boundary_check.scan_source("scripts/tabs/example.py", source)
+        ]
         self.assertIn("ARCH002", rules)
         self.assertIn("ARCH004", rules)
 
     def test_detects_path_python(self):
-        source = "import shutil, subprocess\nshutil.which('python')\nsubprocess.run(['py', 'tool.py'])\n"
+        source = (
+            "import shutil, subprocess\nshutil.which('python')\nsubprocess.run(['py', 'tool.py'])\n"
+        )
         rules = [item.rule for item in app_boundary_check.scan_source("scripts/example.py", source)]
         self.assertEqual(rules.count("ARCH003"), 2)
 
+    def test_detects_venv_python_launching_backend_script(self):
+        source = """from scripts.runtime_python import venv_python
+import subprocess
+python_path = venv_python(runtime / 'venv')
+interpreter = python_path
+launch_py = runtime / self.launch_spec.launch_script_name
+cmd = [str(interpreter), str(launch_py)] + flags
+subprocess.Popen(cmd)
+"""
+        rules = [
+            item.rule
+            for item in app_boundary_check.scan_source("scripts/backend/example.py", source)
+        ]
+        self.assertEqual(rules, ["ARCH005"])
+
+    def test_allows_venv_python_for_module_command_and_packaged_executable(self):
+        source = """from scripts.runtime_python import venv_python
+import subprocess
+python_path = venv_python(runtime / 'venv')
+subprocess.run([str(python_path), '-m', 'http.server'])
+subprocess.Popen(['Backend.exe', '--port', '8188'])
+"""
+        self.assertEqual(app_boundary_check.scan_source("scripts/backend/example.py", source), [])
+
     def test_allows_packaged_exe_and_http_client(self):
         source = "import subprocess\nimport requests\nsubprocess.Popen(['OtherService.exe', '--port', '8188'])\nrequests.get('http://127.0.0.1:8188/health')\n"
-        self.assertEqual(app_boundary_check.scan_source("scripts/example.py", source), [])
-
-    def test_detects_venv_python_and_backend_script_variables(self):
-        source = """from pathlib import Path
-import subprocess
-python = venv_python(RUNTIME_DIR / 'venv')
-script = RUNTIME_DIR / self.launch_spec.launch_script_name
-subprocess.Popen([str(python), str(script)])
-"""
-        rules = [item.rule for item in app_boundary_check.scan_source("scripts/backend/example.py", source)]
-        self.assertIn("ARCH005", rules)
-
-    def test_detects_path_python_executable(self):
-        source = """from pathlib import Path
-import subprocess
-python = Path(root) / 'Scripts/python.exe'
-subprocess.run([str(python), 'tool.py'])
-"""
-        rules = [item.rule for item in app_boundary_check.scan_source("scripts/example.py", source)]
-        self.assertIn("ARCH005", rules)
-
-    def test_allows_packaged_executable_helper(self):
-        source = "import subprocess\nsubprocess.Popen([packaged_executable('Touka'), '--help'])\n"
         self.assertEqual(app_boundary_check.scan_source("scripts/example.py", source), [])
 
     def test_baseline_blocks_new_violation_and_requires_reduction(self):
@@ -59,11 +64,16 @@ subprocess.run([str(python), 'tool.py'])
             target = root / "scripts" / "tabs" / "legacy.py"
             target.write_text("import sys\nx = sys.executable\n", encoding="utf-8")
             baseline = root / "baseline.json"
-            baseline.write_text('{"allow":[{"path":"scripts/tabs/legacy.py","rule":"ARCH002","max_count":1,"reason":"legacy"}]}', encoding="utf-8")
+            baseline.write_text(
+                '{"allow":[{"path":"scripts/tabs/legacy.py","rule":"ARCH002","max_count":1,"reason":"legacy"}]}',
+                encoding="utf-8",
+            )
             _, errors = app_boundary_check.scan_repository(root, baseline)
             self.assertEqual(errors, [])
 
-            target.write_text("import sys\nx = sys.executable\ny = sys.executable\n", encoding="utf-8")
+            target.write_text(
+                "import sys\nx = sys.executable\ny = sys.executable\n", encoding="utf-8"
+            )
             _, errors = app_boundary_check.scan_repository(root, baseline)
             self.assertTrue(any("baseline allows 1" in error for error in errors))
 

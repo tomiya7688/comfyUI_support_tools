@@ -42,6 +42,12 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 このcoreはoffline procedural baselineを提供しますが、学習済み外部dance model、PMX geometry/physics preview、IK solver、collision evaluatorを同梱しません。procedural motionは編集とpipeline検証用で、trained dance backend相当の振付品質を保証しません。評価レポートはbeat activity、smoothness、foot contact drift、floor clearance、section diversityのproxyと各制約を分けて記録します。
 
+### MMD Character Creator
+
+`comfyui_support_tools.shared.mmd_character` はStable humanoid/Free 3D route、CharacterSpec、geometry/rig/morph/physics/preview/export adapter contracts、標準bone・mesh topology・weights・morph・material・physics validator、provenance/license gate、最大3回の局所repair loopを提供します。invalid rig/geometryとunknown model licenseはPMX exporterへ渡しません。
+
+CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generatorとBlender `mmd_tools` PMX exporter/preview adapterはまだ接続されていません。従ってこの変更はproduction-ready model generationを提供せず、Character Creator acceptanceのうち実際のPMX生成、顔morph、cloth physics、motion previewは未完了です。外部adapterを登録して初めて出力できる構成で、対応実装がない場合は明確に失敗します。
+
 ---
 
 ## English
@@ -96,3 +102,9 @@ limitations are reported rather than implying geometric accuracy from the 2D pre
 Launch the standalone editor with `python -m comfyui_support_tools.applications.music_to_mmd`. `comfyui_support_tools.shared.music_to_mmd.MusicToMmdApplication` connects audio analysis, editable section plans, a capability-routed dance backend registry, per-section generation/regeneration, the Video-to-MMD retarget/contact cleanup core, and VMD export. The default decoder accepts uncompressed PCM WAV files up to ten minutes and can read MP3/FLAC when FFmpeg is available on `PATH`. It includes an offline procedural baseline that builds joint motion from style, energy, sections, and beats. Add higher-quality 3D dance models such as AtomicDance/DanceLDM through adapters. RMS onset/BPM estimation and eight-second energy segmentation are lightweight heuristics; semantic labels such as chorus require review.
 
 The core includes an offline procedural baseline but does not bundle a trained dance model, PMX geometry/physics preview, IK solver, or collision evaluator. Procedural motion supports editing and pipeline validation; it does not claim choreography quality equal to a trained dance backend. The report separates beat activity, smoothness, contact drift, floor-clearance, and section-diversity proxies from their stated limitations.
+
+## MMD Character Creator
+
+`comfyui_support_tools.shared.mmd_character` provides Stable Humanoid/Free 3D routes, CharacterSpec, geometry/rig/morph/physics/preview/export adapter contracts, standard-bone/topology/weight/morph/material/physics validation, provenance/license gating, and up to three local repair rounds. Invalid rigs/geometry and unknown model licenses never reach the PMX exporter.
+
+CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generation and a Blender `mmd_tools` PMX exporter/preview adapter are not connected yet. This change therefore does not provide production character generation; actual PMX generation, facial morph synthesis, cloth physics, and motion preview remain unimplemented acceptance items. Output requires registered external adapters and fails clearly when none are available.

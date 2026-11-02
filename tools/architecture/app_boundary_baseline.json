@@ -1,3 +1,22 @@
 {
-  "allow": []
+  "allow": [
+    {
+      "path": "scripts/backend/embedded_start_webui.py",
+      "rule": "ARCH005",
+      "max_count": 1,
+      "reason": "Existing embedded WebUI script launch; migrate to a packaged executable or API (issues #129 and #446)."
+    },
+    {
+      "path": "scripts/backend/pixai_tagger_server.py",
+      "rule": "ARCH005",
+      "max_count": 1,
+      "reason": "Existing PixAI Tagger script launch; migrate to a packaged executable or API."
+    },
+    {
+      "path": "scripts/backend/taggui_controller.py",
+      "rule": "ARCH005",
+      "max_count": 1,
+      "reason": "Existing TagGUI script launch; migrate to a packaged executable or API."
+    }
+  ]
 }

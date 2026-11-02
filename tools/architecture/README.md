@@ -6,6 +6,12 @@ Two complementary checks protect different boundaries.
 
 `app_boundary_check.py` enforces the distribution rule that packaged apps/services may live in the same one-dir folder, but must not share Python runtimes or internal implementation details.
 
+It also detects direct launches of backend `.py` scripts through a Python
+interpreter returned by `venv_python()`, including simple aliases and command
+variables (`ARCH005`). Existing launches are listed with reasons in
+`app_boundary_baseline.json`; new launches fail the check, and existing counts
+must be reduced when their migration is completed.
+
 Allowed communication is through explicit process boundaries and APIs (for example HTTP/WebSocket). Packaged sibling executables may be started directly.
 
 Run:

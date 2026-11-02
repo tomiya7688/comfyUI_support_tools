@@ -80,6 +80,10 @@ Tensor検出器は `ModelFamilyDetectorRegistry` へ登録でき、結果にdete
 
 `python -m comfyui_support_tools.applications.composition_template`で画像から正規化した構図領域、余白、saliency proxy、任意のhorizonを抽出し、手動trace・role編集・wireframe確認・aspect-ratio adaptation・JSON/library保存・generation guidance exportを行えます。標準抽出は色/identity/styleを含まない低信頼度ヒューリスティックです。pose、semantic segmentation、depth、vanishing-point推定adapterは注入可能ですが標準実装にはなく、#348/#56/#82/#84/#354の実接続も未実装です。評価・使い方は[日本語ガイド](doc/composition_template.md) / [English guide](doc/composition_template.en.md)を参照してください。
 
+### Manga Creator / Storyboard
+
+`python -m comfyui_support_tools.applications.manga_creator`で編集可能なMangaProject、Character/Location/Prop Bible、story→page/panel storyboard、4コマ/通常漫画/webtoon/splash layout、別レイヤーdialogue/balloon、continuity event、best-of-N candidate保存、panel単位再生成、page合成、JSONによる保存/再開を行えます。既定backendはrough storyboard sketchです。`COMFYUI_MANGA_WORKFLOW`にAPI workflow JSONを指定するとComfyUIへ接続できます。汎用workflowには参照画像conditioningは注入されず、MangaFlow/DiffSensei等、#348/#350/#353 router、Job Queue、縦書き対応CJK font、story/identity/OCR評価、局所inpaint repair、PDF/CBZ exportは未接続です。仕様・検証範囲は[Manga Creator](doc/manga_creator.md) / [English guide](doc/manga_creator.en.md)を参照してください。
+
 ### LoRA Composition Lab
 
 `comfyui_support_tools.shared.lora_composition` は互換性preflight、LoRA update norm/cosine/subspace/sign conflict分析、weighted/top-K/Zip-style training-free merge、rank圧縮、global/per-layer scale grid探索、seed固定の評価bridge、user scale preference prior、provenance付きsafetensorsとruntime recipe出力を提供します。任意依存は `pip install -r requirements-lora-composition.txt` で導入します。分析するdense updateは1 layerあたり8,388,608要素に制限します。Zip-style/top-Kは研究論文実装そのものではなく、比較可能なtraining-free baselineです。GUIと画像生成/evaluation adapterの統合は未実装です。詳細は[LoRA Composition Lab](doc/lora_composition.md)を参照してください。
@@ -183,6 +187,10 @@ Launch the GUI with `python -m comfyui_support_tools.applications.lora_dataset_c
 ### Composition Template Extractor
 
 Launch `python -m comfyui_support_tools.applications.composition_template` to extract normalized composition regions, negative space, a saliency proxy, and an optional horizon from an image. The GUI supports manual traces, role edits, wireframe review, aspect-ratio adaptation, JSON/library storage, and generic generation-guidance export. The built-in extraction is a low-confidence heuristic that excludes color, identity, and style. Pose, semantic segmentation, depth, and vanishing-point adapters can be injected but are not bundled, and live integration with #348/#56/#82/#84/#354 is not implemented. See the [Japanese guide](doc/composition_template.md) / [English guide](doc/composition_template.en.md).
+
+### Manga Creator / Storyboard
+
+Launch `python -m comfyui_support_tools.applications.manga_creator` to edit a resumable MangaProject with Character/Location/Prop bibles, story-to-page/panel storyboard planning, four-koma/manga/webtoon/splash layouts, separate dialogue/balloon overlays, continuity events, best-of-N candidate storage, local panel regeneration, page composition, and JSON save/resume. The default backend draws rough storyboard sketches. Set `COMFYUI_MANGA_WORKFLOW` to an API-format workflow JSON to connect ComfyUI. Generic workflows receive text grounding but no automatic reference-image conditioning. MangaFlow/DiffSensei integrations, #348/#350/#353 routing, Job Queue, bundled vertical Japanese CJK fonts, story/identity/OCR evaluation, local inpaint repair, and PDF/CBZ export are not connected. See the [Japanese guide](doc/manga_creator.md) / [English guide](doc/manga_creator.en.md) for the implemented scope and validation.
 
 ### LoRA Composition Lab
 

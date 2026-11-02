@@ -1,0 +1,1 @@
+"""Manga process command routing."""

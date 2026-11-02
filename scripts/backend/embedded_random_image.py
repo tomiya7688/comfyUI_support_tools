@@ -1,15 +1,31 @@
 import io
 import json
+import re
 
 from PIL import Image
 
-from ..context import *
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
-from .text_to_image_request import TextToImageRequest
+from comfyui_support_tools.shared.contracts.resolved_generation_parameters import (
+    ResolvedGenerationParameters,
+)
+from comfyui_support_tools.shared.prompt_stability.analyzer import PromptRiskAnalyzer
+from comfyui_support_tools.shared.prompt_stability.contracts import (
+    ApplyMode,
+    ComputeBudget,
+    ContentMode,
+    GuardSettings,
+    IntentPreservation,
+    PromptRiskRequest,
+    RiskTolerance,
+)
+from comfyui_support_tools.shared.prompt_stability.planner import PromptAdjustmentPlanner
+
+from ..context import *
+from .generation_parameter_resolver import GenerationParameterResolver
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
-from .generation_parameter_resolver import GenerationParameterResolver
 from .prompt_lora_compatibility import validate_prompt_loras
+from .text_to_image_request import TextToImageRequest
 
 _GENERATION_PROFILE = create_configured_image_generation_profile(datetime.now().strftime("%Y%m%d"))
 
@@ -53,6 +69,15 @@ class EmbeddedRandomImage:
     sequential_reuse_wildcards = True
     output_format = "png"
     enable_prompt_correction = False
+    prompt_guard_enabled = False
+    prompt_guard_mode = "sfw"
+    prompt_guard_sfw = True
+    prompt_guard_nsfw = True
+    prompt_guard_apply_mode = "suggest_only"
+    prompt_guard_budget = "standard"
+    prompt_guard_preview = True
+    prompt_guard_intent = "strict"
+    prompt_guard_tolerance = "balanced"
     ollama_api_url = "http://127.0.0.1:11434"
     ollama_model = ""
 
@@ -344,6 +369,17 @@ class EmbeddedRandomImage:
             prompt = self.process_file(self.input_file, self.root_dir, wildcard_cache=wildcard_cache)
         prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
         prompt = self._correct_prompt(prompt)
+        guard_mode = ContentMode(self.prompt_guard_mode)
+        guard_settings = GuardSettings(
+            enabled=bool(self.prompt_guard_enabled),
+            apply_to_sfw=bool(self.prompt_guard_sfw),
+            apply_to_nsfw=bool(self.prompt_guard_nsfw),
+            apply_mode=ApplyMode(self.prompt_guard_apply_mode),
+            budget=ComputeBudget(self.prompt_guard_budget),
+            intent_preservation=IntentPreservation(self.prompt_guard_intent),
+            risk_tolerance=RiskTolerance(self.prompt_guard_tolerance),
+            show_preview=bool(self.prompt_guard_preview),
+        )
         workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
         backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
         backend.capabilities.require("txt2img")
@@ -362,6 +398,57 @@ class EmbeddedRandomImage:
             ),
         )
         parameters = self._resolve_generation_parameters()
+        loras = tuple(
+            (name, float(weight), "style" if "style" in name.casefold() else "pose" if "pose" in name.casefold() else "character" if "char" in name.casefold() else "")
+            for name, weight in re.findall(r"<lora:([^:>]+):([0-9.]+)>", prompt, re.IGNORECASE)
+        )
+        risk_request = PromptRiskRequest(
+            prompt=prompt,
+            negative_prompt=negative,
+            content_mode=guard_mode,
+            settings=guard_settings,
+            backend=self.generation_profile.backend,
+            model=self.sd_model_checkpoint,
+            loras=loras,
+            parameters={"candidate_count": 1, "steps": parameters.steps, "cfg": parameters.cfg},
+        )
+        risk_report = PromptRiskAnalyzer().analyze(risk_request)
+        plan = PromptAdjustmentPlanner().plan(risk_request, risk_report)
+        if guard_settings.enabled:
+            self._log(
+                f"Prompt stability {risk_report.overall_risk.value} / {guard_mode.value}: "
+                + (
+                    ", ".join(factor.description for factor in risk_report.risk_factors)
+                    or "no structural risk detected"
+                )
+            )
+            for suggestion in risk_report.suggested_adjustments:
+                self._log(f"Prompt stability suggestion: {suggestion}")
+            if guard_settings.show_preview:
+                self._log(
+                    f"Prompt stability preview: candidates {plan.original_candidate_count} -> "
+                    f"{plan.candidate_count}; {', '.join(plan.adjustment_log) or 'prompt unchanged'}"
+                )
+        if plan.applied:
+            if guard_settings.show_preview and plan.adjusted_prompt != prompt:
+                self._log(f"Prompt before: {prompt}\nPrompt after: {plan.adjusted_prompt}")
+            if guard_settings.show_preview and plan.adjusted_negative_prompt != negative:
+                self._log(
+                    f"Negative prompt before: {negative}\n"
+                    f"Negative prompt after: {plan.adjusted_negative_prompt}"
+                )
+            prompt = plan.adjusted_prompt
+            negative = plan.adjusted_negative_prompt
+            adjusted = dict(plan.adjusted_parameters)
+            parameters = ResolvedGenerationParameters(
+                cfg=float(adjusted.get("cfg", parameters.cfg)),
+                steps=int(adjusted.get("steps", parameters.steps)),
+                width=parameters.width,
+                height=parameters.height,
+                sampler=parameters.sampler,
+                parameters=parameters.parameters,
+                backend_parameters=parameters.backend_parameters,
+            )
         self._log(
             "🎛️ 生成パラメータ: "
             f"CFG={parameters.cfg:g}, Steps={parameters.steps}, "
@@ -372,55 +459,74 @@ class EmbeddedRandomImage:
             raise ValueError("選択中の生成バックエンドはカスタムworkflowに対応していません")
         if self.enable_hr and not backend.capabilities.supports("hires_fix"):
             raise ValueError("選択中の生成バックエンドはHires Fixに対応していません")
-        self._active_backend = backend
-        try:
-            image_bytes = backend.generate(
-                TextToImageRequest(
-                prompt=prompt,
-                negative=negative,
-                checkpoint=self.sd_model_checkpoint,
-                steps=parameters.steps,
-                cfg=parameters.cfg,
-                sampler=parameters.sampler,
-                width=parameters.width,
-                height=parameters.height,
-                use_model_vae=self.use_model_vae,
-                vae_name=self.vae_name,
-                enable_hr=self.enable_hr,
-                hr_scale=self.hr_scale,
-                hr_upscaler=self.hr_upscaler,
-                hr_second_pass_steps=self.hr_second_pass_steps,
-                denoising_strength=self.denoising_strength,
-                workflow_path=workflow_path,
-                model_overrides=self.comfy_model_overrides,
-                ),
-                stop_event=self._stop_event,
-            )
-        finally:
-            if self._active_backend is backend:
-                self._active_backend = None
-        if image_bytes:
+        generation_request = TextToImageRequest(
+            prompt=prompt,
+            negative=negative,
+            checkpoint=self.sd_model_checkpoint,
+            steps=parameters.steps,
+            cfg=parameters.cfg,
+            sampler=parameters.sampler,
+            width=parameters.width,
+            height=parameters.height,
+            use_model_vae=self.use_model_vae,
+            vae_name=self.vae_name,
+            enable_hr=self.enable_hr,
+            hr_scale=self.hr_scale,
+            hr_upscaler=self.hr_upscaler,
+            hr_second_pass_steps=self.hr_second_pass_steps,
+            denoising_strength=self.denoising_strength,
+            workflow_path=workflow_path,
+            model_overrides=self.comfy_model_overrides,
+        )
+        candidate_total = max(1, plan.candidate_count)
+        attempt_limit = min(candidate_total, plan.retry_limit + 1) if plan.retry_limit else candidate_total
+        for candidate_index in range(attempt_limit):
+            if self._stop_event.is_set():
+                break
+            self._active_backend = backend
+            try:
+                image_bytes = backend.generate(generation_request, stop_event=self._stop_event)
+            finally:
+                if self._active_backend is backend:
+                    self._active_backend = None
+            if not image_bytes:
+                continue
             image_bytes = self._apply_nsfw_mosaic(image_bytes, backend)
             image_bytes, output_extension = self._encoded_output(image_bytes)
             failure = None
-            if self.enable_failure_isolation:
+            if self.enable_failure_isolation or plan.retry_limit:
                 failure = ImageFailureInspector(self.image_failure_min_variance).inspect(image_bytes)
+            if failure and plan.retry_limit:
+                self._log(f"⚠️ stability retry {candidate_index + 1}/{attempt_limit}: {failure['reason']}")
+                if candidate_index + 1 < attempt_limit:
+                    continue
             output_dir = Path(self.output_dir)
             if failure:
                 output_dir = output_dir / "_image_failure"
-            output = output_dir / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.{output_extension}"
+            output = output_dir / f"image_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{candidate_index + 1}.{output_extension}"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_bytes(image_bytes)
-            metadata_path = self._save_generation_metadata(output, parameters.to_dict())
+            metadata = parameters.to_dict()
+            metadata["prompt_stability"] = {
+                "content_mode": guard_mode.value,
+                "risk": risk_report.overall_risk.value,
+                "risk_factors": [factor.key for factor in risk_report.risk_factors],
+                "candidate_index": candidate_index + 1,
+                "candidate_count": candidate_total,
+                "adjustments": list(plan.adjustment_log),
+            }
+            metadata_path = self._save_generation_metadata(output, metadata)
             prompt_path = self._save_prompt(output, prompt)
             if failure:
-                report_path = self._save_failure_report(output, failure, prompt, negative, parameters.to_dict())
+                report_path = self._save_failure_report(output, failure, prompt, negative, metadata)
                 self._log(f"⚠️ 破綻候補を隔離しました: {output} / 記録: {report_path}")
             else:
                 self._log(
-                    f"✅ 生成成功: {output} / parameters: {metadata_path}"
+                    f"✅ 生成成功 ({candidate_index + 1}/{candidate_total}): {output} / parameters: {metadata_path}"
                     + (f" / prompt: {prompt_path}" if prompt_path else "")
                 )
+            if plan.retry_limit and not failure:
+                break
 
     def _sequential_prompt_sources(self):
         source = Path(self.input_file)

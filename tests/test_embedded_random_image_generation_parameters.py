@@ -159,6 +159,54 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
             self.assertEqual(metadata["sampler"], "DPM++ 2M Karras")
             self.assertTrue(any("CFG=5.5" in message for message in messages))
 
+    # {
+    #   責務: [test_prompt_stability_guard_applies_bounded_candidates_and_records_provenance: opt-in guardを生成backendまで接続する]
+    #   処理: [high-risk promptにQuality budgetを適用し, 候補数・config・provenanceを検証する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_prompt_stability_guard_applies_bounded_candidates_and_records_provenance(self):
+        backend = _Backend()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            generator = EmbeddedRandomImage()
+            generator.api_url = "http://127.0.0.1:8188"
+            generator.output_dir = temporary_directory
+            generator.comfy_flow = ""
+            generator.enable_hr = False
+            generator.enable_failure_isolation = False
+            generator.enable_nsfw_mosaic = False
+            generator.enable_prompt_correction = False
+            generator.save_prompts = False
+            generator.prompt_guard_enabled = True
+            generator.prompt_guard_mode = "sfw"
+            generator.prompt_guard_sfw = True
+            generator.prompt_guard_apply_mode = "auto_apply"
+            generator.prompt_guard_budget = "quality"
+            generator.additional_inputs = []
+            generator.additional_input_files = []
+            generator.action_wildcards = []
+            generator.comfy_model_overrides = {}
+            generator.generation_parameter_config = {
+                "cfg": {"mode": "fixed", "value": 6.0},
+                "steps": {"mode": "fixed", "value": 18},
+                "resolution": {"mode": "fixed", "value": {"width": 512, "height": 768}},
+                "sampler": {"mode": "fixed", "value": "Euler a"},
+            }
+            generator._log = lambda _message: None
+            prompt = "full-body, detailed face, detailed hands, complex background"
+            with patch(
+                "scripts.backend.embedded_random_image.create_configured_image_generation_backend",
+                return_value=backend,
+            ):
+                generator._generate(prompt=prompt, negative="")
+
+            outputs = list(Path(temporary_directory).glob("*.png"))
+            self.assertEqual(len(outputs), 8)
+            self.assertEqual(backend.request.steps, 22)
+            metadata = json.loads(outputs[0].with_suffix(".generation.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["prompt_stability"]["content_mode"], "sfw")
+            self.assertEqual(metadata["prompt_stability"]["candidate_count"], 8)
+
 
 if __name__ == "__main__":
     unittest.main()

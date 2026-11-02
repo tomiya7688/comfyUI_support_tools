@@ -1,15 +1,16 @@
-from ..context import *
-from ..context import _safe_thread
-from ..context import _unique_choices
+from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+
 from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
 )
 from ..backend.ollama_prompt_corrector import OllamaPromptCorrector
-from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+from ..context import *
+from ..context import _safe_thread, _unique_choices
 from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
+
 
 class RandomImageTab(ttk.Frame):
     # {
@@ -71,6 +72,15 @@ class RandomImageTab(ttk.Frame):
         self.var_sequential_reuse_wildcards = tk.BooleanVar(value=True)
         self.var_output_format = tk.StringVar(value="png")
         self.var_enable_prompt_correction = tk.BooleanVar(value=False)
+        self.var_prompt_guard_enabled = tk.BooleanVar(value=False)
+        self.var_prompt_guard_mode = tk.StringVar(value="sfw")
+        self.var_prompt_guard_sfw = tk.BooleanVar(value=True)
+        self.var_prompt_guard_nsfw = tk.BooleanVar(value=True)
+        self.var_prompt_guard_apply_mode = tk.StringVar(value="suggest_only")
+        self.var_prompt_guard_budget = tk.StringVar(value="standard")
+        self.var_prompt_guard_preview = tk.BooleanVar(value=True)
+        self.var_prompt_guard_intent = tk.StringVar(value="strict")
+        self.var_prompt_guard_tolerance = tk.StringVar(value="balanced")
         self.var_ollama_api_url = tk.StringVar(value="http://127.0.0.1:11434")
         self.var_ollama_model = tk.StringVar()
         self.var_api_timeout = tk.IntVar()
@@ -104,6 +114,19 @@ class RandomImageTab(ttk.Frame):
         ttk.Label(prompt_correct_row, text=" モデル").pack(side="left")
         self.ollama_model_combo = ttk.Combobox(prompt_correct_row, textvariable=self.var_ollama_model, width=24); self.ollama_model_combo.pack(side="left", padx=3, fill="x", expand=True)
         ttk.Button(prompt_correct_row, text="Ollamaモデル更新", command=self.refresh_ollama_models).pack(side="left")
+        prompt_guard = ttk.LabelFrame(top, text="Prompt Stability Guard（生成品質の調整・任意）", padding=5)
+        prompt_guard.pack(fill="x", pady=3)
+        ttk.Checkbutton(prompt_guard, text="有効化", variable=self.var_prompt_guard_enabled).pack(side="left")
+        ttk.Label(prompt_guard, text="今回の内容").pack(side="left", padx=(8, 3))
+        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_mode, values=["sfw", "nsfw"], state="readonly", width=7).pack(side="left")
+        ttk.Checkbutton(prompt_guard, text="SFWへ適用", variable=self.var_prompt_guard_sfw).pack(side="left", padx=4)
+        ttk.Checkbutton(prompt_guard, text="NSFWへ適用", variable=self.var_prompt_guard_nsfw).pack(side="left", padx=4)
+        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_apply_mode, values=["suggest_only", "auto_apply", "auto_evaluate_retry"], state="readonly", width=23).pack(side="left", padx=4)
+        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_budget, values=["fast", "standard", "quality", "overnight"], state="readonly", width=11).pack(side="left")
+        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_intent, values=["strict", "normal", "flexible"], state="readonly", width=9).pack(side="left", padx=4)
+        ttk.Combobox(prompt_guard, textvariable=self.var_prompt_guard_tolerance, values=["conservative", "balanced", "aggressive"], state="readonly", width=12).pack(side="left")
+        ttk.Checkbutton(prompt_guard, text="調整案を表示", variable=self.var_prompt_guard_preview).pack(side="left", padx=4)
+        ttk.Label(prompt_guard, text="OFF時は変更しません。自動調整前に変更案をログへ表示します。", wraplength=800).pack(side="left", padx=6)
         api_row = ttk.Frame(top)
         api_row.pack(fill="x", pady=3)
         ttk.Label(api_row, text="API URL", width=16).pack(side="left", padx=(0, 6))
@@ -255,13 +278,24 @@ class RandomImageTab(ttk.Frame):
         self.var_nsfw_mosaic_factor.set(getattr(self.mod, "nsfw_mosaic_factor", 5))
         self.var_enable_failure_isolation.set(getattr(self.mod, "enable_failure_isolation", False))
         self.var_image_failure_min_variance.set(getattr(self.mod, "image_failure_min_variance", 8.0))
+        self.var_prompt_guard_enabled.set(getattr(self.mod, "prompt_guard_enabled", False))
+        self.var_prompt_guard_mode.set(getattr(self.mod, "prompt_guard_mode", "sfw"))
+        self.var_prompt_guard_sfw.set(getattr(self.mod, "prompt_guard_sfw", True))
+        self.var_prompt_guard_nsfw.set(getattr(self.mod, "prompt_guard_nsfw", True))
+        self.var_prompt_guard_apply_mode.set(getattr(self.mod, "prompt_guard_apply_mode", "suggest_only"))
+        self.var_prompt_guard_budget.set(getattr(self.mod, "prompt_guard_budget", "standard"))
+        self.var_prompt_guard_preview.set(getattr(self.mod, "prompt_guard_preview", True))
+        self.var_prompt_guard_intent.set(getattr(self.mod, "prompt_guard_intent", "strict"))
+        self.var_prompt_guard_tolerance.set(getattr(self.mod, "prompt_guard_tolerance", "balanced"))
         self._set_additional_file_rows(getattr(self.mod, "additional_inputs", []) or getattr(self.mod, "additional_input_files", []))
         self._set_action_wildcard_rows(getattr(self.mod, "action_wildcards", []))
         self._apply_flow_model_choices()
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
+        values = {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
+        values.update({"prompt_guard_enabled": self.var_prompt_guard_enabled.get(), "prompt_guard_mode": self.var_prompt_guard_mode.get(), "prompt_guard_sfw": self.var_prompt_guard_sfw.get(), "prompt_guard_nsfw": self.var_prompt_guard_nsfw.get(), "prompt_guard_apply_mode": self.var_prompt_guard_apply_mode.get(), "prompt_guard_budget": self.var_prompt_guard_budget.get(), "prompt_guard_preview": self.var_prompt_guard_preview.get(), "prompt_guard_intent": self.var_prompt_guard_intent.get(), "prompt_guard_tolerance": self.var_prompt_guard_tolerance.get()})
+        return values
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -292,6 +326,7 @@ class RandomImageTab(ttk.Frame):
             self.var_sequential_reuse_wildcards.set(values.get("sequential_reuse_wildcards", True))
             self.var_keep_main_wildcard_until_stop.set(values.get("keep_main_wildcard_until_stop", values.get("wildcard_cache_scope") == "until_stop"))
             self.var_enable_prompt_correction.set(values.get("enable_prompt_correction", False)); self.var_ollama_api_url.set(values.get("ollama_api_url", "http://127.0.0.1:11434")); self.var_ollama_model.set(values.get("ollama_model", ""))
+            self.var_prompt_guard_enabled.set(values.get("prompt_guard_enabled", False)); self.var_prompt_guard_mode.set(values.get("prompt_guard_mode", "sfw")); self.var_prompt_guard_sfw.set(values.get("prompt_guard_sfw", True)); self.var_prompt_guard_nsfw.set(values.get("prompt_guard_nsfw", True)); self.var_prompt_guard_apply_mode.set(values.get("prompt_guard_apply_mode", "suggest_only")); self.var_prompt_guard_budget.set(values.get("prompt_guard_budget", "standard")); self.var_prompt_guard_preview.set(values.get("prompt_guard_preview", True)); self.var_prompt_guard_intent.set(values.get("prompt_guard_intent", "strict")); self.var_prompt_guard_tolerance.set(values.get("prompt_guard_tolerance", "balanced"))
             self.var_output_format.set(values.get("output_format", "png"))
             self._apply_generation_parameter_input(values.get("generation_parameter_input", {}))
         except Exception as error: self.logbox.log(f"プリセット読込エラー: {error}")
@@ -525,6 +560,11 @@ class RandomImageTab(ttk.Frame):
             "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": "until_stop" if self.var_keep_main_wildcard_until_stop.get() else "each_image",
             "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(),
             "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(),
+            "prompt_guard_enabled": self.var_prompt_guard_enabled.get(), "prompt_guard_mode": self.var_prompt_guard_mode.get(),
+            "prompt_guard_sfw": self.var_prompt_guard_sfw.get(), "prompt_guard_nsfw": self.var_prompt_guard_nsfw.get(),
+            "prompt_guard_apply_mode": self.var_prompt_guard_apply_mode.get(), "prompt_guard_budget": self.var_prompt_guard_budget.get(),
+            "prompt_guard_preview": self.var_prompt_guard_preview.get(),
+            "prompt_guard_intent": self.var_prompt_guard_intent.get(), "prompt_guard_tolerance": self.var_prompt_guard_tolerance.get(),
         })
 
     def _generation_parameter_input(self):

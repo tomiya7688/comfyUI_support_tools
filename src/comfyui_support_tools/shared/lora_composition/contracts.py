@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 
+# {
+# 責務: [LoRARole: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 class LoRARole(str, Enum):
     SUBJECT = "subject"
     CHARACTER = "character"
@@ -21,6 +26,11 @@ class LoRARole(str, Enum):
     SLIDER = "slider"
 
 
+# {
+# 責務: [MergeMethod: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 class MergeMethod(str, Enum):
     WEIGHTED = "weighted"
     TOP_K = "top_k"
@@ -29,6 +39,11 @@ class MergeMethod(str, Enum):
     ZIP_LORA = "zip_lora"
 
 
+# {
+# 責務: [LoRAAdapter: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 @dataclass(frozen=True)
 class LoRAAdapter:
     """Loaded LoRA factors and the source evidence needed for safe merging."""
@@ -47,6 +62,11 @@ class LoRAAdapter:
     slider_neutral: float = 0.0
 
 
+# {
+# 責務: [CompatibilityFinding: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 @dataclass(frozen=True)
 class CompatibilityFinding:
     """One preflight finding, with blocking and advisory states separated."""
@@ -56,6 +76,11 @@ class CompatibilityFinding:
     blocking: bool
 
 
+# {
+# 責務: [CompatibilityReport: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 @dataclass(frozen=True)
 class CompatibilityReport:
     """Preflight result for a set of LoRAs and a requested base model."""
@@ -65,6 +90,11 @@ class CompatibilityReport:
     findings: tuple[CompatibilityFinding, ...]
 
 
+# {
+# 責務: [LayerInterference: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 @dataclass(frozen=True)
 class LayerInterference:
     """Numerical similarity and conflict signals for one target module."""
@@ -82,6 +112,11 @@ class LayerInterference:
     right_singular_values: tuple[float, ...]
 
 
+# {
+# 責務: [EvaluationScore: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 @dataclass(frozen=True)
 class EvaluationScore:
     """Observable evaluator metrics for a fixed prompt and seed."""
@@ -97,6 +132,12 @@ class EvaluationScore:
     leakage: float = 0.0
     anatomy: float = 0.0
 
+    # {
+    # 責務: [aggregate: perform the declared operation]
+    # 処理: [follow the documented contract and preserve validated invariants]
+    # 引数: [declared function inputs]
+    # 戻り値: [declared function result]
+    # }
     @property
     def aggregate(self) -> float:
         """Return a balanced score that penalizes weak constituent metrics."""
@@ -111,6 +152,11 @@ class EvaluationScore:
         return min(core) * 0.5 + sum(core) / len(core) * 0.5 + bonus - penalties
 
 
+# {
+# 責務: [EvaluationCase: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 @dataclass(frozen=True)
 class EvaluationCase:
     """Validation prompt with a fixed seed for reproducible comparisons."""
@@ -120,6 +166,11 @@ class EvaluationCase:
     negative_prompt: str = ""
 
 
+# {
+# 責務: [ScaleCandidate: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 @dataclass(frozen=True)
 class ScaleCandidate:
     """A per-adapter and optional per-layer scale proposal."""
@@ -131,6 +182,11 @@ class ScaleCandidate:
     merge_method: MergeMethod | None = None
 
 
+# {
+# 責務: [LoRAComposition: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 @dataclass(frozen=True)
 class LoRAComposition:
     """Portable recipe and optional static merged artifact description."""

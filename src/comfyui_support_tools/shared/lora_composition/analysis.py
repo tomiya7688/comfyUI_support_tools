@@ -7,16 +7,17 @@ from collections.abc import Sequence
 import numpy as np
 
 from ..model_identity import ModelFamily, classify_model
-
 from .contracts import CompatibilityFinding, CompatibilityReport, LayerInterference, LoRAAdapter
 
 _MAX_DENSE_UPDATE_ELEMENTS = 8_388_608
 
 
+# {
 # 責務: [_factor_pairs: normalize supported LoRA tensor key conventions]
 # 処理: [pair A/B tensors by module path and reject incomplete or ambiguous pairs]
 # 引数: [adapter: loaded LoRA artifact]
 # 戻り値: [dict[str, tuple[np.ndarray, np.ndarray]]: module factors]
+# }
 def factor_pairs(adapter: LoRAAdapter) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     pairs: dict[str, dict[str, np.ndarray]] = {}
     for name, tensor in adapter.tensors.items():
@@ -61,10 +62,12 @@ def factor_pairs(adapter: LoRAAdapter) -> dict[str, tuple[np.ndarray, np.ndarray
     return result
 
 
+# {
 # 責務: [_updates: materialize each adapter's scaled module update]
 # 処理: [apply alpha/rank semantics and return deterministic layer matrices]
 # 引数: [adapter: loaded LoRA artifact]
 # 戻り値: [dict[str, np.ndarray]: full update matrix per module]
+# }
 def _updates(adapter: LoRAAdapter) -> dict[str, np.ndarray]:
     return {
         layer: (b @ a) * (adapter.alpha / adapter.rank)
@@ -72,10 +75,12 @@ def _updates(adapter: LoRAAdapter) -> dict[str, np.ndarray]:
     }
 
 
+# {
 # 責務: [check_composition_compatibility: reject unsafe base and tensor combinations]
 # 処理: [compare family, architecture, target overlap, ranks, alpha and provenance evidence]
 # 引数: [adapters: selected LoRAs, base_model: requested base identity]
 # 戻り値: [CompatibilityReport: blocking errors and nonblocking advisories]
+# }
 def check_composition_compatibility(
     adapters: Sequence[LoRAAdapter], base_model: str, base_architecture: str | None = None
 ) -> CompatibilityReport:
@@ -208,18 +213,22 @@ def check_composition_compatibility(
     )
 
 
+# {
 # 責務: [_singular_values: return a bounded singular spectrum summary]
 # 処理: [compute stable singular values from one module update]
 # 引数: [matrix: materialized LoRA update]
 # 戻り値: [tuple[float, ...]: descending spectrum truncated to rank 32]
+# }
 def _singular_values(matrix: np.ndarray) -> tuple[float, ...]:
     return tuple(float(value) for value in np.linalg.svd(matrix, compute_uv=False)[:32])
 
 
+# {
 # 責務: [_subspace_overlap: estimate shared output subspace coverage]
 # 処理: [compare orthonormal bases from the leading left singular vectors]
 # 引数: [left: left update, right: right update]
 # 戻り値: [float: symmetric overlap in [0, 1]]
+# }
 def _subspace_overlap(left: np.ndarray, right: np.ndarray) -> float:
     left_u, left_s, _ = np.linalg.svd(left, full_matrices=False)
     right_u, right_s, _ = np.linalg.svd(right, full_matrices=False)
@@ -236,10 +245,12 @@ def _subspace_overlap(left: np.ndarray, right: np.ndarray) -> float:
     return float(np.clip(overlap / min(left_rank, right_rank), 0.0, 1.0))
 
 
+# {
 # 責務: [analyze_interference: quantify pairwise LoRA update conflict by layer]
 # 処理: [compute norm, cosine, subspace, sign-conflict, layer overlap and spectrum]
 # 引数: [adapters: compatible or partially overlapping LoRAs]
 # 戻り値: [tuple[LayerInterference, ...]: deterministic layer findings]
+# }
 def analyze_interference(adapters: Sequence[LoRAAdapter]) -> tuple[LayerInterference, ...]:
     updates = {adapter.name: _updates(adapter) for adapter in adapters}
     findings: list[LayerInterference] = []

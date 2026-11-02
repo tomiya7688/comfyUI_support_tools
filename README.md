@@ -60,6 +60,10 @@ character/situation/background/styleの学習済みclassifierやembedding model�
 
 このbackendはAPI接続型で、認証情報と実Pixiv応答がない環境では実アカウントへの通信を実行しません。GUIのquery builder/preview controls、CLI command、翻訳tag辞書、非original派生画像の取得、動画(MP4)変換は未実装です。権利許可は常に`unknown`として保存され、duplicateはgroup化のみで自動削除しません。詳細は[Pixiv Dataset Downloader](doc/dataset/pixiv_dataset.md)を参照してください。
 
+### Modern Trainer Adapter Registry
+
+`comfyui_support_tools.shared.trainer_registry` はSimpleTuner / AI Toolkit / sd-scriptsを共通`TrainingSpec`からtrainer別JSON/YAML/TOML/CLIへ変換し、SDXL/FLUX.1/FLUX.2/Qwen Image/SD3.5/Anima/Hunyuan/Krea2/HiDreamのarchitecture profile、LoRA/LyCORIS method status、version/capability cache、target module discovery、quantization/offload適合性、provenance、1–8 step smoke gateを提供します。Autoはruntimeでsupportedと確認されたmethodだけを選び、smokeでcheckpointとsampleが得られない場合はfull training callbackを実行しません。trainer実体とmodelを使ったlive validationは未実施です。詳細は[Modern Trainer Adapter Registry](doc/trainer_registry.md)を参照してください。
+
 ### LoRA Composition Lab
 
 `comfyui_support_tools.shared.lora_composition` は互換性preflight、LoRA update norm/cosine/subspace/sign conflict分析、weighted/top-K/Zip-style training-free merge、rank圧縮、global/per-layer scale grid探索、seed固定の評価bridge、user scale preference prior、provenance付きsafetensorsとruntime recipe出力を提供します。任意依存は `pip install -r requirements-lora-composition.txt` で導入します。分析するdense updateは1 layerあたり8,388,608要素に制限します。Zip-style/top-Kは研究論文実装そのものではなく、比較可能なtraining-free baselineです。GUIと画像生成/evaluation adapterの統合は未実装です。詳細は[LoRA Composition Lab](doc/lora_composition.md)を参照してください。
@@ -145,6 +149,10 @@ Pretrained character/situation/background/style classifiers and embedding models
 `comfyui_support_tools.shared.pixiv_dataset` provides a PixivPy3 adapter, refresh-token authentication and health checks, tag/creator/bookmark/ranking/ID queries, filtering, throttling and bounded retries, JobRuntime integration, resumable checkpoints, ordered illustration/manga pages and ugoira archives, optional GIF/WebP previews, work/provenance JSON, exact/perceptual duplicate grouping, and a #356 handoff. `PixivRateLimitProfile` configures requests/minute, API/download concurrency caps, interval, retries/backoff, 429 cooldown, and automatic pause at application/query/job scope; the effective policy is recorded in checkpoints and provenance, with bounded retry/429 history in job state. Aggressive custom profiles expose a warning state. Install PixivPy3 separately with `pip install -r requirements-pixiv.txt`; supply the refresh token at runtime through the caller's secure secret store. Presets and dataset files never store it.
 
 This backend requires live Pixiv credentials and API responses for account-level validation, which are not available in the offline test suite. The query-builder GUI, CLI command, translated-tag dictionary, non-original rendition selection, and MP4 conversion are not implemented. Rights remain `unknown`; duplicate handling groups records and never deletes files. See [Pixiv Dataset Downloader](doc/dataset/pixiv_dataset.md).
+
+### Modern Trainer Adapter Registry
+
+`comfyui_support_tools.shared.trainer_registry` translates a shared `TrainingSpec` into trainer-specific SimpleTuner / AI Toolkit / sd-scripts JSON/YAML/TOML/CLI, and provides SDXL/FLUX.1/FLUX.2/Qwen Image/SD3.5/Anima/Hunyuan/Krea2/HiDream architecture profiles, LoRA/LyCORIS method states, versioned capability cache, target-module discovery, quantization/offload validation, provenance and a 1–8 step smoke gate. Auto selects only methods confirmed as supported at runtime; full-training callbacks do not run unless smoke produces both a checkpoint and sample. Live validation with installed trainers and model weights has not been performed. See [Modern Trainer Adapter Registry](doc/trainer_registry.en.md).
 
 ### LoRA Composition Lab
 

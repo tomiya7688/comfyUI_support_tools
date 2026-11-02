@@ -25,13 +25,20 @@ from .io import load_adapter, new_composition, save_composition, save_merged_lor
 from .merge import merge_adapters
 
 
+# {
+# 責務: [CompositionEvaluator: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 class CompositionEvaluator(Protocol):
     """Bridge that renders or measures each candidate with a fixed case."""
 
+    # {
     # 責務: [__call__: evaluate one exact prompt, seed, and scale configuration]
     # 処理: [render or inspect the composition and return normalized concept metrics]
     # 引数: [adapters: selected LoRAs, global_scales: candidate global weights, layer_scales: optional local weights, case: fixed validation case]
     # 戻り値: [EvaluationScore: fidelity, controllability, quality and leakage metrics]
+    # }
     def __call__(
         self,
         adapters: Sequence[LoRAAdapter],
@@ -41,13 +48,20 @@ class CompositionEvaluator(Protocol):
     ) -> EvaluationScore: ...
 
 
+# {
+# 責務: [CompositionComparisonEvaluator: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 class CompositionComparisonEvaluator(Protocol):
     """Bridge that compares runtime stacking with a concrete merge method."""
 
+    # {
     # 責務: [__call__: score one runtime or static composition candidate]
     # 処理: [render a fixed case using runtime stacking or the selected merged method]
     # 引数: [adapters: source LoRAs, global_scales: candidate weights, layer_scales: module overrides, case: fixed prompt and seed, merge_method: None for runtime stack or static algorithm]
     # 戻り値: [EvaluationScore: normalized multi-concept metrics]
+    # }
     def __call__(
         self,
         adapters: Sequence[LoRAAdapter],
@@ -58,23 +72,32 @@ class CompositionComparisonEvaluator(Protocol):
     ) -> EvaluationScore: ...
 
 
+# {
+# 責務: [LoRACompositionApplication: coordinate this module responsibility]
+# フィールド: [declared values and public collaborators]
+# 処理: [follow the documented contract and preserve validated invariants]
+# }
 class LoRACompositionApplication:
     """Coordinate independent analysis, merge, evaluation and persistence modules."""
 
+    # {
     # 責務: [__init__: configure bounded scale search and preference history]
     # 処理: [prepare a local preference file and reject invalid search budgets]
     # 引数: [preference_path: optional prior history file, candidate_budget: maximum evaluator calls]
     # 戻り値: [None: application ready]
+    # }
     def __init__(self, preference_path: str | Path | None = None, candidate_budget: int = 5000):
         if candidate_budget <= 0 or candidate_budget > 100_000:
             raise ValueError("candidate_budget must be in 1..100000")
         self.preference_path = Path(preference_path).expanduser() if preference_path else None
         self.candidate_budget = candidate_budget
 
+    # {
     # 責務: [load: load selected safetensors adapters with declared roles]
     # 処理: [pair paths with optional role labels and delegate parsing to the isolated safetensors adapter]
     # 引数: [paths: input files, roles: optional names to functional roles]
     # 戻り値: [tuple[LoRAAdapter, ...]: loaded independent adapters]
+    # }
     def load(
         self, paths: Sequence[str | Path], roles: Mapping[str, str] | None = None
     ) -> tuple[LoRAAdapter, ...]:
@@ -85,26 +108,32 @@ class LoRACompositionApplication:
             load_adapter(path, LoRARole(role_map.get(Path(path).stem, "concept"))) for path in paths
         )
 
+    # {
     # 責務: [preflight: ensure model identity and target modules are safe to combine]
     # 処理: [return compatibility findings without guessing unknown base identity]
     # 引数: [adapters: selected LoRAs, base_model: requested base identifier]
     # 戻り値: [CompatibilityReport: blocking and advisory findings]
+    # }
     def preflight(
         self, adapters: Sequence[LoRAAdapter], base_model: str, base_architecture: str
     ) -> CompatibilityReport:
         return check_composition_compatibility(adapters, base_model, base_architecture)
 
+    # {
     # 責務: [analyze: calculate per-layer numerical interference signals]
     # 処理: [produce norm, cosine, subspace, sign-conflict and spectrum findings]
     # 引数: [adapters: selected source LoRAs]
     # 戻り値: [tuple[LayerInterference, ...]: visualization-ready findings]
+    # }
     def analyze(self, adapters: Sequence[LoRAAdapter]) -> tuple[LayerInterference, ...]:
         return analyze_interference(adapters)
 
+    # {
     # 責務: [search_scales: evaluate bounded global and per-layer scale candidates]
     # 処理: [score every fixed prompt/seed with balanced multi-concept objectives and history priors]
     # 引数: [adapters: source LoRAs, cases: fixed prompts/seeds, evaluator: rendering and metric bridge, scale_grid: candidate values, layer_scale_grid: optional per-layer values]
     # 戻り値: [tuple[ScaleCandidate, ...]: best-first scored scale candidates]
+    # }
     def search_scales(
         self,
         adapters: Sequence[LoRAAdapter],
@@ -145,10 +174,12 @@ class LoRACompositionApplication:
             scored.append(ScaleCandidate(global_scales, layer_scales, scores, aggregate))
         return tuple(sorted(scored, key=lambda item: item.aggregate_score, reverse=True))
 
+    # {
     # 責務: [search_compositions: compare runtime stacking and static merge candidates]
     # 処理: [evaluate fixed prompt/seed cases across weighted, top-K and Zip-style methods]
     # 引数: [adapters: compatible source LoRAs, cases: fixed validation set, evaluator: runtime/static comparison bridge, scale_grid: candidate scales, layer_scale_grid: optional per-adapter module grids, methods: selected static merge methods]
     # 戻り値: [tuple[ScaleCandidate, ...]: best-first candidate scores including runtime stack baseline]
+    # }
     def search_compositions(
         self,
         adapters: Sequence[LoRAAdapter],
@@ -192,10 +223,12 @@ class LoRACompositionApplication:
             scored.append(ScaleCandidate(scales, layers, scores, aggregate, method))
         return tuple(sorted(scored, key=lambda item: item.aggregate_score, reverse=True))
 
+    # {
     # 責務: [_scale_candidates: construct a bounded search space with prior scales]
     # 処理: [enumerate global choices and optional per-layer overrides deterministically]
     # 引数: [adapters: source LoRAs, scale_grid: candidate values, layer_grid: per-layer values]
     # 戻り値: [tuple[tuple[dict, dict], ...]: candidate settings]
+    # }
     def _scale_candidates(
         self,
         adapters: Sequence[LoRAAdapter],
@@ -265,12 +298,14 @@ class LoRACompositionApplication:
             )
         result = []
         for globals_tuple in global_combinations:
-            global_map = {adapter.name: value for adapter, value in zip(adapters, globals_tuple)}
+            global_map = {
+                adapter.name: value for adapter, value in zip(adapters, globals_tuple, strict=True)
+            }
             for overrides in override_combinations:
                 layer_map = {
                     adapter.name: {
                         layer: value
-                        for (name, layer, _), value in zip(layer_options, overrides)
+                        for (name, layer, _), value in zip(layer_options, overrides, strict=True)
                         if name == adapter.name
                     }
                     for adapter in adapters
@@ -278,19 +313,23 @@ class LoRACompositionApplication:
                 result.append((global_map, layer_map))
         return tuple(result)
 
+    # {
     # 責務: [_valid_score: validate the evaluator's normalized metric contract]
     # 処理: [check all public metrics for finite [0, 1] values]
     # 引数: [score: evaluator result]
     # 戻り値: [bool: true when all metrics are normalized]
+    # }
     @staticmethod
     def _valid_score(score: EvaluationScore) -> bool:
         values = tuple(vars(score).values())
         return all(np.isfinite(value) and 0 <= value <= 1 for value in values)
 
+    # {
     # 責務: [export: create merged tensors and a portable runtime recipe]
     # 処理: [preflight, merge, write immutable artifacts and preserve source hashes and evaluation cases]
     # 引数: [adapters: source LoRAs, base_model: target model, base_architecture: declared architecture, method: composition algorithm, global_scales: selected values, destination: recipe output, layer_scales: optional overrides, cases: fixed validation prompts, score: optional candidate score, rank_limit: static output rank cap]
     # 戻り値: [LoRAComposition: generated recipe metadata]
+    # }
     def export(
         self,
         adapters: Sequence[LoRAAdapter],
@@ -352,10 +391,12 @@ class LoRACompositionApplication:
             raise
         return composition
 
+    # {
     # 責務: [record_preference: persist a user's reviewed scale choice]
     # 処理: [append a bounded pair of names, roles and chosen scales to atomic local history]
     # 引数: [adapters: selected source assets, scales: preferred global scales]
     # 戻り値: [None: preference available as future search prior]
+    # }
     def record_preference(
         self, adapters: Sequence[LoRAAdapter], scales: Mapping[str, float]
     ) -> None:
@@ -374,10 +415,12 @@ class LoRACompositionApplication:
         )
         write_json_atomic(self.preference_path, history[-1000:])
 
+    # {
     # 責務: [preference_priors: calculate scale priors from prior user choices]
     # 処理: [average each known adapter scale from the last 1000 bounded preference records]
     # 引数: [None: use configured history path]
     # 戻り値: [dict[str, float]: previous mean scales]
+    # }
     def preference_priors(self) -> dict[str, float]:
         values: dict[str, list[float]] = {}
         for record in self._read_preferences():
@@ -386,10 +429,12 @@ class LoRACompositionApplication:
                     values.setdefault(name, []).append(float(scale))
         return {name: sum(scales) / len(scales) for name, scales in values.items() if scales}
 
+    # {
     # 責務: [_read_preferences: load bounded preference history defensively]
     # 処理: [reject symlink, malformed, oversized, or unexpected preference documents]
     # 引数: [None: use configured history path]
     # 戻り値: [list[dict]: validated bounded history]
+    # }
     def _read_preferences(self) -> list[dict]:
         if self.preference_path is None or not self.preference_path.exists():
             return []
@@ -407,9 +452,11 @@ class LoRACompositionApplication:
         return value[-1000:]
 
 
+# {
 # 責務: [_adapter_layers: retrieve supported target layer names from factors]
 # 処理: [normalize factor-pair keys by relying on the analyzer's validated parser]
 # 引数: [adapter: loaded LoRA]
 # 戻り値: [set[str]: target module names]
+# }
 def _adapter_layers(adapter: LoRAAdapter) -> set[str]:
     return set(factor_pairs(adapter))

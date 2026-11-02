@@ -10,10 +10,12 @@ from .analysis import check_composition_compatibility, factor_pairs
 from .contracts import LoRAAdapter, LoRARole, MergeMethod
 
 
+# {
 # 責務: [_compress_update: factorize a merged update within a bounded rank]
 # 処理: [truncate SVD and distribute singular values symmetrically across A/B factors]
 # 引数: [update: dense module update, rank_limit: maximum exported rank]
 # 戻り値: [tuple[np.ndarray, np.ndarray]: output A and B factors]
+# }
 def _compress_update(update: np.ndarray, rank_limit: int) -> tuple[np.ndarray, np.ndarray]:
     if rank_limit <= 0:
         raise ValueError("rank_limit must be positive")
@@ -25,10 +27,12 @@ def _compress_update(update: np.ndarray, rank_limit: int) -> tuple[np.ndarray, n
     return root[:, None] * vh[:rank], u[:, :rank] * root[None, :]
 
 
+# {
 # 責務: [_combine_layer: apply one composition rule to a target module]
 # 処理: [scale source updates and combine weighted, top-K, or role-aware Zip-style values]
 # 引数: [contributions: ordered adapter/update pairs, scales: adapter scales, method: merge rule]
 # 戻り値: [np.ndarray: composed dense update]
+# }
 def _combine_layer(
     contributions: Sequence[tuple[LoRAAdapter, np.ndarray]],
     scales: Mapping[str, float],
@@ -64,7 +68,7 @@ def _combine_layer(
         chosen = np.take_along_axis(stack, winner[None, ...], axis=0)[0]
         # Keep aligned contributions additive while selecting a dominant owner for conflicts.
         aligned = np.zeros_like(chosen)
-        for index, update in enumerate(stack):
+        for update in stack:
             agrees = np.sign(update) == np.sign(chosen)
             aligned += np.where(agrees, update * 0.25, 0.0)
         return chosen + aligned
@@ -84,10 +88,12 @@ def _combine_layer(
     raise ValueError(f"unsupported merge method: {method}")
 
 
+# {
 # 責務: [merge_adapters: create a static low-rank LoRA from compatible source adapters]
 # 処理: [preflight, compose each shared target, SVD-compress and emit standard A/B tensor keys]
 # 引数: [adapters: selected source LoRAs, base_model: target base, scales: global scales, method: algorithm, layer_scales: optional local scales, rank_limit: output rank cap, top_k_fraction: legacy-compatible reserved selector]
 # 戻り値: [dict[str, np.ndarray]: merged A/B factor tensors]
+# }
 def merge_adapters(
     adapters: Sequence[LoRAAdapter],
     base_model: str,

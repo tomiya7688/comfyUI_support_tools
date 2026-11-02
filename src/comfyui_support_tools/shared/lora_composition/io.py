@@ -14,14 +14,15 @@ import numpy as np
 
 from .contracts import EvaluationCase, LoRAAdapter, LoRAComposition, LoRARole, MergeMethod
 
-
 _MAX_JSON_BYTES = 4 * 1024 * 1024
 
 
+# {
 # 責務: [_atomic_json: persist bounded JSON without exposing partial files]
 # 処理: [reject symlinks and oversized payloads, then replace through a same-directory temporary file]
 # 引数: [path: target JSON path, payload: JSON-compatible content]
 # 戻り値: [None: complete document written]
+# }
 def write_json_atomic(path: str | Path, payload: Any) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -44,10 +45,12 @@ def write_json_atomic(path: str | Path, payload: Any) -> None:
             os.unlink(temporary_name)
 
 
+# {
 # 責務: [composition_payload: encode a portable composition recipe]
 # 処理: [serialize scales, validation cases, method and provenance without tensor data]
 # 引数: [composition: recipe to encode]
 # 戻り値: [dict[str, Any]: JSON-safe recipe document]
+# }
 def composition_payload(composition: LoRAComposition) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -66,24 +69,28 @@ def composition_payload(composition: LoRAComposition) -> dict[str, Any]:
     }
 
 
+# {
 # 責務: [save_composition: write the non-destructive portable runtime recipe]
 # 処理: [persist one schema-versioned JSON recipe atomically]
 # 引数: [composition: selected recipe, destination: output JSON path]
 # 戻り値: [Path: saved recipe path]
+# }
 def save_composition(composition: LoRAComposition, destination: str | Path) -> Path:
     target = Path(destination).expanduser()
     write_json_atomic(target, composition_payload(composition))
     return target
 
 
+# {
 # 責務: [load_adapter: load one LoRA safetensors artifact with conservative metadata checks]
 # 処理: [load CPU arrays through the optional safetensors package and normalize supported metadata keys]
 # 引数: [path: input LoRA file, role: user-declared functional role]
 # 戻り値: [LoRAAdapter: tensors, family, architecture, rank, alpha and provenance]
+# }
 def load_adapter(path: str | Path, role: LoRARole = LoRARole.CONCEPT) -> LoRAAdapter:
     try:
-        from safetensors.numpy import load_file
         from safetensors import safe_open
+        from safetensors.numpy import load_file
     except ImportError as error:
         raise RuntimeError(
             "Install requirements-lora-composition.txt to read safetensors LoRAs"
@@ -130,10 +137,12 @@ def load_adapter(path: str | Path, role: LoRARole = LoRARole.CONCEPT) -> LoRAAda
     )
 
 
+# {
 # 責務: [_sha256: identify artifact bytes for reproducibility]
 # 処理: [stream the source file through SHA-256 without loading it all into memory]
 # 引数: [path: regular file]
 # 戻り値: [str: lowercase SHA-256 digest]
+# }
 def _sha256(path: Path) -> str:
     import hashlib
 
@@ -144,10 +153,12 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+# {
 # 責務: [save_merged_lora: write static merged tensors and sidecar provenance]
 # 処理: [use safetensors safe serialization and refuse overwriting existing source/output files]
 # 引数: [tensors: merged factors, destination: new safetensors path, metadata: provenance values]
 # 戻り値: [Path: saved artifact path]
+# }
 def save_merged_lora(
     tensors: dict[str, np.ndarray], destination: str | Path, metadata: dict[str, str]
 ) -> Path:
@@ -181,10 +192,12 @@ def save_merged_lora(
     return target
 
 
+# {
 # 責務: [new_composition: build timestamped recipe with source artifact hashes]
 # 処理: [record source identity, evaluation prompts, selected scales and method provenance]
 # 引数: [adapters: source artifacts, base_model: target base, method: selected merge rule, global_scales: chosen scales, layer_scales: optional local scales, score: optional evaluator result, cases: fixed validation prompts, static_path: optional merged output]
 # 戻り値: [LoRAComposition: immutable saved-recipe data]
+# }
 def new_composition(
     adapters: tuple[LoRAAdapter, ...],
     base_model: str,

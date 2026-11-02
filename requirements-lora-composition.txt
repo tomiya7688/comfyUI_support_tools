@@ -1,0 +1,3 @@
+# Install a compatible NumPy build appropriate for the host runtime.
+numpy>=1.24,<3
+safetensors>=0.4,<1

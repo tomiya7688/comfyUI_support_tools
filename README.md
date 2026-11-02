@@ -32,6 +32,16 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 現在のPyInstaller onedir版にはPyTorch/Transformersを同梱していないため、凍結実行ファイルではOSSモデルによる推論を利用できません。明示metadataの分類とコピーは使えますが、モデル判定が必要な画像は `uncertain` に残ります。OSSモデル推論を使う場合は、対応依存を導入したソース版GUIを起動してください。
 
+### Video to MMD Motion
+
+`comfyui_support_tools.shared.video_to_mmd` は、GVHMR/WHAM等を差し替える姿勢推定backend contract、confidence付き3D pose retarget、カメラ平行移動の除去、足接地・速度制限・key reduction、VMD 0002出力を提供します。実際の姿勢推定model、動画decoder、PMX geometry/IK previewは同梱していません。
+
+### Music to MMD Dance
+
+`python -m comfyui_support_tools.applications.music_to_mmd` でstandalone editorを起動できます。`comfyui_support_tools.shared.music_to_mmd.MusicToMmdApplication` は、音源解析・編集可能なsection plan・dance backend registry・sectionごとの生成/再生成・Video-to-MMDのretarget/foot contact cleanup・VMD出力をつなぎます。既定decoderは10分以下の非圧縮PCM WAVで、PATHにFFmpegがあればMP3/FLAC等も読み込めます。style/energy/section/beatから関節列を作るoffline procedural baselineを含みます。より高品質な生成にはAtomicDance/DanceLDM等の3D dance model adapterを追加します。RMS onset/BPMと8秒単位のenergy sectioningは軽量heuristicで、chorus等の意味解釈はレビュー対象です。
+
+このcoreはoffline procedural baselineを提供しますが、学習済み外部dance model、PMX geometry/physics preview、IK solver、collision evaluatorを同梱しません。procedural motionは編集とpipeline検証用で、trained dance backend相当の振付品質を保証しません。評価レポートはbeat activity、smoothness、foot contact drift、floor clearance、section diversityのproxyと各制約を分けて記録します。
+
 ---
 
 ## English
@@ -80,3 +90,9 @@ debug aid and does not load PMX geometry, bone hierarchy/rest poses, IK, or a 3D
 The repository does not bundle a video decoder, person detector/tracker, GVHMR model,
 or trained pose weights. Those remain injectable backend responsibilities; detected
 limitations are reported rather than implying geometric accuracy from the 2D preview.
+
+## Music to MMD Dance
+
+Launch the standalone editor with `python -m comfyui_support_tools.applications.music_to_mmd`. `comfyui_support_tools.shared.music_to_mmd.MusicToMmdApplication` connects audio analysis, editable section plans, a capability-routed dance backend registry, per-section generation/regeneration, the Video-to-MMD retarget/contact cleanup core, and VMD export. The default decoder accepts uncompressed PCM WAV files up to ten minutes and can read MP3/FLAC when FFmpeg is available on `PATH`. It includes an offline procedural baseline that builds joint motion from style, energy, sections, and beats. Add higher-quality 3D dance models such as AtomicDance/DanceLDM through adapters. RMS onset/BPM estimation and eight-second energy segmentation are lightweight heuristics; semantic labels such as chorus require review.
+
+The core includes an offline procedural baseline but does not bundle a trained dance model, PMX geometry/physics preview, IK solver, or collision evaluator. Procedural motion supports editing and pipeline validation; it does not claim choreography quality equal to a trained dance backend. The report separates beat activity, smoothness, contact drift, floor-clearance, and section-diversity proxies from their stated limitations.

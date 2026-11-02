@@ -70,7 +70,9 @@ def _is_reparse_point(path: Path) -> bool:
         attributes = getattr(path.lstat(), "st_file_attributes", 0)
     except OSError:
         return False
-    return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+    return path.is_symlink() or bool(
+        attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    )
 
 
 def _relative_to_legacy_root(target: Path, legacy_root: Path) -> Path | None:

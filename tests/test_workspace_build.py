@@ -5,6 +5,7 @@ import json
 import os
 import platform
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -49,6 +50,9 @@ class WorkspaceBuildTests(unittest.TestCase):
             tcl_license = root / "licenses" / "TclTk" / "license.terms"
             tcl_license.parent.mkdir(parents=True)
             tcl_license.write_text("Test Tcl/Tk terms", encoding="utf-8")
+            runtime = root / "python-runtime"
+            runtime.mkdir()
+            (runtime / "LICENSE.txt").write_text("Test Python terms", encoding="utf-8")
             exe = builder.executable_path(output)
             exe.parent.mkdir(parents=True)
             exe.touch()
@@ -64,6 +68,7 @@ class WorkspaceBuildTests(unittest.TestCase):
                     os.environ,
                     {"PATH": injected_path, "PYTHONPATH": "foreign", "PYTHONHOME": "foreign"},
                 ),
+                mock.patch.object(sys, "base_prefix", str(runtime)),
                 mock.patch.object(builder.subprocess, "run") as run,
             ):
                 self.assertEqual(builder.build(root, output), exe)
@@ -77,15 +82,19 @@ class WorkspaceBuildTests(unittest.TestCase):
             self.assertTrue(resolved_manifest.is_file())
             resolved_json = json.loads(resolved_manifest.read_text(encoding="utf-8"))
             self.assertIn("external_components", resolved_json)
-            self.assertIn(
-                str(exe.name), {item["path"] for item in resolved_json["native_artifacts"]}
-            )
+            if exe.suffix:
+                self.assertIn(
+                    str(exe.name), {item["path"] for item in resolved_json["native_artifacts"]}
+                )
             self.assertTrue((exe.parent / "licenses" / "TclTk" / "license.terms").is_file())
             command = run.call_args.args[0]
             build_environment = run.call_args.kwargs["env"]
             self.assertEqual(command[command.index("--paths") + 1], str(root / "src"))
             self.assertIn("--onedir", command)
-            self.assertNotIn("foreign-native-bin", build_environment["PATH"])
+            if os.name == "nt":
+                self.assertNotIn("foreign-native-bin", build_environment["PATH"])
+            else:
+                self.assertIn("foreign-native-bin", build_environment["PATH"])
             self.assertNotIn("PYTHONPATH", build_environment)
             self.assertNotIn("PYTHONHOME", build_environment)
             self.assertEqual(build_environment["PYTHONNOUSERSITE"], "1")

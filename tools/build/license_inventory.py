@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import site
 import shutil
 import sys
+import sysconfig
 from importlib.metadata import Distribution, PackageNotFoundError, distribution, distributions
 from pathlib import Path, PurePosixPath
 
@@ -124,11 +126,28 @@ def _external_components() -> list[dict]:
     ]
 
 
+# {
+# 責務: [_site_packages_paths: interpreterのsite-packages rootsを特定する]
+# 処理: [Windows runtime, interpreter purelib, user siteの順で既存pathを選ぶ]
+# 引数: []
+# 戻り値: [tuple[Path, ...]: distribution metadata roots]
+# }
+def _site_packages_paths() -> tuple[Path, ...]:
+    windows_site_packages = Path(sys.prefix) / "Lib" / "site-packages"
+    if windows_site_packages.is_dir():
+        return (windows_site_packages,)
+    candidates = (
+        Path(sysconfig.get_paths().get("purelib", "")),
+        Path(site.getusersitepackages()),
+    )
+    return tuple(dict.fromkeys(path for path in candidates if str(path) and path.is_dir()))
+
+
 def _runtime_dependency_names(root: Path) -> list[str]:
-    site_packages = Path(sys.prefix) / "Lib" / "site-packages"
+    site_packages = _site_packages_paths()
     available = {
         canonicalize_name(item.metadata["Name"]): item
-        for item in distributions(path=[str(site_packages)])
+        for item in distributions(path=[str(path) for path in site_packages])
         if item.metadata.get("Name")
     }
     requirements_file = root / "requirements-kadoka-tools.txt"
@@ -188,11 +207,18 @@ def _copy_python_package_licenses(
 ) -> list[str]:
     package_name = canonicalize_name(item.metadata["Name"])
     copied = []
+    package_root = Path(item.locate_file("")).resolve()
     for source in _license_files(item, site_packages):
-        relative = source.relative_to(site_packages)
+        resolved_source = source.resolve()
+        try:
+            relative = resolved_source.relative_to(package_root)
+        except ValueError as error:
+            raise RuntimeError(
+                f"Package license resolves outside its distribution root: {source}"
+            ) from error
         destination = target / "licenses" / "python_packages" / package_name / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+        shutil.copy2(resolved_source, destination)
         copied.append(destination.relative_to(target).as_posix())
     return copied
 
@@ -407,7 +433,7 @@ def collect_license_inventory(
     """Copy Python/Tcl and runtime package licenses and emit resolved metadata."""
     root = root.resolve()
     distribution_dir = distribution_dir.resolve()
-    site_packages = Path(sys.prefix) / "Lib" / "site-packages"
+    site_packages = next(iter(_site_packages_paths()), Path(sys.prefix) / "Lib" / "site-packages")
     components = []
 
     python_license = Path(sys.base_prefix) / "LICENSE.txt"

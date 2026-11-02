@@ -32,6 +32,12 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 現在のPyInstaller onedir版にはPyTorch/Transformersを同梱していないため、凍結実行ファイルではOSSモデルによる推論を利用できません。明示metadataの分類とコピーは使えますが、モデル判定が必要な画像は `uncertain` に残ります。OSSモデル推論を使う場合は、対応依存を導入したソース版GUIを起動してください。
 
+### MMD Camera Director基盤
+
+`comfyui_support_tools.shared.camera_director` はdance VMDを読み、style preset・stage bounds・任意のPCM WAV energy sectionsからcamera VMD、JSON plan、animated GIF preview、SVG storyboardを生成します。heuristic backendは固定seedで再現でき、指定frame区間だけ再生成できます。DanceStyleCam用adapterとmodel-aware collision checkerは注入可能で、成果物は既存ファイルを上書きせず一式として保存します。
+
+既定解析はroot bone名または最初のbone trackをsubject proxyに使い、WAVは一定長windowのRMS energyに分けます。DanceStyleCam本体、PMX/stage形状に基づく可視性・衝突検査、beat/section推定、3D scene renderer、timeline GUIは含まれていません。GIFとSVGはcamera planを可視化し、3D scene自体はrenderしません。
+
 ---
 
 ## English
@@ -63,3 +69,9 @@ The `AI画像クラスタ` tab analyzes an image folder and previews three group
 To use the detector, install `requirements-ai-image-clustering.txt` and a compatible PyTorch build into the GUI's Python environment. The model weights are downloaded from Hugging Face on first inference and stored under `user_data/cache/ai_origin` by default. The model targets anime images and its score thresholds are uncalibrated. Treat image-only results as estimates and keep ambiguous results in `uncertain`. Images are not sent to an external service. The model weights are Apache-2.0 licensed and are not bundled with the application.
 
 The current PyInstaller onedir build does not bundle PyTorch or Transformers, so OSS model inference is unavailable in the frozen executable. Explicit metadata classification and copying still work, while images requiring model inference remain `uncertain`. To use OSS model inference, launch the source version of the GUI with the supported dependencies installed.
+
+### MMD Camera Director foundation
+
+`comfyui_support_tools.shared.camera_director` reads dance VMD and generates a camera VMD, JSON plan, animated GIF preview, and SVG storyboard from a style preset, stage bounds, and optional PCM WAV energy sections. Its heuristic backend is reproducible with a fixed seed and can regenerate only a requested frame range. DanceStyleCam and model-aware collision checkers can be injected through adapters; the artifact set refuses to overwrite existing files.
+
+The default uses a recognized root-bone name or the first bone track as a subject proxy, and divides WAV input into fixed-duration RMS-energy windows. The DanceStyleCam implementation, PMX/stage geometry visibility and collision checks, beat/section detection, rendered scene preview, and timeline GUI are not included. The GIF and SVG visualize the plan and camera movement without rendering the 3D scene.

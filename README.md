@@ -66,6 +66,12 @@ Random Image の CFG、steps、resolution、sampler は共通 `ParameterSpecRegi
 
 共通 `output_artifact` helper は fail / skip / overwrite / rename / versioned conflict policy、入力とのpath衝突防止、一時ファイルへのfsync、commit前validator、atomic publishを提供します。Inspectorのsidecar exportはこのhelperを使ってJSON検証後に書き込みます。
 
+### MMD Model Doctor基盤
+
+`comfyui_support_tools.shared.mmd_doctor` はPMX 2.0/2.1の構造を安全に読み取り、bone hierarchy・weight・morph参照・rigid body・jointの診断と局所修正候補を生成します。修正は元ファイルへ上書きせず、motion evaluatorが注入された場合だけ候補をBest-of-N比較し、選択されたPMXとbefore/after診断・バイト差分を別ファイルへ保存します。外部のMMD物理engineとweight推定器はadapterとして接続できます。
+
+この段階ではPMX 2.1のsoft body、GUI、MMD Bullet motion evaluator、SkinTokens/UniRig等のweight推定modelは同梱していません。soft bodyを含むファイルは不完全な監査を避けるため拒否し、evaluator未設定時は自動選択・自動exportを行いません。
+
 ---
 
 ## English
@@ -131,3 +137,9 @@ Random Image CFG, steps, resolution, and sampler resolve through the shared `Par
 ### Output artifacts
 
 The shared `output_artifact` helper provides fail, skip, overwrite, rename, and versioned conflict policies, source-path collision protection, fsynced temporary writes, validation before commit, and atomic publication. Inspector sidecar export uses it to validate JSON before publishing.
+
+### MMD Model Doctor foundation
+
+`comfyui_support_tools.shared.mmd_doctor` safely reads PMX 2.0/2.1 structures and reports bone hierarchy, weight, morph-reference, rigid-body, and joint findings with localized repair candidates. Repairs never overwrite the source. When a motion evaluator is injected, the service compares candidates with Best-of-N and writes the selected PMX plus before/after findings and byte-level rollback data to separate files. External MMD physics engines and weight estimators can be connected through adapters.
+
+This stage does not bundle PMX 2.1 soft-body support, a GUI, an MMD Bullet motion evaluator, or weight-estimation models such as SkinTokens/UniRig. Files containing soft bodies are rejected to avoid partial audits. Without an evaluator, automatic selection and export are disabled.

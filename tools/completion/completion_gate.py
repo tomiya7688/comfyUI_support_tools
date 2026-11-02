@@ -104,8 +104,8 @@ def quality_check() -> CheckResult:
 
 
 # {
-#   責務: [comment_coverage_check: tools内の宣言comment coverageをstrictに検査する]
-#   処理: [tools path限定でcoverage checkerを実行し、そのstatusを返す]
+#   責務: [comment_coverage_check: toolsとtests内の宣言comment coverageをstrictに検査する]
+#   処理: [移行済みtools/tests pathsにcoverage checkerを実行し、そのstatusを返す]
 #   引数: []
 #   戻り値: [result: coverage checkerのCheckResult]
 #   副作用: [coverage checker subprocessを起動する]
@@ -117,6 +117,8 @@ def comment_coverage_check() -> CheckResult:
             "tools/quality/comment_coverage.py",
             "--path",
             "tools",
+            "--path",
+            "tests",
             "--strict",
         ]
     )

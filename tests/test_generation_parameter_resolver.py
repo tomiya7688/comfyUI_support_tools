@@ -5,7 +5,25 @@ from src.comfyui_support_tools.shared.contracts.resolved_generation_parameters i
 from scripts.backend.generation_parameter_resolver import GenerationParameterResolver
 
 
+# {
+#   責務: [GenerationParameterResolverTests: related test fixtures and cases for GenerationParameterResolver behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class GenerationParameterResolverTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_resolves_fixed_values_without_changing_legacy_defaults: verifies the behavior described by "resolves fixed values without changing legacy defaults",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for resolves fixed values without changing legacy defaults,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_resolves_fixed_values_without_changing_legacy_defaults(self):
         resolver = GenerationParameterResolver(random.Random(1))
         result = resolver.resolve({
@@ -22,6 +40,18 @@ class GenerationParameterResolverTests(unittest.TestCase):
             "sampler": "Euler a",
         })
 
+    # {
+    #   責務: [
+    #     test_resolves_ranges_and_candidates_once_per_call: verifies the behavior described by "resolves ranges and candidates once per call",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for resolves ranges and candidates once per call,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_resolves_ranges_and_candidates_once_per_call(self):
         resolver = GenerationParameterResolver(random.Random(4))
         config = {
@@ -38,6 +68,18 @@ class GenerationParameterResolverTests(unittest.TestCase):
         self.assertEqual({item.width for item in results}, {512, 768})
         self.assertEqual({item.sampler for item in results}, {"Euler a", "DPM++ 2M Karras"})
 
+    # {
+    #   責務: [
+    #     test_rejects_invalid_ranges_and_empty_candidates: verifies the behavior described by "rejects invalid ranges and empty candidates",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for rejects invalid ranges and empty candidates,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_rejects_invalid_ranges_and_empty_candidates(self):
         resolver = GenerationParameterResolver(random.Random(2))
         with self.assertRaisesRegex(ValueError, "minimum exceeds maximum"):
@@ -49,6 +91,18 @@ class GenerationParameterResolverTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "non-empty text"):
             resolver.resolve(self._configuration(sampler={"mode": "candidate", "values": ["Euler a", " "]}))
 
+    # {
+    #   責務: [
+    #     test_rejects_invalid_dimensions_and_unsupported_sampler_range: verifies the behavior described by "rejects invalid dimensions and unsupported sampler range",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for rejects invalid dimensions and unsupported sampler range,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_rejects_invalid_dimensions_and_unsupported_sampler_range(self):
         resolver = GenerationParameterResolver(random.Random(3))
         with self.assertRaisesRegex(ValueError, "multiple of 8"):
@@ -58,6 +112,12 @@ class GenerationParameterResolverTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "sampler mode"):
             resolver.resolve(self._configuration(sampler={"mode": "range", "min": 1, "max": 2}))
 
+    # {
+    #   責務: [_configuration: builds the baseline generation parameter mapping]
+    #   処理: [1: apply supplied settings overrides to the base configuration, 2: return the fixture configuration]
+    #   引数: [**overrides: **overrides passed to this helper (unspecified)]
+    #   戻り値: [result: result value built or selected by this helper]
+    # }
     @staticmethod
     def _configuration(**overrides):
         result = {

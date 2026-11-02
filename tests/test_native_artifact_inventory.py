@@ -8,7 +8,26 @@ from unittest.mock import patch
 from tools.build import native_artifact_inventory as inventory
 
 
+# {
+#   責務: [NativeArtifactInventoryTests: related test fixtures and cases for NativeArtifactInventory behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class NativeArtifactInventoryTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_attributes_python_native_runtime_libraries_separately: verifies the behavior described by "attributes python native runtime libraries separately",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for attributes python native runtime libraries separately,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_attributes_python_native_runtime_libraries_separately(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -58,6 +77,19 @@ class NativeArtifactInventoryTests(unittest.TestCase):
         self.assertEqual(by_path["pyexpat.pyd"]["license_files"], ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"])
         self.assertEqual(by_path["VCRUNTIME140.dll"]["audit_status"], "redistribution-terms-review-required")
 
+    # {
+    #   責務: [
+    #     test_links_distribution_owned_artifact_to_component_license: verifies the behavior described by "links distribution owned artifact to component license",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for links distribution owned artifact to component license,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_links_distribution_owned_artifact_to_component_license(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -80,6 +112,19 @@ class NativeArtifactInventoryTests(unittest.TestCase):
             self.assertEqual(entries[0]["license_files"], component["license_files"])
             self.assertEqual(entries[0]["audit_status"], "origin-and-license-document-linked")
 
+    # {
+    #   責務: [
+    #     test_external_source_hint_does_not_disclose_absolute_builder_path: verifies the behavior described by "external source hint does not disclose absolute builder path",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for external source hint does not disclose absolute builder path,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_external_source_hint_does_not_disclose_absolute_builder_path(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

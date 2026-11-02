@@ -15,6 +15,12 @@ from comfyui_support_tools.applications.main_gui.data.processing.media_io import
 from comfyui_support_tools.shared.contracts.inspector_contracts import ActionRequest, TaggerSettings
 
 
+# {
+#   責務: [wait_for: waits for a condition until it succeeds or the timeout expires]
+#   処理: [1: poll or pump until the requested predicate succeeds, 2: raise a useful timeout failure if it does not]
+#   引数: [predicate: completion predicate callback (unspecified), timeout: maximum wait duration (unspecified)]
+#   戻り値: [None: test helper returns no value]
+# }
 def wait_for(predicate, timeout=4):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -24,7 +30,25 @@ def wait_for(predicate, timeout=4):
     raise AssertionError("timed out")
 
 
+# {
+#   責務: [JobRuntimeTests: related test fixtures and cases for JobRuntime behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class JobRuntimeTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_lifecycle_progress_logs_times_backend_id_and_error: verifies the behavior described by "lifecycle progress logs times backend id and error",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for lifecycle progress logs times backend id and error,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_lifecycle_progress_logs_times_backend_id_and_error(self):
         runtime = JobRuntime(max_concurrent=1)
         job = runtime.create(
@@ -60,6 +84,18 @@ class JobRuntimeTests(unittest.TestCase):
         self.assertIn("HTTP timeout", error.error)
         runtime.close()
 
+    # {
+    #   責務: [
+    #     test_concurrency_limit_keeps_second_queued_and_queued_cancel_wakes_waiter: verifies the behavior described by "concurrency limit keeps second queued and queued cancel wakes waiter",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for concurrency limit keeps second queued and queued cancel wakes waiter,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_concurrency_limit_keeps_second_queued_and_queued_cancel_wakes_waiter(self):
         runtime = JobRuntime(max_concurrent=1)
         cancel_one, cancel_two = Event(), Event()
@@ -68,6 +104,15 @@ class JobRuntimeTests(unittest.TestCase):
         release = Event()
         results = {}
 
+        # {
+        #   責務: [worker: waits for its release event and reports completion to the job runtime]
+        #   処理: [1: wait until the test releases the worker, 2: report completion through the job runtime]
+        #   引数: [
+        #     job: job snapshot passed to worker (unspecified),
+        #     release_event: test-controlled worker release signal (unspecified),
+        #   ],
+        #   戻り値: [None: test helper returns no value]
+        # }
         def worker(job, release_event=None):
             results[job] = runtime.wait_start(job)
             if results[job] and release_event is not None:
@@ -92,6 +137,18 @@ class JobRuntimeTests(unittest.TestCase):
         self.assertEqual(states[second], "cancelled")
         runtime.close()
 
+    # {
+    #   責務: [
+    #     test_running_cancel_is_cooperative_and_shutdown_never_waits: verifies the behavior described by "running cancel is cooperative and shutdown never waits",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for running cancel is cooperative and shutdown never waits,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_running_cancel_is_cooperative_and_shutdown_never_waits(self):
         runtime = JobRuntime(max_concurrent=1)
         cancel = Event()
@@ -106,6 +163,18 @@ class JobRuntimeTests(unittest.TestCase):
         runtime.close()
         self.assertLess(time.monotonic() - start, 0.2)
 
+    # {
+    #   責務: [
+    #     test_history_is_bounded_and_progress_validation_is_strict: verifies the behavior described by "history is bounded and progress validation is strict",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for history is bounded and progress validation is strict,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_history_is_bounded_and_progress_validation_is_strict(self):
         runtime = JobRuntime(max_concurrent=1, history_limit=10)
         for index in range(12):
@@ -123,6 +192,18 @@ class JobRuntimeTests(unittest.TestCase):
         runtime.finish(job, "cancelled")
         runtime.close()
 
+    # {
+    #   責務: [
+    #     test_contract_reserves_retry_lineage_without_claiming_handler: verifies the behavior described by "contract reserves retry lineage without claiming handler",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for contract reserves retry lineage without claiming handler,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_contract_reserves_retry_lineage_without_claiming_handler(self):
         runtime = JobRuntime()
         original = runtime.create("tag", "tag", retryable=False)
@@ -136,12 +217,55 @@ class JobRuntimeTests(unittest.TestCase):
         runtime.close()
 
 
+# {
+#   責務: [SharedExistingProcessJobTests: related test fixtures and cases for SharedExistingProcessJob behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class SharedExistingProcessJobTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_media_scan_and_tagger_actions_share_one_job_model: verifies the behavior described by "media scan and tagger actions share one job model",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for media scan and tagger actions share one job model,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: tuple/list fixture / mapping built or selected by this helper]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_media_scan_and_tagger_actions_share_one_job_model(self):
+        # {
+        #   責務: [FakeTransport: deterministic tagger transport for shared job lifecycle tests]
+        #   処理: [1: provide the configured fields and methods used by the surrounding cases]
+        #   フィールド: []
+        #   引数: []
+        # }
         class FakeTransport:
+            # {
+            #   責務: [probe: returns the canned model list used by the backend test double]
+            #   処理: [1: return the fixed model list expected by the inspector state test double]
+            #   引数: [_settings: settings argument ignored by this controlled test double (unspecified)]
+            #   戻り値: [result: tuple/list fixture built or selected by this helper]
+            # }
             def probe(self, _settings):
                 return ("fixture-model",)
 
+            # {
+            #   責務: [tag: returns the canned tag response used by the backend test double]
+            #   処理: [
+            #     1: record or derive tag output from the supplied sequence inputs,
+            #     2: return the deterministic tag payload,
+            #   ],
+            #   引数: [
+            #     _item: media item argument ignored by this controlled test double (unspecified),
+            #     _settings: settings argument ignored by this controlled test double (unspecified),
+            #   ],
+            #   戻り値: [result: mapping built or selected by this helper]
+            # }
             def tag(self, _item, _settings):
                 return {"tags": {"fixture": 0.99}}
 

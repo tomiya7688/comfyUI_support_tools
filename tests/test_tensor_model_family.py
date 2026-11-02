@@ -5,6 +5,15 @@ import unittest
 from src.comfyui_support_tools.shared.model_identity import ModelFamily, ModelKind, classify_model
 
 
+# {
+#   責務: [_unet: creates representative UNet tensor names and shapes for family detection]
+#   処理: [1: create the representative tensor-name/shape mapping for a UNet family]
+#   引数: [
+#     width: tensor dimension used in synthetic metadata (int),
+#     prefix: tensor-name prefix for the synthetic checkpoint family (str),
+#   ],
+#   戻り値: [result: dict produced for the supplied fixture/input]
+# }
 def _unet(width: int, prefix: str = "model.diffusion_model.") -> dict:
     return {
         prefix + "input_blocks.0.0.weight": (320, 4, 3, 3),
@@ -13,11 +22,23 @@ def _unet(width: int, prefix: str = "model.diffusion_model.") -> dict:
     }
 
 
+# {
+#   責務: [_lora: creates representative LoRA tensor names and shapes for family detection]
+#   処理: [1: create the representative tensor-name/shape mapping for a LoRA family]
+#   引数: [width: tensor dimension used in synthetic metadata (int)]
+#   戻り値: [result: dict produced for the supplied fixture/input]
+# }
 def _lora(width: int) -> dict:
     name = "lora_unet_input_blocks_4_1_transformer_blocks_0_attn2_to_k"
     return {name + ".lora_down.weight": (16, width), name + ".lora_up.weight": (640, 16)}
 
 
+# {
+#   責務: [_flux: creates representative Flux tensor names and shapes for family detection]
+#   処理: [1: create representative Flux tensor names/shapes with the requested prefix]
+#   引数: [prefix: tensor-name prefix for the synthetic checkpoint family (str)]
+#   戻り値: [result: dict produced for the supplied fixture/input]
+# }
 def _flux(prefix: str = "") -> dict:
     return {prefix + key: shape for key, shape in {
         "img_in.weight": (3072, 64), "txt_in.weight": (3072, 4096),
@@ -26,6 +47,12 @@ def _flux(prefix: str = "") -> dict:
     }.items()}
 
 
+# {
+#   責務: [_anima: creates representative Anima tensor names and shapes for family detection]
+#   処理: [1: create representative Anima tensor names/shapes with the requested prefix]
+#   引数: [prefix: tensor-name prefix for the synthetic checkpoint family (str)]
+#   戻り値: [result: dict produced for the supplied fixture/input]
+# }
 def _anima(prefix: str = "net.") -> dict:
     return {prefix + key: shape for key, shape in {
         "blocks.0.mlp.layer1.weight": (8192, 2048),
@@ -34,7 +61,25 @@ def _anima(prefix: str = "net.") -> dict:
     }.items()}
 
 
+# {
+#   責務: [TensorModelFamilyTests: related test fixtures and cases for TensorModelFamily behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class TensorModelFamilyTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_sd_families_from_unet_context_shapes_with_generic_filename: verifies the behavior described by "sd families from unet context shapes with generic filename",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for sd families from unet context shapes with generic filename,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_sd_families_from_unet_context_shapes_with_generic_filename(self):
         for width, family in [(768, ModelFamily.SD_1_5), (2048, ModelFamily.SDXL)]:
             for prefix in ["", "model.diffusion_model.", "diffusion_model.", "unet."]:
@@ -45,6 +90,18 @@ class TensorModelFamilyTests(unittest.TestCase):
                     self.assertIn("tensor", result.family_reason)
                     self.assertIn(str(width), result.family_reason)
 
+    # {
+    #   責務: [
+    #     test_diffusers_unet_layout_is_supported: verifies the behavior described by "diffusers unet layout is supported",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for diffusers unet layout is supported,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_diffusers_unet_layout_is_supported(self):
         shapes = {
             "unet.conv_in.weight": (320, 4, 3, 3),
@@ -52,6 +109,18 @@ class TensorModelFamilyTests(unittest.TestCase):
         }
         self.assertEqual(classify_model("generic", tensor_shapes=shapes).family, ModelFamily.SDXL)
 
+    # {
+    #   責務: [
+    #     test_lora_pairs_supply_unet_architecture_evidence: verifies the behavior described by "lora pairs supply unet architecture evidence",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for lora pairs supply unet architecture evidence,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_lora_pairs_supply_unet_architecture_evidence(self):
         for width, family in [(768, ModelFamily.SD_1_5), (2048, ModelFamily.SDXL)]:
             with self.subTest(width=width):
@@ -59,11 +128,33 @@ class TensorModelFamilyTests(unittest.TestCase):
                 self.assertEqual(result.family, family)
                 self.assertEqual(result.kind, ModelKind.LORA)
 
+    # {
+    #   責務: [test_peft_lora_pairs_are_supported: verifies the behavior described by "peft lora pairs are supported"]
+    #   処理: [
+    #     1: arrange case data and fixture state for peft lora pairs are supported,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_peft_lora_pairs_are_supported(self):
         key = "base_model.model.unet.down_blocks.1.attentions.0.transformer_blocks.0.attn2.to_v"
         shapes = {key + ".lora_A.weight": (8, 2048), key + ".lora_B.weight": (640, 8)}
         self.assertEqual(classify_model("generic", tensor_shapes=shapes).family, ModelFamily.SDXL)
 
+    # {
+    #   責務: [
+    #     test_incomplete_or_mismatched_lora_pair_is_not_family_evidence: verifies the behavior described by "incomplete or mismatched lora pair is not family evidence",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for incomplete or mismatched lora pair is not family evidence,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_incomplete_or_mismatched_lora_pair_is_not_family_evidence(self):
         shapes = _lora(2048)
         up = next(key for key in shapes if "lora_up" in key)
@@ -76,6 +167,18 @@ class TensorModelFamilyTests(unittest.TestCase):
                     candidate[up] = replacement
                 self.assertEqual(classify_model("generic", tensor_shapes=candidate).family, ModelFamily.UNKNOWN)
 
+    # {
+    #   責務: [
+    #     test_only_text_encoder_or_unet_self_attention_does_not_infer_family: verifies the behavior described by "only text encoder or unet self attention does not infer family",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for only text encoder or unet self attention does not infer family,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_only_text_encoder_or_unet_self_attention_does_not_infer_family(self):
         for shapes in [
             {"text_encoder.encoder.layers.0.attn2.to_k.weight": (640, 2048)},
@@ -86,6 +189,18 @@ class TensorModelFamilyTests(unittest.TestCase):
             with self.subTest(shapes=shapes):
                 self.assertEqual(classify_model("generic", tensor_shapes=shapes).family, ModelFamily.UNKNOWN)
 
+    # {
+    #   責務: [
+    #     test_mixed_or_unsupported_context_dimensions_remain_unknown: verifies the behavior described by "mixed or unsupported context dimensions remain unknown",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for mixed or unsupported context dimensions remain unknown,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_mixed_or_unsupported_context_dimensions_remain_unknown(self):
         mixed = _unet(768)
         mixed["model.diffusion_model.output_blocks.1.1.transformer_blocks.0.attn2.to_k.weight"] = (640, 2048)
@@ -95,6 +210,18 @@ class TensorModelFamilyTests(unittest.TestCase):
                 self.assertEqual(result.family, ModelFamily.UNKNOWN)
                 self.assertIn("Conflicting", result.family_reason)
 
+    # {
+    #   責務: [
+    #     test_tensor_evidence_conflicting_with_metadata_or_filename_is_unknown: verifies the behavior described by "tensor evidence conflicting with metadata or filename is unknown",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for tensor evidence conflicting with metadata or filename is unknown,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_tensor_evidence_conflicting_with_metadata_or_filename_is_unknown(self):
         for name, metadata in [("sdxl/generic", None), ("generic", {"ss_base_model_version": "sdxl"})]:
             with self.subTest(name=name):
@@ -102,6 +229,18 @@ class TensorModelFamilyTests(unittest.TestCase):
                 self.assertEqual(result.family, ModelFamily.UNKNOWN)
                 self.assertIn("tensor", result.family_reason)
 
+    # {
+    #   責務: [
+    #     test_anima_backbone_and_adapter_must_match_under_one_prefix: verifies the behavior described by "anima backbone and adapter must match under one prefix",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for anima backbone and adapter must match under one prefix,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_anima_backbone_and_adapter_must_match_under_one_prefix(self):
         for prefix in ["", "net.", "model.diffusion_model."]:
             with self.subTest(prefix=prefix):
@@ -113,6 +252,18 @@ class TensorModelFamilyTests(unittest.TestCase):
         shapes["llm_adapter.blocks.0.cross_attn.q_proj.weight"] = (1024, 1024)
         self.assertEqual(classify_model("generic", tensor_shapes=shapes).family, ModelFamily.UNKNOWN)
 
+    # {
+    #   責務: [
+    #     test_flux_base_signature_and_exclusion_of_chroma_layout: verifies the behavior described by "flux base signature and exclusion of chroma layout",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for flux base signature and exclusion of chroma layout,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_flux_base_signature_and_exclusion_of_chroma_layout(self):
         shapes = _flux("model.diffusion_model.")
         self.assertEqual(classify_model("generic", tensor_shapes=shapes).family, ModelFamily.FLUX)
@@ -121,6 +272,18 @@ class TensorModelFamilyTests(unittest.TestCase):
         self.assertEqual(result.family, ModelFamily.UNKNOWN)
         self.assertIn("Chroma", result.family_reason)
 
+    # {
+    #   責務: [
+    #     test_changed_flux_projection_or_mixed_transformers_remains_unknown: verifies the behavior described by "changed flux projection or mixed transformers remains unknown",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for changed flux projection or mixed transformers remains unknown,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_changed_flux_projection_or_mixed_transformers_remains_unknown(self):
         changed = _flux()
         changed["txt_in.weight"] = (3072, 15360)

@@ -9,7 +9,25 @@ from unittest.mock import patch
 from scripts import runtime_python
 
 
+# {
+#   責務: [RuntimePythonTest: related test fixtures and cases for RuntimePython behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class RuntimePythonTest(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_preferred_python_uses_current_interpreter_when_not_frozen: verifies the behavior described by "preferred python uses current interpreter when not frozen",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for preferred python uses current interpreter when not frozen,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_preferred_python_uses_current_interpreter_when_not_frozen(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -23,6 +41,19 @@ class RuntimePythonTest(unittest.TestCase):
                     Path(r"C:\Python310\python.exe"),
                 )
 
+    # {
+    #   責務: [
+    #     test_preferred_python_does_not_use_frozen_application_executable: verifies the behavior described by "preferred python does not use frozen application executable",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for preferred python does not use frozen application executable,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_preferred_python_does_not_use_frozen_application_executable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -36,10 +67,34 @@ class RuntimePythonTest(unittest.TestCase):
             ):
                 self.assertEqual(runtime_python.preferred_python(), expected)
 
+    # {
+    #   責務: [
+    #     test_python_root_is_missing_until_explicitly_configured: verifies the behavior described by "python root is missing until explicitly configured",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for python root is missing until explicitly configured,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_python_root_is_missing_until_explicitly_configured(self):
         with patch.dict(os.environ, {"KADOKA_PYTHON_ROOT": ""}):
             self.assertIsNone(runtime_python.python_root())
 
+    # {
+    #   責務: [
+    #     test_frozen_app_requires_a_configured_external_python: verifies the behavior described by "frozen app requires a configured external python",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for frozen app requires a configured external python,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_frozen_app_requires_a_configured_external_python(self):
         with (
             patch.object(runtime_python, "python_root", return_value=None),
@@ -48,6 +103,18 @@ class RuntimePythonTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "KADOKA_PYTHON_ROOT"):
                 runtime_python.preferred_python()
 
+    # {
+    #   責務: [
+    #     test_setup_launchers_do_not_contain_machine_specific_python_roots: verifies the behavior described by "setup launchers do not contain machine specific python roots",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for setup launchers do not contain machine specific python roots,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_setup_launchers_do_not_contain_machine_specific_python_roots(self):
         repository = Path(__file__).resolve().parents[1]
         launchers = (
@@ -58,6 +125,18 @@ class RuntimePythonTest(unittest.TestCase):
             with self.subTest(launcher=launcher.name):
                 self.assertNotIn("E:\\program_files", launcher.read_text(encoding="utf-8").lower())
 
+    # {
+    #   責務: [
+    #     test_kadoka_setup_requires_supported_cpython_without_unversioned_fallback: verifies the behavior described by "kadoka setup requires supported cpython without unversioned fallback",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for kadoka setup requires supported cpython without unversioned fallback,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_kadoka_setup_requires_supported_cpython_without_unversioned_fallback(self):
         setup = (
             (Path(__file__).resolve().parents[1] / "setup_kadoka_tools.bat")
@@ -140,6 +219,18 @@ class RuntimePythonTest(unittest.TestCase):
         self.assertIn("$bootstrappipversion", workflow)
         self.assertIn('[version]"24.2"', workflow)
 
+    # {
+    #   責務: [
+    #     test_onedir_batch_falls_back_to_supported_cpython_launcher: verifies the behavior described by "onedir batch falls back to supported cpython launcher",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for onedir batch falls back to supported cpython launcher,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_onedir_batch_falls_back_to_supported_cpython_launcher(self):
         batch = (
             (Path(__file__).resolve().parents[1] / "tools" / "build" / "build_onedir.bat")
@@ -153,6 +244,19 @@ class RuntimePythonTest(unittest.TestCase):
         self.assertIn("sys.version_info < (3, 13)", batch)
         self.assertIn(":try_python_launcher", batch)
 
+    # {
+    #   責務: [
+    #     test_venv_python_prefers_existing_venv_interpreter: verifies the behavior described by "venv python prefers existing venv interpreter",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for venv python prefers existing venv interpreter,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_venv_python_prefers_existing_venv_interpreter(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             venv_dir = Path(temp_dir)

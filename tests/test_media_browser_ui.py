@@ -22,12 +22,39 @@ from comfyui_support_tools.shared.contracts.media_preview import MediaPreview
 TOOLS = (ToolEntry("test", "Legacy Test", "Utility"),)
 
 
+# {
+#   責務: [MediaGuiTests: related test fixtures and cases for MediaGui behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: [
+#     tmp: temporary root containing fixture files,
+#     root: fixture root or application root under test,
+#     window: Tk root window owned by the UI test,
+#     browser: media browser widget under test,
+#     events: captured UI/model events,
+#   ],
+#   引数: []
+# }
 class MediaGuiTests(unittest.TestCase):
+    # {
+    #   責務: [setUpClass: skips MediaGuiTests when required platform or display prerequisites are unavailable]
+    #   処理: [1: check platform/display prerequisites, 2: skip the UI suite when the required display is unavailable]
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     @classmethod
     def setUpClass(cls):
         if sys.platform != "win32" and not os.environ.get("DISPLAY"):
             raise unittest.SkipTest("Requires a display; Windows CI always exercises Tk")
 
+    # {
+    #   責務: [setUp: initializes per-test fixture state for MediaGuiTests]
+    #   処理: [
+    #     1: create the per-test inputs and fixture resources required by the scenario,
+    #     2: register cleanup for resources owned by the fixture,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)/"日本語 media"
@@ -40,6 +67,12 @@ class MediaGuiTests(unittest.TestCase):
         self.events = []
         self.window.bind("<<MediaSelectionChanged>>", lambda _event: self.events.append(self.window.media_selection))
 
+    # {
+    #   責務: [tearDown: releases per-test resources created by MediaGuiTests]
+    #   処理: [1: stop owned workers/servers and release temporary files or UI resources]
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def tearDown(self):
         self.window.destroy()
         for thread in threading.enumerate():
@@ -49,12 +82,30 @@ class MediaGuiTests(unittest.TestCase):
         self.tmp.cleanup()
         self.assertEqual(self.errors, [])
 
+    # {
+    #   責務: [load: requests a collection load and waits for the UI model to render it]
+    #   処理: [1: request the browser collection, 2: wait for scan completion and render the rows]
+    #   引数: [collection: media collection name (unspecified)]
+    #   戻り値: [result: value returned by the helper's documented test role]
+    # }
     def load(self, collection="library"):
         self.browser.load_folder(str(self.root), collection)
         wait_until(self.window, lambda: not self.browser.commander.view()[1]["loading"])
         self.browser._render()
         return self.browser.commander.view()[0]
 
+    # {
+    #   責務: [
+    #     test_real_grid_thumbnails_and_preview: verifies the behavior described by "real grid thumbnails and preview",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for real grid thumbnails and preview,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_real_grid_thumbnails_and_preview(self):
         items = self.load()
         wait_until(self.window, lambda: len(self.browser.grid_view.images) == 4)
@@ -66,6 +117,18 @@ class MediaGuiTests(unittest.TestCase):
         self.assertTrue(self.events)
         self.assertLessEqual(len(self.browser.grid_view.items), 60)
 
+    # {
+    #   責務: [
+    #     test_thumbnail_ctrl_shift_and_keyboard_selection: verifies the behavior described by "thumbnail ctrl shift and keyboard selection",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for thumbnail ctrl shift and keyboard selection,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_thumbnail_ctrl_shift_and_keyboard_selection(self):
         items = self.load()
         grid = self.browser.grid_view
@@ -80,6 +143,18 @@ class MediaGuiTests(unittest.TestCase):
         grid._key(SimpleNamespace(keysym="Home", state=0))
         self.assertEqual(self.window.media_selection, (items[0],))
 
+    # {
+    #   責務: [
+    #     test_list_multiselection_and_view_switch_preserve_selection: verifies the behavior described by "list multiselection and view switch preserve selection",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for list multiselection and view switch preserve selection,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_list_multiselection_and_view_switch_preserve_selection(self):
         items = self.load()
         self.browser.mode.set("リスト")
@@ -92,6 +167,18 @@ class MediaGuiTests(unittest.TestCase):
         self.window.update()
         self.assertEqual(len(self.window.media_selection), 2)
 
+    # {
+    #   責務: [
+    #     test_library_filter_search_sort_and_collection: verifies the behavior described by "library filter search sort and collection",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for library filter search sort and collection,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_library_filter_search_sort_and_collection(self):
         self.load("generated")
         self.window.select_section("generated")
@@ -112,6 +199,18 @@ class MediaGuiTests(unittest.TestCase):
         sizes = [item.size for item in self.browser.commander.view()[0]]
         self.assertEqual(sizes, sorted(sizes, reverse=True))
 
+    # {
+    #   責務: [
+    #     test_broken_image_and_missing_folder_keep_ui_alive: verifies the behavior described by "broken image and missing folder keep ui alive",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for broken image and missing folder keep ui alive,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_broken_image_and_missing_folder_keep_ui_alive(self):
         items = self.load()
         broken = next(item for item in items if item.name == "broken.png")
@@ -123,8 +222,26 @@ class MediaGuiTests(unittest.TestCase):
         self.assertIn("見つかりません", self.browser.commander.view()[1]["message"])
         self.assertTrue(self.window.winfo_exists())
 
+    # {
+    #   責務: [
+    #     test_blocked_scan_does_not_block_tk_event_loop: verifies the behavior described by "blocked scan does not block tk event loop",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for blocked scan does not block tk event loop,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_blocked_scan_does_not_block_tk_event_loop(self):
         entered, release = threading.Event(), threading.Event()
+        # {
+        #   責務: [blocked: signals entry and waits on a release event to simulate in-flight scanning]
+        #   処理: [1: signal worker entry, 2: wait for the release event]
+        #   引数: [*args: positional HTTP handler arguments forwarded to the base class (unspecified)]
+        #   戻り値: [None: test helper returns no value]
+        # }
         def blocked(*args):
             entered.set()
             release.wait(5)
@@ -142,6 +259,18 @@ class MediaGuiTests(unittest.TestCase):
         finally:
             release.set()
 
+    # {
+    #   責務: [
+    #     test_hidden_selection_clears_and_old_tools_still_work: verifies the behavior described by "hidden selection clears and old tools still work",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for hidden selection clears and old tools still work,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_hidden_selection_clears_and_old_tools_still_work(self):
         items = self.load()
         self.browser.select((items[0].id,))
@@ -158,6 +287,18 @@ class MediaGuiTests(unittest.TestCase):
         self.browser.apply_query()
         self.assertEqual(self.window.media_selection, ())
 
+    # {
+    #   責務: [
+    #     test_paging_controls_remain_visible_at_minimum_window_size: verifies the behavior described by "paging controls remain visible at minimum window size",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for paging controls remain visible at minimum window size,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_paging_controls_remain_visible_at_minimum_window_size(self):
         self.load()
         self.window.geometry("900x600")
@@ -167,6 +308,16 @@ class MediaGuiTests(unittest.TestCase):
             self.assertLessEqual(widget.winfo_rooty()+widget.winfo_height(),
                                  self.browser.winfo_rooty()+self.browser.winfo_height())
 
+    # {
+    #   責務: [test_stale_preview_token_is_ignored: verifies the behavior described by "stale preview token is ignored"]
+    #   処理: [
+    #     1: arrange case data and fixture state for stale preview token is ignored,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_stale_preview_token_is_ignored(self):
         self.load()
         before = self.window.media_preview.details.cget("text")
@@ -177,6 +328,19 @@ class MediaGuiTests(unittest.TestCase):
             self.window.update()
         self.assertEqual(self.window.media_preview.details.cget("text"), before)
 
+    # {
+    #   責務: [
+    #     test_page_selection_cleared_and_rendered_tiles_bounded: verifies the behavior described by "page selection cleared and rendered tiles bounded",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for page selection cleared and rendered tiles bounded,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_page_selection_cleared_and_rendered_tiles_bounded(self):
         png = (self.root/"画像 sample.png").read_bytes()
         for i in range(125):
@@ -192,6 +356,18 @@ class MediaGuiTests(unittest.TestCase):
         self.browser.move_page(1)
         self.assertEqual(len(self.browser.grid_view.items), 9)
 
+    # {
+    #   責務: [
+    #     test_real_frozen_smoke_probe_can_run_from_source: verifies the behavior described by "real frozen smoke probe can run from source",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for real frozen smoke probe can run from source,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_real_frozen_smoke_probe_can_run_from_source(self):
         exercise_media(self.window)
 

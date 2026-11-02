@@ -9,7 +9,24 @@ sys.path.insert(0, str(MODULE_DIR))
 import repo_map  # noqa: E402
 
 
+# {
+#   責務: [RepoMapTests: related test fixtures and cases for RepoMap behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class RepoMapTests(unittest.TestCase):
+    # {
+    #   責務: [test_collects_symbols_and_imports: verifies the behavior described by "collects symbols and imports"]
+    #   処理: [
+    #     1: arrange case data and fixture state for collects symbols and imports,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_collects_symbols_and_imports(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -31,6 +48,17 @@ class RepoMapTests(unittest.TestCase):
                 [("Demo", "class"), ("run", "function")],
             )
 
+    # {
+    #   責務: [test_skips_invalid_python: verifies the behavior described by "skips invalid python"]
+    #   処理: [
+    #     1: arrange case data and fixture state for skips invalid python,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_skips_invalid_python(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

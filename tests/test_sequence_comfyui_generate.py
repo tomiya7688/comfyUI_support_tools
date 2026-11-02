@@ -25,11 +25,27 @@ from comfyui_support_tools.shared.contracts.sequence_contracts import (
 from tools.security.check_python_ca import AFFECTED_CERTIFICATES
 
 
+# {
+#   責務: [_ComfyHandler: loopback HTTP fixture that captures ComfyUI prompts and serves a generated image]
+#   処理: [1: provide the configured fields and methods used by the surrounding cases]
+#   フィールド: [
+#     prompt_payload: prompt payload fixture state used by the test cases (dict[str, Any]),
+#     image_bytes: image bytes fixture state used by the test cases,
+#     uploaded_image: uploaded image fixture state used by the test cases (bytes),
+#   ],
+#   引数: []
+# }
 class _ComfyHandler(BaseHTTPRequestHandler):
     prompt_payload: dict[str, Any] = {}
     image_bytes = b"test-png-data"
     uploaded_image: bytes = b""
 
+    # {
+    #   責務: [do_POST: records a local fixture POST request and returns its response]
+    #   処理: [1: read and decode the posted JSON body, 2: record the request and send the configured response payload]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def do_POST(self) -> None:
         body = self.rfile.read(int(self.headers["Content-Length"]))
         if self.path == "/upload/image":
@@ -43,6 +59,12 @@ class _ComfyHandler(BaseHTTPRequestHandler):
         type(self).prompt_payload = json.loads(body)
         self._json({"prompt_id": "fixture-prompt"})
 
+    # {
+    #   責務: [do_GET: records a local fixture GET request and returns its response]
+    #   処理: [1: record the request method and path, 2: send the configured model-list response]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         if parsed.path == "/history/fixture-prompt":
@@ -69,6 +91,12 @@ class _ComfyHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    # {
+    #   責務: [_json: encodes the payload and writes a JSON HTTP response with content headers]
+    #   処理: [1: serialize the payload as JSON bytes, 2: write a response with JSON content headers]
+    #   引数: [payload: JSON request/response payload (Any)]
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def _json(self, payload: Any) -> None:
         data = json.dumps(payload).encode("utf-8")
         self.send_response(200)
@@ -76,16 +104,51 @@ class _ComfyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    # {
+    #   責務: [assert_view_query: fails when the request does not target ComfyUI's image-view endpoint]
+    #   処理: [
+    #     1: validate the endpoint and required view parameters,
+    #     2: raise AssertionError when the request is malformed,
+    #   ],
+    #   引数: [query: query passed to this helper (dict[str, list[str]])]
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     @staticmethod
     def assert_view_query(query: dict[str, list[str]]) -> None:
         if query != {"filename": ["generated.png"], "type": ["output"]}:
             raise AssertionError(f"unexpected image query: {query}")
 
+    # {
+    #   責務: [log_message: suppresses default request logging from the local fixture server]
+    #   処理: [1: suppress the HTTP server's default request log output]
+    #   引数: [
+    #     _format:  format passed to this helper (str),
+    #     *_args: additional logging arguments intentionally ignored (Any),
+    #   ],
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def log_message(self, _format: str, *_args: Any) -> None:
         return
 
 
+# {
+#   責務: [ComfyUIGenerateCommandTests: related test fixtures and cases for ComfyUIGenerateCommand behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: [
+#     temp: temporary root containing fixture files,
+#     command: command fixture state used by the test cases,
+#     workflow: saved workflow fixture under test,
+#   ],
+#   引数: []
+# }
 class ComfyUIGenerateCommandTests(unittest.TestCase):
+    # {
+    #   責務: [setUpClass: initializes class-wide fixture state for ComfyUIGenerateCommandTests]
+    #   処理: [1: create class-wide fixture resources shared by related cases, 2: register cleanup for owned resources]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    #   副作用: [test専用のloopback HTTP fixture serverを起動・停止する]
+    # }
     @classmethod
     def setUpClass(cls) -> None:
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), _ComfyHandler)
@@ -93,12 +156,27 @@ class ComfyUIGenerateCommandTests(unittest.TestCase):
         cls.thread.start()
         cls.url = f"http://127.0.0.1:{cls.server.server_address[1]}"
 
+    # {
+    #   責務: [tearDownClass: releases class-wide resources created by ComfyUIGenerateCommandTests]
+    #   処理: [1: stop owned workers/servers and release temporary files or UI resources]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     @classmethod
     def tearDownClass(cls) -> None:
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join(timeout=2)
 
+    # {
+    #   責務: [setUp: initializes per-test fixture state for ComfyUIGenerateCommandTests]
+    #   処理: [
+    #     1: create the per-test inputs and fixture resources required by the scenario,
+    #     2: register cleanup for resources owned by the fixture,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def setUp(self) -> None:
         _ComfyHandler.prompt_payload = {}
         _ComfyHandler.uploaded_image = b""
@@ -136,9 +214,30 @@ class ComfyUIGenerateCommandTests(unittest.TestCase):
         self.assertTrue(fingerprints)
         self.assertFalse(fingerprints & set(AFFECTED_CERTIFICATES))
 
+    # {
+    #   責務: [
+    #     test_generation_output_is_available_to_next_step: verifies the behavior described by "generation output is available to next step",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for generation output is available to next step,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def test_generation_output_is_available_to_next_step(self) -> None:
         observed: list[bytes] = []
 
+        # {
+        #   責務: [next_step: records sequence inputs and reads the produced image as the next step would]
+        #   処理: [1: record the upstream step values, 2: read the image referenced by the previous step]
+        #   引数: [
+        #     inputs: input mapping from the previous workflow step (unspecified),
+        #     _context: execution context passed through the workflow (unspecified),
+        #   ],
+        #   戻り値: [result: mapping built or selected by this helper]
+        # }
         def next_step(inputs, _context):
             observed.append(Path(inputs["image"]).read_bytes())
             return {"received": True}
@@ -214,6 +313,18 @@ class ComfyUIGenerateCommandTests(unittest.TestCase):
             "uploaded-input.png",
         )
 
+    # {
+    #   責務: [
+    #     test_rejects_non_loopback_url_and_invalid_workflow: verifies the behavior described by "rejects non loopback url and invalid workflow",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for rejects non loopback url and invalid workflow,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def test_rejects_non_loopback_url_and_invalid_workflow(self) -> None:
         with self.assertRaisesRegex(ValueError, "localhost/loopback"):
             self.command(

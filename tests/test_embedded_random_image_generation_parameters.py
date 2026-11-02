@@ -10,6 +10,15 @@ from scripts.backend.embedded_random_image import EmbeddedRandomImage
 from scripts.backend.generation_capabilities import GenerationCapabilities
 
 
+# {
+#   責務: [_Backend: deterministic image-generation backend that records capability use and returns a tiny PNG]
+#   処理: [1: provide the configured fields and methods used by the surrounding cases]
+#   フィールド: [
+#     request: fake request passed through the backend fixture,
+#     capabilities: capabilities fixture state used by the test cases,
+#   ],
+#   引数: []
+# }
 class _Backend:
     # {
     #   責務: [_Backend: 生成テストでrequestを記録し, テスト画像を返すadapter]
@@ -20,10 +29,29 @@ class _Backend:
     #   引数: [self: backend stub]
     #   戻り値: []
     # }
+    # {
+    #   責務: [__init__: initializes the fields and controlled behavior of _Backend]
+    #   処理: [1: store constructor inputs and initialize controlled fixture state]
+    #   引数: []
+    #   戻り値: [None: initialize instance state without returning a value]
+    # }
     def __init__(self):
         self.request = None
         self.capabilities = GenerationCapabilities(frozenset({"txt2img"}))
 
+    # {
+    #   責務: [generate: returns a deterministic image payload for the supplied generation request]
+    #   処理: [
+    #     1: record or derive the generation output from the supplied sequence inputs,
+    #     2: return the deterministic output payload,
+    #   ],
+    #   引数: [
+    #     request: request data under test (unspecified),
+    #     stop_event: cooperative cancellation signal (unspecified),
+    #   ],
+    #   戻り値: [result: buffer.getvalue built or selected by this helper]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def generate(self, request, stop_event=None):
         self.request = request
         from io import BytesIO
@@ -33,6 +61,14 @@ class _Backend:
         return buffer.getvalue()
 
 
+# {
+#   責務: [
+#     EmbeddedRandomImageGenerationParameterTests: related test fixtures and cases for EmbeddedRandomImageGenerationParameter behavior,
+#   ],
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
     # {
     #   責務: [EmbeddedRandomImageGenerationParameterTests: generation parameterとbackend capability routingを検証する]
@@ -53,6 +89,18 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
 
     # {
     #   責務: [test_incompatible_lora_stops_before_backend_request: 非互換LoRAで生成APIを呼ばずに中止する]
+    # }
+    # {
+    #   責務: [
+    #     test_incompatible_lora_stops_before_backend_request: verifies the behavior described by "incompatible lora stops before backend request",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for incompatible lora stops before backend request,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
     # }
     def test_incompatible_lora_stops_before_backend_request(self):
         generator = EmbeddedRandomImage()
@@ -78,6 +126,18 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
     #   責務: [test_model_override_ambiguity_uses_backend_capability: model override判定をadapter capabilityから行う]
     #   処理: [異なるcapabilityで生成し, LoRA検証へ渡るbase model情報を確認する]
     #   戻り値: []
+    # }
+    # {
+    #   責務: [
+    #     test_model_override_ambiguity_uses_backend_capability: verifies the behavior described by "model override ambiguity uses backend capability",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for model override ambiguity uses backend capability,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
     # }
     def test_model_override_ambiguity_uses_backend_capability(self):
         cases = (({"txt2img", "model_overrides"}, None), ({"txt2img"}, "sdxl/base.safetensors"))
@@ -115,6 +175,18 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
                     reason = validate_loras.call_args.kwargs["base_model_reason"]
                     self.assertEqual(reason is not None, expected_checkpoint is None)
 
+    # {
+    #   責務: [
+    #     test_resolved_values_are_sent_to_backend_and_saved_as_metadata: verifies the behavior described by "resolved values are sent to backend and saved as metadata",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for resolved values are sent to backend and saved as metadata,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_resolved_values_are_sent_to_backend_and_saved_as_metadata(self):
         backend = _Backend()
         messages = []

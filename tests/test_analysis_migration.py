@@ -32,6 +32,12 @@ from comfyui_support_tools.applications.main_gui.process.processing.tag_result i
 )
 
 
+# {
+#   責務: [media_item: creates a media record from a path and its filesystem metadata]
+#   処理: [1: read file metadata from the supplied path, 2: build a MediaItem with stable ID and source metadata]
+#   引数: [path: fixture file or directory path (Path)]
+#   戻り値: [result: MediaItem built or selected by this helper]
+# }
 def media_item(path: Path):
     stat = path.stat()
     return MediaItem(
@@ -45,7 +51,25 @@ def media_item(path: Path):
     )
 
 
+# {
+#   責務: [NormalizedTagResultTests: related test fixtures and cases for NormalizedTagResult behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class NormalizedTagResultTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_categories_rating_caption_and_scores_are_separate: verifies the behavior described by "categories rating caption and scores are separate",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for categories rating caption and scores are separate,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_categories_rating_caption_and_scores_are_separate(self):
         payload = {
             "general": {"1girl": 0.95, "low": 0.1},
@@ -73,6 +97,18 @@ class NormalizedTagResultTests(unittest.TestCase):
         self.assertEqual(tuple(value.name for value in result.content_scores), ("1girl", "low"))
         self.assertNotIn("watercolor", result.content_tags)
 
+    # {
+    #   責務: [
+    #     test_nested_common_service_and_flat_pixai_compatibility: verifies the behavior described by "nested common service and flat pixai compatibility",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for nested common service and flat pixai compatibility,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_nested_common_service_and_flat_pixai_compatibility(self):
         nested = {
             "tags": {
@@ -98,11 +134,35 @@ class NormalizedTagResultTests(unittest.TestCase):
         self.assertEqual(parse_tags({"tag": {"sky": 0.9, "low": 0.1}}, 0.35), ("sky",))
         self.assertEqual(parse_tags({"caption": "sky, clouds"}, 0.35), ("sky", "clouds"))
 
+    # {
+    #   責務: [
+    #     test_freeform_caption_is_not_invented_as_content_tag: verifies the behavior described by "freeform caption is not invented as content tag",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for freeform caption is not invented as content tag,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_freeform_caption_is_not_invented_as_content_tag(self):
         result = parse_tag_result({"caption": "A woman standing under a blue sky."}, 0.35, 0.85)
         self.assertEqual(result.content_tags, ())
         self.assertEqual(result.caption, "A woman standing under a blue sky.")
 
+    # {
+    #   責務: [
+    #     test_unknown_style_only_and_invalid_scores_are_rejected: verifies the behavior described by "unknown style only and invalid scores are rejected",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for unknown style only and invalid scores are rejected,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_unknown_style_only_and_invalid_scores_are_rejected(self):
         for payload in (
             {"style": {"watercolor": 0.9}},
@@ -114,7 +174,25 @@ class NormalizedTagResultTests(unittest.TestCase):
                 parse_tag_result(payload, 0.35, 0.85)
 
 
+# {
+#   責務: [BackendMigrationTests: related test fixtures and cases for BackendMigration behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class BackendMigrationTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_pixai_and_common_service_are_explicit_and_path_checked: verifies the behavior described by "pixai and common service are explicit and path checked",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for pixai and common service are explicit and path checked,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_pixai_and_common_service_are_explicit_and_path_checked(self):
         pixai = TaggerSettings(
             "http://localhost:7861/pixai/v1/interrogate",
@@ -134,12 +212,45 @@ class BackendMigrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_settings(replace(pixai, backend="tagger_service_http"))
 
+    # {
+    #   責務: [
+    #     test_unimplemented_backend_cannot_be_selected_by_id: verifies the behavior described by "unimplemented backend cannot be selected by id",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for unimplemented backend cannot be selected by id,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_unimplemented_backend_cannot_be_selected_by_id(self):
         with self.assertRaises(ValueError):
             resolve_backend("anime_timm_magic", "http://localhost/tagger/v1/interrogate")
 
 
+# {
+#   責務: [InspectorNormalizationTests: related test fixtures and cases for InspectorNormalization behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: [
+#     tmp: temporary root containing fixture files,
+#     item: media item fixture passed to the action under test,
+#     state: application state object under test,
+#     settings: validated request settings for the fixture backend,
+#   ],
+#   引数: []
+# }
 class InspectorNormalizationTests(unittest.TestCase):
+    # {
+    #   責務: [setUp: initializes per-test fixture state for InspectorNormalizationTests]
+    #   処理: [
+    #     1: create the per-test inputs and fixture resources required by the scenario,
+    #     2: register cleanup for resources owned by the fixture,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -161,6 +272,18 @@ class InspectorNormalizationTests(unittest.TestCase):
             prompt="keep prompt",
         ))
 
+    # {
+    #   責務: [
+    #     test_tag_updates_normalized_fields_without_overwriting_style_or_prompt: verifies the behavior described by "tag updates normalized fields without overwriting style or prompt",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for tag updates normalized fields without overwriting style or prompt,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_tag_updates_normalized_fields_without_overwriting_style_or_prompt(self):
         request = self.state.begin("tag")
         payload = {
@@ -186,6 +309,18 @@ class InspectorNormalizationTests(unittest.TestCase):
         self.assertEqual(notes.tagger_backend, "pixai_http")
         self.assertEqual(notes.tagger_model, "fixture-model")
 
+    # {
+    #   責務: [
+    #     test_manual_analysis_edit_clears_stale_confidence_provenance: verifies the behavior described by "manual analysis edit clears stale confidence provenance",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for manual analysis edit clears stale confidence provenance,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_manual_analysis_edit_clears_stale_confidence_provenance(self):
         previous = MediaNotes(
             content_tags=("old",),
@@ -200,6 +335,18 @@ class InspectorNormalizationTests(unittest.TestCase):
         self.assertEqual(notes.tagger_backend, "manual-edit")
         self.assertEqual(notes.tagger_model, "")
 
+    # {
+    #   責務: [
+    #     test_export_request_does_not_require_live_tagger: verifies the behavior described by "export request does not require live tagger",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for export request does not require live tagger,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_export_request_does_not_require_live_tagger(self):
         self.state.ready = False
         settings = ExportSettings(caption_sidecar=True, metadata_sidecar=False)
@@ -209,7 +356,28 @@ class InspectorNormalizationTests(unittest.TestCase):
         self.assertEqual(request.export_records[0].notes.style_tags, ("manual-style",))
 
 
+# {
+#   責務: [ResultExporterTests: related test fixtures and cases for ResultExporter behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: [
+#     tmp: temporary root containing fixture files,
+#     root: fixture root or application root under test,
+#     image: source image fixture used by export tests,
+#     item: media item fixture passed to the action under test,
+#   ],
+#   引数: []
+# }
 class ResultExporterTests(unittest.TestCase):
+    # {
+    #   責務: [setUp: initializes per-test fixture state for ResultExporterTests]
+    #   処理: [
+    #     1: create the per-test inputs and fixture resources required by the scenario,
+    #     2: register cleanup for resources owned by the fixture,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -218,6 +386,18 @@ class ResultExporterTests(unittest.TestCase):
         Image.new("RGB", (20, 10), "blue").save(self.image)
         self.item = media_item(self.image)
 
+    # {
+    #   責務: [
+    #     test_caption_metadata_and_batch_export_keep_fields_structured: verifies the behavior described by "caption metadata and batch export keep fields structured",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for caption metadata and batch export keep fields structured,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_caption_metadata_and_batch_export_keep_fields_structured(self):
         notes = MediaNotes(
             content_tags=("1girl", "blue sky"),
@@ -253,6 +433,18 @@ class ResultExporterTests(unittest.TestCase):
         self.assertEqual(metadata["analysis"]["content_scores"][0]["score"], 0.99)
         self.assertIn(str(self.image.absolute()), batch.read_text(encoding="utf-8"))
 
+    # {
+    #   責務: [
+    #     test_image_to_text_caption_has_priority_over_tag_join: verifies the behavior described by "image to text caption has priority over tag join",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for image to text caption has priority over tag join,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_image_to_text_caption_has_priority_over_tag_join(self):
         notes = MediaNotes(
             content_tags=("tag",),
@@ -268,6 +460,19 @@ class ResultExporterTests(unittest.TestCase):
             "A complete caption sentence.",
         )
 
+    # {
+    #   責務: [
+    #     test_existing_file_requires_explicit_overwrite: verifies the behavior described by "existing file requires explicit overwrite",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for existing file requires explicit overwrite,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_existing_file_requires_explicit_overwrite(self):
         target = self.image.with_suffix(".txt")
         target.write_text("original", encoding="utf-8")
@@ -278,6 +483,19 @@ class ResultExporterTests(unittest.TestCase):
         export_records((record,), ExportSettings(metadata_sidecar=False, overwrite=True))
         self.assertEqual(target.read_text(encoding="utf-8").strip(), "new")
 
+    # {
+    #   責務: [
+    #     test_changed_source_and_bad_batch_target_are_rejected_before_writing: verifies the behavior described by "changed source and bad batch target are rejected before writing",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for changed source and bad batch target are rejected before writing,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_changed_source_and_bad_batch_target_are_rejected_before_writing(self):
         record = MediaExportRecord(self.item, MediaNotes(content_tags=("tag",)))
         self.image.write_bytes(self.image.read_bytes() + b"x")

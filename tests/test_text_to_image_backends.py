@@ -22,18 +22,51 @@ from scripts.backend.generation_backend_catalog_factory import create_generation
 from scripts.backend.text_to_image_request import TextToImageRequest
 
 
+# {
+#   責務: [FakeResponse: controlled HTTP response with configured status, headers, and JSON payload]
+#   処理: [1: provide the configured fields and methods used by the surrounding cases]
+#   フィールド: [
+#     payload: HTTP request/response payload captured by the fixture,
+#     status_checked: status checked fixture state used by the test cases,
+#   ],
+#   引数: []
+# }
 class FakeResponse:
+    # {
+    #   責務: [__init__: initializes the fields and controlled behavior of FakeResponse]
+    #   処理: [1: store constructor inputs and initialize controlled fixture state]
+    #   引数: [payload: JSON request/response payload (unspecified)]
+    #   戻り値: [None: initialize instance state without returning a value]
+    # }
     def __init__(self, payload):
         self.payload = payload
         self.status_checked = False
 
+    # {
+    #   責務: [raise_for_status: records that the fake HTTP response status was checked]
+    #   処理: [1: record that the caller checked the fake response status]
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def raise_for_status(self):
         self.status_checked = True
 
+    # {
+    #   責務: [json: returns the configured decoded response payload]
+    #   処理: [1: return the payload configured for this fake response]
+    #   引数: []
+    #   戻り値: [result: value returned by the helper's documented test role]
+    # }
     def json(self):
         return self.payload
 
 
+# {
+#   責務: [request: builds a TextToImageRequest using the supplied prompt and backend parameters]
+#   処理: [1: merge supplied overrides with deterministic default request fields, 2: construct a TextToImageRequest]
+#   引数: [**overrides: **overrides passed to this helper (unspecified)]
+#   戻り値: [result: TextToImageRequest built or selected by this helper]
+# }
 def request(**overrides):
     values = {
         "prompt": "portrait",
@@ -49,6 +82,15 @@ def request(**overrides):
     return TextToImageRequest(**values)
 
 
+# {
+#   責務: [TextToImageBackendTests: related test fixtures and cases for TextToImageBackend behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: [
+#     arguments: arguments fixture state used by the test cases,
+#     interrupted: interrupted fixture state used by the test cases,
+#   ],
+#   引数: []
+# }
 class TextToImageBackendTests(unittest.TestCase):
     # {
     #   責務: [test_registered_backend_apis_create_matching_catalogs_and_adapters: 共通registry APIがbackendごとの生成機能一式を対応づけることを検証する]
@@ -116,16 +158,49 @@ class TextToImageBackendTests(unittest.TestCase):
     #   引数: [self: test case]
     #   戻り値: []
     # }
+    # {
+    #   責務: [
+    #     test_configured_backend_provider_reports_missing_requests: verifies the behavior described by "configured backend provider reports missing requests",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for configured backend provider reports missing requests,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_configured_backend_provider_reports_missing_requests(self):
         with patch("scripts.context.requests", None):
             with self.assertRaisesRegex(RuntimeError, "requests"):
                 create_configured_image_generation_backend("http://localhost:8188", 45)
 
+    # {
+    #   責務: [
+    #     test_a1111_maps_common_request_and_decodes_first_image: verifies the behavior described by "a1111 maps common request and decodes first image",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 maps common request and decodes first image,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: response value built or selected by this helper]
+    # }
     def test_a1111_maps_common_request_and_decodes_first_image(self):
         image = b"image-bytes"
         response = FakeResponse({"images": [base64.b64encode(image).decode("ascii"), "ignored"]})
         calls = []
 
+        # {
+        #   責務: [post: records the request sent to the fake A1111 backend and returns a generated-image response]
+        #   処理: [1: capture the URL and request options, 2: return the configured fake HTTP response]
+        #   引数: [
+        #     url: fake endpoint URL (unspecified),
+        #     **kwargs: keyword request options captured by the fake client (unspecified),
+        #   ],
+        #   戻り値: [result: response value built or selected by this helper]
+        # }
         def post(url, **kwargs):
             calls.append((url, kwargs))
             return response
@@ -146,6 +221,18 @@ class TextToImageBackendTests(unittest.TestCase):
         })
         self.assertTrue(calls[0][1]["json"]["enable_hr"])
 
+    # {
+    #   責務: [
+    #     test_comfyui_selected_vae_loader_is_connected_to_all_vae_consumers: verifies the behavior described by "comfyui selected vae loader is connected to all vae consumers",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for comfyui selected vae loader is connected to all vae consumers,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_comfyui_selected_vae_loader_is_connected_to_all_vae_consumers(self):
         workflow = {
             "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "model.safetensors"}},
@@ -161,6 +248,18 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertEqual(workflow["8"]["inputs"]["vae"], ["12", 0])
         self.assertEqual(workflow["11"]["inputs"]["vae"], ["12", 0])
 
+    # {
+    #   責務: [
+    #     test_comfyui_selection_updates_existing_vae_loader: verifies the behavior described by "comfyui selection updates existing vae loader",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for comfyui selection updates existing vae loader,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_comfyui_selection_updates_existing_vae_loader(self):
         workflow = {
             "61": {"class_type": "VAELoader", "inputs": {"vae_name": "old.safetensors"}},
@@ -171,6 +270,18 @@ class TextToImageBackendTests(unittest.TestCase):
 
         self.assertEqual(workflow["61"]["inputs"]["vae_name"], "chosen.safetensors")
         self.assertEqual(workflow["62"]["inputs"]["vae"], ["61", 0])
+    # {
+    #   責務: [
+    #     test_a1111_uses_explicit_vae_when_selected: verifies the behavior described by "a1111 uses explicit vae when selected",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 uses explicit vae when selected,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_a1111_uses_explicit_vae_when_selected(self):
         response = FakeResponse({"images": []})
         calls = []
@@ -182,6 +293,18 @@ class TextToImageBackendTests(unittest.TestCase):
         backend.generate(request(vae_name="vae.safetensors"))
 
         self.assertEqual(calls[0][1]["json"]["override_settings"]["sd_vae"], "vae.safetensors")
+    # {
+    #   責務: [
+    #     test_a1111_does_not_send_request_when_already_cancelled: verifies the behavior described by "a1111 does not send request when already cancelled",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 does not send request when already cancelled,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_a1111_does_not_send_request_when_already_cancelled(self):
         called = []
         stopped = Event()
@@ -191,13 +314,46 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertIsNone(backend.generate(request(), stopped))
         self.assertEqual(called, [])
 
+    # {
+    #   責務: [
+    #     test_comfyui_maps_request_to_existing_client: verifies the behavior described by "comfyui maps request to existing client",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for comfyui maps request to existing client,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: bytes value built or selected by this helper]
+    # }
     def test_comfyui_maps_request_to_existing_client(self):
         instances = []
 
+        # {
+        #   責務: [FakeClient: reusable fixture or controlled test double for FakeClient behavior]
+        #   処理: [1: provide the configured fields and methods used by the surrounding cases]
+        #   フィールド: [arguments: arguments fixture state used by the test cases]
+        #   引数: []
+        # }
         class FakeClient:
+            # {
+            #   責務: [__init__: initializes the fields and controlled behavior of FakeClient]
+            #   処理: [1: store constructor inputs and initialize controlled fixture state]
+            #   引数: [
+            #     api_url: API base URL supplied to the fake client (unspecified),
+            #     timeout: maximum wait duration (unspecified),
+            #   ],
+            #   戻り値: [None: initialize instance state without returning a value]
+            # }
             def __init__(self, api_url, timeout):
                 instances.append((api_url, timeout))
 
+            # {
+            #   責務: [txt2img: returns a deterministic image for the text-to-image test double]
+            #   処理: [1: store the generation arguments, 2: return the configured image bytes]
+            #   引数: [**kwargs: keyword request options captured by the fake client (unspecified)]
+            #   戻り値: [result: bytes value built or selected by this helper]
+            # }
             def txt2img(self, **kwargs):
                 self.arguments = kwargs
                 return b"comfy-image"
@@ -216,6 +372,19 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertEqual(backend.client.arguments["model_overrides"], {"4:ckpt_name": "other.safetensors"})
         self.assertEqual(backend.client.arguments["vae_name"], "vae.safetensors")
 
+    # {
+    #   責務: [
+    #     test_a1111_img2img_encodes_source_image_and_maps_settings: verifies the behavior described by "a1111 img2img encodes source image and maps settings",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 img2img encodes source image and maps settings,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_a1111_img2img_encodes_source_image_and_maps_settings(self):
         source_image = b"source-image"
         response = FakeResponse({"images": [base64.b64encode(b"result-image").decode("ascii")]})
@@ -249,11 +418,44 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["json"]["denoising_strength"], 0.6)
         self.assertEqual(calls[0][1]["timeout"], 25)
 
+    # {
+    #   責務: [
+    #     test_comfyui_img2img_passes_image_path_and_stop_event: verifies the behavior described by "comfyui img2img passes image path and stop event",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for comfyui img2img passes image path and stop event,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: bytes value built or selected by this helper]
+    # }
     def test_comfyui_img2img_passes_image_path_and_stop_event(self):
+        # {
+        #   責務: [FakeClient: reusable fixture or controlled test double for FakeClient behavior]
+        #   処理: [1: provide the configured fields and methods used by the surrounding cases]
+        #   フィールド: [arguments: arguments fixture state used by the test cases]
+        #   引数: []
+        # }
         class FakeClient:
+            # {
+            #   責務: [__init__: initializes the fields and controlled behavior of FakeClient]
+            #   処理: [1: store constructor inputs and initialize controlled fixture state]
+            #   引数: [
+            #     _url:  url passed to this helper (unspecified),
+            #     _timeout:  timeout passed to this helper (unspecified),
+            #   ],
+            #   戻り値: [None: initialize instance state without returning a value]
+            # }
             def __init__(self, _url, _timeout):
                 self.arguments = None
 
+            # {
+            #   責務: [img2img: returns the canned image-to-image result from the fake client]
+            #   処理: [1: store the generation arguments, 2: return the configured image-to-image bytes]
+            #   引数: [**kwargs: keyword request options captured by the fake client (unspecified)]
+            #   戻り値: [result: bytes value built or selected by this helper]
+            # }
             def img2img(self, **kwargs):
                 self.arguments = kwargs
                 return b"comfy-img2img"
@@ -280,6 +482,18 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertEqual(backend.client.arguments["denoise"], 0.65)
         self.assertEqual(backend.client.arguments["vae_name"], "")
 
+    # {
+    #   責務: [
+    #     test_a1111_interrupt_uses_service_root_and_declares_capabilities: verifies the behavior described by "a1111 interrupt uses service root and declares capabilities",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 interrupt uses service root and declares capabilities,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_a1111_interrupt_uses_service_root_and_declares_capabilities(self):
         calls = []
         response = FakeResponse({})
@@ -296,11 +510,44 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertTrue(backend.capabilities.supports("img2img"))
         self.assertFalse(backend.capabilities.supports("workflow"))
 
+    # {
+    #   責務: [
+    #     test_comfyui_interrupt_delegates_and_declares_workflow_support: verifies the behavior described by "comfyui interrupt delegates and declares workflow support",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for comfyui interrupt delegates and declares workflow support,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_comfyui_interrupt_delegates_and_declares_workflow_support(self):
+        # {
+        #   責務: [FakeClient: reusable fixture or controlled test double for FakeClient behavior]
+        #   処理: [1: provide the configured fields and methods used by the surrounding cases]
+        #   フィールド: [interrupted: interrupted fixture state used by the test cases]
+        #   引数: []
+        # }
         class FakeClient:
+            # {
+            #   責務: [__init__: initializes the fields and controlled behavior of FakeClient]
+            #   処理: [1: store constructor inputs and initialize controlled fixture state]
+            #   引数: [
+            #     _url:  url passed to this helper (unspecified),
+            #     _timeout:  timeout passed to this helper (unspecified),
+            #   ],
+            #   戻り値: [None: initialize instance state without returning a value]
+            # }
             def __init__(self, _url, _timeout):
                 self.interrupted = False
 
+            # {
+            #   責務: [interrupt: returns the interruption response configured for the fake client]
+            #   処理: [1: store the interruption request, 2: return the configured interrupted result]
+            #   引数: []
+            #   戻り値: [None: test helper returns no value]
+            # }
             def interrupt(self):
                 self.interrupted = True
 
@@ -312,6 +559,18 @@ class TextToImageBackendTests(unittest.TestCase):
         self.assertTrue(backend.capabilities.supports("workflow"))
         self.assertTrue(backend.capabilities.supports("interrupt"))
 
+    # {
+    #   責務: [
+    #     test_factory_selects_supported_backend_and_rejects_unknown: verifies the behavior described by "factory selects supported backend and rejects unknown",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for factory selects supported backend and rejects unknown,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_factory_selects_supported_backend_and_rejects_unknown(self):
         post = lambda *args, **kwargs: FakeResponse({"images": []})
         self.assertIsInstance(

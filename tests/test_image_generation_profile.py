@@ -209,6 +209,18 @@ class ImageGenerationProfileTests(unittest.TestCase):
     #   引数: [self: test case]
     #   戻り値: []
     # }
+    # {
+    #   責務: [
+    #     test_img2img_profile_rejects_unknown_backend: verifies the behavior described by "img2img profile rejects unknown backend",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for img2img profile rejects unknown backend,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_img2img_profile_rejects_unknown_backend(self):
         with self.assertRaises(ValueError):
             create_generation_profile(

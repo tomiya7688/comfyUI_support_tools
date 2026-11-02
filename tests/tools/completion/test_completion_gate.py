@@ -9,7 +9,23 @@ sys.path.insert(0, str(MODULE_DIR))
 import completion_gate  # noqa: E402
 
 
+# {
+#   責務: [CompletionGateTests: related test fixtures and cases for CompletionGate behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class CompletionGateTests(unittest.TestCase):
+    # {
+    #   責務: [test_stops_on_failed_check: verifies the behavior described by "stops on failed check"]
+    #   処理: [
+    #     1: arrange case data and fixture state for stops on failed check,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_stops_on_failed_check(self):
         with mock.patch.object(completion_gate, "compile_check", return_value=completion_gate.CheckResult("compile", 1)), \
              mock.patch.object(completion_gate, "quality_check") as quality, \
@@ -28,6 +44,18 @@ class CompletionGateTests(unittest.TestCase):
             upd.assert_not_called()
             diff.assert_not_called()
 
+    # {
+    #   責務: [
+    #     test_skip_tests_still_runs_docs_architecture_and_diff: verifies the behavior described by "skip tests still runs docs architecture and diff",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for skip tests still runs docs architecture and diff,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_skip_tests_still_runs_docs_architecture_and_diff(self):
         with mock.patch.object(completion_gate, "compile_check", return_value=completion_gate.CheckResult("compile", 0)), \
              mock.patch.object(completion_gate, "quality_check", return_value=completion_gate.CheckResult("quality", 0)) as quality, \
@@ -46,6 +74,18 @@ class CompletionGateTests(unittest.TestCase):
             upd.assert_called_once()
             diff.assert_called_once()
 
+    # {
+    #   責務: [
+    #     test_stops_when_generated_docs_are_stale: verifies the behavior described by "stops when generated docs are stale",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for stops when generated docs are stale,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_stops_when_generated_docs_are_stale(self):
         with mock.patch.object(completion_gate, "compile_check", return_value=completion_gate.CheckResult("compile", 0)), \
              mock.patch.object(completion_gate, "quality_check", return_value=completion_gate.CheckResult("quality", 0)), \
@@ -60,6 +100,18 @@ class CompletionGateTests(unittest.TestCase):
             upd.assert_not_called()
             diff.assert_not_called()
 
+    # {
+    #   責務: [
+    #     test_stops_on_architecture_violation: verifies the behavior described by "stops on architecture violation",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for stops on architecture violation,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_stops_on_architecture_violation(self):
         with mock.patch.object(completion_gate, "compile_check", return_value=completion_gate.CheckResult("compile", 0)), \
              mock.patch.object(completion_gate, "quality_check", return_value=completion_gate.CheckResult("quality", 0)), \
@@ -73,6 +125,18 @@ class CompletionGateTests(unittest.TestCase):
             upd.assert_not_called()
             diff.assert_not_called()
 
+    # {
+    #   責務: [
+    #     test_stops_on_upd_architecture_violation: verifies the behavior described by "stops on upd architecture violation",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for stops on upd architecture violation,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_stops_on_upd_architecture_violation(self):
         with mock.patch.object(completion_gate, "compile_check", return_value=completion_gate.CheckResult("compile", 0)), \
              mock.patch.object(completion_gate, "quality_check", return_value=completion_gate.CheckResult("quality", 0)), \

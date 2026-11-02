@@ -21,13 +21,31 @@ from comfyui_support_tools.entrypoints.sequence_cli import main
 from comfyui_support_tools.shared.contracts.sequence_contracts import SequenceDefinition, SequenceStep
 
 
+# {
+#   責務: [_OllamaHandler: loopback HTTP fixture that captures Ollama prompt requests and returns a canned response]
+#   処理: [1: provide the configured fields and methods used by the surrounding cases]
+#   フィールド: [payload: HTTP request/response payload captured by the fixture (dict[str, Any])]
+#   引数: []
+# }
 class _OllamaHandler(BaseHTTPRequestHandler):
     payload: dict[str, Any] = {}
 
+    # {
+    #   責務: [do_POST: records a local fixture POST request and returns its response]
+    #   処理: [1: read and decode the posted JSON body, 2: record the request and send the configured response payload]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def do_POST(self) -> None:
         type(self).payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self._json({"response": "corrected image prompt"})
 
+    # {
+    #   責務: [_json: encodes the payload and writes a JSON HTTP response with content headers]
+    #   処理: [1: serialize the payload as JSON bytes, 2: write a response with JSON content headers]
+    #   引数: [payload: JSON request/response payload (Any)]
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def _json(self, payload: Any) -> None:
         data = json.dumps(payload).encode("utf-8")
         self.send_response(200)
@@ -35,18 +53,48 @@ class _OllamaHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    # {
+    #   責務: [log_message: suppresses default request logging from the local fixture server]
+    #   処理: [1: suppress the HTTP server's default request log output]
+    #   引数: [
+    #     _format:  format passed to this helper (str),
+    #     *_args: additional logging arguments intentionally ignored (Any),
+    #   ],
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def log_message(self, _format: str, *_args: Any) -> None:
         return
 
 
+# {
+#   責務: [_ComfyHandler: loopback HTTP fixture that captures ComfyUI prompts and serves a generated image]
+#   処理: [1: provide the configured fields and methods used by the surrounding cases]
+#   フィールド: [
+#     payload: HTTP request/response payload captured by the fixture (dict[str, Any]),
+#     image_data: image data fixture state used by the test cases,
+#   ],
+#   引数: []
+# }
 class _ComfyHandler(BaseHTTPRequestHandler):
     payload: dict[str, Any] = {}
     image_data = b""
 
+    # {
+    #   責務: [do_POST: records a local fixture POST request and returns its response]
+    #   処理: [1: read and decode the posted JSON body, 2: record the request and send the configured response payload]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def do_POST(self) -> None:
         type(self).payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self._json({"prompt_id": "sequence-e2e"})
 
+    # {
+    #   責務: [do_GET: records a local fixture GET request and returns its response]
+    #   処理: [1: record the request method and path, 2: send the configured model-list response]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
         if path == "/history/sequence-e2e":
@@ -66,6 +114,12 @@ class _ComfyHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    # {
+    #   責務: [_json: encodes the payload and writes a JSON HTTP response with content headers]
+    #   処理: [1: serialize the payload as JSON bytes, 2: write a response with JSON content headers]
+    #   引数: [payload: JSON request/response payload (Any)]
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def _json(self, payload: Any) -> None:
         data = json.dumps(payload).encode("utf-8")
         self.send_response(200)
@@ -73,14 +127,38 @@ class _ComfyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    # {
+    #   責務: [log_message: suppresses default request logging from the local fixture server]
+    #   処理: [1: suppress the HTTP server's default request log output]
+    #   引数: [
+    #     _format:  format passed to this helper (str),
+    #     *_args: additional logging arguments intentionally ignored (Any),
+    #   ],
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def log_message(self, _format: str, *_args: Any) -> None:
         return
 
 
+# {
+#   責務: [_TaggerHandler: loopback HTTP fixture that captures tagger requests and returns controlled tags]
+#   処理: [1: provide the configured fields and methods used by the surrounding cases]
+#   フィールド: [
+#     payload: HTTP request/response payload captured by the fixture (dict[str, Any]),
+#     image_data: image data fixture state used by the test cases,
+#   ],
+#   引数: []
+# }
 class _TaggerHandler(BaseHTTPRequestHandler):
     payload: dict[str, Any] = {}
     image_data = b""
 
+    # {
+    #   責務: [do_POST: records a local fixture POST request and returns its response]
+    #   処理: [1: read and decode the posted JSON body, 2: record the request and send the configured response payload]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def do_POST(self) -> None:
         type(self).payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         type(self).image_data = base64.b64decode(type(self).payload["image"])
@@ -94,14 +172,38 @@ class _TaggerHandler(BaseHTTPRequestHandler):
             "caption": "tagged generated image",
         }).encode("utf-8"))
 
+    # {
+    #   責務: [log_message: suppresses default request logging from the local fixture server]
+    #   処理: [1: suppress the HTTP server's default request log output]
+    #   引数: [
+    #     _format:  format passed to this helper (str),
+    #     *_args: additional logging arguments intentionally ignored (Any),
+    #   ],
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def log_message(self, _format: str, *_args: Any) -> None:
         return
 
 
+# {
+#   責務: [_A1111Handler: reusable fixture or controlled test double for _A1111Handler behavior]
+#   処理: [1: provide the configured fields and methods used by the surrounding cases]
+#   フィールド: [
+#     payload: HTTP request/response payload captured by the fixture (dict[str, Any]),
+#     image_data: image data fixture state used by the test cases,
+#   ],
+#   引数: []
+# }
 class _A1111Handler(BaseHTTPRequestHandler):
     payload: dict[str, Any] = {}
     image_data = b""
 
+    # {
+    #   責務: [do_POST: records a local fixture POST request and returns its response]
+    #   処理: [1: read and decode the posted JSON body, 2: record the request and send the configured response payload]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def do_POST(self) -> None:
         type(self).payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         encoded = base64.b64encode(type(self).image_data).decode("ascii")
@@ -112,11 +214,33 @@ class _A1111Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    # {
+    #   責務: [log_message: suppresses default request logging from the local fixture server]
+    #   処理: [1: suppress the HTTP server's default request log output]
+    #   引数: [
+    #     _format:  format passed to this helper (str),
+    #     *_args: additional logging arguments intentionally ignored (Any),
+    #   ],
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def log_message(self, _format: str, *_args: Any) -> None:
         return
 
 
+# {
+#   責務: [SequenceEndToEndTests: related test fixtures and cases for SequenceEndToEnd behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class SequenceEndToEndTests(unittest.TestCase):
+    # {
+    #   責務: [setUpClass: initializes class-wide fixture state for SequenceEndToEndTests]
+    #   処理: [1: create class-wide fixture resources shared by related cases, 2: register cleanup for owned resources]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    #   副作用: [test専用のloopback HTTP fixture serverを起動・停止する]
+    # }
     @classmethod
     def setUpClass(cls) -> None:
         cls.servers = []
@@ -132,6 +256,12 @@ class SequenceEndToEndTests(unittest.TestCase):
         cls.tagger_url = cls._base_url(cls.servers[2]) + "/pixai/v1/interrogate"
         cls.a1111_url = cls._base_url(cls.servers[3])
 
+    # {
+    #   責務: [tearDownClass: releases class-wide resources created by SequenceEndToEndTests]
+    #   処理: [1: stop owned workers/servers and release temporary files or UI resources]
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     @classmethod
     def tearDownClass(cls) -> None:
         for server in cls.servers:
@@ -140,10 +270,29 @@ class SequenceEndToEndTests(unittest.TestCase):
         for thread in cls.threads:
             thread.join(timeout=2)
 
+    # {
+    #   責務: [_base_url: returns the loopback URL for the local fixture server]
+    #   処理: [1: read the ephemeral port from the running HTTP server, 2: return its loopback URL]
+    #   引数: [server: running local HTTP server (ThreadingHTTPServer)]
+    #   戻り値: [result: str produced for the supplied fixture/input]
+    # }
     @staticmethod
     def _base_url(server: ThreadingHTTPServer) -> str:
         return f"http://127.0.0.1:{server.server_address[1]}"
 
+    # {
+    #   責務: [
+    #     test_saved_sequence_runs_ollama_comfyui_and_tagger_through_cli: verifies the behavior described by "saved sequence runs ollama comfyui and tagger through cli",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for saved sequence runs ollama comfyui and tagger through cli,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_saved_sequence_runs_ollama_comfyui_and_tagger_through_cli(self) -> None:
         image_buffer = BytesIO()
         Image.new("RGB", (24, 16), "blue").save(image_buffer, format="PNG")
@@ -217,6 +366,19 @@ class SequenceEndToEndTests(unittest.TestCase):
         self.assertEqual(_TaggerHandler.payload["model"], "fixture-tagger")
         self.assertEqual(workflow["6"]["inputs"]["text"], "unmodified")
 
+    # {
+    #   責務: [
+    #     test_saved_sequence_runs_ollama_a1111_and_tagger_through_cli: verifies the behavior described by "saved sequence runs ollama a1111 and tagger through cli",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for saved sequence runs ollama a1111 and tagger through cli,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_saved_sequence_runs_ollama_a1111_and_tagger_through_cli(self) -> None:
         image_buffer = BytesIO()
         Image.new("RGB", (24, 16), "red").save(image_buffer, format="PNG")
@@ -281,6 +443,18 @@ class SequenceEndToEndTests(unittest.TestCase):
         self.assertFalse(_A1111Handler.payload["save_images"])
         self.assertTrue(_TaggerHandler.image_data.startswith(b"\x89PNG"))
 
+    # {
+    #   責務: [
+    #     test_a1111_command_rejects_remote_api_before_creating_output_directory: verifies the behavior described by "a1111 command rejects remote api before creating output directory",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 command rejects remote api before creating output directory,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: None produced for the supplied fixture/input]
+    # }
     def test_a1111_command_rejects_remote_api_before_creating_output_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output_dir = Path(directory) / "not-created"

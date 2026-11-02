@@ -18,6 +18,16 @@ from tests.inspector_http_fixture import TaggerFixture
 from tests.test_inspector_actions import sample
 
 
+# {
+#   責務: [pump: pumps the UI event loop until a condition succeeds or the timeout expires]
+#   処理: [1: poll or pump until the requested predicate succeeds, 2: raise a useful timeout failure if it does not]
+#   引数: [
+#     window: window passed to this helper (unspecified),
+#     predicate: completion predicate callback (unspecified),
+#     timeout: maximum wait duration (unspecified),
+#   ],
+#   戻り値: [None: test helper returns no value]
+# }
 def pump(window, predicate, timeout=5):
     deadline=time.monotonic()+timeout
     while time.monotonic()<deadline:
@@ -28,12 +38,44 @@ def pump(window, predicate, timeout=5):
     raise AssertionError("Tk inspector timed out")
 
 
+# {
+#   責務: [InspectorPanelTests: related test fixtures and cases for InspectorPanel behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: [
+#     tmp: temporary root containing fixture files,
+#     fixture: local service fixture used by the test,
+#     a: first selected media item,
+#     b: second selected media item,
+#     window: Tk root window owned by the UI test,
+#     errors: errors collected from navigation callbacks,
+#     logs: log messages emitted by the tested action,
+#     controller: application controller under test,
+#     panel: panel widget or view under test,
+#   ],
+#   引数: []
+# }
 class InspectorPanelTests(unittest.TestCase):
+    # {
+    #   責務: [setUpClass: skips InspectorPanelTests when required platform or display prerequisites are unavailable]
+    #   処理: [1: check platform/display prerequisites, 2: skip the UI suite when the required display is unavailable]
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     @classmethod
     def setUpClass(cls):
         if sys.platform!='win32' and not os.environ.get('DISPLAY'):
             raise unittest.SkipTest('Tk display required; Windows CI exercises all tests')
 
+    # {
+    #   責務: [setUp: initializes per-test fixture state for InspectorPanelTests]
+    #   処理: [
+    #     1: create the per-test inputs and fixture resources required by the scenario,
+    #     2: register cleanup for resources owned by the fixture,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [Tk test window/event loopを作成し、test終了時に破棄する]
+    # }
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.fixture=TaggerFixture()
@@ -50,6 +92,12 @@ class InspectorPanelTests(unittest.TestCase):
         self.panel.select((self.a,))
         self.window.update()
 
+    # {
+    #   責務: [tearDown: releases per-test resources created by InspectorPanelTests]
+    #   処理: [1: stop owned workers/servers and release temporary files or UI resources]
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def tearDown(self):
         self.window.destroy()
         for worker in threading.enumerate():
@@ -60,12 +108,30 @@ class InspectorPanelTests(unittest.TestCase):
         self.tmp.cleanup()
         self.assertEqual(self.errors,[])
 
+    # {
+    #   責務: [connect: configures the local backend, starts probing, and refreshes the UI state]
+    #   処理: [1: configure/start the fixture backend, 2: pump UI events and refresh the panel]
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def connect(self):
         self.controller.configure(TaggerSettings(self.fixture.url,'fixture-model'))
         self.controller.start('probe')
         pump(self.window,lambda:not self.controller.status().busy)
         self.panel.refresh()
 
+    # {
+    #   責務: [
+    #     test_initial_state_disabled_and_does_not_auto_connect: verifies the behavior described by "initial state disabled and does not auto connect",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for initial state disabled and does not auto connect,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_initial_state_disabled_and_does_not_auto_connect(self):
         self.assertEqual(str(self.panel.run_button['state']),'disabled')
         self.panel.open_settings()
@@ -73,6 +139,18 @@ class InspectorPanelTests(unittest.TestCase):
         self.assertEqual(self.fixture.requests,[])
         self.assertIn('未確認',self.panel.reason_text.get())
 
+    # {
+    #   責務: [
+    #     test_confirmation_cancel_makes_no_post: verifies the behavior described by "confirmation cancel makes no post",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for confirmation cancel makes no post,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_confirmation_cancel_makes_no_post(self):
         self.connect()
         with mock.patch('tkinter.messagebox.askyesno',return_value=False) as confirm:
@@ -80,6 +158,18 @@ class InspectorPanelTests(unittest.TestCase):
         self.assertTrue(confirm.called)
         self.assertEqual([verb for verb,*_ in self.fixture.requests],['GET'])
 
+    # {
+    #   責務: [
+    #     test_real_button_posts_batch_and_keeps_style_prompt_separate: verifies the behavior described by "real button posts batch and keeps style prompt separate",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for real button posts batch and keeps style prompt separate,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_real_button_posts_batch_and_keeps_style_prompt_separate(self):
         self.connect()
         notes=MediaNotes(style_tags=('watercolor',),prompt='blue sky')
@@ -96,8 +186,29 @@ class InspectorPanelTests(unittest.TestCase):
         self.assertIn('landscape',self.panel.fields['content_tags'].get('1.0','end'))
         self.assertEqual(len([x for x in self.fixture.requests if x[0]=='POST']),2)
 
+    # {
+    #   責務: [
+    #     test_selection_change_during_confirmation_aborts_send: verifies the behavior described by "selection change during confirmation aborts send",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for selection change during confirmation aborts send,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [result: bool value built or selected by this helper]
+    # }
     def test_selection_change_during_confirmation_aborts_send(self):
         self.connect()
+        # {
+        #   責務: [confirm: changes media selection while the confirmation dialog is pending]
+        #   処理: [1: change selected item while confirmation is pending]
+        #   引数: [
+        #     *_args: additional logging arguments intentionally ignored (unspecified),
+        #     **_kwargs: ** kwargs passed to this helper (unspecified),
+        #   ],
+        #   戻り値: [result: bool value built or selected by this helper]
+        # }
         def confirm(*_args,**_kwargs):
             self.panel.select((self.b,));return True
         with mock.patch('tkinter.messagebox.askyesno',side_effect=confirm):
@@ -105,6 +216,18 @@ class InspectorPanelTests(unittest.TestCase):
         self.assertEqual(len(self.fixture.requests),1)
         self.assertTrue(any('選択または' in text for text in self.logs))
 
+    # {
+    #   責務: [
+    #     test_video_and_mixed_selection_disable_image_action: verifies the behavior described by "video and mixed selection disable image action",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for video and mixed selection disable image action,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_video_and_mixed_selection_disable_image_action(self):
         self.connect()
         for values in ((replace(self.a,kind='video'),), (self.a,replace(self.b,kind='video'))):
@@ -113,6 +236,18 @@ class InspectorPanelTests(unittest.TestCase):
             self.assertEqual(str(self.panel.save_button['state']),'disabled')
             self.assertIn('画像のみ',self.panel.reason_text.get())
 
+    # {
+    #   責務: [
+    #     test_notes_saved_only_to_selected_media_session: verifies the behavior described by "notes saved only to selected media session",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for notes saved only to selected media session,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_notes_saved_only_to_selected_media_session(self):
         self.panel.fields['style_tags'].insert('1.0','ink, sketch')
         self.panel.fields['prompt'].insert('1.0','My prompt')
@@ -126,6 +261,18 @@ class InspectorPanelTests(unittest.TestCase):
         self.assertEqual(self.panel.fields['prompt'].get('1.0','end-1c'),'My prompt')
         self.assertEqual(len(list(Path(self.tmp.name).iterdir())),2)
 
+    # {
+    #   責務: [
+    #     test_unapplied_edits_do_not_leak_on_selection_change: verifies the behavior described by "unapplied edits do not leak on selection change",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for unapplied edits do not leak on selection change,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_unapplied_edits_do_not_leak_on_selection_change(self):
         self.panel.fields['prompt'].insert('1.0','UNSAVED')
         self.window.update()
@@ -133,6 +280,18 @@ class InspectorPanelTests(unittest.TestCase):
         self.assertEqual(self.panel.fields['prompt'].get('1.0','end-1c'),'')
         self.assertTrue(any('未反映' in line for line in self.logs))
 
+    # {
+    #   責務: [
+    #     test_menu_and_button_share_registry_and_capability_state: verifies the behavior described by "menu and button share registry and capability state",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for menu and button share registry and capability state,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_menu_and_button_share_registry_and_capability_state(self):
         menu=tk.Menu(self.window,tearoff=False)
         self.panel.fill_menu(menu)
@@ -146,12 +305,39 @@ class InspectorPanelTests(unittest.TestCase):
         execute.assert_called_once_with('tag')
 
 
+# {
+#   責務: [InspectorShellIntegrationTests: related test fixtures and cases for InspectorShellIntegration behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class InspectorShellIntegrationTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     setUpClass: skips InspectorShellIntegrationTests when required platform or display prerequisites are unavailable,
+    #   ],
+    #   処理: [1: check platform/display prerequisites, 2: skip the UI suite when the required display is unavailable]
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     @classmethod
     def setUpClass(cls):
         if sys.platform!='win32' and not os.environ.get('DISPLAY'):
             raise unittest.SkipTest('Tk display required')
 
+    # {
+    #   責務: [
+    #     test_real_shell_switching_clears_actions_and_restores_media_notes: verifies the behavior described by "real shell switching clears actions and restores media notes",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for real shell switching clears actions and restores media notes,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [Tk test window/event loopを作成し、test終了時に破棄する]
+    # }
     def test_real_shell_switching_clears_actions_and_restores_media_notes(self):
         from comfyui_support_tools.applications.main_gui.ui.processing.inspector_shell import InspectorShellWindow
         from comfyui_support_tools.entrypoints.workspace import create_navigation

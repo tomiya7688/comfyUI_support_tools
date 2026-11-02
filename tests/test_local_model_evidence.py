@@ -15,19 +15,51 @@ from scripts.backend.prompt_lora_compatibility import validate_prompt_loras
 from src.comfyui_support_tools.shared.model_identity import ModelFamily, ModelKind
 
 
+# {
+#   責務: [_write_header: writes a safetensors header containing the selected model family]
+#   処理: [1: encode the safetensors metadata header, 2: write its length prefix and header bytes to the fixture path]
+#   引数: [path: fixture file or directory path (Path), family: family passed to this helper (str)]
+#   戻り値: [result: None produced for the supplied fixture/input]
+#   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+# }
 def _write_header(path: Path, family: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     header = json.dumps({"__metadata__": {"ss_base_model_version": family}}).encode("utf-8")
     path.write_bytes(struct.pack("<Q", len(header)) + header)
 
 
+# {
+#   責務: [_write_shapes: writes tensor shape metadata to a safetensors fixture]
+#   処理: [1: encode tensor shape metadata, 2: write the safetensors header at the fixture path]
+#   引数: [path: fixture file or directory path (Path), shapes: tensor-name/shape mapping (dict)]
+#   戻り値: [result: None produced for the supplied fixture/input]
+#   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+# }
 def _write_shapes(path: Path, shapes: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     header = json.dumps({key: {"shape": list(shape)} for key, shape in shapes.items()}).encode("utf-8")
     path.write_bytes(struct.pack("<Q", len(header)) + header)
 
 
+# {
+#   責務: [LocalModelEvidenceTests: related test fixtures and cases for LocalModelEvidence behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: [root: fixture root or application root under test, roots: roots fixture state used by the test cases]
+#   引数: []
+# }
 class LocalModelEvidenceTests(unittest.TestCase):
+    # {
+    #   責務: [
+    #     test_structure_only_checkpoint_and_lora_mismatch_stops_generation: verifies the behavior described by "structure only checkpoint and lora mismatch stops generation",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for structure only checkpoint and lora mismatch stops generation,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_structure_only_checkpoint_and_lora_mismatch_stops_generation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -48,6 +80,18 @@ class LocalModelEvidenceTests(unittest.TestCase):
                     )
                 self.assertIn("tensor", logs[0])
 
+    # {
+    #   責務: [
+    #     test_replaced_structure_only_model_invalidates_cached_classification: verifies the behavior described by "replaced structure only model invalidates cached classification",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for replaced structure only model invalidates cached classification,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_replaced_structure_only_model_invalidates_cached_classification(self):
         path = self.root / "base.safetensors"
         shapes = {
@@ -62,6 +106,15 @@ class LocalModelEvidenceTests(unittest.TestCase):
         os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000))
         self.assertEqual(classify_local_model_choice(path.name, ModelKind.CHECKPOINT).family, ModelFamily.SDXL)
 
+    # {
+    #   責務: [setUp: initializes per-test fixture state for LocalModelEvidenceTests]
+    #   処理: [
+    #     1: create the per-test inputs and fixture resources required by the scenario,
+    #     2: register cleanup for resources owned by the fixture,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -70,6 +123,18 @@ class LocalModelEvidenceTests(unittest.TestCase):
         self.roots = roots.start()
         self.addCleanup(roots.stop)
 
+    # {
+    #   責務: [
+    #     test_catalog_classifier_uses_metadata_for_generic_filename: verifies the behavior described by "catalog classifier uses metadata for generic filename",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for catalog classifier uses metadata for generic filename,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_catalog_classifier_uses_metadata_for_generic_filename(self):
         _write_header(self.root / "base.safetensors", "sdxl_base_v1-0")
         result = classify_base_model_choice("base.safetensors", {"checkpoints": ["base.safetensors"]})
@@ -80,6 +145,18 @@ class LocalModelEvidenceTests(unittest.TestCase):
     #   責務: [test_checkpoint_roots_follow_selected_catalog: checkpoint分類が選択中catalogのruntime配置先を使うことを検証する]
     #   処理: [各backend設定でruntime checkpoint rootがcatalogの宣言と一致することを確認する]
     #   戻り値: []
+    # }
+    # {
+    #   責務: [
+    #     test_checkpoint_roots_follow_selected_catalog: verifies the behavior described by "checkpoint roots follow selected catalog",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for checkpoint roots follow selected catalog,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
     # }
     def test_checkpoint_roots_follow_selected_catalog(self):
         runtime = self.root / "runtime"
@@ -94,12 +171,36 @@ class LocalModelEvidenceTests(unittest.TestCase):
         self.assertIn(runtime / "models" / "checkpoints", comfyui_roots)
         self.assertNotIn(runtime / "models" / "Stable-diffusion", comfyui_roots)
 
+    # {
+    #   責務: [
+    #     test_a1111_checkpoint_display_hash_resolves_local_header: verifies the behavior described by "a1111 checkpoint display hash resolves local header",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 checkpoint display hash resolves local header,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_a1111_checkpoint_display_hash_resolves_local_header(self):
         _write_header(self.root / "base.safetensors", "sdxl")
         name = "base.safetensors [012345abcd]"
         result = classify_base_model_choice(name, {"checkpoints": [name]})
         self.assertEqual(result.family, ModelFamily.SDXL)
 
+    # {
+    #   責務: [
+    #     test_a1111_lora_stem_finds_unique_nested_file_and_metadata: verifies the behavior described by "a1111 lora stem finds unique nested file and metadata",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 lora stem finds unique nested file and metadata,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_a1111_lora_stem_finds_unique_nested_file_and_metadata(self):
         _write_header(self.root / "base.safetensors", "flux1")
         _write_header(self.root / "nested" / "style.safetensors", "sdxl")
@@ -110,12 +211,36 @@ class LocalModelEvidenceTests(unittest.TestCase):
                 lambda _message: None,
             )
 
+    # {
+    #   責務: [
+    #     test_a1111_stem_with_multiple_local_matches_remains_unknown: verifies the behavior described by "a1111 stem with multiple local matches remains unknown",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 stem with multiple local matches remains unknown,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_a1111_stem_with_multiple_local_matches_remains_unknown(self):
         _write_header(self.root / "sdxl" / "style.safetensors", "sdxl")
         _write_header(self.root / "flux" / "style.safetensors", "flux1")
         result = classify_local_model_choice("style", ModelKind.LORA)
         self.assertEqual(result.family, ModelFamily.UNKNOWN)
 
+    # {
+    #   責務: [
+    #     test_dotted_lora_api_name_is_an_alias_not_a_file_extension: verifies the behavior described by "dotted lora api name is an alias not a file extension",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for dotted lora api name is an alias not a file extension,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_dotted_lora_api_name_is_an_alias_not_a_file_extension(self):
         _write_header(self.root / "base.safetensors", "flux1")
         _write_header(self.root / "style.v1.2.safetensors", "sdxl")
@@ -126,6 +251,18 @@ class LocalModelEvidenceTests(unittest.TestCase):
                 lambda _message: None,
             )
 
+    # {
+    #   責務: [
+    #     test_api_alias_and_local_filename_use_same_metadata_for_compatibility: verifies the behavior described by "api alias and local filename use same metadata for compatibility",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for api alias and local filename use same metadata for compatibility,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_api_alias_and_local_filename_use_same_metadata_for_compatibility(self):
         _write_header(self.root / "base.safetensors", "flux1")
         _write_header(self.root / "style.safetensors", "sdxl")
@@ -137,6 +274,18 @@ class LocalModelEvidenceTests(unittest.TestCase):
             )
         self.assertIn("extensionless API alias", logs[0])
 
+    # {
+    #   責務: [
+    #     test_metadata_mismatch_stops_prompt_generation_for_generic_names: verifies the behavior described by "metadata mismatch stops prompt generation for generic names",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for metadata mismatch stops prompt generation for generic names,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_metadata_mismatch_stops_prompt_generation_for_generic_names(self):
         _write_header(self.root / "base.safetensors", "flux1")
         _write_header(self.root / "style.safetensors", "sdxl_base_v1-0")
@@ -149,6 +298,18 @@ class LocalModelEvidenceTests(unittest.TestCase):
         self.assertIn("[incompatible]", logs[0])
         self.assertIn("metadata", logs[0])
 
+    # {
+    #   責務: [
+    #     test_duplicate_distinct_local_files_keep_family_unknown: verifies the behavior described by "duplicate distinct local files keep family unknown",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for duplicate distinct local files keep family unknown,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_duplicate_distinct_local_files_keep_family_unknown(self):
         other = self.root / "other"
         self.roots.return_value = [self.root, other]
@@ -158,11 +319,36 @@ class LocalModelEvidenceTests(unittest.TestCase):
         self.assertEqual(result.family, ModelFamily.UNKNOWN)
         self.assertIn("ambiguous", result.family_reason)
 
+    # {
+    #   責務: [
+    #     test_duplicate_roots_do_not_make_one_file_ambiguous: verifies the behavior described by "duplicate roots do not make one file ambiguous",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for duplicate roots do not make one file ambiguous,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_duplicate_roots_do_not_make_one_file_ambiguous(self):
         self.roots.return_value = [self.root, self.root / "."]
         _write_header(self.root / "base.safetensors", "sdxl")
         self.assertEqual(classify_local_model_choice("base.safetensors", ModelKind.CHECKPOINT).family, ModelFamily.SDXL)
 
+    # {
+    #   責務: [
+    #     test_broken_header_keeps_path_evidence_and_reports_problem: verifies the behavior described by "broken header keeps path evidence and reports problem",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for broken header keeps path evidence and reports problem,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_broken_header_keeps_path_evidence_and_reports_problem(self):
         path = self.root / "sdxl" / "base.safetensors"
         path.parent.mkdir()
@@ -171,6 +357,18 @@ class LocalModelEvidenceTests(unittest.TestCase):
         self.assertEqual(result.family, ModelFamily.SDXL)
         self.assertIn("metadata unavailable", result.family_reason)
 
+    # {
+    #   責務: [
+    #     test_replacing_model_invalidates_header_cache: verifies the behavior described by "replacing model invalidates header cache",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for replacing model invalidates header cache,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_replacing_model_invalidates_header_cache(self):
         path = self.root / "base.safetensors"
         _write_header(path, "flux1")
@@ -180,12 +378,36 @@ class LocalModelEvidenceTests(unittest.TestCase):
         os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000))
         self.assertEqual(classify_local_model_choice(path.name, ModelKind.CHECKPOINT).family, ModelFamily.SDXL)
 
+    # {
+    #   責務: [
+    #     test_catalog_name_cannot_read_metadata_outside_model_roots: verifies the behavior described by "catalog name cannot read metadata outside model roots",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for catalog name cannot read metadata outside model roots,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_catalog_name_cannot_read_metadata_outside_model_roots(self):
         _write_header(self.root / "base.safetensors", "sdxl")
         self.roots.return_value = [self.root / "sub"]
         result = classify_local_model_choice("../base.safetensors", ModelKind.CHECKPOINT)
         self.assertEqual(result.family, ModelFamily.UNKNOWN)
 
+    # {
+    #   責務: [
+    #     test_legacy_lora_root_is_resolved_from_configuration: verifies the behavior described by "legacy lora root is resolved from configuration",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for legacy lora root is resolved from configuration,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_legacy_lora_root_is_resolved_from_configuration(self):
         _write_header(self.root / "legacy" / "Lora" / "style.safetensors", "sdxl")
         self.roots.side_effect = _model_roots

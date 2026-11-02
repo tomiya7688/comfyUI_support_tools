@@ -14,6 +14,12 @@ from tools.build.license_inventory import _python_native_components, collect_lic
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# {
+#   責務: [LicenseInventoryTests: related test fixtures and cases for LicenseInventory behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class LicenseInventoryTests(unittest.TestCase):
     # {
     #   責務: [
@@ -92,6 +98,19 @@ class LicenseInventoryTests(unittest.TestCase):
             ["https://raw.githubusercontent.com/python/cpython/v3.11.18/Modules/expat/expat.h"],
         )
 
+    # {
+    #   責務: [
+    #     test_classifies_python_bundled_native_libraries_separately: verifies the behavior described by "classifies python bundled native libraries separately",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for classifies python bundled native libraries separately,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_classifies_python_bundled_native_libraries_separately(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
@@ -186,6 +205,19 @@ class LicenseInventoryTests(unittest.TestCase):
         )
         self.assertEqual(by_name["Microsoft Visual C++ Runtime"]["license_files"], [])
 
+    # {
+    #   責務: [
+    #     test_keeps_libffi_version_unresolved_for_unverified_python_builds: verifies the behavior described by "keeps libffi version unresolved for unverified python builds",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for keeps libffi version unresolved for unverified python builds,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_keeps_libffi_version_unresolved_for_unverified_python_builds(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
@@ -197,6 +229,19 @@ class LicenseInventoryTests(unittest.TestCase):
         self.assertIsNone(components[0]["version"])
         self.assertEqual(components[0]["audit_status"], "upstream-version-unresolved")
 
+    # {
+    #   責務: [
+    #     test_keeps_liblzma_version_unresolved_for_unverified_python_builds: verifies the behavior described by "keeps liblzma version unresolved for unverified python builds",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for keeps liblzma version unresolved for unverified python builds,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_keeps_liblzma_version_unresolved_for_unverified_python_builds(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
@@ -209,6 +254,19 @@ class LicenseInventoryTests(unittest.TestCase):
         self.assertIsNone(components[0]["license_metadata"])
         self.assertEqual(components[0]["audit_status"], "upstream-version-unresolved")
 
+    # {
+    #   責務: [
+    #     test_keeps_libmpdec_version_unresolved_for_unverified_python_builds: verifies the behavior described by "keeps libmpdec version unresolved for unverified python builds",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for keeps libmpdec version unresolved for unverified python builds,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_keeps_libmpdec_version_unresolved_for_unverified_python_builds(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)
@@ -222,6 +280,19 @@ class LicenseInventoryTests(unittest.TestCase):
         self.assertEqual(components[0]["license_files"], [])
         self.assertEqual(components[0]["audit_status"], "upstream-version-unresolved")
 
+    # {
+    #   責務: [
+    #     test_keeps_expat_version_unresolved_for_unverified_python_builds: verifies the behavior described by "keeps expat version unresolved for unverified python builds",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for keeps expat version unresolved for unverified python builds,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_keeps_expat_version_unresolved_for_unverified_python_builds(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             distribution = Path(temporary_directory)

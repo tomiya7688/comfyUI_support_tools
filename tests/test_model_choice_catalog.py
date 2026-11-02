@@ -9,7 +9,22 @@ from unittest.mock import patch
 import scripts.context as app_context
 
 
+# {
+#   責務: [_Catalog: catalog API test double that returns fixed model choices]
+#   処理: [1: provide the configured fields and methods used by the surrounding cases]
+#   フィールド: []
+#   引数: []
+# }
 class _Catalog:
+    # {
+    #   責務: [query_choices: returns deterministic catalog choices independently of the requested service URL]
+    #   処理: [1: return the fixed model choices and no dynamic sampler list]
+    #   引数: [
+    #     _base_url: catalog service base URL (unspecified),
+    #     _request_get: injected HTTP GET callback (unspecified),
+    #   ],
+    #   戻り値: [result: tuple/list fixture built or selected by this helper]
+    # }
     def query_choices(self, _base_url, _request_get):
         return {
             "checkpoints": ["sdxl/api-checkpoint.safetensors"],
@@ -21,11 +36,24 @@ class _Catalog:
         }, []
 
 
+# {
+#   責務: [_write_file: creates parent directories and writes fixture text at the requested path]
+#   処理: [1: create the parent directory when needed, 2: write fixture text to the requested path]
+#   引数: [path: fixture file or directory path (Path)]
+#   戻り値: [result: None produced for the supplied fixture/input]
+#   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+# }
 def _write_file(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("model", encoding="utf-8")
 
 
+# {
+#   責務: [ModelChoiceCatalogTests: related test fixtures and cases for ModelChoiceCatalog behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class ModelChoiceCatalogTests(unittest.TestCase):
     # {
     #   責務: [test_legacy_workflow_is_loadable_after_root_change: 旧workflow配置からモデル候補をcatalog経由で読み込めることを検証する]
@@ -56,12 +84,37 @@ class ModelChoiceCatalogTests(unittest.TestCase):
                     "value": "anima/model.safetensors",
                 }])
 
+    # {
+    #   責務: [
+    #     test_a1111_workflow_catalog_returns_no_model_inputs: verifies the behavior described by "a1111 workflow catalog returns no model inputs",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 workflow catalog returns no model inputs,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_a1111_workflow_catalog_returns_no_model_inputs(self):
         with patch.object(app_context, "RUNTIME_BACKEND", "a1111"):
             catalog = app_context.create_configured_generation_backend_catalog()
 
         self.assertEqual(catalog.workflow_model_inputs(Path("unused.json")), [])
 
+    # {
+    #   責務: [
+    #     test_configured_workflow_takes_precedence_over_legacy_copy: verifies the behavior described by "configured workflow takes precedence over legacy copy",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for configured workflow takes precedence over legacy copy,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_configured_workflow_takes_precedence_over_legacy_copy(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -74,6 +127,18 @@ class ModelChoiceCatalogTests(unittest.TestCase):
             ):
                 self.assertEqual(app_context.resolve_comfy_flow_path("default.json"), root / "shared" / "flows" / "default.json")
 
+    # {
+    #   責務: [
+    #     test_load_backend_choices_merges_local_and_api_per_model_kind: verifies the behavior described by "load backend choices merges local and api per model kind",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for load backend choices merges local and api per model kind,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_load_backend_choices_merges_local_and_api_per_model_kind(self):
         local = {
             "checkpoints": ["sdxl/local-checkpoint.safetensors"],
@@ -99,6 +164,19 @@ class ModelChoiceCatalogTests(unittest.TestCase):
         self.assertEqual(choices["loras"], ["sdxl/api-style.safetensors", "sdxl/local-style.safetensors"])
         self.assertEqual(warnings, [])
 
+    # {
+    #   責務: [
+    #     test_default_models_root_is_user_data_input_and_legacy_input_models_is_preserved: verifies the behavior described by "default models root is user data input and legacy input models is preserved",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for default models root is user data input and legacy input models is preserved,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_default_models_root_is_user_data_input_and_legacy_input_models_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -123,6 +201,18 @@ class ModelChoiceCatalogTests(unittest.TestCase):
             self.assertEqual(Path(migrated["checkpoints"]), Path("D:/models/shared") / "checkpoints")
 
 
+    # {
+    #   責務: [
+    #     test_a1111_catalog_includes_legacy_model_directories: verifies the behavior described by "a1111 catalog includes legacy model directories",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for a1111 catalog includes legacy model directories,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_a1111_catalog_includes_legacy_model_directories(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -147,6 +237,18 @@ class ModelChoiceCatalogTests(unittest.TestCase):
         self.assertEqual(choices["vaes"], ["sdxl/vae.safetensors"])
 
 
+    # {
+    #   責務: [
+    #     test_primary_base_choices_include_unets_only_for_comfyui: verifies the behavior described by "primary base choices include unets only for comfyui",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for primary base choices include unets only for comfyui,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_primary_base_choices_include_unets_only_for_comfyui(self):
         choices = {"checkpoints": ["checkpoint.safetensors"], "unets": ["unet.safetensors"]}
         with patch.object(app_context, "RUNTIME_BACKEND", "comfyui"):
@@ -157,6 +259,19 @@ class ModelChoiceCatalogTests(unittest.TestCase):
         self.assertEqual(comfy_choices, ["checkpoint.safetensors", "unet.safetensors"])
         self.assertEqual(a1111_choices, ["checkpoint.safetensors"])
 
+    # {
+    #   責務: [
+    #     test_local_model_folders_are_kept_in_separate_categories: verifies the behavior described by "local model folders are kept in separate categories",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for local model folders are kept in separate categories,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_local_model_folders_are_kept_in_separate_categories(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

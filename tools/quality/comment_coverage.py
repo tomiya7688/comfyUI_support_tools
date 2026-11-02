@@ -6,10 +6,9 @@ import argparse
 import ast
 import json
 import subprocess
-import sys
 import tokenize
-from dataclasses import asdict, dataclass
 from collections.abc import Iterable
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 if __package__:
@@ -210,10 +209,16 @@ def select_paths(paths: Iterable[str], filters: Iterable[str]) -> list[str]:
 #   副作用: [git ls-files subprocessを実行し、coverage reportをstdoutへ表示する]
 # }
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Report JSON-like comment coverage for tracked first-party Python.")
+    parser = argparse.ArgumentParser(
+        description="Report JSON-like comment coverage for tracked first-party Python."
+    )
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
-    parser.add_argument("--path", action="append", default=[], help="file/directory prefix; repeatable")
-    parser.add_argument("--strict", action="store_true", help="fail when missing or undecidable counts are nonzero")
+    parser.add_argument(
+        "--path", action="append", default=[], help="file/directory prefix; repeatable"
+    )
+    parser.add_argument(
+        "--strict", action="store_true", help="fail when missing or undecidable counts are nonzero"
+    )
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     args = parser.parse_args(argv)
 
@@ -223,14 +228,28 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("path filters did not match tracked Python files")
     report = coverage_report(root, paths)
     if args.json:
-        print(json.dumps({"total": report.total, "applied": report.applied, "missing": report.missing,
-                          "undecidable": report.undecidable, "files": [asdict(item) for item in report.files]},
-                         ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "total": report.total,
+                    "applied": report.applied,
+                    "missing": report.missing,
+                    "undecidable": report.undecidable,
+                    "files": [asdict(item) for item in report.files],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     else:
-        print(f"total={report.total} applied={report.applied} missing={report.missing} undecidable={report.undecidable}")
+        print(
+            f"total={report.total} applied={report.applied} missing={report.missing} undecidable={report.undecidable}"
+        )
         for item in report.files:
             if item.missing or item.undecidable:
-                print(f"{item.path}: total={item.total} applied={item.applied} missing={item.missing} undecidable={item.undecidable}")
+                print(
+                    f"{item.path}: total={item.total} applied={item.applied} missing={item.missing} undecidable={item.undecidable}"
+                )
     return int(args.strict and (report.missing > 0 or report.undecidable > 0))
 
 

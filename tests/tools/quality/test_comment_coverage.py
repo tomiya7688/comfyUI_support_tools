@@ -66,7 +66,9 @@ class Outer:
 
         result = analyze_source(source, "sample.py")
 
-        self.assertEqual((result.total, result.applied, result.missing, result.undecidable), (5, 5, 0, 0))
+        self.assertEqual(
+            (result.total, result.applied, result.missing, result.undecidable), (5, 5, 0, 0)
+        )
 
     # {
     #   責務: [test_reports_missing_comments: comment未適用宣言をmissingとして報告する]
@@ -88,7 +90,9 @@ class Outer:
     def test_reports_syntax_errors_as_undecidable(self) -> None:
         result = analyze_source("def invalid(:\n")
 
-        self.assertEqual((result.total, result.applied, result.missing, result.undecidable), (0, 0, 0, 1))
+        self.assertEqual(
+            (result.total, result.applied, result.missing, result.undecidable), (0, 0, 0, 1)
+        )
 
     # {
     #   責務: [test_filters_only_selected_paths_and_excludes_generated_data:対象path filterと除外境界を検証する]

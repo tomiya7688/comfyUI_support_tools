@@ -18,6 +18,12 @@ builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 
 
+# {
+#   責務: [WorkspaceBuildTests: related test fixtures and cases for WorkspaceBuild behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class WorkspaceBuildTests(unittest.TestCase):
     # {
     #   責務: [test_one_dir_build_requires_supported_cpython: 対応Python範囲外をビルドが拒否することを検証する]
@@ -37,6 +43,19 @@ class WorkspaceBuildTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "CPython 3.11.18 through 3.12"):
                     builder._require_supported_python(version, implementation)
 
+    # {
+    #   責務: [
+    #     test_build_discovers_own_src_package: verifies the behavior described by "build discovers own src package",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for build discovers own src package,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    #   副作用: [一時directory内にfixture file/imageを作成・更新・削除する]
+    # }
     def test_build_discovers_own_src_package(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -99,6 +118,18 @@ class WorkspaceBuildTests(unittest.TestCase):
             self.assertNotIn("PYTHONHOME", build_environment)
             self.assertEqual(build_environment["PYTHONNOUSERSITE"], "1")
 
+    # {
+    #   責務: [
+    #     test_smoke_checks_both_uis_outside_distribution_without_python_paths: verifies the behavior described by "smoke checks both uis outside distribution without python paths",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for smoke checks both uis outside distribution without python paths,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_smoke_checks_both_uis_outside_distribution_without_python_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             exe = Path(tmp) / "KadokaTools.exe"

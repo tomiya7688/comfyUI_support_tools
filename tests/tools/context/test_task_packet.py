@@ -11,10 +11,34 @@ import task_packet  # noqa: E402
 from select_task import Issue  # noqa: E402
 
 
+# {
+#   責務: [TaskPacketTests: related test fixtures and cases for TaskPacket behavior]
+#   処理: [1: group related test cases and share their fixture state]
+#   フィールド: []
+#   引数: []
+# }
 class TaskPacketTests(unittest.TestCase):
+    # {
+    #   責務: [issue: builds an issue fixture with the selected number and markdown sections]
+    #   処理: [1: build the Issue object with the supplied number/title/body fields]
+    #   引数: [body: issue markdown body (str)]
+    #   戻り値: [result: Issue produced for the supplied fixture/input]
+    # }
     def issue(self, body: str) -> Issue:
         return Issue(44, "[P0] Example task", body, "https://example.invalid/44")
 
+    # {
+    #   責務: [
+    #     test_sections_and_diff_are_compacted: verifies the behavior described by "sections and diff are compacted",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for sections and diff are compacted,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_sections_and_diff_are_compacted(self):
         issue = self.issue(
             "## 目的\nReduce context.\n\n"
@@ -34,6 +58,18 @@ class TaskPacketTests(unittest.TestCase):
         self.assertEqual(packet.changed_symbols, ["build_packet"])
         self.assertEqual(len(packet.compact_patch), 2)
 
+    # {
+    #   責務: [
+    #     test_write_packet_creates_issue_directory: verifies the behavior described by "write packet creates issue directory",
+    #   ],
+    #   処理: [
+    #     1: arrange case data and fixture state for write packet creates issue directory,
+    #     2: exercise the application behavior, workflow, or UI action under test,
+    #     3: verify its public result, state transition, error, or side-effect contract,
+    #   ],
+    #   引数: []
+    #   戻り値: [None: test helper returns no value]
+    # }
     def test_write_packet_creates_issue_directory(self):
         packet = task_packet.build_packet(self.issue("## 目的\nTest."))
         with tempfile.TemporaryDirectory() as temp_dir:

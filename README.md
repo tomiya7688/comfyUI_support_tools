@@ -68,6 +68,10 @@ character/situation/background/styleの学習済みclassifierやembedding model�
 
 `comfyui_support_tools.shared.training_doctor` はcharacter/style/object/multi-concept向け固定validation matrix、同一seed/sampler/steps/resolutionのcheckpoint比較、trigger/strength sweep、task別weighted score、leakage/memorization/base-preservation/diversity signal、patience付きearly-stop callback、best checkpoint選択/rollback、training curveとsample preview付きreport保存を提供します。`ValidationEvaluator`は#20品質評価の実測値を受け取り、`publish_prompt_metadata`は#240互換sinkへtrigger/tags/strengthを渡します。trainer/ComfyUI実生成adapterはこの環境にないためlive integrationは未検証です。詳細は[LoRA Training Doctor](doc/training_doctor.md)を参照してください。
 
+### LoRA Dataset Curator / Caption Planner
+
+`python -m comfyui_support_tools.applications.lora_dataset_curator`でGUIを起動し、task-aware caption、Character Registryのtrait/outfit、quality proxy、duplicate group、coverage、validation split、sample weightを確認・手動修正してからSimpleTuner / AI Toolkit / sd-scripts向けdataset treeをexportできます。入力画像・sidecarは変更せず、fingerprintとdecision manifestを保存します。vision taggerとtrainer固有weight adapterは注入式で、実trainerによるtrainingは未検証です。詳細は[LoRA Dataset Curator](doc/lora_dataset_curator.md)を参照してください。
+
 ### LoRA Composition Lab
 
 `comfyui_support_tools.shared.lora_composition` は互換性preflight、LoRA update norm/cosine/subspace/sign conflict分析、weighted/top-K/Zip-style training-free merge、rank圧縮、global/per-layer scale grid探索、seed固定の評価bridge、user scale preference prior、provenance付きsafetensorsとruntime recipe出力を提供します。任意依存は `pip install -r requirements-lora-composition.txt` で導入します。分析するdense updateは1 layerあたり8,388,608要素に制限します。Zip-style/top-Kは研究論文実装そのものではなく、比較可能なtraining-free baselineです。GUIと画像生成/evaluation adapterの統合は未実装です。詳細は[LoRA Composition Lab](doc/lora_composition.md)を参照してください。
@@ -161,6 +165,10 @@ This backend requires live Pixiv credentials and API responses for account-level
 ### LoRA Training Doctor
 
 `comfyui_support_tools.shared.training_doctor` provides fixed character/style/object/multi-concept validation matrices, checkpoint comparisons under the same seed/sampler/steps/resolution, trigger and strength sweeps, task-weighted scores, leakage/memorization/base-preservation/diversity signals, patience-based early-stop callbacks, best-checkpoint selection/rollback, and report persistence with training curves and sample previews. `ValidationEvaluator` accepts measured #20 image-quality evidence, and `publish_prompt_metadata` sends trigger/tags/strength to a #240-compatible sink. No live trainer/ComfyUI generation adapter is configured in this environment, so live integration is unverified. See [LoRA Training Doctor](doc/training_doctor.en.md).
+
+### LoRA Dataset Curator / Caption Planner
+
+Launch the GUI with `python -m comfyui_support_tools.applications.lora_dataset_curator` to review and edit task-aware captions, Character Registry traits/outfits, quality proxies, duplicate groups, coverage, validation splits, and sample weights before exporting a dataset tree for SimpleTuner / AI Toolkit / sd-scripts. Source images and sidecars remain unchanged; a fingerprint and decision manifest are saved. Vision tagging and trainer-specific weight adapters are injectable; training with an installed trainer has not been validated. See [LoRA Dataset Curator](doc/lora_dataset_curator.en.md).
 
 ### LoRA Composition Lab
 

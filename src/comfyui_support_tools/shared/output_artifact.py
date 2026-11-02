@@ -10,6 +10,11 @@ from enum import Enum
 from pathlib import Path
 
 
+# {
+# 責務: [ConflictPolicy: 出力collision時の明示的動作を定義する]
+# フィールド: [FAIL/SKIP/OVERWRITE/RENAME/VERSIONED]
+# 処理: []
+# }
 class ConflictPolicy(str, Enum):
     FAIL = "fail"
     SKIP = "skip"
@@ -18,6 +23,11 @@ class ConflictPolicy(str, Enum):
     VERSIONED = "versioned"
 
 
+# {
+# 責務: [ArtifactState: output artifactのlifecycle状態を定義する]
+# フィールド: [PLANNED/WRITING/COMPLETE/FAILED/QUARANTINED/SUPERSEDED]
+# 処理: []
+# }
 class ArtifactState(str, Enum):
     PLANNED = "planned"
     WRITING = "writing"
@@ -151,6 +161,9 @@ def atomic_write_bytes(
             try:
                 os.link(temporary, destination)
             except FileExistsError:
+                if policy is ConflictPolicy.SKIP:
+                    temporary.unlink(missing_ok=True)
+                    return None
                 raise FileExistsError(destination) from None
             temporary.unlink()
         return ArtifactRef(source, destination, ArtifactState.COMPLETE, group_id)

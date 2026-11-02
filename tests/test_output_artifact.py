@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.comfyui_support_tools.shared.output_artifact import (
     ArtifactState,
@@ -48,6 +49,12 @@ class OutputArtifactTests(unittest.TestCase):
             target = Path(directory) / "result.json"
             target.write_bytes(b'{"old": true}')
 
+            # {
+            # 責務: [reject: staged JSONがinvalidであることを示すtest validator]
+            # 処理: [1: validationを拒否する]
+            # 引数: [_path: staged artifact]
+            # 戻り値: [raises ValueError]
+            # }
             def reject(_path):
                 raise ValueError("invalid staged artifact")
 
@@ -90,6 +97,23 @@ class OutputArtifactTests(unittest.TestCase):
             self.assertEqual(versioned.target.name, "result.v001.txt")
             self.assertEqual(renamed.target.read_bytes(), b"renamed")
             self.assertEqual(versioned.target.read_bytes(), b"versioned")
+
+    # {
+    # 責務: [test_skip_policy_handles_target_race: resolve後にtargetが作られてもskipする]
+    # 処理: [1: link commitでcollisionを起こす 2: skip結果とtemp cleanupを確認する]
+    # 引数: [self: test instance]
+    # 戻り値: []
+    # }
+    def test_skip_policy_handles_target_race(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "result.txt"
+            with patch(
+                "src.comfyui_support_tools.shared.output_artifact.os.link",
+                side_effect=FileExistsError,
+            ):
+                result = atomic_write_bytes(target, b"skip", policy=ConflictPolicy.SKIP)
+            self.assertIsNone(result)
+            self.assertEqual(list(Path(directory).glob(".*.tmp")), [])
 
     # {
     # 責務: [ test_rejects_input_collision_and_sanitizes_names: source破壊とWindows予約名を防止する ]

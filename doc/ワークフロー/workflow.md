@@ -38,7 +38,7 @@ Extract Goal / Required / Acceptance and exclusions from the Issue. Search for r
 
 Use an Issue-specific branch, never edit `main`/`master` directly. Read the [coding standards](../coding-standards.md) before code changes. Edit target code and tests and update Japanese/English docs in the same PR. Never stage unrelated untracked user data. Run focused tests, static checks, and `git diff --check`; report actual GUI, external API, GPU, real-backend, and CI evidence separately.
 
-Before PR, self-review acceptance coverage, diff scope, JSON-like declaration comments, error handling, dependencies/licenses, meaningful tests, bilingual docs, secrets, and user-data inclusion. Do not commit or open a PR if `python tools/completion/completion_gate.py` fails. Stage explicit target files only. Write the PR body in Japanese with its Issue, changes, validation results, and unverified/deferred items.
+Before PR, run the single local entrypoint `python tools/completion/check.py`. It checks changed-file syntax, the incremental quality gate, relevant unit tests, generated docs, and diff whitespace; it reports PASS/FAIL/SKIP/UNVERIFIED and fails when a required check cannot run. CI retains the full completion gate and heavier platform checks. Then self-review acceptance coverage, diff scope, JSON-like declaration comments, error handling, dependencies/licenses, meaningful tests, bilingual docs, secrets, and user-data inclusion. Do not commit or open a PR if a required local check fails or is UNVERIFIED. Stage explicit target files only. Write the PR body in Japanese with its Issue, changes, validation results, and unverified/deferred items.
 
 ## Review and completion
 

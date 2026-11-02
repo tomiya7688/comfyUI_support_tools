@@ -115,7 +115,11 @@ def _project_python_path(path: str) -> bool:
 # 戻り値: [ changes: ChangeSet ]
 # }
 def _changed_python_files(
-    root: Path, requested_base_ref: str | None, *, all_files: bool
+    root: Path,
+    requested_base_ref: str | None,
+    *,
+    all_files: bool,
+    include_untracked: bool = False,
 ) -> ChangeSet:
     if all_files:
         files = tuple(
@@ -135,6 +139,12 @@ def _changed_python_files(
         parts = raw.split("\t")
         if len(parts) >= 2 and _project_python_path(parts[-1]):
             statuses[parts[-1]] = parts[0]
+    if include_untracked:
+        for path in _run_git(
+            root, ["ls-files", "--others", "--exclude-standard", "--", "*.py"]
+        ).stdout.splitlines():
+            if _project_python_path(path):
+                statuses[path] = "A"
     return ChangeSet(
         tuple(sorted(statuses)),
         frozenset(path for path, status in statuses.items() if status.startswith("A")),
@@ -575,10 +585,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--base-ref")
     parser.add_argument("--all", action="store_true")
+    parser.add_argument("--include-untracked", action="store_true")
     parser.add_argument("--skip-ruff", action="store_true")
     args = parser.parse_args(argv)
     root = args.root.resolve()
-    changes = _changed_python_files(root, args.base_ref, all_files=args.all)
+    changes = _changed_python_files(
+        root,
+        args.base_ref,
+        all_files=args.all,
+        include_untracked=args.include_untracked,
+    )
     if not changes.files:
         print("OK: no changed project-owned Python files")
         return 0

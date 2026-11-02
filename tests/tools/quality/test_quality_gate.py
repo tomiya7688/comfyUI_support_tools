@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+import subprocess
+import tempfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -13,6 +15,32 @@ from tools.quality import quality_gate
 # 処理: [ 1: comment ruleを検証する, 2: 例外ruleを検証する, 3: 1000行監査を検証する ]
 # }
 class QualityGateTests(unittest.TestCase):
+    # {
+    # 責務: [test_incremental_changes_include_untracked_python_when_requested: local checkが未追跡Pythonも品質検査対象にできる]
+    # 処理: [1: temp git baselineを作る, 2: untracked Pythonを追加する, 3: ChangeSetに入ることを確認する]
+    # 引数: []
+    # 戻り値: []
+    # }
+    def test_incremental_changes_include_untracked_python_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Quality Gate Test"], cwd=root, check=True
+            )
+            (root / "tracked.py").write_text("value = 1\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.py"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "baseline"], cwd=root, check=True)
+            (root / "new_module.py").write_text("value = 2\n", encoding="utf-8")
+            changes = quality_gate._changed_python_files(
+                root, "HEAD", all_files=False, include_untracked=True
+            )
+            self.assertEqual(changes.files, ("new_module.py",))
+            self.assertEqual(changes.new_files, frozenset({"new_module.py"}))
+
     # {
     # 責務: [ test_accepts_json_like_comment_for_new_function: 必須comment付き新規functionを受理する ]
     # 処理: [ 1: sourceを作る, 2: scanする, 3: QUA200がないことを確認する ]

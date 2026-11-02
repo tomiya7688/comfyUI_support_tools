@@ -53,6 +53,74 @@ def sample_video_frames(
     clock: Callable[[], float] = time.monotonic,
 ) -> FrameSamplingResult:
     options = options or FrameSamplingOptions()
+    mode, sampling_bins, budget = _validate_sampling_request(
+        source_video_id, duration, requested_count, evaluator, options, bins, clock
+    )
+    generator = random.Random(f"{options.sampling_seed}:{source_video_id}")
+    started_at = clock()
+    attempts, kept, seen_kept_frame_ids, seen, pending, stop_reason = _sample_initial_candidates(
+        source_video_id,
+        duration,
+        requested_count,
+        evaluator,
+        options,
+        sampling_bins,
+        mode,
+        budget,
+        generator,
+        started_at,
+        clock,
+    )
+    if mode is FrameCountMode.TARGET_KEPT:
+        stop_reason = _refill_target_kept(
+            source_video_id,
+            requested_count,
+            evaluator,
+            options,
+            sampling_bins,
+            budget,
+            generator,
+            started_at,
+            clock,
+            attempts,
+            kept,
+            seen_kept_frame_ids,
+            seen,
+            pending,
+            stop_reason,
+        )
+    elif not stop_reason:
+        stop_reason = "candidate_count_complete"
+
+    return FrameSamplingResult(
+        source_video_id,
+        duration,
+        mode,
+        requested_count,
+        options.sampling_seed,
+        options,
+        sampling_bins,
+        tuple(attempts),
+        tuple(kept),
+        stop_reason,
+    )
+
+
+# {
+#   責務: [_validate_sampling_request: sample request、budget、binsの型と範囲を検証する]
+#   処理: [1: source/count/callbacksを検査する 2: optionsとbinsを検査する 3: mode/bins/budgetを返す]
+#   引数: [source_video_id/duration/requested_count/evaluator/options/bins/clock]
+#   戻り値: [count mode, sampling bins, bounded attempt budget]
+# }
+def _validate_sampling_request(
+    source_video_id: str,
+    duration: float,
+    requested_count: int,
+    evaluator: Callable[[float], FrameEvaluation],
+    options: FrameSamplingOptions,
+    bins: Sequence[SamplingBin] | None,
+    clock: Callable[[], float],
+) -> tuple[FrameCountMode, tuple[SamplingBin, ...], int]:
     mode = FrameCountMode(options.count_mode)
     if (
         not isinstance(source_video_id, str)
@@ -80,8 +148,35 @@ def sample_video_frames(
     sampling_bins = tuple(bins) if bins is not None else _time_bins(duration, options.bin_count)
     _validate_bins(sampling_bins, duration)
     budget = min(options.max_attempts, requested_count * options.max_candidate_multiplier)
-    generator = random.Random(f"{options.sampling_seed}:{source_video_id}")
-    started_at = clock()
+    return mode, sampling_bins, budget
+
+
+# {
+#   責務: [_sample_initial_candidates: 初回stratified candidatesを時間制限とattempt budget内で評価する]
+#   処理: [1: timestampを層化する 2: keep/drop/duplicateを記録する 3: drop binsをrefill queueへ積む]
+#   引数: [source/duration/count/evaluator/options/bins/mode/budget/generator/start/clock]
+#   戻り値: [attempts/kept/seen frame IDs/timestamps/pending bins/stop reason]
+# }
+def _sample_initial_candidates(
+    source_video_id: str,
+    duration: float,
+    requested_count: int,
+    evaluator: Callable[[float], FrameEvaluation],
+    options: FrameSamplingOptions,
+    sampling_bins: tuple[SamplingBin, ...],
+    mode: FrameCountMode,
+    budget: int,
+    generator: random.Random,
+    started_at: float,
+    clock: Callable[[], float],
+) -> tuple[
+    list[FrameSampleRecord],
+    list[FrameSampleRecord],
+    set[str],
+    set[float],
+    deque[tuple[SamplingBin, str]],
+    str,
+]:
     attempts: list[FrameSampleRecord] = []
     kept: list[FrameSampleRecord] = []
     seen_kept_frame_ids = set()
@@ -112,57 +207,63 @@ def sample_video_frames(
             pending.append((sampling_bin, record.candidate_id))
     if len(timestamps) > budget and not stop_reason:
         stop_reason = _budget_reason(options, requested_count)
+    return attempts, kept, seen_kept_frame_ids, seen, pending, stop_reason
 
-    if mode is FrameCountMode.TARGET_KEPT:
-        draw_limit = min(max(budget * 2, 8), 64)
-        while len(kept) < requested_count and pending and len(attempts) < budget:
-            if _out_of_time(started_at, options.max_wall_time_seconds, clock):
-                stop_reason = "max_wall_time"
-                break
-            sampling_bin, parent_id = pending.popleft()
-            timestamp = _replacement_timestamp(sampling_bin, generator, seen, draw_limit)
-            if timestamp is None:
-                stop_reason = "no_unique_timestamps"
-                break
-            seen.add(timestamp)
-            record = _evaluate_candidate(
-                source_video_id,
-                timestamp,
-                sampling_bin,
-                "replacement",
-                parent_id,
-                len(attempts),
-                evaluator,
-            )
-            record = _reject_duplicate_actual_frame(record, seen_kept_frame_ids)
-            attempts.append(record)
-            if record.filter_result == "keep":
-                kept.append(record)
-            else:
-                pending.append((sampling_bin, record.candidate_id))
-        if len(kept) >= requested_count:
-            stop_reason = "target_reached"
-        elif not stop_reason:
-            stop_reason = (
-                "insufficient_candidates"
-                if not pending
-                else _budget_reason(options, requested_count)
-            )
-    elif not stop_reason:
-        stop_reason = "candidate_count_complete"
 
-    return FrameSamplingResult(
-        source_video_id,
-        duration,
-        mode,
-        requested_count,
-        options.sampling_seed,
-        options,
-        sampling_bins,
-        tuple(attempts),
-        tuple(kept),
-        stop_reason,
-    )
+# {
+#   責務: [_refill_target_kept: drop結果のsampling binsから候補をboundedに追加評価する]
+#   処理: [1: unique timestampを引く 2: duplicate decoded framesを拒否する 3: target/budget/time終端を返す]
+#   引数: [source/count/evaluator/options/bins/budget/random/time and mutable attempt state]
+#   戻り値: [target_reached/max_wall_time/no_unique_timestamps/insufficient_candidates/budget reason]
+# }
+def _refill_target_kept(
+    source_video_id: str,
+    requested_count: int,
+    evaluator: Callable[[float], FrameEvaluation],
+    options: FrameSamplingOptions,
+    sampling_bins: tuple[SamplingBin, ...],
+    budget: int,
+    generator: random.Random,
+    started_at: float,
+    clock: Callable[[], float],
+    attempts: list[FrameSampleRecord],
+    kept: list[FrameSampleRecord],
+    seen_kept_frame_ids: set[str],
+    seen: set[float],
+    pending: deque[tuple[SamplingBin, str]],
+    stop_reason: str,
+) -> str:
+    draw_limit = min(max(budget * 2, 8), 64)
+    while len(kept) < requested_count and pending and len(attempts) < budget:
+        if _out_of_time(started_at, options.max_wall_time_seconds, clock):
+            stop_reason = "max_wall_time"
+            break
+        sampling_bin, parent_id = pending.popleft()
+        timestamp = _replacement_timestamp(sampling_bin, generator, seen, draw_limit)
+        if timestamp is None:
+            stop_reason = "no_unique_timestamps"
+            break
+        seen.add(timestamp)
+        record = _evaluate_candidate(
+            source_video_id,
+            timestamp,
+            sampling_bin,
+            "replacement",
+            parent_id,
+            len(attempts),
+            evaluator,
+        )
+        record = _reject_duplicate_actual_frame(record, seen_kept_frame_ids)
+        attempts.append(record)
+        if record.filter_result == "keep":
+            kept.append(record)
+        else:
+            pending.append((sampling_bin, record.candidate_id))
+    if len(kept) >= requested_count:
+        return "target_reached"
+    if stop_reason:
+        return stop_reason
+    return "insufficient_candidates" if not pending else _budget_reason(options, requested_count)
 
 
 # {

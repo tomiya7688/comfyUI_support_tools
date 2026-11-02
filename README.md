@@ -48,6 +48,12 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generatorとBlender `mmd_tools` PMX exporter/preview adapterはまだ接続されていません。従ってこの変更はproduction-ready model generationを提供せず、Character Creator acceptanceのうち実際のPMX生成、顔morph、cloth physics、motion previewは未完了です。外部adapterを登録して初めて出力できる構成で、対応実装がない場合は明確に失敗します。
 
+### Image Dataset Classifier / Sorter
+
+`comfyui_support_tools.shared.dataset_classifier.DatasetClassifierApplication` は再帰inventory、axis classifier registry、複数evidenceの重み付きfusion、metadata優先、alternate label/disagreement/uncertain分類、manual review保存、AND/OR/NOT query、style embedding clustering adapter、dry-run/copy/move/manifest-only、collision回避、caption/metadata sidecar検証付き転送を提供します。JSON sidecarのlabelは既定priorityで他model evidenceより優先し、queryは必要なaxisだけを分類できます。結果manifestにはsource/output、labels、confidence、evidence provenance、manual overrideを記録し、#356向けhandoff payloadも作れます。
+
+character/situation/background/styleの学習済みclassifierやembedding modelは同梱せず、adapter未登録のaxisは`uncertain`になります。ローカルJSON metadataと利用者が登録するmodelsを使うshared serviceです。GitHub issue #369の完全なreview GUIと本番semantic model接続は未実装です。
+
 ### Pixel Art Creator
 
 `python -m comfyui_support_tools.applications.pixel_art` で独立したPixel Art Creator画面を起動し、Text / Image / Retouchを選べます。`comfyui_support_tools.shared.pixel_art.PixelArtApplication` は3入口で共通設定と処理を使います。8/16/32/64/96/128/192/256 pxとcustom WxH、palette import/extract/export、透明RGBA、crop/pad、palette制限、dither、nearest-neighbor preview、native-sizeのpixel指標、PNG/JSON出力、undo/redo可能なproject履歴、sprite-sheet分割/結合を提供します。Text workflowでは `Text backend…` からローカルComfyUI API-format workflowを設定できます。アプリにはmodel/LoRAを同梱せず、適合するworkflowとローカルComfyUI環境は利用者が用意します。
@@ -117,6 +123,12 @@ The core includes an offline procedural baseline but does not bundle a trained d
 
 CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generation and a Blender `mmd_tools` PMX exporter/preview adapter are not connected yet. This change therefore does not provide production character generation; actual PMX generation, facial morph synthesis, cloth physics, and motion preview remain unimplemented acceptance items. Output requires registered external adapters and fails clearly when none are available.
 
+
+### Image Dataset Classifier / Sorter
+
+`comfyui_support_tools.shared.dataset_classifier.DatasetClassifierApplication` provides recursive inventory, an axis-classifier registry, weighted multi-evidence fusion, metadata precedence, alternate-label/disagreement/uncertainty reporting, persisted manual review, AND/OR/NOT queries, a style-embedding clustering adapter, dry-run/copy/move/manifest-only actions, collision avoidance, and verified caption/metadata sidecar transfer. JSON sidecar labels take priority over model evidence by default, and queries can classify only the axes they need. Export manifests record sources/destinations, labels, confidence, evidence provenance, and manual overrides; a #356 handoff payload is available.
+
+Pretrained character/situation/background/style classifiers and embedding models are not bundled. Axes without registered adapters remain `uncertain`. This is a shared service using local JSON metadata or user-provided models; the complete review GUI and production semantic-model integrations from issue #369 remain unfinished.
 
 ### Pixel Art Creator
 

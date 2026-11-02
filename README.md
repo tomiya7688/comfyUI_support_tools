@@ -64,6 +64,10 @@ character/situation/background/styleの学習済みclassifierやembedding model�
 
 `comfyui_support_tools.shared.trainer_registry` はSimpleTuner / AI Toolkit / sd-scriptsを共通`TrainingSpec`からtrainer別JSON/YAML/TOML/CLIへ変換し、SDXL/FLUX.1/FLUX.2/Qwen Image/SD3.5/Anima/Hunyuan/Krea2/HiDreamのarchitecture profile、LoRA/LyCORIS method status、version/capability cache、target module discovery、quantization/offload適合性、provenance、1–8 step smoke gateを提供します。Autoはruntimeでsupportedと確認されたmethodだけを選び、smokeでcheckpointとsampleが得られない場合はfull training callbackを実行しません。trainer実体とmodelを使ったlive validationは未実施です。詳細は[Modern Trainer Adapter Registry](doc/trainer_registry.md)を参照してください。
 
+### LoRA Training Doctor
+
+`comfyui_support_tools.shared.training_doctor` はcharacter/style/object/multi-concept向け固定validation matrix、同一seed/sampler/steps/resolutionのcheckpoint比較、trigger/strength sweep、task別weighted score、leakage/memorization/base-preservation/diversity signal、patience付きearly-stop callback、best checkpoint選択/rollback、training curveとsample preview付きreport保存を提供します。`ValidationEvaluator`は#20品質評価の実測値を受け取り、`publish_prompt_metadata`は#240互換sinkへtrigger/tags/strengthを渡します。trainer/ComfyUI実生成adapterはこの環境にないためlive integrationは未検証です。詳細は[LoRA Training Doctor](doc/training_doctor.md)を参照してください。
+
 ### LoRA Composition Lab
 
 `comfyui_support_tools.shared.lora_composition` は互換性preflight、LoRA update norm/cosine/subspace/sign conflict分析、weighted/top-K/Zip-style training-free merge、rank圧縮、global/per-layer scale grid探索、seed固定の評価bridge、user scale preference prior、provenance付きsafetensorsとruntime recipe出力を提供します。任意依存は `pip install -r requirements-lora-composition.txt` で導入します。分析するdense updateは1 layerあたり8,388,608要素に制限します。Zip-style/top-Kは研究論文実装そのものではなく、比較可能なtraining-free baselineです。GUIと画像生成/evaluation adapterの統合は未実装です。詳細は[LoRA Composition Lab](doc/lora_composition.md)を参照してください。
@@ -153,6 +157,10 @@ This backend requires live Pixiv credentials and API responses for account-level
 ### Modern Trainer Adapter Registry
 
 `comfyui_support_tools.shared.trainer_registry` translates a shared `TrainingSpec` into trainer-specific SimpleTuner / AI Toolkit / sd-scripts JSON/YAML/TOML/CLI, and provides SDXL/FLUX.1/FLUX.2/Qwen Image/SD3.5/Anima/Hunyuan/Krea2/HiDream architecture profiles, LoRA/LyCORIS method states, versioned capability cache, target-module discovery, quantization/offload validation, provenance and a 1–8 step smoke gate. Auto selects only methods confirmed as supported at runtime; full-training callbacks do not run unless smoke produces both a checkpoint and sample. Live validation with installed trainers and model weights has not been performed. See [Modern Trainer Adapter Registry](doc/trainer_registry.en.md).
+
+### LoRA Training Doctor
+
+`comfyui_support_tools.shared.training_doctor` provides fixed character/style/object/multi-concept validation matrices, checkpoint comparisons under the same seed/sampler/steps/resolution, trigger and strength sweeps, task-weighted scores, leakage/memorization/base-preservation/diversity signals, patience-based early-stop callbacks, best-checkpoint selection/rollback, and report persistence with training curves and sample previews. `ValidationEvaluator` accepts measured #20 image-quality evidence, and `publish_prompt_metadata` sends trigger/tags/strength to a #240-compatible sink. No live trainer/ComfyUI generation adapter is configured in this environment, so live integration is unverified. See [LoRA Training Doctor](doc/training_doctor.en.md).
 
 ### LoRA Composition Lab
 

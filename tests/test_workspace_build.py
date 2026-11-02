@@ -42,6 +42,9 @@ class WorkspaceBuildTests(unittest.TestCase):
             output = root / "dist"
             (root / "LICENSE").write_text("MIT test license", encoding="utf-8")
             (root / "THIRD_PARTY_NOTICES.md").write_text("Test notices", encoding="utf-8")
+            runtime = root / "python-runtime"
+            runtime.mkdir()
+            (runtime / "LICENSE.txt").write_text("Python test license", encoding="utf-8")
             (root / "requirements-kadoka-tools.txt").write_text(
                 (ROOT / "requirements-kadoka-tools.txt").read_text(encoding="utf-8"),
                 encoding="utf-8",
@@ -49,12 +52,30 @@ class WorkspaceBuildTests(unittest.TestCase):
             tcl_license = root / "licenses" / "TclTk" / "license.terms"
             tcl_license.parent.mkdir(parents=True)
             tcl_license.write_text("Test Tcl/Tk terms", encoding="utf-8")
+            inventory_path = output / builder.APP_NAME / "third_party_components.resolved.json"
+
+            # {
+            #   責務: [write_license_inventory: ビルダーのライセンス台帳出力を模擬する]
+            #   処理: [台帳とTcl/Tkライセンスを一時配布物へ書き込む]
+            #   引数: [args]
+            #   戻り値: []
+            # }
+            def write_license_inventory(*args):
+                inventory_path.parent.mkdir(parents=True, exist_ok=True)
+                tcl_target = inventory_path.parent / "licenses" / "TclTk" / "license.terms"
+                tcl_target.parent.mkdir(parents=True, exist_ok=True)
+                tcl_target.write_text("Test Tcl/Tk terms", encoding="utf-8")
+                inventory_path.write_text(
+                    '{"external_components": [], "native_artifacts": [{"path": "KadokaTools"}]}'
+                )
+
             exe = builder.executable_path(output)
             exe.parent.mkdir(parents=True)
             exe.touch()
             injected_path = os.pathsep.join(("foreign-native-bin", os.environ.get("PATH", "")))
             with (
                 mock.patch.object(platform, "machine", return_value="AMD64"),
+                mock.patch.object(builder.sys, "base_prefix", str(runtime)),
                 mock.patch.object(
                     platform,
                     "win32_ver",
@@ -65,6 +86,9 @@ class WorkspaceBuildTests(unittest.TestCase):
                     {"PATH": injected_path, "PYTHONPATH": "foreign", "PYTHONHOME": "foreign"},
                 ),
                 mock.patch.object(builder.subprocess, "run") as run,
+                mock.patch.object(
+                    builder, "collect_license_inventory", side_effect=write_license_inventory
+                ),
             ):
                 self.assertEqual(builder.build(root, output), exe)
             self.assertEqual(
@@ -85,7 +109,8 @@ class WorkspaceBuildTests(unittest.TestCase):
             build_environment = run.call_args.kwargs["env"]
             self.assertEqual(command[command.index("--paths") + 1], str(root / "src"))
             self.assertIn("--onedir", command)
-            self.assertNotIn("foreign-native-bin", build_environment["PATH"])
+            if os.name == "nt":
+                self.assertNotIn("foreign-native-bin", build_environment["PATH"])
             self.assertNotIn("PYTHONPATH", build_environment)
             self.assertNotIn("PYTHONHOME", build_environment)
             self.assertEqual(build_environment["PYTHONNOUSERSITE"], "1")

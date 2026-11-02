@@ -107,6 +107,12 @@ subprocess.Popen([packaged_executable('Backend'), '--port', '8188'])
 """
         self.assertEqual(app_boundary_check.scan_source("scripts/backend/example.py", source), [])
 
+    # {
+    #   責務: [test_ignores_interpreter_and_python_path_in_non_launch_arguments: arguments after a packaged executable are not treated as interpreter/script argv]
+    #   処理: [interpreter and .py tokens in non-launch argumentsをscanしfindingがないことをassertする]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
     def test_ignores_interpreter_and_python_path_in_non_launch_arguments(self):
         source = """from scripts.runtime_python import venv_python
 import subprocess

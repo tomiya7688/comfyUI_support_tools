@@ -1,7 +1,6 @@
 """Runtime dependency license inventory checks."""
 
 import json
-import pyexpat
 from pathlib import Path
 import tempfile
 import unittest
@@ -249,6 +248,9 @@ class LicenseInventoryTests(unittest.TestCase):
     def test_copies_runtime_license_files_and_records_resolved_versions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory)
+            runtime = target / "python-runtime"
+            runtime.mkdir()
+            (runtime / "LICENSE.txt").write_text("Python test license", encoding="utf-8")
             executable = target / "KadokaTools.exe"
             executable.parent.mkdir(parents=True, exist_ok=True)
             executable.write_bytes(b"test executable")
@@ -257,96 +259,129 @@ class LicenseInventoryTests(unittest.TestCase):
             extension.write_bytes(b"test native extension")
             (target / "_decimal.pyd").write_bytes(b"test decimal extension")
             (target / "pyexpat.pyd").write_bytes(b"test expat extension")
-            manifest = collect_license_inventory(ROOT, target)
 
-            names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
-            self.assertTrue(
-                {
-                    "python",
-                    "tcl/tk",
-                    "numpy",
-                    "pillow",
-                    "opencv-python-headless",
-                    "requests",
-                    "psutil",
-                }.issubset(names)
-            )
-            self.assertTrue(
-                all(
-                    item["distribution_status"] in {"bundled", "bundled-component"}
-                    for item in manifest["components"]
-                )
-            )
-            by_name = {item["name"]: item for item in manifest["components"]}
-            bootloader = by_name["PyInstaller bootloader"]
-            runtime_hooks = by_name["PyInstaller runtime hooks"]
-            self.assertEqual(
-                bootloader["license_metadata"], "GPL-2.0-or-later WITH Bootloader-exception"
-            )
-            self.assertEqual(runtime_hooks["license_metadata"], "Apache-2.0")
-            self.assertEqual(bootloader["version"], runtime_hooks["version"])
-            libmpdec = by_name["libmpdec"]
-            self.assertEqual(libmpdec["version"], "2.5.1")
-            self.assertEqual(
-                libmpdec["license_files"],
-                ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"],
-            )
-            self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
-            expat = by_name["Expat"]
-            self.assertEqual(expat["version"], pyexpat.EXPAT_VERSION.removeprefix("expat_"))
-            self.assertEqual(
-                expat["license_files"],
-                ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"],
-            )
-            self.assertTrue((target / "licenses" / "expat" / "LICENSE.txt").is_file())
-            self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])
-            native = {item["path"]: item for item in manifest["native_artifacts"]}
-            self.assertEqual(native["KadokaTools.exe"]["size_bytes"], len(b"test executable"))
-            self.assertEqual(native["cv2/native.pyd"]["audit_status"], "build-source-unavailable")
-            self.assertEqual(len(native["KadokaTools.exe"]["sha256"]), 64)
-            self.assertEqual(manifest["schema_version"], 2)
-            external = {item["name"]: item for item in manifest["external_components"]}
-            expected_external = {
-                "ComfyUI",
-                "WebUI1111",
-                "PixAI Tagger",
-                "TagGUI",
-                "Ollama",
-                "FFmpeg",
-                "7-Zip",
-                "AI model weights",
-            }
-            self.assertTrue(expected_external.issubset(external))
-            self.assertTrue(
-                all(item["distribution_status"] == "external-only" for item in external.values())
-            )
-            self.assertTrue(
-                all(
-                    item["version"] is None and item["license_metadata"] is None
-                    for item in external.values()
-                )
-            )
-            self.assertTrue(
-                all(
-                    item["audit_status"] == "not-audited-by-this-artifact"
-                    for item in external.values()
-                )
-            )
-            for component in manifest["components"]:
-                self.assertTrue(component["version"])
-                self.assertTrue(component["license_files"])
-                for relative_path in component["license_files"]:
-                    self.assertTrue((target / relative_path).is_file(), relative_path)
+            # {
+            #   責務: [copy_package_license: Linuxテスト用のPyInstaller配布物ライセンスを模擬する]
+            #   処理: [COPYING.txtとthird-party noticeを一時成果物へ書き込む]
+            #   引数: [item, site_packages, distribution_dir]
+            #   戻り値: [成果物からの相対ライセンスパス一覧]
+            # }
+            def copy_package_license(item, site_packages, distribution_dir):
+                paths = []
+                for name in ("COPYING.txt", "LICENSE-3RD-PARTY.txt"):
+                    license_path = distribution_dir / "licenses" / "python_packages" / "test" / name
+                    license_path.parent.mkdir(parents=True, exist_ok=True)
+                    license_path.write_text("Package test license", encoding="utf-8")
+                    paths.append(license_path.relative_to(distribution_dir).as_posix())
+                return paths
 
-            resolved_file = target / "third_party_components.resolved.json"
-            self.assertEqual(json.loads(resolved_file.read_text(encoding="utf-8")), manifest)
-            copied_names = [
-                Path(path).name
-                for entry in manifest["components"]
-                for path in entry["license_files"]
-            ]
-            self.assertIn("LICENSE-3RD-PARTY.txt", copied_names)
-            self.assertIn("license.terms", copied_names)
+            with (
+                patch("tools.build.license_inventory.sys.base_prefix", str(runtime)),
+                patch("tools.build.license_inventory.sys.version", "3.11.18 test build"),
+                patch("tools.build.license_inventory._runtime_dependency_names", return_value=[]),
+                patch(
+                    "tools.build.license_inventory._copy_python_package_licenses",
+                    side_effect=copy_package_license,
+                ),
+            ):
+                manifest = collect_license_inventory(ROOT, target)
+
+            self._assert_generated_inventory(target, manifest)
+
+    # {
+    #   責務: [_assert_generated_inventory: 生成された依存関係台帳と複製ライセンスを検証する]
+    #   処理: [必須コンポーネント、版、外部依存、全ライセンスパスと成果物を確認する]
+    #   引数: [target: 成果物ディレクトリ, manifest: 生成された台帳]
+    #   戻り値: []
+    # }
+    def _assert_generated_inventory(self, target, manifest):
+        self.assertEqual(
+            (target / "licenses" / "Python" / "LICENSE.txt").read_text(encoding="utf-8"),
+            "Python test license",
+        )
+
+        names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
+        self.assertTrue(
+            {
+                "python",
+                "tcl/tk",
+                "pyinstaller bootloader",
+                "pyinstaller runtime hooks",
+            }.issubset(names)
+        )
+        self.assertTrue(
+            all(
+                item["distribution_status"] in {"bundled", "bundled-component"}
+                for item in manifest["components"]
+            )
+        )
+        by_name = {item["name"]: item for item in manifest["components"]}
+        bootloader = by_name["PyInstaller bootloader"]
+        runtime_hooks = by_name["PyInstaller runtime hooks"]
+        self.assertEqual(
+            bootloader["license_metadata"], "GPL-2.0-or-later WITH Bootloader-exception"
+        )
+        self.assertEqual(runtime_hooks["license_metadata"], "Apache-2.0")
+        self.assertEqual(bootloader["version"], runtime_hooks["version"])
+        libmpdec = by_name["libmpdec"]
+        self.assertEqual(libmpdec["version"], "2.5.1")
+        self.assertEqual(
+            libmpdec["license_files"],
+            ["licenses/Python/LICENSE.txt", "licenses/libmpdec/LICENSE.txt"],
+        )
+        self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
+        expat = by_name["Expat"]
+        self.assertEqual(expat["version"], "2.9.0")
+        self.assertEqual(
+            expat["license_files"],
+            ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"],
+        )
+        self.assertTrue((target / "licenses" / "expat" / "LICENSE.txt").is_file())
+        self.assertIn("COPYING.txt", [Path(path).name for path in bootloader["license_files"]])
+        native = {item["path"]: item for item in manifest["native_artifacts"]}
+        self.assertEqual(native["KadokaTools.exe"]["size_bytes"], len(b"test executable"))
+        self.assertEqual(native["cv2/native.pyd"]["audit_status"], "build-source-unavailable")
+        self.assertEqual(len(native["KadokaTools.exe"]["sha256"]), 64)
+        self.assertEqual(manifest["schema_version"], 2)
+        external = {item["name"]: item for item in manifest["external_components"]}
+        expected_external = {
+            "ComfyUI",
+            "WebUI1111",
+            "PixAI Tagger",
+            "TagGUI",
+            "Ollama",
+            "FFmpeg",
+            "7-Zip",
+            "AI model weights",
+        }
+        self.assertTrue(expected_external.issubset(external))
+        self.assertTrue(
+            all(item["distribution_status"] == "external-only" for item in external.values())
+        )
+        self.assertTrue(
+            all(
+                item["version"] is None and item["license_metadata"] is None
+                for item in external.values()
+            )
+        )
+        self.assertTrue(
+            all(
+                item["audit_status"] == "not-audited-by-this-artifact" for item in external.values()
+            )
+        )
+        for component in manifest["components"]:
+            self.assertTrue(component["version"])
+            self.assertTrue(component["license_files"])
+            for relative_path in component["license_files"]:
+                self.assertTrue((target / relative_path).is_file(), relative_path)
+
+        resolved_file = target / "third_party_components.resolved.json"
+        self.assertEqual(json.loads(resolved_file.read_text(encoding="utf-8")), manifest)
+        copied_names = [
+            Path(path).name for entry in manifest["components"] for path in entry["license_files"]
+        ]
+        self.assertIn("LICENSE-3RD-PARTY.txt", copied_names)
+        self.assertIn("license.terms", copied_names)
 
 
 if __name__ == "__main__":

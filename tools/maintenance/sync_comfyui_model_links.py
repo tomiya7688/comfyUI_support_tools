@@ -67,9 +67,12 @@ def _read_link_target(link: Path) -> Path:
 
 def _is_reparse_point(path: Path) -> bool:
     try:
-        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+        file_stat = path.lstat()
     except OSError:
         return False
+    if stat.S_ISLNK(file_stat.st_mode):
+        return True
+    attributes = getattr(file_stat, "st_file_attributes", 0)
     return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
 
 

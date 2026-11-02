@@ -104,8 +104,8 @@ def quality_check() -> CheckResult:
 
 
 # {
-#   責務: [comment_coverage_check: tools/tests/shared/entrypoints/sequence/main_guiの宣言comment coverageをstrictに検査する]
-#   処理: [移行済み六領域のpath filterでcoverage checkerを実行し、そのstatusを返す]
+#   責務: [comment_coverage_check: tools/tests/shared/entrypoints/sequence/main_gui/Toukaの宣言comment coverageをstrictに検査する]
+#   処理: [移行済み領域とTouka対象9 fileのpath filterでcoverage checkerを実行し、そのstatusを返す]
 #   引数: []
 #   戻り値: [result: coverage checkerのCheckResult]
 #   副作用: [coverage checker subprocessを起動する]
@@ -127,6 +127,24 @@ def comment_coverage_check() -> CheckResult:
             "src/comfyui_support_tools/applications/sequence",
             "--path",
             "src/comfyui_support_tools/applications/main_gui",
+            "--path",
+            "nuno/_touka/fashionpedia_preset_builder.py",
+            "--path",
+            "nuno/_touka/fashionpedia_segmentation_model.py",
+            "--path",
+            "nuno/_touka/fashionpedia_training_dataset.py",
+            "--path",
+            "nuno/_touka/guidance.py",
+            "--path",
+            "nuno/_touka/image_enhancer.py",
+            "--path",
+            "nuno/_touka/material_estimator.py",
+            "--path",
+            "nuno/_touka/touka_batch.py",
+            "--path",
+            "nuno/_touka/train_fashionpedia_segmentation.py",
+            "--path",
+            "nuno/_touka/translucent_surface_augmenter.py",
             "--strict",
         ]
     )

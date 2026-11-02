@@ -17,8 +17,8 @@ import completion_gate  # noqa: E402
 # }
 class CompletionGateTests(unittest.TestCase):
     # {
-    #   責務: [test_comment_coverage_checks_migrated_source_areas: strict coverage対象にsharedとentrypointsが含まれることを検証する]
-    #   処理: [comment_coverage_checkから起動するcommand argumentsを捕捉し、全移行済みprefixとstrict flagを確認する]
+    #   責務: [test_comment_coverage_checks_migrated_source_areas: strict coverage対象に移行済み領域とTouka fileが含まれることを検証する]
+    #   処理: [comment_coverage_checkから起動するcommand argumentsを捕捉し、対象pathとstrict flagを確認する]
     #   引数: []
     #   戻り値: [なし]
     # }
@@ -36,6 +36,15 @@ class CompletionGateTests(unittest.TestCase):
                 "src/comfyui_support_tools/entrypoints",
                 "src/comfyui_support_tools/applications/sequence",
                 "src/comfyui_support_tools/applications/main_gui",
+                "nuno/_touka/fashionpedia_preset_builder.py",
+                "nuno/_touka/fashionpedia_segmentation_model.py",
+                "nuno/_touka/fashionpedia_training_dataset.py",
+                "nuno/_touka/guidance.py",
+                "nuno/_touka/image_enhancer.py",
+                "nuno/_touka/material_estimator.py",
+                "nuno/_touka/touka_batch.py",
+                "nuno/_touka/train_fashionpedia_segmentation.py",
+                "nuno/_touka/translucent_surface_augmenter.py",
             ],
         )
         self.assertIn("--strict", command)

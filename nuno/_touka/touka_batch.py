@@ -39,11 +39,23 @@ SURFACE_PRESETS = {
 }
 
 
+# {
+#   責務: [surface_alpha_for: surface presetに応じたbounded alphaを返す]
+#   処理: [scale requested opacity by preset and clamp it to supported limits]
+#   引数: [alpha, surface_preset]
+#   戻り値: [described processing result]
+# }
 def surface_alpha_for(alpha, surface_preset):
     scale = SURFACE_PRESETS.get(surface_preset, SURFACE_PRESETS["auto"])
     return max(0.05, min(0.30, float(alpha) * scale))
 
 
+# {
+#   責務: [estimate_surface_color: RGB image borderからrepresentative surface colorsを推定する]
+#   処理: [convert pixels to LAB and run OpenCV k-means on border samples using CPU memory]
+#   引数: [rgb]
+#   戻り値: [described processing result]
+# }
 def estimate_surface_color(rgb):
     import cv2
     import numpy as np
@@ -67,6 +79,12 @@ def estimate_surface_color(rgb):
     return [tuple(int(v) for v in color) for color in rgb_centers]
 
 
+# {
+#   責務: [estimate_surface_alpha: RGB border color spreadからconservative surface alphaを推定する]
+#   処理: [measure LAB border variance and clamp the scalar estimate]
+#   引数: [rgb]
+#   戻り値: [described processing result]
+# }
 def estimate_surface_alpha(rgb):
     import cv2
     import numpy as np
@@ -86,6 +104,12 @@ def estimate_surface_alpha(rgb):
     return float(np.clip(0.28 - spread / 180.0, 0.08, 0.24))
 
 
+# {
+#   責務: [weaken_surface_component: nearby surface-color componentのRGB contributionを弱める]
+#   処理: [compute LAB distance maps and blend pixels using a distance-adaptive alpha]
+#   引数: [rgb, clusters, alpha]
+#   戻り値: [described processing result]
+# }
 def weaken_surface_component(rgb, clusters, alpha=0.16):
     import cv2
     import numpy as np
@@ -107,6 +131,12 @@ def weaken_surface_component(rgb, clusters, alpha=0.16):
     return corrected.astype("uint8")
 
 
+# {
+#   責務: [enhance_local_contrast: CLAHEでRGB imageのlocal lightness contrastをenhanceする]
+#   処理: [convert to LAB, adjust lightness, and convert back in CPU memory]
+#   引数: [rgb]
+#   戻り値: [described processing result]
+# }
 def enhance_local_contrast(rgb):
     import cv2
 
@@ -116,6 +146,12 @@ def enhance_local_contrast(rgb):
     return cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2RGB)
 
 
+# {
+#   責務: [reduce_low_frequency_shading: low-frequency illumination variationをreduceする]
+#   処理: [blur LAB lightness, normalize broad shading, and return an RGB array]
+#   引数: [rgb, strength]
+#   戻り値: [described processing result]
+# }
 def reduce_low_frequency_shading(rgb, strength=0.45):
     import cv2
     import numpy as np
@@ -131,6 +167,12 @@ def reduce_low_frequency_shading(rgb, strength=0.45):
     return cv2.cvtColor(cv2.merge((normalized, a, b)), cv2.COLOR_LAB2RGB)
 
 
+# {
+#   責務: [shape_features: edge contoursからimage shape descriptorsを算出する]
+#   処理: [measure contour area, elongation, holes, and mirror symmetry on CPU]
+#   引数: [rgb]
+#   戻り値: [described processing result]
+# }
 def shape_features(rgb):
     import cv2
 
@@ -157,6 +199,12 @@ def shape_features(rgb):
     return float(len(areas)), float(sum(areas)), float(elongated), holes, symmetry
 
 
+# {
+#   責務: [refine_object_mask: preset-specific morphologyでbinary object maskをrefineする]
+#   処理: [apply selected OpenCV morphology operations and return a byte mask]
+#   引数: [mask, preset]
+#   戻り値: [described processing result]
+# }
 def refine_object_mask(mask, preset):
     import cv2
 
@@ -196,6 +244,12 @@ def refine_object_mask(mask, preset):
     return binary
 
 
+# {
+#   責務: [skeleton_features: binary maskをskeletonizeしてlength and endpointsを測る]
+#   処理: [erode image-sized CPU arrays until empty and count skeleton neighbors]
+#   引数: [mask]
+#   戻り値: [described processing result]
+# }
 def skeleton_features(mask):
     import cv2
     import numpy as np
@@ -214,6 +268,12 @@ def skeleton_features(mask):
     return float(points.sum()), float(endpoints)
 
 
+# {
+#   責務: [recommend_object_preset: mask geometryからmatching object presetをrecommendする]
+#   処理: [inspect largest external contour, aspect ratio, and image-relative area]
+#   引数: [mask]
+#   戻り値: [described processing result]
+# }
 def recommend_object_preset(mask):
     import cv2
 
@@ -232,6 +292,12 @@ def recommend_object_preset(mask):
     return "cloth" if aspect <= 1.8 else "regular"
 
 
+# {
+#   責務: [denoise_reference_image: optional denoisingをreference imageへ適用する]
+#   処理: [return input unchanged when disabled or run size-preserving OpenCV filters]
+#   引数: [image, enabled]
+#   戻り値: [described processing result]
+# }
 def denoise_reference_image(image, enabled):
     if not enabled:
         return image
@@ -246,6 +312,12 @@ def denoise_reference_image(image, enabled):
     return cv2.bilateralFilter(image, 7, 40, 40)
 
 
+# {
+#   責務: [reference_shape_distance: two reference shape descriptorsのarea/aspect distanceを算出する]
+#   処理: [compare logarithmic area and aspect ratios]
+#   引数: [first, second]
+#   戻り値: [described processing result]
+# }
 def reference_shape_distance(first, second):
     import math
 
@@ -254,6 +326,12 @@ def reference_shape_distance(first, second):
     return area_distance + aspect_distance * 0.5
 
 
+# {
+#   責務: [reference_shape_consistency: descriptor group内のpairwise shape consistencyを算出する]
+#   処理: [average pairwise shape distance and map it to a bounded score]
+#   引数: [descriptors]
+#   戻り値: [described processing result]
+# }
 def reference_shape_consistency(descriptors):
 
     if len(descriptors) < 2:
@@ -265,6 +343,12 @@ def reference_shape_consistency(descriptors):
     return 1.0 / (1.0 + sum(distances) / max(1, len(distances)))
 
 
+# {
+#   責務: [reference_shape_summary: reference directoryからshape preset and confidence summaryを作る]
+#   処理: [read up to 100 image files, compute CPU descriptors and return aggregate metadata]
+#   引数: [reference_dir, denoise]
+#   戻り値: [described processing result]
+# }
 def reference_shape_summary(reference_dir, denoise=False):
     import collections
 
@@ -351,11 +435,23 @@ def reference_shape_summary(reference_dir, denoise=False):
     }
 
 
+# {
+#   責務: [reference_shape_hint: reference directoryからshape preset and image countを返す]
+#   処理: [delegate to summary computation without writing files]
+#   引数: [reference_dir, denoise]
+#   戻り値: [described processing result]
+# }
 def reference_shape_hint(reference_dir, denoise=False):
     summary = reference_shape_summary(reference_dir, denoise)
     return summary["preset"], summary["image_count"]
 
 
+# {
+#   責務: [reference_surface_hint: reference imagesからsurface color clusters and alphaを推定する]
+#   処理: [read up to 100 files, compute CPU LAB samples and k-means centers]
+#   引数: [reference_dir, denoise]
+#   戻り値: [described processing result]
+# }
 def reference_surface_hint(reference_dir, denoise=False):
     import cv2
     import numpy as np
@@ -389,6 +485,12 @@ def reference_surface_hint(reference_dir, denoise=False):
     )
 
 
+# {
+#   責務: [settings_for: named profileからEnhanceSettings valuesをresolveする]
+#   処理: [select a profile tuple or balanced fallback and build one settings object]
+#   引数: [profile]
+#   戻り値: [described processing result]
+# }
 def settings_for(profile):
     values = {
         "color": (22, -12, 5, 5, 68),
@@ -1178,6 +1280,12 @@ def process_video(
     }
 
 
+# {
+#   責務: [process_videos: source path内のvideosを処理しcandidate reportsを出力する]
+#   処理: [invoke per-video CPU processing, create target directories, and write JSON/Markdown reports and video outputs]
+#   引数: [source, target, profile, object_preset, preview_seconds, roi, preview_start_seconds, reference_dir, surface_reference_dir, surface_preset, denoise_reference]
+#   戻り値: [described processing result]
+# }
 def process_videos(
     source,
     target,
@@ -1253,6 +1361,12 @@ def process_videos(
     return scores
 
 
+# {
+#   責務: [write_candidate_comparison: candidate videosのfirst framesをcontact sheetへ書き出す]
+#   処理: [decode up to 12 video frames into CPU memory and save candidate_comparison.png]
+#   引数: [entries, output]
+#   戻り値: [described processing result]
+# }
 def write_candidate_comparison(entries, output):
     import cv2
 
@@ -1285,6 +1399,12 @@ def write_candidate_comparison(entries, output):
     return path
 
 
+# {
+#   責務: [main: Touka batch CLI argumentsをparseしてimage/video workflowを実行する]
+#   処理: [validate paths and options, invoke CPU image or video processing, and write requested outputs]
+#   引数: [none]
+#   戻り値: [described processing result]
+# }
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("image", "video"), default="")

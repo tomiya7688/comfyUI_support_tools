@@ -11,6 +11,7 @@ from comfyui_support_tools.shared.contracts.composition_template import Composit
 # {
 # 責務: [TemplateLibraryMessenger: route Process requests to Data]
 # 処理: [forward template library payloads without storage logic]
+#   フィールド: [主要状態: TemplateLibraryMessengerが管理する状態]
 # }
 class TemplateLibraryMessenger:
     # {
@@ -25,6 +26,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [list_names: transport a list request]
     # 処理: [forward to Data messenger]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [tuple[str, ...]: 宣言の結果]
     # }
     def list_names(self) -> tuple[str, ...]:
         return self._target.list_names()
@@ -32,6 +35,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [save: transport a template save request]
     # 処理: [forward to Data messenger]
+    #   引数: [name, template: 宣言の入力値]
+    #   戻り値: [Path: 宣言の結果]
     # }
     def save(self, name: str, template: CompositionTemplate) -> Path:
         return self._target.save(name, template)
@@ -39,6 +44,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [load: transport a template load request]
     # 処理: [forward to Data messenger]
+    #   引数: [name: 宣言の入力値]
+    #   戻り値: [CompositionTemplate: 宣言の結果]
     # }
     def load(self, name: str) -> CompositionTemplate:
         return self._target.load(name)
@@ -46,6 +53,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [import_json: transport a template document for decoding]
     # 処理: [forward to Data messenger]
+    #   引数: [document: 宣言の入力値]
+    #   戻り値: [CompositionTemplate: 宣言の結果]
     # }
     def import_json(self, document: str) -> CompositionTemplate:
         return self._target.import_json(document)
@@ -53,6 +62,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [export_json: transport a template for encoding]
     # 処理: [forward to Data messenger]
+    #   引数: [template: 宣言の入力値]
+    #   戻り値: [str: 宣言の結果]
     # }
     def export_json(self, template: CompositionTemplate) -> str:
         return self._target.export_json(template)

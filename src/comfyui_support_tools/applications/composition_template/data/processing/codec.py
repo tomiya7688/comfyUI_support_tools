@@ -101,6 +101,16 @@ def template_from_json(document: str) -> CompositionTemplate:
         raw = json.loads(document, parse_constant=reject_constant, object_pairs_hook=_unique_object)
     except (json.JSONDecodeError, UnicodeError) as error:
         raise ValueError("template JSON is malformed") from error
+    return _decode_template_root(raw)
+
+
+# {
+#   責務: [_decode_template_root: schemaを検証してtemplate contractへ変換する]
+#   処理: [1: root schemaを検証, 2: 各要素を型変換, 3: 検証済みtemplateを構築]
+#   引数: [raw: JSON decoderが返したroot object]
+#   戻り値: [CompositionTemplate: 検証済みlayout template]
+# }
+def _decode_template_root(raw: object) -> CompositionTemplate:
     root_keys = (
         "aspect_ratio",
         "shot_type",

@@ -15,6 +15,7 @@ from comfyui_support_tools.shared.contracts.composition_template import Composit
 # {
 # 責務: [TemplateLibraryMessenger: serve template storage requests]
 # 処理: [delegate list, save, and load operations to Data processing]
+#   フィールド: [主要状態: TemplateLibraryMessengerが管理する状態]
 # }
 class TemplateLibraryMessenger:
     # {
@@ -29,6 +30,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [list_names: return saved template names]
     # 処理: [delegate to Data library storage]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [tuple[str, ...]: 宣言の結果]
     # }
     def list_names(self) -> tuple[str, ...]:
         return self._library.list_names()
@@ -36,6 +39,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [save: persist one named template]
     # 処理: [delegate to Data library storage]
+    #   引数: [name, template: 宣言の入力値]
+    #   戻り値: [Path: 宣言の結果]
     # }
     def save(self, name: str, template: CompositionTemplate) -> Path:
         return self._library.save(name, template)
@@ -43,6 +48,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [load: retrieve one named template]
     # 処理: [delegate to Data library storage]
+    #   引数: [name: 宣言の入力値]
+    #   戻り値: [CompositionTemplate: 宣言の結果]
     # }
     def load(self, name: str) -> CompositionTemplate:
         return self._library.load(name)
@@ -50,6 +57,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [import_json: parse a portable template document]
     # 処理: [delegate versioned parsing to Data processing]
+    #   引数: [document: 宣言の入力値]
+    #   戻り値: [CompositionTemplate: 宣言の結果]
     # }
     def import_json(self, document: str) -> CompositionTemplate:
         return template_from_json(document)
@@ -57,6 +66,8 @@ class TemplateLibraryMessenger:
     # {
     # 責務: [export_json: serialize a template for file export]
     # 処理: [delegate versioned JSON conversion to Data processing]
+    #   引数: [template: 宣言の入力値]
+    #   戻り値: [str: 宣言の結果]
     # }
     def export_json(self, template: CompositionTemplate) -> str:
         return template_to_json(template)

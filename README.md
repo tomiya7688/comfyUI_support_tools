@@ -167,3 +167,15 @@ By default, subject tracking uses a root-bone name or the first bone track, and 
 `comfyui_support_tools.shared.audio_to_face` accepts timed phonemes from PCM WAV plus a transcript, or from an injected speech analyzer, then generates Japanese vowel morphs, emotion morphs, and seeded blink curves. `MorphCalibration` supplies model-specific morph names and ranges. The service writes a facial-only VMD, a non-destructive morph merge into a body VMD, a timing report, and a GIF of the morph curves without overwriting existing outputs.
 
 The built-in transcript path distributes mora uniformly across the audio as an estimate; it does not provide real speech timing or guarantee lip-sync quality. Speech recognition, phoneme alignment, and singing analysis require an external `SpeechAnalyzer` adapter. AnyTalk itself, automatic PMX morph discovery/calibration, gaze/head motion, and preview video are not bundled. Evaluation values measure generated-timeline consistency, not comparison against labeled audio/video ground truth.
+
+### Video-to-MMD Motion基盤
+
+`comfyui_support_tools.shared.video_to_mmd` は外部pose recovery backendのtracked 3D skeletonをperson idで選択し、camera translation補正、confidenceベースの欠損補間、temporal smoothing、foot-contact補正、retarget、速度制限、keyframe reductionを行いVMD・confidence report・GIF previewを作成します。source bone/target PMX boneの対応と座標系は `RetargetProfile` で指定します。出力3ファイルは既存成果物を上書きせず作成します。
+
+GVHMR/WHAM/DWPoseなどのvideo inference、本物のcamera estimation、person tracking、PMXのIK/geometryを使った適用previewは含みません。foot-contact補正はbackendが示すfoot contactとretarget bone名に依存する保守的なtranslation補正です。GIFはmapped boneの2D軌跡表示で、MMD scene renderingではありません。#376へのreference motion登録も自動では行いません。
+
+### Video-to-MMD Motion foundation
+
+`comfyui_support_tools.shared.video_to_mmd` selects a tracked 3D skeleton by person ID from an injected pose-recovery backend, then applies camera-translation compensation, confidence-based interpolation, temporal smoothing, foot-contact correction, retargeting, speed limiting, and keyframe reduction. It writes a VMD, confidence report, and GIF preview. `RetargetProfile` defines source-to-target bone mappings and coordinate conversion. The three outputs are created without overwriting existing files.
+
+Video inference such as GVHMR/WHAM/DWPose, actual camera estimation, person tracking, and a PMX IK/geometry preview are not included. Foot-contact correction is a conservative translation adjustment that depends on backend contact labels and retarget bone names. The GIF shows mapped bones in 2D; it does not render an MMD scene. Registering the result as a #376 reference motion is also not automatic.

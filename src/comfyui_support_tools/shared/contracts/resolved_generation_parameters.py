@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Mapping
 
 
 # {
@@ -13,6 +14,8 @@ class ResolvedGenerationParameters:
     width: int
     height: int
     sampler: str
+    parameters: Mapping[str, object] = field(default_factory=dict)
+    backend_parameters: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
 
     # {
     #   責務: [to_dict: 確定済み生成値をmetadata互換のmappingへ変換する]
@@ -21,9 +24,16 @@ class ResolvedGenerationParameters:
     #   戻り値: [dict: generation metadata]
     # }
     def to_dict(self) -> dict[str, object]:
-        return {
+        result = {
             "cfg": self.cfg,
             "steps": self.steps,
             "resolution": {"width": self.width, "height": self.height},
             "sampler": self.sampler,
         }
+        if self.parameters:
+            result["parameters"] = dict(self.parameters)
+        if self.backend_parameters:
+            result["backend_parameters"] = {
+                namespace: dict(values) for namespace, values in self.backend_parameters.items()
+            }
+        return result

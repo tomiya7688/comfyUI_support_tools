@@ -40,6 +40,10 @@ Toukaの動画候補scoreは、候補生成中のmetricから独立したversion
 
 Tensor検出器は `ModelFamilyDetectorRegistry` へ登録でき、結果にdetector ID/versionと一致confidenceを保持します。path・metadata・tensor evidenceが衝突した場合や未対応layoutの場合は `unknown` を維持します。追加detectorは既存のtensor detectorを編集せずfixtureから登録できます。
 
+### 生成パラメータ
+
+Random Image の CFG、steps、resolution、sampler は共通 `ParameterSpecRegistry` から解決します。seed、scheduler、独自parameter、backend namespace付き値はspec登録で追加でき、解決済み値は既存4項目との互換形式を保ちながら `parameters` / `backend_parameters` に保存されます。UIとpresetはregistryのschema descriptorを共有できます。
+
 ---
 
 ## English
@@ -79,3 +83,7 @@ Touka video candidate scores are computed by a separate, versioned evaluator fro
 ### Model family detection
 
 Tensor detectors register through `ModelFamilyDetectorRegistry`, and classifications retain detector ID/version and match confidence. Conflicting path, metadata, and tensor evidence, as well as unsupported layouts, remain `unknown`. A fixture can register an additional detector without editing the existing tensor detector.
+
+### Generation parameters
+
+Random Image CFG, steps, resolution, and sampler resolve through the shared `ParameterSpecRegistry`. Seed, scheduler, custom parameters, and backend-namespaced values can be added through spec registration. Resolved values preserve the existing four-field representation and store extensions under `parameters` / `backend_parameters`. UI and presets can share the registry schema descriptors.

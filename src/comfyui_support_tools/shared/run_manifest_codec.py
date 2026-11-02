@@ -277,6 +277,17 @@ def _validate_manifest(manifest: RunManifest) -> None:
         raise ValueError("running manifest cannot have a finish time")
     if manifest.status is not RunStatus.RUNNING and manifest.finished_at is None:
         raise ValueError("terminal manifest requires a finish time")
+    _validate_manifest_collection_types(manifest)
+    _validate_manifest_record_values(manifest)
+
+
+# {
+#   責務: [_validate_manifest_collection_types: immutable record collectionとkey/value shapeを検証する]
+#   処理: [1: tuple contractを確認する 2: artifact/decision/pair/refの構造を確認する]
+#   引数: [manifest: run contract]
+#   戻り値: []
+# }
+def _validate_manifest_collection_types(manifest: RunManifest) -> None:
     tuple_fields = (
         manifest.input_refs,
         manifest.resolved_settings,
@@ -337,6 +348,15 @@ def _validate_manifest(manifest: RunManifest) -> None:
         for item in (*manifest.selected_candidate_refs, *manifest.rejected_candidate_refs)
     ):
         raise ValueError("candidate references must be strings")
+
+
+# {
+#   責務: [_validate_manifest_record_values: seeds/privacy/artifact/decision valuesを検証してJSON-safeを保証する]
+#   処理: [1: seed/privacy invariantを検証する 2: metadata valuesを検証しcanonicalizeする]
+#   引数: [manifest: run contract]
+#   戻り値: []
+# }
+def _validate_manifest_record_values(manifest: RunManifest) -> None:
     seed_names = [name for name, _seed in manifest.random_seeds]
     if any(not isinstance(name, str) or not name for name in seed_names) or len(
         set(seed_names)

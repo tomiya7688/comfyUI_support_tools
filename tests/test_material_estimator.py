@@ -184,7 +184,9 @@ class MaterialEstimatorTests(unittest.TestCase):
             selected = report["inputs"][0]
             self.assertTrue(selected["selected_estimate"]["estimate_id"].endswith(":conservative"))
             self.assertEqual(len(selected["hypotheses"]), 3)
-            self.assertTrue(all((output_path.parent / item).is_file() for item in selected["map_files"]))
+            self.assertTrue(
+                all((output_path.parent / item).is_file() for item in selected["map_files"])
+            )
 
 
 if __name__ == "__main__":

@@ -207,6 +207,12 @@ class MaterialEstimatorRegistry:
 #   処理: [estimate surface color, local alpha/transmission, shading, scatter, texture, specularity, wrinkles and uncertainty]
 # }
 class ClassicalMaterialEstimator:
+    # {
+    #   責務: [name: stable estimator provenance identifierを返す]
+    #   処理: [expose the classical local-statistics method name]
+    #   引数: [self: material estimator]
+    #   戻り値: [str: algorithm identifier]
+    # }
     @property
     def name(self) -> str:
         return "classical_spatial_prior_v1"
@@ -308,11 +314,9 @@ class ClassicalMaterialEstimator:
         local_alpha = base_alpha * np.exp(-color_residual / residual_scale)
         local_alpha *= 0.72 + 0.28 * (1.0 - scattering_map.astype(np.float32) / 255)
         local_alpha = np.clip(local_alpha, 0.025, 0.36)
-        transmittance = 1.0 - local_alpha
         alpha_uncertainty = np.clip(0.66 + 0.20 * np.minimum(color_residual / 64, 1.0), 0.50, 0.92)
         if material or category:
             alpha_uncertainty = np.maximum(0.42, alpha_uncertainty - 0.10)
-        uncertainty_map = np.clip(alpha_uncertainty * 255, 0, 255).astype(np.uint8)
         inferred_category = category or _infer_category(texture_map, specular_map)
         inferred_material = material or _infer_material(
             inferred_category, texture_map, specular_map
@@ -422,8 +426,8 @@ def apply_surface_estimate(
         blurred = cv2.GaussianBlur(corrected.astype(np.uint8), (0, 0), sigmaX=1.2).astype(
             np.float32
         )
-        correction_weight = scatter[..., None] * confidence_gain[..., None] * (
-            0.08 * estimate.scattering_strength
+        correction_weight = (
+            scatter[..., None] * confidence_gain[..., None] * (0.08 * estimate.scattering_strength)
         )
         corrected = corrected * (1 - correction_weight) + blurred * correction_weight
     return Image.fromarray(np.clip(corrected, 0, 255).astype(np.uint8), "RGB")

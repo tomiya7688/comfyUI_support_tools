@@ -1,0 +1,2 @@
+# Optional Pixiv source adapter. Kept out of the base GUI environment.
+pixivpy3>=3.7,<4

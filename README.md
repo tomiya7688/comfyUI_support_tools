@@ -54,6 +54,12 @@ CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generatorとBlender `mmd_tools` PMX
 
 character/situation/background/styleの学習済みclassifierやembedding modelは同梱せず、adapter未登録のaxisは`uncertain`になります。ローカルJSON metadataと利用者が登録するmodelsを使うshared serviceです。GitHub issue #369の完全なreview GUIと本番semantic model接続は未実装です。
 
+### Pixiv Dataset Downloader
+
+`comfyui_support_tools.shared.pixiv_dataset` はPixivPy3 source adapter、refresh-token auth/health、tag・creator・bookmark・ranking・ID query、filter、rate limit/retry、JobRuntime bridge、resume checkpoint、ページ順を維持したillustration/mangaとugoira archive収集、任意GIF/WebP preview、work/provenance JSON、exact/perceptual duplicate grouping、#356 handoffを提供します。`PixivRateLimitProfile`で毎分上限、API/download並列上限、interval、retry/backoff、429 cooldown、自動pauseをapp/query/job単位に設定でき、effective設定とbounded retry/429履歴をcheckpointへ記録します。custom設定が保守的な初期値を超える場合はwarning状態を返します。使う場合は別環境に `pip install -r requirements-pixiv.txt` でPixivPy3を導入し、呼び出し元のsecure secret storeからrefresh tokenを実行時に渡してください。tokenをpresetやdatasetへ保存しません。
+
+このbackendはAPI接続型で、認証情報と実Pixiv応答がない環境では実アカウントへの通信を実行しません。GUIのquery builder/preview controls、CLI command、翻訳tag辞書、非original派生画像の取得、動画(MP4)変換は未実装です。権利許可は常に`unknown`として保存され、duplicateはgroup化のみで自動削除しません。詳細は[Pixiv Dataset Downloader](doc/dataset/pixiv_dataset.md)を参照してください。
+
 ### Pixel Art Creator
 
 `python -m comfyui_support_tools.applications.pixel_art` で独立したPixel Art Creator画面を起動し、Text / Image / Retouchを選べます。`comfyui_support_tools.shared.pixel_art.PixelArtApplication` は3入口で共通設定と処理を使います。8/16/32/64/96/128/192/256 pxとcustom WxH、palette import/extract/export、透明RGBA、crop/pad、palette制限、dither、nearest-neighbor preview、native-sizeのpixel指標、PNG/JSON出力、undo/redo可能なproject履歴、sprite-sheet分割/結合を提供します。Text workflowでは `Text backend…` からローカルComfyUI API-format workflowを設定できます。アプリにはmodel/LoRAを同梱せず、適合するworkflowとローカルComfyUI環境は利用者が用意します。
@@ -129,6 +135,12 @@ CharacterGen/Hunyuan3D/VRM/SkinTokens/UniRig generation and a Blender `mmd_tools
 `comfyui_support_tools.shared.dataset_classifier.DatasetClassifierApplication` provides recursive inventory, an axis-classifier registry, weighted multi-evidence fusion, metadata precedence, alternate-label/disagreement/uncertainty reporting, persisted manual review, AND/OR/NOT queries, a style-embedding clustering adapter, dry-run/copy/move/manifest-only actions, collision avoidance, and verified caption/metadata sidecar transfer. JSON sidecar labels take priority over model evidence by default, and queries can classify only the axes they need. Export manifests record sources/destinations, labels, confidence, evidence provenance, and manual overrides; a #356 handoff payload is available.
 
 Pretrained character/situation/background/style classifiers and embedding models are not bundled. Axes without registered adapters remain `uncertain`. This is a shared service using local JSON metadata or user-provided models; the complete review GUI and production semantic-model integrations from issue #369 remain unfinished.
+
+### Pixiv Dataset Downloader
+
+`comfyui_support_tools.shared.pixiv_dataset` provides a PixivPy3 adapter, refresh-token authentication and health checks, tag/creator/bookmark/ranking/ID queries, filtering, throttling and bounded retries, JobRuntime integration, resumable checkpoints, ordered illustration/manga pages and ugoira archives, optional GIF/WebP previews, work/provenance JSON, exact/perceptual duplicate grouping, and a #356 handoff. `PixivRateLimitProfile` configures requests/minute, API/download concurrency caps, interval, retries/backoff, 429 cooldown, and automatic pause at application/query/job scope; the effective policy is recorded in checkpoints and provenance, with bounded retry/429 history in job state. Aggressive custom profiles expose a warning state. Install PixivPy3 separately with `pip install -r requirements-pixiv.txt`; supply the refresh token at runtime through the caller's secure secret store. Presets and dataset files never store it.
+
+This backend requires live Pixiv credentials and API responses for account-level validation, which are not available in the offline test suite. The query-builder GUI, CLI command, translated-tag dictionary, non-original rendition selection, and MP4 conversion are not implemented. Rights remain `unknown`; duplicate handling groups records and never deletes files. See [Pixiv Dataset Downloader](doc/dataset/pixiv_dataset.md).
 
 ### Pixel Art Creator
 

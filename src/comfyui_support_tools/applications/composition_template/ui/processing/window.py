@@ -519,7 +519,7 @@ class CompositionTemplateWindow:
                 for keypoint in skeleton.keypoints
                 if keypoint.visibility > 0.1
             ]
-            for start, end in zip(points, points[1:]):
+            for start, end in zip(points, points[1:], strict=False):
                 draw.line((*start, *end), fill=(40, 255, 150, 230), width=2)
             for x, y in points:
                 draw.ellipse((x - 3, y - 3, x + 3, y + 3), fill=(40, 255, 150, 240))

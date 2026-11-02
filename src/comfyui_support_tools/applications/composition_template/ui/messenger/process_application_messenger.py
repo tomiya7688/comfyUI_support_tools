@@ -13,11 +13,14 @@ from comfyui_support_tools.shared.contracts.composition_template import (
 # {
 # 責務: [ProcessApplicationEndpoint: describe commands available to the UI boundary]
 # 処理: [declare the Process application operations without importing its implementation]
+#   フィールド: [主要状態: ProcessApplicationEndpointが管理する状態]
 # }
 class ProcessApplicationEndpoint(Protocol):
     # {
     # 責務: [extract: expose the Process extraction operation]
     # 処理: [accept an image source and abstraction level]
+    #   引数: [source, level: 宣言の入力値]
+    #   戻り値: [CompositionTemplate: 宣言の結果]
     # }
     def extract(
         self, source: str | Path, level: ExtractionLevel = ExtractionLevel.LAYOUT
@@ -26,6 +29,8 @@ class ProcessApplicationEndpoint(Protocol):
     # {
     # 責務: [adapt: expose the Process geometry transformation]
     # 処理: [accept a template, target ratio and policy]
+    #   引数: [template, ratio, policy: 宣言の入力値]
+    #   戻り値: [CompositionTemplate: 宣言の結果]
     # }
     def adapt(
         self, template: CompositionTemplate, ratio: float, policy: AspectPolicy
@@ -34,48 +39,64 @@ class ProcessApplicationEndpoint(Protocol):
     # {
     # 責務: [prompt: expose spatial prompt generation]
     # 処理: [accept an abstract template]
+    #   引数: [template: 宣言の入力値]
+    #   戻り値: [str: 宣言の結果]
     # }
     def prompt(self, template: CompositionTemplate) -> str: ...
 
     # {
     # 責務: [guidance: expose generic generation guidance]
     # 処理: [accept an abstract template]
+    #   引数: [template: 宣言の入力値]
+    #   戻り値: [str: 宣言の結果]
     # }
     def guidance(self, template: CompositionTemplate) -> str: ...
 
     # {
     # 責務: [save: expose template library persistence]
     # 処理: [accept an identifier and abstract template]
+    #   引数: [name, template: 宣言の入力値]
+    #   戻り値: [Path: 宣言の結果]
     # }
     def save(self, name: str, template: CompositionTemplate) -> Path: ...
 
     # {
     # 責務: [load: expose template library retrieval]
     # 処理: [accept a template identifier]
+    #   引数: [name: 宣言の入力値]
+    #   戻り値: [CompositionTemplate: 宣言の結果]
     # }
     def load(self, name: str) -> CompositionTemplate: ...
 
     # {
     # 責務: [list_templates: expose template library listing]
     # 処理: [return available template identifiers]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [tuple[str, ...]: 宣言の結果]
     # }
     def list_templates(self) -> tuple[str, ...]: ...
 
     # {
     # 責務: [import_file: expose versioned JSON template import]
     # 処理: [accept a selected template file path]
+    #   引数: [path: 宣言の入力値]
+    #   戻り値: [CompositionTemplate: 宣言の結果]
     # }
     def import_file(self, path: str | Path) -> CompositionTemplate: ...
 
     # {
     # 責務: [export_file: expose versioned JSON template export]
     # 処理: [accept a destination path and template]
+    #   引数: [path, template: 宣言の入力値]
+    #   戻り値: [Path: 宣言の結果]
     # }
     def export_file(self, path: str | Path, template: CompositionTemplate) -> Path: ...
 
     # {
     # 責務: [export_guidance_file: expose generation guidance export]
     # 処理: [accept a destination path and template]
+    #   引数: [path, template: 宣言の入力値]
+    #   戻り値: [Path: 宣言の結果]
     # }
     def export_guidance_file(self, path: str | Path, template: CompositionTemplate) -> Path: ...
 

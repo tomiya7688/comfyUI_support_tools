@@ -44,6 +44,12 @@ from comfyui_support_tools.shared.contracts.composition_template import (
 )
 
 
+# {
+# 責務: [_template: build a small validated test fixture]
+# 処理: [create subject and negative-space layout records]
+# 戻り値: [CompositionTemplate: reusable test layout]
+#   引数: [なし: 宣言の入力値]
+# }
 def _template() -> CompositionTemplate:
     """Build a small fixture with a subject and empty space."""
     provenance = ExtractionProvenance(
@@ -69,9 +75,20 @@ def _template() -> CompositionTemplate:
     )
 
 
+# {
+# 責務: [CompositionTemplateTests: verify layout extraction and interchange behavior]
+# 処理: [test contract validation, adaptation, extraction, export and library persistence]
+#   フィールド: [主要状態: CompositionTemplateTestsが管理する状態]
+# }
 class CompositionTemplateTests(unittest.TestCase):
     """Verify the layout data contract end to end."""
 
+    # {
+    # 責務: [test_template_json_round_trip_and_unknown_field_rejection: validate portable JSON schema]
+    # 処理: [roundtrip valid data and reject unknown, duplicate and invalid fields]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_template_json_round_trip_and_unknown_field_rejection(self) -> None:
         template = _template()
         encoded = template_to_json(template)
@@ -87,12 +104,24 @@ class CompositionTemplateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             template_from_json(json.dumps(data))
 
+    # {
+    # 責務: [test_template_contract_rejects_non_normalized_regions: guard normalized layout invariants]
+    # 処理: [verify out-of-bounds boxes and non-finite horizons fail]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_template_contract_rejects_non_normalized_regions(self) -> None:
         with self.assertRaises(ValueError):
             CompositionRegion("bad", RegionRole.MAIN_SUBJECT, (0.8, 0.1, 0.3, 0.2))
         with self.assertRaises(ValueError):
             HorizonLine(float("nan"))
 
+    # {
+    # 責務: [test_editor_maps_each_region_role_to_its_matching_template_collection: protect manual role edits]
+    # 処理: [verify foreground/depth/subject role routing]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_editor_maps_each_region_role_to_its_matching_template_collection(self) -> None:
         self.assertEqual(
             CompositionTemplateWindow._category_for_role(RegionRole.BACKGROUND),
@@ -107,6 +136,12 @@ class CompositionTemplateTests(unittest.TestCase):
             "subject_regions",
         )
 
+    # {
+    # 責務: [test_aspect_adaptation_preserves_geometry_without_stretching: verify crop and fit transforms]
+    # 処理: [check unchanged proportions, normalized clipping and attention map adaptation]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_aspect_adaptation_preserves_geometry_without_stretching(self) -> None:
         template = _template()
         fit = adapt_template(template, 9 / 16, AspectPolicy.FIT)
@@ -118,11 +153,23 @@ class CompositionTemplateTests(unittest.TestCase):
         self.assertIsNotNone(fit.visual_weight_map)
         self.assertEqual(len(fit.visual_weight_map.rows), 2)
 
+    # {
+    # 責務: [test_smart_reflow_moves_main_region_toward_opposite_empty_space: verify layout reflow]
+    # 処理: [check the subject shifts while negative space remains anchored]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_smart_reflow_moves_main_region_toward_opposite_empty_space(self) -> None:
         template = _template()
         adapted = adapt_template(template, 1.5, AspectPolicy.SMART_REFLOW)
         self.assertLess(adapted.subject_regions[0].bbox[0], template.subject_regions[0].bbox[0])
 
+    # {
+    # 責務: [test_extraction_outputs_only_layout_evidence_and_marks_heuristics: verify the baseline extractor]
+    # 処理: [extract one synthetic image and reject appearance-specific output fields]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_extraction_outputs_only_layout_evidence_and_marks_heuristics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "synthetic.png"
@@ -140,6 +187,12 @@ class CompositionTemplateTests(unittest.TestCase):
         self.assertNotIn("identity", serialized)
         self.assertNotIn("style", serialized)
 
+    # {
+    # 責務: [test_injected_subject_pose_depth_and_perspective_adapters_are_retained: verify replaceable CV providers]
+    # 処理: [pass injected subject, depth and perspective evidence through extraction]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_injected_subject_pose_depth_and_perspective_adapters_are_retained(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "synthetic.png"
@@ -169,6 +222,12 @@ class CompositionTemplateTests(unittest.TestCase):
         self.assertTrue(template.depth_structure.measured)
         self.assertEqual(template.horizon.y, 0.55)
 
+    # {
+    # 責務: [test_library_is_reusable_and_does_not_overwrite: verify safe template library persistence]
+    # 処理: [save, list, load, reject overwrite and reject unsafe identifiers]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_library_is_reusable_and_does_not_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             library = TemplateLibrary(directory)
@@ -180,6 +239,12 @@ class CompositionTemplateTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 library.load("../outside")
 
+    # {
+    # 責務: [test_prompt_and_downstream_guidance_contain_spatial_data: verify generic consumer exports]
+    # 処理: [assert that prompt and JSON payload carry layout without identity/style claims]
+    #   引数: [なし: 宣言の入力値]
+    #   戻り値: [None: 宣言の結果]
+    # }
     def test_prompt_and_downstream_guidance_contain_spatial_data(self) -> None:
         template = _template()
         prompt = export_prompt(template).lower()

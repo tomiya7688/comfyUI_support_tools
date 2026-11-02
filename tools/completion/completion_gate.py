@@ -104,6 +104,25 @@ def quality_check() -> CheckResult:
 
 
 # {
+#   責務: [comment_coverage_check: tools内の宣言comment coverageをstrictに検査する]
+#   処理: [tools path限定でcoverage checkerを実行し、そのstatusを返す]
+#   引数: []
+#   戻り値: [result: coverage checkerのCheckResult]
+#   副作用: [coverage checker subprocessを起動する]
+# }
+def comment_coverage_check() -> CheckResult:
+    return run(
+        [
+            sys.executable,
+            "tools/quality/comment_coverage.py",
+            "--path",
+            "tools",
+            "--strict",
+        ]
+    )
+
+
+# {
 #   責務: [
 #     test_check: repository unittest suiteを実行する
 #   ],
@@ -224,7 +243,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-tests", action="store_true")
     args = parser.parse_args(argv)
 
-    checks = [compile_check, quality_check]
+    checks = [compile_check, quality_check, comment_coverage_check]
     if not args.skip_tests:
         checks.append(test_check)
     checks.extend([generated_docs_check, architecture_check, upd_architecture_check, diff_check])

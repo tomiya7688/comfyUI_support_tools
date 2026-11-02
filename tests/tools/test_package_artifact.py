@@ -1,6 +1,7 @@
 """Tests for final distribution archive creation and integrity verification."""
 
 import hashlib
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,6 +38,8 @@ class PackageArtifactTests(unittest.TestCase):
             first_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             self.assertEqual(checksum.name, CHECKSUM_NAME)
             self.assertEqual(verify_distribution(output), (archive, checksum))
+            executable = distribution / "KadokaTools.exe"
+            executable.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
             package_distribution(distribution, output)
             second_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
             self.assertEqual(first_digest, second_digest)

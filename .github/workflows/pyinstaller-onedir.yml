@@ -14,6 +14,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
     timeout-minutes: 60
+    # Release credentials must live in a protected environment, never repo-level secrets.
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && 'windows-release-signing' || 'ci' }}
 
     steps:
       - name: Checkout
@@ -116,8 +119,16 @@ jobs:
           $pfxPath = Join-Path $env:RUNNER_TEMP "kadoka-codesign.pfx"
           try {
             [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
-            $binaries = Get-ChildItem -LiteralPath "dist/KadokaTools" -Recurse -File |
-              Where-Object { $_.Extension -in @(".exe", ".dll", ".pyd", ".msi", ".msix") }
+            $binaries = @()
+            foreach ($file in Get-ChildItem -LiteralPath "dist/KadokaTools" -Recurse -File) {
+              $stream = [IO.File]::OpenRead($file.FullName)
+              try {
+                if ($stream.Length -ge 2 -and $stream.ReadByte() -eq 0x4D -and $stream.ReadByte() -eq 0x5A) {
+                  $binaries += $file
+                }
+              }
+              finally { $stream.Dispose() }
+            }
             if (-not ($binaries | Where-Object { $_.Extension -eq ".exe" })) {
               throw "The distribution has no executable to sign."
             }
@@ -139,6 +150,38 @@ jobs:
       - name: Verify package checksum and archive
         if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
         run: python tools/build/package_artifact.py --verify dist/release
+
+      - name: Verify Authenticode signatures in final archive
+        if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $verifyRoot = Join-Path $env:RUNNER_TEMP "release-signature-check"
+          Expand-Archive -LiteralPath "dist/release/KadokaTools-windows-onedir.zip" -DestinationPath $verifyRoot -Force
+          $binaries = @()
+          foreach ($file in Get-ChildItem -LiteralPath $verifyRoot -Recurse -File) {
+            $stream = [IO.File]::OpenRead($file.FullName)
+            try {
+              if ($stream.Length -ge 2 -and $stream.ReadByte() -eq 0x4D -and $stream.ReadByte() -eq 0x5A) {
+                $binaries += $file
+              }
+            }
+            finally { $stream.Dispose() }
+          }
+          if (-not ($binaries | Where-Object { $_.Extension -eq ".exe" })) {
+            throw "The final archive has no signed executable."
+          }
+          $publisher = $null
+          foreach ($binary in $binaries) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $binary.FullName
+            if ($signature.Status -ne "Valid" -or -not $signature.SignerCertificate) {
+              throw "Final archive contains an unsigned or invalid PE file: $($binary.Name)"
+            }
+            if ($publisher -and $signature.SignerCertificate.Thumbprint -ne $publisher) {
+              throw "Final archive contains binaries signed by different publishers."
+            }
+            $publisher = $signature.SignerCertificate.Thumbprint
+          }
+          if (-not $binaries.Count) { throw "The final archive contains no signed PE files." }
 
       - name: Upload release staging artifact
         if: github.event_name == 'workflow_dispatch' && github.ref_type == 'tag'
@@ -212,5 +255,5 @@ jobs:
             gh release create $tag --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes
             if ($LASTEXITCODE -ne 0) { throw "Verified GitHub Release could not be created." }
           }
-          gh release upload $tag release/KadokaTools-windows-onedir.zip release/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --clobber
+          gh release upload $tag release/KadokaTools-windows-onedir.zip release/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw "Attested release assets could not be uploaded." }

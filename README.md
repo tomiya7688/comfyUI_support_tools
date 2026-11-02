@@ -36,7 +36,7 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 ### Windows配布物の真正性検証
 
-配布単位は Authenticode 署名済み Windows `onedir` を格納する `KadokaTools-windows-onedir.zip` と `SHA256SUMS.txt` です。タグを指定して GitHub Actions workflow を手動実行すると、公開配布前に `.exe` / `.dll` / `.pyd` を RFC 3161 timestamp 付きで署名・検証し、最終 ZIP と checksum manifest の両方へ GitHub Artifact Attestation を付け、attestation を検証してから Release assets を公開します。main の通常 CI は署名用 secrets を必要としません。配布 Release のない既存の状態を確認したため、未署名の過去 Release は見つかりませんでした（監査日: 2026-11-02）。
+配布単位は Authenticode 署名済み Windows `onedir` を格納する `KadokaTools-windows-onedir.zip` と `SHA256SUMS.txt` です。タグを指定して GitHub Actions workflow を手動実行すると、公開配布前に全 PE ファイルを RFC 3161 timestamp 付きで署名・検証し、最終 ZIP 展開後にも署名と publisher の一致を検証します。最終 ZIP と checksum manifest の両方へ GitHub Artifact Attestation を付け、attestation 検証後に Release assets を公開します。`windows-release-signing` GitHub Environment に required reviewers とタグ限定ルールを設定し、署名用 secrets をその environment のみへ登録してください。PR と main の CI は秘密情報を持たない `ci` environment を使用します。配布 Release のない既存の状態を確認したため、未署名の過去 Release は見つかりませんでした（監査日: 2026-11-02）。
 
 Release asset をダウンロード後、ZIP と checksum manifest の provenance を確認し、checksum を照合します:
 
@@ -102,7 +102,7 @@ The current PyInstaller onedir build does not bundle PyTorch or Transformers, so
 
 ### Verifying Windows distributions
 
-The final deliverables are `KadokaTools-windows-onedir.zip` (the Authenticode-signed Windows `onedir`) and `SHA256SUMS.txt`. A manual GitHub Actions run targeting a tag signs and verifies every `.exe` / `.dll` / `.pyd` with an RFC 3161 timestamp, attaches GitHub Artifact Attestations to both the final ZIP and checksum manifest, verifies those attestations, and only then publishes Release assets. Regular main-branch CI does not need signing secrets. The repository had no published Release assets during the audit, so no unsigned historical Release needed remediation (audit date: 2026-11-02).
+The final deliverables are `KadokaTools-windows-onedir.zip` (the Authenticode-signed Windows `onedir`) and `SHA256SUMS.txt`. A manual GitHub Actions run targeting a tag signs and verifies every PE file with an RFC 3161 timestamp, then verifies signatures and a common publisher again after extracting the final ZIP. It attaches GitHub Artifact Attestations to both the final ZIP and checksum manifest, verifies those attestations, and only then publishes Release assets. Configure the `windows-release-signing` GitHub Environment with required reviewers and tag-only deployment rules, and store signing secrets only in that environment. Pull requests and main-branch CI use a secret-free `ci` environment. The repository had no published Release assets during the audit, so no unsigned historical Release needed remediation (audit date: 2026-11-02).
 
 After downloading the Release assets, verify provenance for both files and compare the ZIP digest:
 

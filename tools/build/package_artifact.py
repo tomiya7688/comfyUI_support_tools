@@ -45,12 +45,11 @@ def package_distribution(source_dir: Path, output_dir: Path) -> tuple[Path, Path
                 info = ZipInfo(archive_name, NORMALIZED_TIMESTAMP)
                 info.compress_type = ZIP_DEFLATED
                 info.create_system = 3
-                mode = source_path.stat().st_mode
-                info.external_attr = (stat.S_IMODE(mode) & 0xFFFF) << 16
                 if source_path.is_dir():
-                    info.external_attr |= 0x10
+                    info.external_attr = (0o755 << 16) | 0x10
                     bundle.writestr(info, b"")
                 else:
+                    info.external_attr = 0o644 << 16
                     with source_path.open("rb") as content, bundle.open(info, "w") as target:
                         while chunk := content.read(CHUNK_SIZE):
                             target.write(chunk)

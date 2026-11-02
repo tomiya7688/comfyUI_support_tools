@@ -14,6 +14,7 @@ from comfyui_support_tools.shared.contracts.character_registry import (
     CharacterTrait,
 )
 from scripts.tabs.character_library_actions import CharacterLibraryActions
+from ..context import USER_INPUT_DIR
 
 
 # {
@@ -29,9 +30,10 @@ class CharacterLibraryPanel(CharacterLibraryActions, ttk.Frame):
     #   引数: [master: parent widget, profile_root: persistent character store path]
     #   戻り値: []
     # }
-    def __init__(self, master: tk.Misc, profile_root: Path):
+    def __init__(self, master: tk.Misc, profile_root: Path | None = None):
         ttk.Frame.__init__(self, master, padding=10)
-        self.profile_root = Path(profile_root).expanduser()
+        resolved_root = profile_root if profile_root is not None else USER_INPUT_DIR / "characters"
+        self.profile_root = Path(resolved_root).expanduser()
         self.current_profile: CharacterProfile | None = None
         self.current_version: str | None = None
         self.character_id = tk.StringVar()

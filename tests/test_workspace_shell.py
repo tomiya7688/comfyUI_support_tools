@@ -1,27 +1,35 @@
 """Offline navigation, real Tk layout, and legacy-bridge regression tests."""
 
+# The source path must be added before importing the package under test.
+# ruff: noqa: E402
+
 import ast
 import importlib.util
 import os
-from pathlib import Path
 import sys
-from types import ModuleType
 import unittest
+from pathlib import Path
+from types import ModuleType
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import (
-    NavigationProcessing,
+from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import (  # noqa: E402
     SECTIONS,
+    NavigationProcessing,
 )
-from comfyui_support_tools.applications.main_gui.ui.processing.library_panel import LABELS
-from comfyui_support_tools.applications.main_gui.ui.processing.shell_window import ShellWindow
-from comfyui_support_tools.entrypoints.workspace import create_navigation
-from comfyui_support_tools.shared.contracts.tool_entry import ToolEntry
-from scripts.tab_catalog import TAB_CATALOG, tab_index
+from comfyui_support_tools.applications.main_gui.ui.processing.library_panel import (
+    LABELS,  # noqa: E402
+)
+from comfyui_support_tools.applications.main_gui.ui.processing.shell_window import (
+    ShellWindow,  # noqa: E402
+)
+from comfyui_support_tools.entrypoints.workspace import create_navigation  # noqa: E402
+from comfyui_support_tools.shared.contracts.tool_entry import ToolEntry  # noqa: E402
+from scripts.tab_catalog import TAB_CATALOG, tab_index  # noqa: E402
+from scripts.tool_registry import TOOL_REGISTRY  # noqa: E402
 
 TOOLS = (ToolEntry("tag", "Folder Tagger", "Tag"), ToolEntry("video", "動画変換", "Video"))
 
@@ -82,21 +90,32 @@ class NavigationTests(unittest.TestCase):
 
 
 class CatalogParityTests(unittest.TestCase):
+    # {
+    #   責務: [test_catalog_matches_every_legacy_tab_in_order: catalogとsettings metadataがdescriptorから同じ順に派生することを検証する]
+    #   処理: [1: legacy descriptor列を取得する 2: compatibility catalogとapp shell参照を照合する]
+    #   引数: []
+    #   戻り値: []
+    # }
     def test_catalog_matches_every_legacy_tab_in_order(self):
         # Read source without importing legacy backends or opening their windows.
         tree = ast.parse((ROOT / "scripts/app.py").read_text(encoding="utf-8"))
-        lists = [
-            node.value
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == "tab_titles" for t in node.targets)
-        ]
-        self.assertEqual(len(lists), 1)
-        class_names = tuple(
-            item.elts[1].id if isinstance(item.elts[1], ast.Name) else item.elts[1].args[0].id
-            for item in lists[0].elts
+        source = (ROOT / "scripts/app.py").read_text(encoding="utf-8")
+        self.assertTrue(any(isinstance(node, ast.For) for node in ast.walk(tree)))
+        self.assertIn("TOOL_REGISTRY.descriptors", source)
+        self.assertIn("load_implementation", source)
+        self.assertNotIn("tab_titles", source)
+        descriptors = TOOL_REGISTRY.descriptors
+        self.assertEqual(
+            tuple(item.legacy_class for item in descriptors),
+            tuple(item[0] for item in TAB_CATALOG),
         )
-        self.assertEqual(class_names, tuple(item[0] for item in TAB_CATALOG))
+        self.assertEqual(
+            tuple(item.settings_id for item in descriptors),
+            tuple(
+                TOOL_REGISTRY.settings_id_for_legacy_class(item.legacy_class)
+                for item in descriptors
+            ),
+        )
 
 
 class ShellGuiTests(unittest.TestCase):

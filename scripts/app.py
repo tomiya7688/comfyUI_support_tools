@@ -2,7 +2,6 @@ import os
 import subprocess
 import sys
 import tkinter as tk
-from functools import partial
 from pathlib import Path
 from tkinter import ttk
 
@@ -22,38 +21,7 @@ from .context import (
     create_configured_last_settings_store,
 )
 from .runtime_python import venv_python
-from .tabs.ai_image_cluster import AIImageClusterTab
-from .tabs.body_prompt import BodyPromptTab
-from .tabs.character_library import CharacterLibraryPanel
-from .tabs.check_braces import CheckBracesTab
-from .tabs.dependency_status import DependencyStatusTab
-from .tabs.docstring_audit import DocstringAuditTab
-from .tabs.duplicate_line_delete import DuplicateLineDeleteTab
-from .tabs.ffmpeg_repair import FfmpegRepairTab
-from .tabs.flat_file_copy import FlatFileCopyTab
-from .tabs.folder_tagger import FolderTaggerTab
-from .tabs.images_to_webp import ImagesToWebpTab
-from .tabs.movie_to_text import MovieToTextTab
-from .tabs.ollama_prompt import OllamaPromptTab
-from .tabs.prompt_generate import PromptGenerateTab
-from .tabs.random_image import RandomImageTab
-from .tabs.random_img2img import RandomImg2ImgTab
-from .tabs.random_line_picker import RandomLinePickerTab
-from .tabs.screenshot_from_movie import ScreenshotFromMovieTab
-from .tabs.start_webui import StartWebUITab
-from .tabs.static_spec import StaticSpecTab
-from .tabs.tag_deleter import TagDeleterTab
-from .tabs.tag_replacer import TagReplacerTab
-from .tabs.tag_splitter import TagSplitterTab
-from .tabs.tag_to_prompt import TagToPromptTab
-from .tabs.text_merger import TextMergerTab
-from .tabs.touka_enhancer import ToukaEnhancerTab
-from .tabs.touka_evaluation_report import ToukaEvaluationReportTab
-from .tabs.video_reencoder import VideoReencoderTab
-from .tabs.wildcard_checker import WildcardCheckerTab
-from .tabs.wildcard_move import WildcardMoveTab
-from .tabs.youtube_downloader import YouTubeDownloaderTab
-from .tabs.zipper import ZipperTab
+from .tool_registry import TOOL_REGISTRY
 from .widgets.dark_theme import DarkTheme
 from .widgets.scrollable_tab_container import ScrollableTabContainer
 from .widgets.tab_navigation import TabNavigation
@@ -135,43 +103,7 @@ class TabbedToolsApp(tk.Tk):
             create_configured_last_settings_store(settings_path)
         )
 
-        tab_titles = [
-            (f"{BACKEND_DISPLAY_NAME}起動", StartWebUITab),
-            ("random txt2img", RandomImageTab),
-            ("Prompt生成", PromptGenerateTab),
-            ("Random img2img", RandomImg2ImgTab),
-            ("Folder Tagger", FolderTaggerTab),
-            ("AI画像クラスタ", AIImageClusterTab),
-            ("Random Line Picker", RandomLinePickerTab),
-            ("Body Prompt", BodyPromptTab),
-            ("Tag Deleter", TagDeleterTab),
-            ("Tag Splitter", TagSplitterTab),
-            ("Tag Replacer", TagReplacerTab),
-            ("Tag to Prompt", TagToPromptTab),
-            ("Flat Copy/Move", FlatFileCopyTab),
-            ("Text Merger", TextMergerTab),
-            ("Movie Frames", ScreenshotFromMovieTab),
-            (
-                "Character Library",
-                partial(CharacterLibraryPanel, profile_root=USER_INPUT_DIR / "characters"),
-            ),
-            ("Movie to Text", MovieToTextTab),
-            ("画像をWEBP変換", ImagesToWebpTab),
-            ("重複行削除", DuplicateLineDeleteTab),
-            ("ffmpeg修復", FfmpegRepairTab),
-            ("Brace Check", CheckBracesTab),
-            ("Wildcard Check", WildcardCheckerTab),
-            ("Wildcard Move", WildcardMoveTab),
-            ("Zipper", ZipperTab),
-            ("YouTube Downloader", YouTubeDownloaderTab),
-            ("Video Reencoder", VideoReencoderTab),
-            ("静的仕様書", StaticSpecTab),
-            ("Docstring検査", DocstringAuditTab),
-            ("依存状態", DependencyStatusTab),
-            ("Ollama Prompt", OllamaPromptTab),
-            ("半透明素材強調", ToukaEnhancerTab),
-            ("Touka評価履歴", ToukaEvaluationReportTab),
-        ]
+        tool_descriptors = TOOL_REGISTRY.descriptors
 
         self.tab_frames = []
         self.tab_buttons = []
@@ -185,11 +117,13 @@ class TabbedToolsApp(tk.Tk):
         content.rowconfigure(0, weight=1)
         content.columnconfigure(0, weight=1)
 
-        half = (len(tab_titles) + 1) // 2
-        for index, (title, cls) in enumerate(tab_titles):
+        half = (len(tool_descriptors) + 1) // 2
+        for index, descriptor in enumerate(tool_descriptors):
+            title = descriptor.label.format(backend=BACKEND_DISPLAY_NAME)
             try:
                 frame = ScrollableTabContainer(content)
-                tab = cls(frame.content)
+                component = TOOL_REGISTRY.load_implementation(descriptor)
+                tab = component(frame.content)
                 self.last_settings_store.restore(tab)
                 tab.pack(fill="both", expand=True)
             except Exception as e:

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from ..context import *
-from ..context import _unique_choices
+import threading
+import tkinter as tk
+from pathlib import Path
+from tkinter import ttk
+from tkinter.scrolledtext import ScrolledText
+
 from ..backend.model_choice_classification import (
     classify_base_model_choice,
     describe_model_classification,
@@ -10,18 +14,24 @@ from ..backend.prompt_lora_compatibility import (
     assess_prompt_loras,
     format_prompt_lora_findings,
 )
-from ..services import *
+from ..context import (
+    WILDCARDS_DIR,
+    _safe_thread,
+    _unique_choices,
+    base_model_choices,
+    create_configured_generation_backend_catalog,
+    flow_checkpoint_choices,
+    load_backend_choices,
+)
+from ..services import EmbeddedRandomImage, LabeledPathRow, LogBox
+from ..tool_registry import TOOL_REGISTRY
 from ..widgets.preset_store import PresetStore
 
 
 class PromptGenerateTab(ttk.Frame):
     """手入力プロンプトを現在の生成バックエンドへ送る。"""
 
-    # {
-    #   責務: [settings_id: Prompt生成機能の安定した設定識別子を定義する]
-    #   処理: [tab class名の変更に依存しないgeneration設定の保存先を指定する]
-    # }
-    settings_id = "generation.prompt_generate"
+    settings_id = TOOL_REGISTRY.settings_id_for_legacy_class("PromptGenerateTab")
 
     # {
     #   責務: [__init__: Prompt Generateタブの状態を初期化し, 選択backendの機能宣言を取得する]
@@ -63,7 +73,9 @@ class PromptGenerateTab(ttk.Frame):
         ttk.Label(api_row, text="API URL", width=16).pack(side="left")
         ttk.Entry(api_row, textvariable=self.api_url).pack(side="left", fill="x", expand=True)
 
-        prompt_frame = ttk.LabelFrame(self, text="Prompt（__wildcard__ / <lora:...> / {a|b} 対応）", padding=6)
+        prompt_frame = ttk.LabelFrame(
+            self, text="Prompt（__wildcard__ / <lora:...> / {a|b} 対応）", padding=6
+        )
         prompt_frame.pack(fill="both", expand=True, pady=(6, 3))
         self.prompt = ScrolledText(prompt_frame, height=7, wrap="word")
         self.prompt.pack(fill="both", expand=True)
@@ -74,14 +86,20 @@ class PromptGenerateTab(ttk.Frame):
         lora_frame = ttk.LabelFrame(self, text="LoRA互換性（family-level）", padding=5)
         lora_frame.pack(fill="x", pady=(2, 4))
         self.lora_compatibility_text = tk.StringVar(value="LoRA指定はありません。")
-        ttk.Label(lora_frame, textvariable=self.lora_compatibility_text, wraplength=900).pack(anchor="w")
+        ttk.Label(lora_frame, textvariable=self.lora_compatibility_text, wraplength=900).pack(
+            anchor="w"
+        )
         self.prompt.bind("<KeyRelease>", self._update_lora_compatibility)
 
         settings = ttk.Frame(self)
         settings.pack(fill="x", pady=4)
-        for index, (label, variable) in enumerate((("幅", self.width), ("高さ", self.height), ("steps", self.steps))):
+        for index, (label, variable) in enumerate(
+            (("幅", self.width), ("高さ", self.height), ("steps", self.steps))
+        ):
             ttk.Label(settings, text=label).grid(row=0, column=index * 2, sticky="w", padx=(0, 4))
-            ttk.Entry(settings, textvariable=variable, width=8).grid(row=0, column=index * 2 + 1, sticky="w", padx=(0, 10))
+            ttk.Entry(settings, textvariable=variable, width=8).grid(
+                row=0, column=index * 2 + 1, sticky="w", padx=(0, 10)
+            )
         ttk.Label(settings, text="sampler").grid(row=1, column=0, sticky="w", pady=(4, 0))
         self.sampler_combo = ttk.Combobox(settings, textvariable=self.sampler, width=22)
         self.sampler_combo.grid(row=1, column=1, sticky="w", pady=(4, 0))
@@ -91,7 +109,9 @@ class PromptGenerateTab(ttk.Frame):
         ttk.Label(settings, text="VAE（任意）").grid(row=2, column=0, sticky="w", pady=(4, 0))
         self.vae_combo = ttk.Combobox(settings, textvariable=self.vae_name, width=42)
         self.vae_combo.grid(row=2, column=1, columnspan=5, sticky="we", pady=(4, 0))
-        self.model_classification_text = tk.StringVar(value="モデルを選ぶと系統判定と根拠を表示します。")
+        self.model_classification_text = tk.StringVar(
+            value="モデルを選ぶと系統判定と根拠を表示します。"
+        )
         ttk.Label(settings, textvariable=self.model_classification_text, wraplength=900).grid(
             row=4, column=0, columnspan=6, sticky="w", pady=(2, 0)
         )
@@ -100,12 +120,16 @@ class PromptGenerateTab(ttk.Frame):
             ttk.Label(settings, text="Comfyフロー").grid(row=3, column=0, sticky="w", pady=(4, 0))
             self.flow_combo = ttk.Combobox(settings, textvariable=self.comfy_flow, width=42)
             self.flow_combo.grid(row=3, column=1, columnspan=5, sticky="we", pady=(4, 0))
-            self.flow_combo.bind("<<ComboboxSelected>>", lambda _event: self._apply_flow_checkpoint_choices())
+            self.flow_combo.bind(
+                "<<ComboboxSelected>>", lambda _event: self._apply_flow_checkpoint_choices()
+            )
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", pady=8)
         ttk.Button(buttons, text="1枚生成", command=self.start).pack(side="left")
-        ttk.Button(buttons, text="モデル候補更新", command=self.refresh_backend_choices).pack(side="left", padx=4)
+        ttk.Button(buttons, text="モデル候補更新", command=self.refresh_backend_choices).pack(
+            side="left", padx=4
+        )
         ttk.Label(buttons, text="preset").pack(side="left", padx=(16, 4))
         self.preset_combo = ttk.Combobox(buttons, textvariable=self.preset_name, width=18)
         self.preset_combo.pack(side="left")
@@ -146,9 +170,18 @@ class PromptGenerateTab(ttk.Frame):
     # }
     def _preset_values(self):
         return {
-            "wildcard_root": self.wildcard_root.get(), "output_dir": self.output_dir.get(), "api_url": self.api_url.get(),
-            "prompt": self._prompt_text(), "negative": self._negative_text(), "width": self.width.get(), "height": self.height.get(),
-            "steps": self.steps.get(), "sampler": self.sampler.get(), "checkpoint": self.checkpoint.get(), "vae_name": self.vae_name.get(), "comfy_flow": self._workflow_value(),
+            "wildcard_root": self.wildcard_root.get(),
+            "output_dir": self.output_dir.get(),
+            "api_url": self.api_url.get(),
+            "prompt": self._prompt_text(),
+            "negative": self._negative_text(),
+            "width": self.width.get(),
+            "height": self.height.get(),
+            "steps": self.steps.get(),
+            "sampler": self.sampler.get(),
+            "checkpoint": self.checkpoint.get(),
+            "vae_name": self.vae_name.get(),
+            "comfy_flow": self._workflow_value(),
         }
 
     def _refresh_preset_choices(self):
@@ -166,7 +199,18 @@ class PromptGenerateTab(ttk.Frame):
     def load_preset(self):
         try:
             values = self.preset_store.load(self.preset_name.get())
-            for key, variable in (("wildcard_root", self.wildcard_root), ("output_dir", self.output_dir), ("api_url", self.api_url), ("width", self.width), ("height", self.height), ("steps", self.steps), ("sampler", self.sampler), ("checkpoint", self.checkpoint), ("vae_name", self.vae_name), ("comfy_flow", self.comfy_flow)):
+            for key, variable in (
+                ("wildcard_root", self.wildcard_root),
+                ("output_dir", self.output_dir),
+                ("api_url", self.api_url),
+                ("width", self.width),
+                ("height", self.height),
+                ("steps", self.steps),
+                ("sampler", self.sampler),
+                ("checkpoint", self.checkpoint),
+                ("vae_name", self.vae_name),
+                ("comfy_flow", self.comfy_flow),
+            ):
                 if key in values:
                     variable.set(values[key])
             self._set_text(self.prompt, values.get("prompt", self._prompt_text()))
@@ -202,7 +246,9 @@ class PromptGenerateTab(ttk.Frame):
             return
         choices = flow_checkpoint_choices(self.comfy_flow.get())
         if choices:
-            self.checkpoint_combo.configure(values=_unique_choices(choices + list(self.checkpoint_combo.cget("values"))))
+            self.checkpoint_combo.configure(
+                values=_unique_choices(choices + list(self.checkpoint_combo.cget("values")))
+            )
 
     def _update_model_classification(self, *_args):
         selected = self.checkpoint.get().strip()
@@ -224,6 +270,7 @@ class PromptGenerateTab(ttk.Frame):
         def worker():
             choices, warnings = load_backend_choices(self.api_url.get(), query_api=True)
             self.after(0, lambda: self._finish_backend_refresh(choices, warnings))
+
         threading.Thread(target=worker, daemon=True).start()
         self.logbox.log("モデル候補を更新中...")
 
@@ -270,7 +317,11 @@ class PromptGenerateTab(ttk.Frame):
         }
         self.generator.comfy_flow = self._workflow_value()
         cache = {}
-        prompt = self.generator._expand_text(source_prompt, self.generator.root_dir, wildcard_cache=cache)
-        negative = self.generator._expand_text(self._negative_text(), self.generator.root_dir, wildcard_cache=cache)
+        prompt = self.generator._expand_text(
+            source_prompt, self.generator.root_dir, wildcard_cache=cache
+        )
+        negative = self.generator._expand_text(
+            self._negative_text(), self.generator.root_dir, wildcard_cache=cache
+        )
         self.logbox.log(f"展開済み prompt: {prompt}")
         self.generator._generate(prompt=prompt, negative=negative, wildcard_cache=cache)

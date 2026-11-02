@@ -23,7 +23,6 @@ from .contracts import (
     TrainingSpec,
 )
 
-
 _MAX_MANIFEST_BYTES = 1024 * 1024
 _VERSION_PATTERN = re.compile(r"(?<!\d)(\d+)\.(\d+)(?:\.(\d+))?")
 
@@ -102,11 +101,323 @@ def _read_manifest(root: Path | None) -> tuple[dict[str, Any], str]:
 
 
 # {
+# 責務: [_ConfigValidationMixin: validate trainer/model/runtime constraints and estimate memory]
+# フィールド: [None: stateless behavior mixin over a runtime trainer adapter]
+# 処理: [delegate configuration checks to the combined runtime trainer adapter]
+# 引数: [None: behavior is provided by the mixin methods]
+# 戻り値: [None: composed behavior is inherited by RuntimeTrainerAdapter]
+# }
+class _ConfigValidationMixin:
+    # {
+    # 責務: [validate_config: validate common and trainer-specific constraints]
+    # 処理: [reject invalid data, unsupported methods, absent target modules and unavailable quantization]
+    # 引数: [self: trainer adapter, spec: common training specification]
+    # 戻り値: [ConfigValidation: normalized errors and warnings]
+    # }
+    def validate_config(self, spec: TrainingSpec):
+
+        errors = []
+        warnings = []
+        profile = self.profiles.get(spec.architecture)
+        probe = self._probe_cache or self.probe()
+        if not probe.available:
+            errors.append(f"{self.trainer_label} runtime is unavailable: {probe.reason}")
+        if profile is None or spec.architecture not in self.supported_models():
+            errors.append(
+                f"{self.trainer_label} does not support architecture profile {spec.architecture}"
+            )
+        if spec.steps <= 0 or spec.rank <= 0 or spec.alpha <= 0:
+            errors.append("steps, rank and alpha must be positive")
+        if not spec.dataset.exists() or not spec.dataset.is_dir():
+            errors.append("dataset must be an existing directory")
+        if not spec.base_model.exists():
+            errors.append("base model path must exist locally")
+        if spec.resolution <= 0 or spec.batch_size <= 0 or spec.gradient_accumulation <= 0:
+            errors.append("resolution, batch size and gradient accumulation must be positive")
+        if profile is not None and probe.available:
+            methods = {
+                entry.method: entry.level for entry in self.supported_methods(spec.architecture)
+            }
+            method_level = methods.get(spec.method, SupportLevel.UNSUPPORTED)
+            if method_level is SupportLevel.UNSUPPORTED:
+                errors.append(f"method {spec.method.value} is unsupported by {self.trainer_name}")
+            elif method_level is SupportLevel.EXPERIMENTAL:
+                warnings.append(
+                    f"method {spec.method.value} is experimental for {spec.architecture}"
+                )
+            if spec.precision not in self.supported_precision(spec.architecture):
+                errors.append(f"precision {spec.precision} is unavailable")
+            if spec.quantization not in self.supported_quantization(spec.architecture):
+                errors.append(f"quantization {spec.quantization.value} is unavailable")
+            features = set(self.supported_features(spec.architecture))
+            requested_features = {
+                "gradient_checkpointing": spec.gradient_checkpointing,
+                "optimizer_offload": spec.optimizer_offload,
+                "cpu_offload": spec.cpu_offload,
+                "quantized_text_encoder": spec.quantized_text_encoder,
+                "cached_embeddings": spec.cached_embeddings,
+                "vae_cache": spec.vae_cache,
+                "lower_resolution_probe": spec.lower_resolution_probe,
+            }
+            unavailable = sorted(
+                name
+                for name, enabled in requested_features.items()
+                if enabled and name not in features
+            )
+            if unavailable:
+                errors.append(
+                    "requested memory features are unsupported: " + ", ".join(unavailable)
+                )
+            if spec.train_text_encoder and not profile.text_encoder_trainable:
+                errors.append("text encoder training is disabled for this architecture profile")
+            model_path = (
+                spec.base_model
+                if spec.base_model.is_file() and spec.base_model.suffix.casefold() == ".safetensors"
+                else None
+            )
+            available_modules = set(self.target_modules(spec.architecture, model_path))
+            missing = set(spec.target_modules) - available_modules
+            if missing:
+                errors.append(
+                    "target modules are absent from trainer/model discovery: "
+                    + ", ".join(sorted(missing))
+                )
+            if not spec.target_modules:
+                errors.append("target modules must be discovered and explicitly selected")
+            if (
+                spec.target_modules
+                and available_modules
+                and not (set(spec.target_modules) & available_modules)
+            ):
+                errors.append(
+                    "target module selection does not intersect the discovered model targets"
+                )
+            if (
+                profile.dataset_kind != "image_caption"
+                and spec.dataset_kind != profile.dataset_kind
+            ):
+                errors.append(
+                    f"dataset kind must be {profile.dataset_kind} for {spec.architecture}"
+                )
+            if self.available_vram_gib is not None:
+                estimate = self._estimated_vram(profile, spec)
+                if estimate > self.available_vram_gib:
+                    errors.append(
+                        f"estimated VRAM {estimate:.1f} GiB exceeds available {self.available_vram_gib:.1f} GiB"
+                    )
+                elif estimate > self.available_vram_gib * 0.85:
+                    warnings.append(f"estimated VRAM {estimate:.1f} GiB leaves little headroom")
+        return ConfigValidation(not errors, tuple(errors), tuple(warnings))
+
+    # {
+    # 責務: [_estimated_vram: estimate training memory after supported low-VRAM switches]
+    # 処理: [apply profile minimum and conservative, independent offload/cache/quantization reductions]
+    # 引数: [profile: model architecture, spec: normalized training request]
+    # 戻り値: [float: estimated GiB requirement]
+    # }
+    @staticmethod
+    def _estimated_vram(profile: ArchitectureProfile, spec: TrainingSpec) -> float:
+        estimate = profile.minimum_vram_gib
+        if spec.gradient_checkpointing:
+            estimate *= 0.82
+        if spec.cpu_offload:
+            estimate *= 0.7
+        if spec.optimizer_offload:
+            estimate *= 0.88
+        if spec.quantization is not Quantization.NONE:
+            estimate *= 0.72
+        if spec.quantized_text_encoder:
+            estimate *= 0.9
+        if spec.cached_embeddings:
+            estimate *= 0.9
+        if spec.lower_resolution_probe:
+            estimate *= 0.7
+        if spec.batch_size == 1 and spec.gradient_accumulation > 1:
+            estimate *= 0.9
+        return max(4.0, estimate)
+
+
+# {
+# 責務: [_ConfigTranslationMixin: serialize validated specifications and capture provenance]
+# フィールド: [None: stateless behavior mixin over a runtime trainer adapter]
+# 処理: [delegate config serialization and provenance to the combined adapter]
+# 引数: [None: behavior is provided by the mixin methods]
+# 戻り値: [None: composed behavior is inherited by RuntimeTrainerAdapter]
+# }
+class _ConfigTranslationMixin:
+    # {
+    # 責務: [translate_config: convert common spec into native trainer fields]
+    # 処理: [serialize only values accepted by the selected trainer's public configuration surface]
+    # 引数: [self: trainer adapter, spec: validated training specification]
+    # 戻り値: [dict[str, object]: trainer-native config mapping]
+    # }
+    def translate_config(self, spec: TrainingSpec) -> dict[str, object]:
+        validation = self.validate_config(spec)
+        if not validation.valid:
+            raise ValueError("invalid training config: " + "; ".join(validation.errors))
+        profile = self.profiles[spec.architecture]
+        return {
+            "model": {
+                "architecture_profile": spec.architecture,
+                "family": profile.family,
+                "base_model": str(spec.base_model),
+            },
+            "training": {
+                "method": spec.method.value,
+                "steps": spec.steps,
+                "rank": spec.rank,
+                "alpha": spec.alpha,
+                "target_modules": list(spec.target_modules),
+                "resolution": spec.resolution,
+                "train_text_encoder": spec.train_text_encoder,
+                "precision": spec.precision,
+                "quantization": spec.quantization.value,
+                "gradient_checkpointing": spec.gradient_checkpointing,
+                "optimizer_offload": spec.optimizer_offload,
+                "cpu_offload": spec.cpu_offload,
+                "quantized_text_encoder": spec.quantized_text_encoder,
+                "cached_embeddings": spec.cached_embeddings,
+                "vae_cache": spec.vae_cache,
+                "batch_size": spec.batch_size,
+                "gradient_accumulation": spec.gradient_accumulation,
+                "lower_resolution_probe": spec.lower_resolution_probe,
+                "seed": spec.seed,
+            },
+            "dataset": {
+                "path": str(spec.dataset),
+                "kind": spec.dataset_kind or profile.dataset_kind,
+            },
+            "output_dir": str(spec.output),
+        }
+
+    # {
+    # 責務: [training_provenance: capture upstream, version, recipe and local-change identity]
+    # 処理: [hash the translated configuration and inspect the checkout revision without exposing remote credentials]
+    # 引数: [self: trainer adapter, spec: training specification]
+    # 戻り値: [TrainingProvenance: reproducibility record]
+    # }
+    def training_provenance(self, spec: TrainingSpec):
+        from .contracts import TrainingProvenance
+
+        probe = self._probe_cache or self.probe()
+        config_hash = hashlib.sha256(
+            self.serialize_config(self.translate_config(spec)).encode()
+        ).hexdigest()
+        revision = None
+        local_fingerprint = hashlib.sha256(b"").hexdigest()
+        local_changes = False
+        if self.trainer_root and (self.trainer_root / ".git").exists():
+            try:
+                revision_result = subprocess.run(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=self.trainer_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                status_result = subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=self.trainer_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                if revision_result.returncode == 0:
+                    revision = revision_result.stdout.strip()[:64]
+                if status_result.returncode == 0:
+                    status = status_result.stdout
+                    local_changes = bool(status.strip())
+                    local_fingerprint = hashlib.sha256(status.encode()).hexdigest()
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        return TrainingProvenance(
+            self.trainer_name,
+            probe.version,
+            self.upstream_repository,
+            revision,
+            config_hash,
+            local_changes,
+            local_fingerprint,
+            probe.capability_fingerprint,
+        )
+
+    # {
+    # 責務: [serialize_config: encode trainer-native config in the trainer's file format]
+    # 処理: [use deterministic JSON, YAML-compatible JSON, or TOML syntax]
+    # 引数: [config: trainer config mapping]
+    # 戻り値: [str: serialized configuration text]
+    # }
+    def serialize_config(self, config: dict[str, object]) -> str:
+        if self.config_format in {"json", "yaml"}:
+            return json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True)
+        return self._to_toml(config)
+
+    # {
+    # 責務: [_to_toml: serialize nested trainer settings as deterministic TOML]
+    # 処理: [emit scalar root fields and one-level nested sections]
+    # 引数: [config: trainer config mapping]
+    # 戻り値: [str: TOML document]
+    # }
+    @staticmethod
+    def _to_toml(config: dict[str, object]) -> str:
+        # {
+        # 責務: [scalar: perform the declared operation]
+        # 処理: [follow the documented contract and preserve validated invariants]
+        # 引数: [declared function inputs]
+        # 戻り値: [declared function result]
+        # }
+        def scalar(value: Any) -> str:
+            if isinstance(value, bool):
+                return "true" if value else "false"
+            if isinstance(value, (int, float)):
+                return str(value)
+            if isinstance(value, list):
+                return "[" + ", ".join(scalar(item) for item in value) + "]"
+            return json.dumps(str(value), ensure_ascii=False)
+
+        lines = []
+        for key, value in config.items():
+            if not isinstance(value, dict):
+                lines.append(f"{key} = {scalar(value)}")
+        for section, values in config.items():
+            if isinstance(values, dict):
+                lines.append(f"\n[{section}]")
+                lines.extend(f"{key} = {scalar(value)}" for key, value in values.items())
+        return "\n".join(lines) + "\n"
+
+    # {
+    # 責務: [to_cli: express one spec as a safe trainer command argument sequence]
+    # 処理: [translate the config and flatten stable scalar/list options without shell evaluation]
+    # 引数: [self: trainer adapter, spec: validated training specification]
+    # 戻り値: [tuple[str, ...]: trainer CLI arguments]
+    # }
+    def to_cli(self, spec: TrainingSpec) -> tuple[str, ...]:
+        config = self.translate_config(spec)
+        arguments = []
+        for section, values in config.items():
+            if not isinstance(values, dict):
+                arguments.extend((f"--{section.replace('_', '-')}", str(values)))
+                continue
+            for key, value in values.items():
+                name = f"--{section}-{key}".replace("_", "-")
+                if isinstance(value, bool):
+                    if value:
+                        arguments.append(name)
+                elif isinstance(value, list):
+                    arguments.extend((name, ",".join(str(item) for item in value)))
+                else:
+                    arguments.extend((name, str(value)))
+        return tuple(arguments)
+
+
+# {
 # 責務: [RuntimeTrainerAdapter: coordinate this module responsibility]
 # フィールド: [declared values and public collaborators]
 # 処理: [follow the documented contract and preserve validated invariants]
 # }
-class RuntimeTrainerAdapter:
+class RuntimeTrainerAdapter(_ConfigValidationMixin, _ConfigTranslationMixin):
     """Probe one trainer installation and translate the shared training contract."""
 
     trainer_name = "base"
@@ -499,301 +810,6 @@ class RuntimeTrainerAdapter:
             for token in target.split("*")
             if token
         )
-
-    # {
-    # 責務: [validate_config: validate common and trainer-specific constraints]
-    # 処理: [reject invalid data, unsupported methods, absent target modules and unavailable quantization]
-    # 引数: [self: trainer adapter, spec: common training specification]
-    # 戻り値: [ConfigValidation: normalized errors and warnings]
-    # }
-    def validate_config(self, spec: TrainingSpec):
-        from .contracts import ConfigValidation
-
-        errors = []
-        warnings = []
-        profile = self.profiles.get(spec.architecture)
-        probe = self._probe_cache or self.probe()
-        if not probe.available:
-            errors.append(f"{self.trainer_label} runtime is unavailable: {probe.reason}")
-        if profile is None or spec.architecture not in self.supported_models():
-            errors.append(
-                f"{self.trainer_label} does not support architecture profile {spec.architecture}"
-            )
-        if spec.steps <= 0 or spec.rank <= 0 or spec.alpha <= 0:
-            errors.append("steps, rank and alpha must be positive")
-        if not spec.dataset.exists() or not spec.dataset.is_dir():
-            errors.append("dataset must be an existing directory")
-        if not spec.base_model.exists():
-            errors.append("base model path must exist locally")
-        if spec.resolution <= 0 or spec.batch_size <= 0 or spec.gradient_accumulation <= 0:
-            errors.append("resolution, batch size and gradient accumulation must be positive")
-        if profile is not None and probe.available:
-            methods = {
-                entry.method: entry.level for entry in self.supported_methods(spec.architecture)
-            }
-            method_level = methods.get(spec.method, SupportLevel.UNSUPPORTED)
-            if method_level is SupportLevel.UNSUPPORTED:
-                errors.append(f"method {spec.method.value} is unsupported by {self.trainer_name}")
-            elif method_level is SupportLevel.EXPERIMENTAL:
-                warnings.append(
-                    f"method {spec.method.value} is experimental for {spec.architecture}"
-                )
-            if spec.precision not in self.supported_precision(spec.architecture):
-                errors.append(f"precision {spec.precision} is unavailable")
-            if spec.quantization not in self.supported_quantization(spec.architecture):
-                errors.append(f"quantization {spec.quantization.value} is unavailable")
-            features = set(self.supported_features(spec.architecture))
-            requested_features = {
-                "gradient_checkpointing": spec.gradient_checkpointing,
-                "optimizer_offload": spec.optimizer_offload,
-                "cpu_offload": spec.cpu_offload,
-                "quantized_text_encoder": spec.quantized_text_encoder,
-                "cached_embeddings": spec.cached_embeddings,
-                "vae_cache": spec.vae_cache,
-                "lower_resolution_probe": spec.lower_resolution_probe,
-            }
-            unavailable = sorted(
-                name
-                for name, enabled in requested_features.items()
-                if enabled and name not in features
-            )
-            if unavailable:
-                errors.append(
-                    "requested memory features are unsupported: " + ", ".join(unavailable)
-                )
-            if spec.train_text_encoder and not profile.text_encoder_trainable:
-                errors.append("text encoder training is disabled for this architecture profile")
-            model_path = (
-                spec.base_model
-                if spec.base_model.is_file() and spec.base_model.suffix.casefold() == ".safetensors"
-                else None
-            )
-            available_modules = set(self.target_modules(spec.architecture, model_path))
-            missing = set(spec.target_modules) - available_modules
-            if missing:
-                errors.append(
-                    "target modules are absent from trainer/model discovery: "
-                    + ", ".join(sorted(missing))
-                )
-            if not spec.target_modules:
-                errors.append("target modules must be discovered and explicitly selected")
-            if (
-                spec.target_modules
-                and available_modules
-                and not (set(spec.target_modules) & available_modules)
-            ):
-                errors.append(
-                    "target module selection does not intersect the discovered model targets"
-                )
-            if (
-                profile.dataset_kind != "image_caption"
-                and spec.dataset_kind != profile.dataset_kind
-            ):
-                errors.append(
-                    f"dataset kind must be {profile.dataset_kind} for {spec.architecture}"
-                )
-            if self.available_vram_gib is not None:
-                estimate = self._estimated_vram(profile, spec)
-                if estimate > self.available_vram_gib:
-                    errors.append(
-                        f"estimated VRAM {estimate:.1f} GiB exceeds available {self.available_vram_gib:.1f} GiB"
-                    )
-                elif estimate > self.available_vram_gib * 0.85:
-                    warnings.append(f"estimated VRAM {estimate:.1f} GiB leaves little headroom")
-        return ConfigValidation(not errors, tuple(errors), tuple(warnings))
-
-    # {
-    # 責務: [_estimated_vram: estimate training memory after supported low-VRAM switches]
-    # 処理: [apply profile minimum and conservative, independent offload/cache/quantization reductions]
-    # 引数: [profile: model architecture, spec: normalized training request]
-    # 戻り値: [float: estimated GiB requirement]
-    # }
-    @staticmethod
-    def _estimated_vram(profile: ArchitectureProfile, spec: TrainingSpec) -> float:
-        estimate = profile.minimum_vram_gib
-        if spec.gradient_checkpointing:
-            estimate *= 0.82
-        if spec.cpu_offload:
-            estimate *= 0.7
-        if spec.optimizer_offload:
-            estimate *= 0.88
-        if spec.quantization is not Quantization.NONE:
-            estimate *= 0.72
-        if spec.quantized_text_encoder:
-            estimate *= 0.9
-        if spec.cached_embeddings:
-            estimate *= 0.9
-        if spec.lower_resolution_probe:
-            estimate *= 0.7
-        if spec.batch_size == 1 and spec.gradient_accumulation > 1:
-            estimate *= 0.9
-        return max(4.0, estimate)
-
-    # {
-    # 責務: [translate_config: convert common spec into native trainer fields]
-    # 処理: [serialize only values accepted by the selected trainer's public configuration surface]
-    # 引数: [self: trainer adapter, spec: validated training specification]
-    # 戻り値: [dict[str, object]: trainer-native config mapping]
-    # }
-    def translate_config(self, spec: TrainingSpec) -> dict[str, object]:
-        validation = self.validate_config(spec)
-        if not validation.valid:
-            raise ValueError("invalid training config: " + "; ".join(validation.errors))
-        profile = self.profiles[spec.architecture]
-        return {
-            "model": {
-                "architecture_profile": spec.architecture,
-                "family": profile.family,
-                "base_model": str(spec.base_model),
-            },
-            "training": {
-                "method": spec.method.value,
-                "steps": spec.steps,
-                "rank": spec.rank,
-                "alpha": spec.alpha,
-                "target_modules": list(spec.target_modules),
-                "resolution": spec.resolution,
-                "train_text_encoder": spec.train_text_encoder,
-                "precision": spec.precision,
-                "quantization": spec.quantization.value,
-                "gradient_checkpointing": spec.gradient_checkpointing,
-                "optimizer_offload": spec.optimizer_offload,
-                "cpu_offload": spec.cpu_offload,
-                "quantized_text_encoder": spec.quantized_text_encoder,
-                "cached_embeddings": spec.cached_embeddings,
-                "vae_cache": spec.vae_cache,
-                "batch_size": spec.batch_size,
-                "gradient_accumulation": spec.gradient_accumulation,
-                "lower_resolution_probe": spec.lower_resolution_probe,
-                "seed": spec.seed,
-            },
-            "dataset": {
-                "path": str(spec.dataset),
-                "kind": spec.dataset_kind or profile.dataset_kind,
-            },
-            "output_dir": str(spec.output),
-        }
-
-    # {
-    # 責務: [training_provenance: capture upstream, version, recipe and local-change identity]
-    # 処理: [hash the translated configuration and inspect the checkout revision without exposing remote credentials]
-    # 引数: [self: trainer adapter, spec: training specification]
-    # 戻り値: [TrainingProvenance: reproducibility record]
-    # }
-    def training_provenance(self, spec: TrainingSpec):
-        from .contracts import TrainingProvenance
-
-        probe = self._probe_cache or self.probe()
-        config_hash = hashlib.sha256(
-            self.serialize_config(self.translate_config(spec)).encode()
-        ).hexdigest()
-        revision = None
-        local_fingerprint = hashlib.sha256(b"").hexdigest()
-        local_changes = False
-        if self.trainer_root and (self.trainer_root / ".git").exists():
-            try:
-                revision_result = subprocess.run(
-                    ["git", "rev-parse", "HEAD"],
-                    cwd=self.trainer_root,
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                    check=False,
-                )
-                status_result = subprocess.run(
-                    ["git", "status", "--porcelain"],
-                    cwd=self.trainer_root,
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                    check=False,
-                )
-                if revision_result.returncode == 0:
-                    revision = revision_result.stdout.strip()[:64]
-                if status_result.returncode == 0:
-                    status = status_result.stdout
-                    local_changes = bool(status.strip())
-                    local_fingerprint = hashlib.sha256(status.encode()).hexdigest()
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-        return TrainingProvenance(
-            self.trainer_name,
-            probe.version,
-            self.upstream_repository,
-            revision,
-            config_hash,
-            local_changes,
-            local_fingerprint,
-            probe.capability_fingerprint,
-        )
-
-    # {
-    # 責務: [serialize_config: encode trainer-native config in the trainer's file format]
-    # 処理: [use deterministic JSON, YAML-compatible JSON, or TOML syntax]
-    # 引数: [config: trainer config mapping]
-    # 戻り値: [str: serialized configuration text]
-    # }
-    def serialize_config(self, config: dict[str, object]) -> str:
-        if self.config_format in {"json", "yaml"}:
-            return json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True)
-        return self._to_toml(config)
-
-    # {
-    # 責務: [_to_toml: serialize nested trainer settings as deterministic TOML]
-    # 処理: [emit scalar root fields and one-level nested sections]
-    # 引数: [config: trainer config mapping]
-    # 戻り値: [str: TOML document]
-    # }
-    @staticmethod
-    def _to_toml(config: dict[str, object]) -> str:
-        # {
-        # 責務: [scalar: perform the declared operation]
-        # 処理: [follow the documented contract and preserve validated invariants]
-        # 引数: [declared function inputs]
-        # 戻り値: [declared function result]
-        # }
-        def scalar(value: Any) -> str:
-            if isinstance(value, bool):
-                return "true" if value else "false"
-            if isinstance(value, (int, float)):
-                return str(value)
-            if isinstance(value, list):
-                return "[" + ", ".join(scalar(item) for item in value) + "]"
-            return json.dumps(str(value), ensure_ascii=False)
-
-        lines = []
-        for key, value in config.items():
-            if not isinstance(value, dict):
-                lines.append(f"{key} = {scalar(value)}")
-        for section, values in config.items():
-            if isinstance(values, dict):
-                lines.append(f"\n[{section}]")
-                lines.extend(f"{key} = {scalar(value)}" for key, value in values.items())
-        return "\n".join(lines) + "\n"
-
-    # {
-    # 責務: [to_cli: express one spec as a safe trainer command argument sequence]
-    # 処理: [translate the config and flatten stable scalar/list options without shell evaluation]
-    # 引数: [self: trainer adapter, spec: validated training specification]
-    # 戻り値: [tuple[str, ...]: trainer CLI arguments]
-    # }
-    def to_cli(self, spec: TrainingSpec) -> tuple[str, ...]:
-        config = self.translate_config(spec)
-        arguments = []
-        for section, values in config.items():
-            if not isinstance(values, dict):
-                arguments.extend((f"--{section.replace('_', '-')}", str(values)))
-                continue
-            for key, value in values.items():
-                name = f"--{section}-{key}".replace("_", "-")
-                if isinstance(value, bool):
-                    if value:
-                        arguments.append(name)
-                elif isinstance(value, list):
-                    arguments.extend((name, ",".join(str(item) for item in value)))
-                else:
-                    arguments.extend((name, str(value)))
-        return tuple(arguments)
 
 
 # {

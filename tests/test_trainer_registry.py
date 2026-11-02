@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
-import tomllib
 import unittest
 from pathlib import Path
+
+import tomllib
 
 from comfyui_support_tools.shared.trainer_registry import (
     AdapterMethod,
@@ -15,10 +15,10 @@ from comfyui_support_tools.shared.trainer_registry import (
     Quantization,
     SdScriptsAdapter,
     SimpleTunerAdapter,
-    TrainerProbe,
     SmokeGatedTraining,
     SmokeTestRunner,
     SupportLevel,
+    TrainerProbe,
     TrainerSupportRegistry,
     TrainingSpec,
     architecture_profiles,

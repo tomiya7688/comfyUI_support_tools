@@ -17,7 +17,7 @@ import completion_gate  # noqa: E402
 # }
 class CompletionGateTests(unittest.TestCase):
     # {
-    #   責務: [test_comment_coverage_checks_migrated_source_areas: strict coverage対象に移行済み領域とTouka fileが含まれることを検証する]
+    #   責務: [test_comment_coverage_checks_migrated_source_areas: strict coverage対象に全移行済み領域が含まれることを検証する]
     #   処理: [comment_coverage_checkから起動するcommand argumentsを捕捉し、対象pathとstrict flagを確認する]
     #   引数: []
     #   戻り値: [なし]
@@ -45,6 +45,17 @@ class CompletionGateTests(unittest.TestCase):
                 "nuno/_touka/touka_batch.py",
                 "nuno/_touka/train_fashionpedia_segmentation.py",
                 "nuno/_touka/translucent_surface_augmenter.py",
+                "scripts/__init__.py",
+                "scripts/app.py",
+                "scripts/context.py",
+                "scripts/context_packet.py",
+                "scripts/runtime_python.py",
+                "scripts/services.py",
+                "scripts/subapp_runtime.py",
+                "scripts/tab_catalog.py",
+                "scripts/widgets",
+                "tabbed_tools_gui.py",
+                "tabbed_tool_gui.py",
             ],
         )
         self.assertIn("--strict", command)

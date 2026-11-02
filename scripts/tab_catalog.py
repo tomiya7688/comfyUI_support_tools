@@ -40,6 +40,12 @@ TAB_CATALOG = (
 )
 
 
+# {
+#   責務: [tab_index: legacy tool IDに対応するcatalog indexを返す]
+#   処理: [scan stable catalog order and raise for unknown identifiers]
+#   引数: [tool_id]
+#   戻り値: [int]
+# }
 def tab_index(tool_id: str) -> int:
     for index, (identifier, _label, _category) in enumerate(TAB_CATALOG):
         if identifier == tool_id:

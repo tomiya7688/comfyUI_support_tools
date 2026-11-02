@@ -104,8 +104,8 @@ def quality_check() -> CheckResult:
 
 
 # {
-#   責務: [comment_coverage_check: tools/tests/shared/entrypoints/sequence/main_gui/Toukaの宣言comment coverageをstrictに検査する]
-#   処理: [移行済み領域とTouka対象9 fileのpath filterでcoverage checkerを実行し、そのstatusを返す]
+#   責務: [comment_coverage_check: 移行済みsource areasの宣言comment coverageをstrictに検査する]
+#   処理: [移行済み領域ごとのpath filterでcoverage checkerを実行し、そのstatusを返す]
 #   引数: []
 #   戻り値: [result: coverage checkerのCheckResult]
 #   副作用: [coverage checker subprocessを起動する]
@@ -145,6 +145,28 @@ def comment_coverage_check() -> CheckResult:
             "nuno/_touka/train_fashionpedia_segmentation.py",
             "--path",
             "nuno/_touka/translucent_surface_augmenter.py",
+            "--path",
+            "scripts/__init__.py",
+            "--path",
+            "scripts/app.py",
+            "--path",
+            "scripts/context.py",
+            "--path",
+            "scripts/context_packet.py",
+            "--path",
+            "scripts/runtime_python.py",
+            "--path",
+            "scripts/services.py",
+            "--path",
+            "scripts/subapp_runtime.py",
+            "--path",
+            "scripts/tab_catalog.py",
+            "--path",
+            "scripts/widgets",
+            "--path",
+            "tabbed_tools_gui.py",
+            "--path",
+            "tabbed_tool_gui.py",
             "--strict",
         ]
     )

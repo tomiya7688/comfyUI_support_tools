@@ -48,6 +48,12 @@ from .widgets.dark_theme import DarkTheme
 from .runtime_python import venv_python
 
 
+# {
+#   責務: [_launch_backend_gui: configured backend GUIを専用runtime Pythonで起動する]
+#   処理: [resolve runtime and interpreter, prepare child environment, and spawn the GUI process]
+#   引数: [backend]
+#   戻り値: [処理結果]
+# }
 def _launch_backend_gui(backend):
     runtime_directory = configured_backend_runtime_directory(backend)
     python_path = venv_python(runtime_directory / "venv")
@@ -65,6 +71,12 @@ def _launch_backend_gui(backend):
     )
 
 
+# {
+#   責務: [show_backend_selector: 利用者にgeneration backendを選ばせるTk selectorを表示する]
+#   処理: [build and run a selector window and report child-launch errors in the UI]
+#   引数: [なし]
+#   戻り値: [処理結果]
+# }
 def show_backend_selector():
     selector = tk.Tk()
     DarkTheme().apply(selector)
@@ -81,6 +93,12 @@ def show_backend_selector():
     ).pack(pady=(0, 14))
     status = tk.StringVar(value=f"checkpoint: {CHECKPOINTS_DIR}\nwildcard: {WILDCARDS_DIR}")
 
+    # {
+    #   責務: [choose: 選択されたbackend GUIを起動しselector lifecycleを更新する]
+    #   処理: [launch the selected backend and retain selector with an error status on failure]
+    #   引数: [backend]
+    #   戻り値: [処理結果]
+    # }
     def choose(backend):
         try:
             _launch_backend_gui(backend)
@@ -105,6 +123,11 @@ def show_backend_selector():
     selector.mainloop()
 
 
+# {
+#   責務: [TabbedToolsApp: legacy tabbed application window and tab navigationを管理する]
+#   処理: [compose widgets, restore/save settings, instantiate tabs, and switch active views]
+#   フィールド: [tab_frames, tab_buttons, tab_instances, navigation state, settings adapter]
+# }
 class TabbedToolsApp(tk.Tk):
     # {
     #   責務: [__init__: Tabbed Tools GUIと全tabを初期化する]
@@ -217,6 +240,12 @@ class TabbedToolsApp(tk.Tk):
             pass
         self.destroy()
 
+    # {
+    #   責務: [show_tab: 指定tab frameを前面に出しnavigation button stateを更新する]
+    #   処理: [raise target frame and update old/new button relief state]
+    #   引数: [index]
+    #   戻り値: [処理結果]
+    # }
     def show_tab(self, index: int):
         if self.current_tab_index is not None:
             self.tab_buttons[self.current_tab_index].config(relief="raised")
@@ -225,6 +254,12 @@ class TabbedToolsApp(tk.Tk):
         self.current_tab_index = index
 
 
+# {
+#   責務: [main: legacy Tabbed Tools applicationを起動する]
+#   処理: [construct the Tk application and enter its event loop]
+#   引数: [なし]
+#   戻り値: [処理結果]
+# }
 def main():
     app = TabbedToolsApp()
     app.mainloop()

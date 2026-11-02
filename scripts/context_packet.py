@@ -3,6 +3,7 @@
 The command deliberately stores issue metadata and a bounded diff instead of
 copying repository-wide documents into every task context.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -12,6 +13,12 @@ import subprocess
 from pathlib import Path
 
 
+# {
+#   責務: [run: repository commandを実行してstdoutを返す]
+#   処理: [run subprocess with explicit cwd, captured UTF-8 output, and checked exit status]
+#   引数: [command, cwd]
+#   戻り値: [str]
+# }
 def run(command: list[str], cwd: Path) -> str:
     result = subprocess.run(
         command,
@@ -25,11 +32,23 @@ def run(command: list[str], cwd: Path) -> str:
     return result.stdout
 
 
+# {
+#   責務: [changed_files: base以降に変更されたrepository-relative filesを取得する]
+#   処理: [run git diff name-only and discard empty paths]
+#   引数: [root, base]
+#   戻り値: [list[str]]
+# }
 def changed_files(root: Path, base: str) -> list[str]:
     output = run(["git", "diff", "--name-only", f"{base}...HEAD"], root)
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
+# {
+#   責務: [changed_symbols: changed Python filesからclass and function declarationsを列挙する]
+#   処理: [parse tracked source candidates and skip unreadable or invalid files]
+#   引数: [root, files]
+#   戻り値: [list[str]]
+# }
 def changed_symbols(root: Path, files: list[str]) -> list[str]:
     symbols: list[str] = []
     for relative in files:
@@ -46,8 +65,16 @@ def changed_symbols(root: Path, files: list[str]) -> list[str]:
     return sorted(set(symbols))
 
 
+# {
+#   責務: [create_packet: Issue情報とbounded diffからlocal task packetを生成する]
+#   処理: [query issue metadata, collect diff and symbols, and write packet files under .codex]
+#   引数: [root, issue, base, max_diff]
+#   戻り値: [Path]
+# }
 def create_packet(root: Path, issue: int, base: str, max_diff: int) -> Path:
-    issue_data = json.loads(run(["gh", "issue", "view", str(issue), "--json", "number,title,body,url"], root))
+    issue_data = json.loads(
+        run(["gh", "issue", "view", str(issue), "--json", "number,title,body,url"], root)
+    )
     files = changed_files(root, base)
     diff = run(["git", "diff", f"{base}...HEAD", "--", *files], root) if files else ""
     diff_lines = diff.splitlines()
@@ -61,7 +88,9 @@ def create_packet(root: Path, issue: int, base: str, max_diff: int) -> Path:
         encoding="utf-8",
     )
     (packet / "files.txt").write_text("\n".join(files) + ("\n" if files else ""), encoding="utf-8")
-    (packet / "symbols.txt").write_text("\n".join(changed_symbols(root, files)) + "\n", encoding="utf-8")
+    (packet / "symbols.txt").write_text(
+        "\n".join(changed_symbols(root, files)) + "\n", encoding="utf-8"
+    )
     (packet / "constraints.md").write_text(
         "- Search-first, Read-second.\n- Keep unrelated files out of the change.\n"
         "- Validate with targeted tests and report unverified areas.\n",
@@ -71,11 +100,23 @@ def create_packet(root: Path, issue: int, base: str, max_diff: int) -> Path:
     return packet
 
 
+# {
+#   責務: [main: task packet CLI argumentsをparseしてpacket generationを開始する]
+#   処理: [resolve root and bounds, invoke packet creation, and print its path]
+#   引数: [なし]
+#   戻り値: [None]
+# }
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create a bounded Codex task packet from a GitHub Issue")
+    parser = argparse.ArgumentParser(
+        description="Create a bounded Codex task packet from a GitHub Issue"
+    )
     parser.add_argument("issue", type=int, help="GitHub Issue number")
-    parser.add_argument("--base", default="origin/main", help="Git diff base (default: origin/main)")
-    parser.add_argument("--max-diff-lines", type=int, default=400, help="Maximum diff lines in packet")
+    parser.add_argument(
+        "--base", default="origin/main", help="Git diff base (default: origin/main)"
+    )
+    parser.add_argument(
+        "--max-diff-lines", type=int, default=400, help="Maximum diff lines in packet"
+    )
     parser.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     packet = create_packet(args.root.resolve(), args.issue, args.base, max(1, args.max_diff_lines))

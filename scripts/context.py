@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -10,6 +9,7 @@ flat_file_copy、random_image_creater、tag_deleter、start_webui、text_marger
 
 Stable Diffusion 本体、ffmpeg、7-Zip、Pillow、requests は別途必要です。
 """
+
 from __future__ import annotations
 
 import atexit
@@ -40,6 +40,7 @@ from .backend.generation_backend_catalog import ChoiceMap, GenerationModelRoots
 
 try:
     import psutil
+
     _HAS_PSUTIL = True
 except Exception:
     _HAS_PSUTIL = False
@@ -111,6 +112,12 @@ def _default_user_paths(app_dir=None):
     }
 
 
+# {
+#   責務: [_load_user_paths: user path JSONを読み込みportable defaultsと統合する]
+#   処理: [read configured or legacy JSON, tolerate invalid/missing data, and derive compatibility paths]
+#   引数: [なし]
+#   戻り値: [処理結果]
+# }
 def _load_user_paths():
     defaults = _default_user_paths()
     try:
@@ -134,13 +141,27 @@ def _load_user_paths():
 USER_PATHS = _load_user_paths()
 
 
+# {
+#   責務: [_configured_path: environment and user settingsからresolved filesystem pathを選ぶ]
+#   処理: [prefer environment value, fall back to loaded setting, then expand and resolve]
+#   引数: [key, environment_key, fallback]
+#   戻り値: [処理結果]
+# }
 def _configured_path(key, environment_key, fallback):
-    return Path(os.environ.get(environment_key, USER_PATHS.get(key, fallback))).expanduser().resolve()
+    return (
+        Path(os.environ.get(environment_key, USER_PATHS.get(key, fallback))).expanduser().resolve()
+    )
 
 
 SD_ROOT = _configured_path("sd_root", "KADOKA_TOOLS_SD_ROOT", str(APP_DIR))
 
 
+# {
+#   責務: [_backend_from_command_line: argvからbackend selector argumentを取得する]
+#   処理: [recognize split and equals forms and normalize the backend identifier]
+#   引数: [なし]
+#   戻り値: [処理結果]
+# }
 def _backend_from_command_line():
     for index, value in enumerate(sys.argv):
         if value == "--backend" and index + 1 < len(sys.argv):
@@ -150,16 +171,28 @@ def _backend_from_command_line():
     return ""
 
 
+# {
+#   責務: [_api_only_from_command_line: argvにAPI-only mode flagがあるか判定する]
+#   処理: [scan command-line values for the explicit flag]
+#   引数: [なし]
+#   戻り値: [処理結果]
+# }
 def _api_only_from_command_line():
     return any(value == "--api-only" for value in sys.argv)
 
 
 _backend_environment = os.environ.get("KADOKA_TOOLS_BACKEND", "").strip().lower()
 _backend_argument = _backend_from_command_line()
-API_ONLY_MODE = _api_only_from_command_line() or os.environ.get("KADOKA_TOOLS_API_ONLY", "").strip() == "1"
+API_ONLY_MODE = (
+    _api_only_from_command_line() or os.environ.get("KADOKA_TOOLS_API_ONLY", "").strip() == "1"
+)
 BACKEND_SELECTION_REQUIRED = not (_backend_environment or _backend_argument)
-A1111_DIR = _configured_path("a1111_dir", "KADOKA_TOOLS_A1111_DIR", str(SD_ROOT / "external" / "stable-diffusion-webui"))
-COMFYUI_DIR = _configured_path("comfyui_dir", "KADOKA_TOOLS_COMFYUI_DIR", str(SD_ROOT / "external" / "ComfyUI"))
+A1111_DIR = _configured_path(
+    "a1111_dir", "KADOKA_TOOLS_A1111_DIR", str(SD_ROOT / "external" / "stable-diffusion-webui")
+)
+COMFYUI_DIR = _configured_path(
+    "comfyui_dir", "KADOKA_TOOLS_COMFYUI_DIR", str(SD_ROOT / "external" / "ComfyUI")
+)
 _runtime_profile = create_backend_runtime_profile(
     _backend_argument or _backend_environment,
     A1111_DIR,
@@ -170,22 +203,54 @@ RUNTIME_BACKEND = _runtime_profile.backend
 RUNTIME_DIR = _runtime_profile.runtime_directory
 BACKEND_DISPLAY_NAME = _runtime_profile.display_name
 USER_INPUT_DIR = _configured_path("input_root", "KADOKA_TOOLS_INPUT_ROOT", str(USER_INPUT_DIR))
-INPUT_MODELS_DIR = _configured_path("input_models", "KADOKA_TOOLS_INPUT_MODELS", str(USER_INPUT_DIR / "models"))
+INPUT_MODELS_DIR = _configured_path(
+    "input_models", "KADOKA_TOOLS_INPUT_MODELS", str(USER_INPUT_DIR / "models")
+)
 MODELS_DIR = _configured_path("models_root", "KADOKA_TOOLS_MODELS_ROOT", str(INPUT_MODELS_DIR))
 LEGACY_MODELS_DIR = APP_DIR / "models"
-CHECKPOINTS_DIR = _configured_path("checkpoints", "KADOKA_TOOLS_CHECKPOINTS_DIR", str(MODELS_DIR / "checkpoints"))
+CHECKPOINTS_DIR = _configured_path(
+    "checkpoints", "KADOKA_TOOLS_CHECKPOINTS_DIR", str(MODELS_DIR / "checkpoints")
+)
 LEGACY_CHECKPOINTS_DIRS = (LEGACY_MODELS_DIR / "checkpoints", APP_DIR / "checkpoints")
-COMFY_FLOWS_DIR = _configured_path("comfy_flows", "KADOKA_TOOLS_COMFY_FLOWS_DIR", str(MODELS_DIR / "flows"))
-WILDCARDS_DIR = _configured_path("wildcards", "KADOKA_TOOLS_WILDCARDS_DIR", str(SD_ROOT / "wildcards"))
-PIXAI_TAGGER_DIR = _configured_path("pixai_tagger_dir", "KADOKA_TOOLS_PIXAI_TAGGER_DIR", str(SD_ROOT / "external" / "pixai_tagger" / "pixai-tagger-v0.9-demo"))
-TAGGUI_DIR = _configured_path("taggui_dir", "KADOKA_TOOLS_TAGGUI_DIR", str(SD_ROOT / "external" / "taggui"))
-TAGGUI_PACKAGED_EXE = _configured_path("taggui_exe", "KADOKA_TOOLS_TAGGUI_EXE", str(SD_ROOT / "external" / "taggui-v1.34.0-windows" / "taggui.exe"))
-YOUTUBE_DOWNLOADER_DIR = _configured_path("youtube_downloader_dir", "KADOKA_TOOLS_YOUTUBE_DOWNLOADER_DIR", r"I:\scripts\youtubez_downloader")
-NUNO_TOUKA_DIR = _configured_path("nuno_touka_dir", "KADOKA_TOOLS_NUNO_TOUKA_DIR", r"K:\sd\nuno\_touka")
-PIXAI_TAGGER_API_URL = str(USER_PATHS.get("pixai_api_url", "http://127.0.0.1:7861/pixai/v1/interrogate"))
+COMFY_FLOWS_DIR = _configured_path(
+    "comfy_flows", "KADOKA_TOOLS_COMFY_FLOWS_DIR", str(MODELS_DIR / "flows")
+)
+WILDCARDS_DIR = _configured_path(
+    "wildcards", "KADOKA_TOOLS_WILDCARDS_DIR", str(SD_ROOT / "wildcards")
+)
+PIXAI_TAGGER_DIR = _configured_path(
+    "pixai_tagger_dir",
+    "KADOKA_TOOLS_PIXAI_TAGGER_DIR",
+    str(SD_ROOT / "external" / "pixai_tagger" / "pixai-tagger-v0.9-demo"),
+)
+TAGGUI_DIR = _configured_path(
+    "taggui_dir", "KADOKA_TOOLS_TAGGUI_DIR", str(SD_ROOT / "external" / "taggui")
+)
+TAGGUI_PACKAGED_EXE = _configured_path(
+    "taggui_exe",
+    "KADOKA_TOOLS_TAGGUI_EXE",
+    str(SD_ROOT / "external" / "taggui-v1.34.0-windows" / "taggui.exe"),
+)
+YOUTUBE_DOWNLOADER_DIR = _configured_path(
+    "youtube_downloader_dir",
+    "KADOKA_TOOLS_YOUTUBE_DOWNLOADER_DIR",
+    r"I:\scripts\youtubez_downloader",
+)
+NUNO_TOUKA_DIR = _configured_path(
+    "nuno_touka_dir", "KADOKA_TOOLS_NUNO_TOUKA_DIR", r"K:\sd\nuno\_touka"
+)
+PIXAI_TAGGER_API_URL = str(
+    USER_PATHS.get("pixai_api_url", "http://127.0.0.1:7861/pixai/v1/interrogate")
+)
 PIXAI_TAGGER_MODEL = "deepghs/pixai-tagger-v0.9-onnx"
 
 
+# {
+#   責務: [_load_pillow_image: Pillow Image moduleを必要時に遅延importする]
+#   処理: [import optional dependency on demand and raise a focused runtime error on failure]
+#   引数: [なし]
+#   戻り値: [処理結果]
+# }
 def _load_pillow_image():
     """WebUIの依存関係更新とDLLロックが競合しないよう、Pillowは使用時だけ読む。"""
     try:
@@ -194,9 +259,16 @@ def _load_pillow_image():
         raise RuntimeError("Pillow がインポートできません") from exc
     return pillow_image
 
+
 MODEL_FILE_SUFFIXES = {".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".onnx"}
 
 
+# {
+#   責務: [_unique_choices: candidate namesからempty and case-insensitive duplicatesを除く]
+#   処理: [normalize string values and retain first-seen display spelling]
+#   引数: [values]
+#   戻り値: [処理結果]
+# }
 def _unique_choices(values):
     result = []
     seen = set()
@@ -211,6 +283,12 @@ def _unique_choices(values):
     return result
 
 
+# {
+#   責務: [_scan_model_files: model root以下のsupported model filesをrelative pathで列挙する]
+#   処理: [walk filesystem, filter model suffixes, optionally strip suffix, and handle OS errors]
+#   引数: [root, keep_suffix]
+#   戻り値: [処理結果]
+# }
 def _scan_model_files(root, *, keep_suffix=True):
     root = Path(root)
     if not root.is_dir():
@@ -233,16 +311,32 @@ def _scan_model_files(root, *, keep_suffix=True):
     return result
 
 
+# {
+#   責務: [_scan_flow_files: workflow root以下のJSON filesをrelative pathで列挙する]
+#   処理: [walk filesystem and return sorted relative names, or empty list when unavailable]
+#   引数: [root]
+#   戻り値: [処理結果]
+# }
 def _scan_flow_files(root):
     root = Path(root)
     if not root.is_dir():
         return []
     try:
-        return [path.relative_to(root).as_posix() for path in sorted(root.rglob("*.json"), key=lambda p: p.as_posix().casefold()) if path.is_file()]
+        return [
+            path.relative_to(root).as_posix()
+            for path in sorted(root.rglob("*.json"), key=lambda p: p.as_posix().casefold())
+            if path.is_file()
+        ]
     except OSError:
         return []
 
 
+# {
+#   責務: [resolve_comfy_flow_path: workflow名をconfigured pathまたはlegacy pathへ解決する]
+#   処理: [preserve absolute inputs and prefer an existing configured file before legacy fallback]
+#   引数: [flow_name]
+#   戻り値: [処理結果]
+# }
 def resolve_comfy_flow_path(flow_name):
     """Resolve a workflow from the configured root, then its legacy location."""
     path = Path(flow_name)
@@ -269,12 +363,14 @@ def flow_checkpoint_choices(flow_name):
         fields = create_configured_generation_backend_catalog().workflow_model_inputs(path)
     except (OSError, ValueError, KeyError):
         return []
-    return _unique_choices([
-        str(field.get("value", "")).strip()
-        for field in fields
-        if field.get("id", "").rsplit(":", 1)[-1] in {"ckpt_name", "unet_name"}
-        and str(field.get("value", "")).strip()
-    ])
+    return _unique_choices(
+        [
+            str(field.get("value", "")).strip()
+            for field in fields
+            if field.get("id", "").rsplit(":", 1)[-1] in {"ckpt_name", "unet_name"}
+            and str(field.get("value", "")).strip()
+        ]
+    )
 
 
 # {
@@ -308,7 +404,7 @@ def image_to_image_profile():
             runtime_directory=RUNTIME_DIR,
             date_folder="",
             pixai_tagger_url=PIXAI_TAGGER_API_URL,
-        )
+        ),
     )
 
 
@@ -332,7 +428,7 @@ def create_configured_image_generation_profile(date_folder):
             runtime_directory=RUNTIME_DIR,
             date_folder=date_folder,
             pixai_tagger_url=PIXAI_TAGGER_API_URL,
-        )
+        ),
     )
 
 
@@ -465,7 +561,15 @@ def _local_backend_choices():
 def load_backend_choices(api_url: str = "", query_api: bool = False) -> tuple[ChoiceMap, list[str]]:
     """ローカルのモデル候補に、起動中APIの正確な登録名を統合する。"""
     local = _local_backend_choices()
-    api_choices = {"checkpoints": [], "unets": [], "loras": [], "vaes": [], "upscalers": [], "samplers": [], "flows": []}
+    api_choices = {
+        "checkpoints": [],
+        "unets": [],
+        "loras": [],
+        "vaes": [],
+        "upscalers": [],
+        "samplers": [],
+        "flows": [],
+    }
     warnings = []
     if query_api:
         if requests is None:
@@ -488,6 +592,12 @@ def load_backend_choices(api_url: str = "", query_api: bool = False) -> tuple[Ch
     return merged, warnings
 
 
+# {
+#   責務: [extract_tagger_tags: 複数形式のTagger responseからtag stringsを抽出する]
+#   処理: [normalize captions, tag dictionaries, or tags payload and reject unsupported shape]
+#   引数: [result]
+#   戻り値: [処理結果]
+# }
 def extract_tagger_tags(result):
     caption = result.get("caption", result) if isinstance(result, dict) else result
     if isinstance(caption, str):
@@ -507,16 +617,28 @@ def extract_tagger_tags(result):
     raise RuntimeError(f"未対応のTagger応答形式です: {str(result)[:300]}")
 
 
-
-
+# {
+#   責務: [_safe_thread: worker callbackをdaemon threadで実行して例外をlogする]
+#   処理: [run target in background thread and fall back to stderr when logger fails]
+#   引数: [logbox, func, *args, **kwargs]
+#   戻り値: [処理結果]
+# }
 def _safe_thread(logbox, func, *args, **kwargs):
+    # {
+    #   責務: [runner: background target exceptionをloggerまたはstderrへ記録する]
+    #   処理: [invoke function and capture operational exceptions for the UI]
+    #   引数: [なし]
+    #   戻り値: [処理結果]
+    # }
     def runner():
         try:
             func(*args, **kwargs)
         except Exception as exc:
             try:
-                logbox.log(f'❌ エラー発生: {type(exc).__name__}: {exc}')
+                logbox.log(f"❌ エラー発生: {type(exc).__name__}: {exc}")
             except Exception:
-                print(f'ERROR: {type(exc).__name__}: {exc}')
+                print(f"ERROR: {type(exc).__name__}: {exc}")
+
     import threading
+
     threading.Thread(target=runner, daemon=True).start()

@@ -8,7 +8,9 @@ Two complementary checks protect different boundaries.
 
 It also detects direct launches of backend `.py` scripts through a Python
 interpreter returned by `venv_python()`, including simple aliases and command
-variables (`ARCH005`). Existing launches are listed with reasons in
+variables (`ARCH005`), while checking the interpreter and script argv positions
+to avoid classifying `python -c` bootstrap code as a direct script launch.
+Existing launches are listed with reasons in
 `app_boundary_baseline.json`; new launches fail the check, and existing counts
 must be reduced when their migration is completed.
 

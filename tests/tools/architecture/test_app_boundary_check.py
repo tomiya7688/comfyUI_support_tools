@@ -51,17 +51,67 @@ subprocess.Popen(cmd)
         self.assertEqual(rules, ["ARCH005"])
 
     # {
+    #   責務: [test_detects_current_embedded_webui_violation: current #129 WebUI launcher remains visible to the semantic boundary rule]
+    #   処理: [real backend sourceをscanしてARCH005 findingを確認する]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
+    def test_detects_current_embedded_webui_violation(self):
+        root = Path(__file__).parents[3]
+        source = (root / "scripts" / "backend" / "embedded_start_webui.py").read_text(
+            encoding="utf-8"
+        )
+        rules = [
+            item.rule
+            for item in app_boundary_check.scan_source(
+                "scripts/backend/embedded_start_webui.py", source
+            )
+        ]
+        self.assertIn("ARCH005", rules)
+
+    # {
+    #   責務: [test_detects_direct_venv_call_and_path_based_python_launches: direct/helper and indirect interpreter forms are detected]
+    #   処理: [inline venv_python and Path-based interpreter fixturesからARCH005を確認する]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
+    def test_detects_direct_venv_call_and_path_based_python_launches(self):
+        sources = [
+            "import subprocess\nsubprocess.run([str(venv_python(root)), 'backend.py'])\n",
+            "import subprocess\n"
+            "python = Path(root) / 'Scripts' / 'python.exe'\n"
+            "script = root / 'backend.py'\n"
+            "subprocess.Popen([str(python), str(script)])\n",
+        ]
+        for source in sources:
+            with self.subTest(source=source):
+                rules = [
+                    item.rule
+                    for item in app_boundary_check.scan_source("scripts/backend/example.py", source)
+                ]
+                self.assertEqual(rules, ["ARCH005"])
+
+    # {
     #   責務: [test_allows_venv_python_for_module_command_and_packaged_executable: module execution and packaged executable launchが許可されることを確認する]
     #   処理: [valid command fixtureにarchitecture findingsがないことをassertする]
     #   引数: [self]
     #   戻り値: [None]
     # }
+
     def test_allows_venv_python_for_module_command_and_packaged_executable(self):
         source = """from scripts.runtime_python import venv_python
 import subprocess
 python_path = venv_python(runtime / 'venv')
 subprocess.run([str(python_path), '-m', 'http.server'])
-subprocess.Popen(['Backend.exe', '--port', '8188'])
+subprocess.Popen([packaged_executable('Backend'), '--port', '8188'])
+"""
+        self.assertEqual(app_boundary_check.scan_source("scripts/backend/example.py", source), [])
+
+    def test_ignores_interpreter_and_python_path_in_non_launch_arguments(self):
+        source = """from scripts.runtime_python import venv_python
+import subprocess
+python_path = venv_python(runtime / 'venv')
+subprocess.run(['Packaged.exe', str(python_path), 'documentation.py'])
 """
         self.assertEqual(app_boundary_check.scan_source("scripts/backend/example.py", source), [])
 

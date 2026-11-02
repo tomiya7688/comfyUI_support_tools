@@ -11,12 +11,6 @@
       "rule": "ARCH005",
       "max_count": 1,
       "reason": "Existing PixAI Tagger script launch; migrate to a packaged executable or API."
-    },
-    {
-      "path": "scripts/backend/taggui_controller.py",
-      "rule": "ARCH005",
-      "max_count": 1,
-      "reason": "Existing TagGUI script launch; migrate to a packaged executable or API."
     }
   ]
 }

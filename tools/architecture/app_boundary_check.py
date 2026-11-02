@@ -160,6 +160,105 @@ def _python_script_variables(tree: ast.AST) -> set[str]:
     return result
 
 
+# {
+#   責務: [_assigned_values: module内の名前と代入式の対応を収集する]
+#   処理: [assignment targetごとに追跡可能な右辺式を保存する]
+#   引数: [tree: 解析済みPython syntax tree]
+#   戻り値: [dict[str, list[ast.AST]]: variableごとの代入式一覧]
+# }
+def _assigned_values(tree: ast.AST) -> dict[str, list[ast.AST]]:
+    assignments: dict[str, list[ast.AST]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+            targets, value = [node.target], node.value
+        else:
+            continue
+        for target in targets:
+            for name in _targets(target):
+                assignments.setdefault(name, []).append(value)
+    return assignments
+
+
+# {
+#   責務: [_command_elements: subprocess command expressionからargv要素を展開する]
+#   処理: [list/tuple, concatenation, and assigned command aliasesを追跡し循環参照を止める]
+#   引数: [node: command expression, assignments: variable-to-expression mapping, seen: 再帰中のalias names]
+#   戻り値: [list[ast.AST]: 追跡できたargv expressions]
+# }
+def _command_elements(
+    node: ast.AST,
+    assignments: dict[str, list[ast.AST]],
+    seen: frozenset[str] = frozenset(),
+) -> list[ast.AST]:
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return list(node.elts)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _command_elements(node.left, assignments, seen) + _command_elements(
+            node.right, assignments, seen
+        )
+    if isinstance(node, ast.Name) and node.id not in seen:
+        return next(
+            (
+                values
+                for value in assignments.get(node.id, [])
+                if (values := _command_elements(value, assignments, seen | {node.id}))
+            ),
+            [],
+        )
+    return [node]
+
+
+# {
+#   責務: [_is_python_interpreter_expression: argv先頭が追跡対象のPython interpreterか判定する]
+#   処理: [venv_python calls, tracked aliases, PATH lookup, and explicit Path interpreter expressionsを認識する]
+#   引数: [node: argv expression, variables: interpreterとして追跡した名前]
+#   戻り値: [bool: Python interpreter expressionか]
+# }
+def _is_python_interpreter_expression(node: ast.AST, variables: set[str]) -> bool:
+    if _names(node).intersection(variables):
+        return True
+    for item in ast.walk(node):
+        if isinstance(item, ast.Call):
+            if _name(item.func).endswith("venv_python"):
+                return True
+            if _name(item.func) == "shutil.which" and item.args:
+                first = item.args[0]
+                if isinstance(first, ast.Constant) and str(first.value).lower() in PYTHON_COMMANDS:
+                    return True
+    path_call = any(
+        isinstance(item, ast.Call) and _name(item.func).split(".")[-1] == "Path"
+        for item in ast.walk(node)
+    )
+    path_has_interpreter = any(
+        isinstance(item, ast.Constant)
+        and isinstance(item.value, str)
+        and Path(item.value.replace("\\", "/")).name.lower() in PYTHON_COMMANDS
+        for item in ast.walk(node)
+    )
+    return path_call and path_has_interpreter
+
+
+# {
+#   責務: [_is_python_script_expression: argvのscript位置がPython source fileを指すか判定する]
+#   処理: [.py path constants, launch_script_name attributes, and tracked aliasesを認識する]
+#   引数: [node: argv expression, variables: script pathとして追跡した名前]
+#   戻り値: [bool: Python script expressionか]
+# }
+def _is_python_script_expression(node: ast.AST, variables: set[str]) -> bool:
+    if _names(node).intersection(variables):
+        return True
+    if any(name.lower().endswith("launch_script_name") for name in _names(node)):
+        return True
+    return any(
+        isinstance(item, ast.Constant)
+        and isinstance(item.value, str)
+        and item.value.lower().endswith(".py")
+        for item in ast.walk(node)
+    )
+
+
 def scan_source(path: str, source: str) -> list[Violation]:
     try:
         tree = ast.parse(source, filename=path)
@@ -175,6 +274,7 @@ def scan_source(path: str, source: str) -> list[Violation]:
     tab_scope = path.replace("\\", "/").startswith("scripts/tabs/")
     venv_python_variables = _python_interpreter_variables(tree)
     python_script_variables = _python_script_variables(tree)
+    assigned_values = _assigned_values(tree)
 
     for node in ast.walk(tree):
         if runtime_scope and isinstance(node, ast.Import):
@@ -225,16 +325,15 @@ def scan_source(path: str, source: str) -> list[Violation]:
 
             if called in SUBPROCESS_CALLS and node.args:
                 command = node.args[0]
-                command_names = _names(command)
-                command_text_has_python_script = any(
-                    isinstance(item, ast.Constant)
-                    and isinstance(item.value, str)
-                    and item.value.lower().endswith(".py")
-                    for item in ast.walk(command)
-                )
-                if command_names.intersection(venv_python_variables) and (
-                    command_names.intersection(python_script_variables)
-                    or command_text_has_python_script
+                command_elements = _command_elements(command, assigned_values)
+                if (
+                    len(command_elements) > 1
+                    and _is_python_interpreter_expression(
+                        command_elements[0], venv_python_variables
+                    )
+                    and _is_python_script_expression(
+                        command_elements[1], python_script_variables
+                    )
                 ):
                     violations.append(
                         Violation(

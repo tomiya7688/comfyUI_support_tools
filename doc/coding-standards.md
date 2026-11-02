@@ -560,3 +560,8 @@ README files and project-owned documentation are maintained in both Japanese and
 - A project may explicitly document an intentional hierarchy, its rationale and exact scope as a design exception. Existing code alone is not enough evidence.
 - Do not conflate a compiler/analyzer's supported source-language inheritance, examples, or test fixtures with the project's own implementation rules.
 - Apply to new and modified project-owned implementation code. Do not mass-refactor unrelated legacy code.
+
+Quality CI rejects new direct processing/data imports from legacy UI modules,
+handwritten duplicate tool metadata outside `TOOL_REGISTRY`, and precision or
+ranking changes without a corresponding changed test module. Changed test
+modules are executed in CI.

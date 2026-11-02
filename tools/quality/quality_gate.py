@@ -13,6 +13,7 @@ from pathlib import Path
 EXCLUDED_PREFIXES = ("external/", "licenses/", "doc/generated/")
 STRICT_NEW_RULES = "E4,E7,E9,F,I,B,UP"
 HUNK_RE = re.compile(r"^@@ -\\d+(?:,\\d+)? \\+(\\d+)(?:,(\\d+))? @@")
+PRECISION_TERMS = ("evaluator", "ranking", "calibration", "metric", "precision", "scoring")
 
 
 # {
@@ -242,6 +243,109 @@ def _call_name(node: ast.AST) -> str:
 
 
 # {
+# 責務: [_ui_boundary_findings: legacy UIの境界越境と中央metadata重複を検出する]
+# 処理: [1: application内部module importを確認する 2: central descriptor重複を確認する 3: direct IOを確認する]
+# 引数: [path: repository path, node: AST node, added_ranges: added line ranges]
+# 戻り値: [findings: UI boundary findings]
+# }
+def _ui_boundary_findings(
+    path: str, node: ast.AST, added_ranges: tuple[tuple[int, int], ...]
+) -> list[Finding]:
+    normalized_path = path.replace("\\", "/")
+    findings: list[Finding] = []
+    if normalized_path.startswith("scripts/tabs/"):
+        imported_modules: list[tuple[int, str]] = []
+        if isinstance(node, ast.Import):
+            imported_modules.extend((node.lineno, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.append((node.lineno, node.module))
+        for line, module in imported_modules:
+            if (
+                _line_in_ranges(line, added_ranges)
+                and ".applications." in module
+                and (".data." in module or ".process.processing." in module)
+            ):
+                findings.append(
+                    Finding(
+                        "E",
+                        "QUA231",
+                        path,
+                        line,
+                        f"legacy UI imports an internal processing/data module ({module}); use an application boundary",
+                    )
+                )
+
+    if isinstance(node, (ast.Assign, ast.AnnAssign)):
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        names = {target.id for target in targets if isinstance(target, ast.Name)}
+        value = node.value
+        central_names = {
+            "scripts/app.py": {"tab_titles", "TAB_TITLES", "TAB_CLASSES"},
+            "scripts/tab_catalog.py": {"TOOL_TAB_METADATA"},
+            "scripts/widgets/tk_tab_settings_adapter.py": {"STABLE_SETTINGS_IDS"},
+        }.get(normalized_path, set())
+        if (
+            value is not None
+            and _line_in_ranges(node.lineno, added_ranges)
+            and names.intersection(central_names)
+            and not any(
+                isinstance(item, ast.Name) and item.id == "TOOL_REGISTRY"
+                for item in ast.walk(value)
+            )
+        ):
+            findings.append(
+                Finding(
+                    "E",
+                    "QUA232",
+                    path,
+                    node.lineno,
+                    "central tool metadata must derive from TOOL_REGISTRY instead of a second hard-coded list",
+                )
+            )
+
+    if isinstance(node, ast.Call) and _line_in_ranges(node.lineno, added_ranges):
+        called = _call_name(node.func)
+        is_legacy_side_effect = normalized_path.startswith("scripts/tabs/") and (
+            called.startswith("subprocess.")
+            or called.startswith("requests.")
+            or called
+            in {
+                "urlopen",
+                "open",
+                "write_text",
+                "write_bytes",
+                "unlink",
+                "rename",
+                "replace",
+                "mkdir",
+                "rmdir",
+            }
+            or called.endswith(
+                (
+                    ".write_text",
+                    ".write_bytes",
+                    ".unlink",
+                    ".rename",
+                    ".replace",
+                    ".mkdir",
+                    ".rmdir",
+                )
+            )
+        )
+        if is_legacy_side_effect:
+            findings.append(
+                Finding(
+                    "E",
+                    "QUA230",
+                    path,
+                    node.lineno,
+                    f"new direct I/O or process work in legacy UI ({called}); move it behind an adapter",
+                )
+            )
+    return findings
+
+
+# {
 # 責務: [ scan_source: 1つのPython sourceを品質監査する ]
 # 処理: [ 1: sizeと構文を確認する, 2: 新規宣言commentを確認する, 3: 危険patternを確認する ]
 # 引数: [ path: file, source: source text, added_ranges: 追加行range ]
@@ -262,6 +366,7 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
         return [Finding("E", "QUA001", path, exc.lineno or 0, f"syntax error: {exc.msg}")]
 
     for node in ast.walk(tree):
+        findings.extend(_ui_boundary_findings(path, node, added_ranges))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             size = (node.end_lineno or node.lineno) - node.lineno + 1
             if len(lines) > 1000 and _line_in_ranges(_declaration_start(node), added_ranges):
@@ -340,23 +445,6 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
 
         if isinstance(node, ast.Call) and _line_in_ranges(node.lineno, added_ranges):
             called = _call_name(node.func)
-            normalized_path = path.replace("\\", "/")
-            if normalized_path.startswith("scripts/tabs/") and (
-                called.startswith("subprocess.")
-                or called.startswith("requests.")
-                or called in {"urlopen", "open"}
-                or called in {"write_text", "write_bytes", "unlink", "rename", "replace", "mkdir", "rmdir"}
-                or called.endswith((".write_text", ".write_bytes", ".unlink", ".rename", ".replace", ".mkdir", ".rmdir"))
-            ):
-                findings.append(
-                    Finding(
-                        "E",
-                        "QUA230",
-                        path,
-                        node.lineno,
-                        f"new direct I/O or process work in legacy UI ({called}); move it behind an adapter",
-                    )
-                )
             if any(
                 keyword.arg == "shell"
                 and isinstance(keyword.value, ast.Constant)
@@ -382,6 +470,46 @@ def scan_source(path: str, source: str, added_ranges: tuple[tuple[int, int], ...
                         f"new {called}() requires trust-boundary review",
                     )
                 )
+    return findings
+
+
+# {
+# 責務: [precision_validation_findings: precision-sensitive changesに対応するtest追加を要求する]
+# 処理: [1: changed production filesを検索する 2: test fileが無ければerrorを返す]
+# 引数: [root: repository root, changed_files: changed Python paths]
+# 戻り値: [findings: missing test requirement]
+# }
+def precision_validation_findings(root: Path, changed_files: tuple[str, ...]) -> list[Finding]:
+    test_files = tuple(path for path in changed_files if path.startswith("tests/"))
+    test_names = tuple(Path(path).stem.casefold() for path in test_files)
+    findings: list[Finding] = []
+    for path in changed_files:
+        if path.startswith(("tests/", "tools/")) or not _project_python_path(path):
+            continue
+        source = (root / path).read_text(encoding="utf-8").casefold()
+        if any(term in Path(path).stem.casefold() for term in PRECISION_TERMS) or any(
+            term in source for term in PRECISION_TERMS
+        ):
+            module_terms = {
+                term
+                for term in re.split(r"[^a-z0-9]+", Path(path).stem.casefold())
+                if term and term not in {"test", "quality"}
+            }
+            has_related_test = any(
+                module_terms.intersection(re.split(r"[^a-z0-9]+", test_name))
+                for test_name in test_names
+            )
+            if has_related_test:
+                continue
+            findings.append(
+                Finding(
+                    "E",
+                    "QUA250",
+                    path,
+                    1,
+                    "precision/evaluation/ranking changes require a changed test module with validation cases",
+                )
+            )
     return findings
 
 
@@ -466,6 +594,7 @@ def main(argv: list[str] | None = None) -> int:
             line_count=len(source.splitlines()),
         )
         findings.extend(scan_source(path, source, ranges))
+    findings.extend(precision_validation_findings(root, changes.files))
     for finding in findings:
         print(f"{finding.severity} {finding.rule} {finding.path}:{finding.line} {finding.message}")
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from tools.quality import quality_gate
 
@@ -84,6 +86,50 @@ def work():
         source = "class NewResponsibility:\n    pass\n" + "value = 1\n" * 1000
         findings = quality_gate.scan_source("large.py", source, ((1, 1002),))
         self.assertTrue(any(item.rule == "QUA240" and item.severity == "E" for item in findings))
+
+    def test_rejects_direct_application_processing_import_in_legacy_ui(self) -> None:
+        source = "from comfyui_support_tools.applications.demo.data.processing.store import load\n"
+        findings = quality_gate.scan_source("scripts/tabs/demo.py", source, ((1, 1),))
+        self.assertTrue(any(item.rule == "QUA231" for item in findings))
+
+    def test_requires_central_tool_metadata_to_derive_from_registry(self) -> None:
+        hardcoded = "STABLE_SETTINGS_IDS = {'ImageTab': 'image'}\n"
+        derived = "STABLE_SETTINGS_IDS = {item.settings_id for item in TOOL_REGISTRY.descriptors}\n"
+        hardcoded_findings = quality_gate.scan_source(
+            "scripts/widgets/tk_tab_settings_adapter.py", hardcoded, ((1, 1),)
+        )
+        derived_findings = quality_gate.scan_source(
+            "scripts/widgets/tk_tab_settings_adapter.py", derived, ((1, 1),)
+        )
+        self.assertTrue(any(item.rule == "QUA232" for item in hardcoded_findings))
+        self.assertFalse(any(item.rule == "QUA232" for item in derived_findings))
+
+    def test_precision_change_requires_test_module(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_path = root / "src" / "quality" / "evaluator.py"
+            source_path.parent.mkdir(parents=True)
+            source_path.write_text("def evaluate_score():\n    return 0.5\n", encoding="utf-8")
+            findings = quality_gate.precision_validation_findings(
+                root, ("src/quality/evaluator.py",)
+            )
+            self.assertTrue(any(item.rule == "QUA250" for item in findings))
+            self.assertEqual(
+                quality_gate.precision_validation_findings(
+                    root,
+                    ("src/quality/evaluator.py", "tests/test_evaluator.py"),
+                ),
+                [],
+            )
+            self.assertTrue(
+                any(
+                    item.rule == "QUA250"
+                    for item in quality_gate.precision_validation_findings(
+                        root,
+                        ("src/quality/evaluator.py", "tests/test_unrelated.py"),
+                    )
+                )
+            )
 
 
 if __name__ == "__main__":

@@ -59,3 +59,4 @@ jobs:
             BASE_REF="HEAD^"
           fi
           python tools/quality/quality_gate.py --base-ref "$BASE_REF"
+          python tools/quality/changed_test_runner.py --base-ref "$BASE_REF"

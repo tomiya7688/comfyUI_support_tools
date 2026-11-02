@@ -51,3 +51,8 @@ Main checks:
 - audit notices for very large functions and classes
 
 Files over 1000 lines and functions over 120 lines are not automatically forbidden. They trigger an explicit responsibility-boundary review.
+
+The gate also blocks new direct application-processing imports from legacy UI
+modules, duplicated tool metadata outside `TOOL_REGISTRY`, and precision or
+ranking changes without a changed test module. CI runs every Python test module
+changed from the PR base so those validation cases execute.

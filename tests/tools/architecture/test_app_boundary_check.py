@@ -29,6 +29,12 @@ class AppBoundaryCheckTests(unittest.TestCase):
         rules = [item.rule for item in app_boundary_check.scan_source("scripts/example.py", source)]
         self.assertEqual(rules.count("ARCH003"), 2)
 
+    # {
+    #   責務: [test_detects_venv_python_launching_backend_script: helper-resolved venv interpreter and launch-spec scriptが拒否されることを確認する]
+    #   処理: [venv alias and command variable fixtureからARCH005をassertする]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
     def test_detects_venv_python_launching_backend_script(self):
         source = """from scripts.runtime_python import venv_python
 import subprocess
@@ -44,6 +50,12 @@ subprocess.Popen(cmd)
         ]
         self.assertEqual(rules, ["ARCH005"])
 
+    # {
+    #   責務: [test_allows_venv_python_for_module_command_and_packaged_executable: module execution and packaged executable launchが許可されることを確認する]
+    #   処理: [valid command fixtureにarchitecture findingsがないことをassertする]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
     def test_allows_venv_python_for_module_command_and_packaged_executable(self):
         source = """from scripts.runtime_python import venv_python
 import subprocess

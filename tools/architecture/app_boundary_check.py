@@ -37,10 +37,22 @@ def _name(node: ast.AST) -> str:
     return ".".join(reversed(parts))
 
 
+# {
+#   責務: [_names: AST subtree内のName identifiersを集める]
+#   処理: [ast.walkでName nodesを収集しsetへ変換する]
+#   引数: [node]
+#   戻り値: [set[str]]
+# }
 def _names(node: ast.AST) -> set[str]:
     return {item.id for item in ast.walk(node) if isinstance(item, ast.Name)}
 
 
+# {
+#   責務: [_targets: assignment targetから代入先variable namesを抽出する]
+#   処理: [Name, tuple, and list targetsを再帰的に展開する]
+#   引数: [node]
+#   戻り値: [list[str]]
+# }
 def _targets(node: ast.AST) -> list[str]:
     if isinstance(node, ast.Name):
         return [node.id]
@@ -49,6 +61,12 @@ def _targets(node: ast.AST) -> list[str]:
     return []
 
 
+# {
+#   責務: [_python_interpreter_variables: helper/path経由のPython interpreter variablesを追跡する]
+#   処理: [venv_python, PATH Python, and alias assignmentsをfixed pointまで解析する]
+#   引数: [tree]
+#   戻り値: [set[str]]
+# }
 def _python_interpreter_variables(tree: ast.AST) -> set[str]:
     """Find venv or PATH-resolved Python interpreters, including simple aliases."""
     variables: set[str] = set()
@@ -91,6 +109,12 @@ def _python_interpreter_variables(tree: ast.AST) -> set[str]:
     return variables
 
 
+# {
+#   責務: [_python_script_variables: Python script path variables and aliasesを追跡する]
+#   処理: [py values, launch spec attributes, and named script aliasesを解析する]
+#   引数: [tree]
+#   戻り値: [set[str]]
+# }
 def _python_script_variables(tree: ast.AST) -> set[str]:
     """Recognize named paths used as backend scripts, including launch-script fields."""
     result: set[str] = set()
@@ -257,6 +281,12 @@ def load_baseline(path: Path) -> dict[tuple[str, str], tuple[int, str]]:
     return result
 
 
+# {
+#   責務: [scan_repository: scripts sourceをarchitecture violations and baseline regressionsについてscanする]
+#   処理: [tracked Python filesをscanしbaseline countsの超過と縮小可能性を検証する]
+#   引数: [root, baseline_path]
+#   戻り値: [tuple[list[Violation], list[str]]]
+# }
 def scan_repository(
     root: Path, baseline_path: Path | None = None
 ) -> tuple[list[Violation], list[str]]:

@@ -253,6 +253,123 @@ class ResultExporterTests(unittest.TestCase):
         self.assertEqual(metadata["analysis"]["content_scores"][0]["score"], 0.99)
         self.assertIn(str(self.image.absolute()), batch.read_text(encoding="utf-8"))
 
+    def test_transparency_assist_is_opt_in_and_redacts_prompt_from_metadata(self):
+        notes = MediaNotes(
+            content_tags=("landscape",),
+            prompt="private generation prompt",
+            negative_prompt="private negative prompt",
+        )
+        before = self.image.read_bytes()
+        written = export_records(
+            (MediaExportRecord(self.item, notes),),
+            ExportSettings(
+                caption_sidecar=False,
+                metadata_sidecar=True,
+                transparency_assist=True,
+            ),
+        )
+        self.assertEqual(len(written), 2)
+        self.assertEqual(self.image.read_bytes(), before)
+        metadata = json.loads(self.image.with_suffix(".png.kadoka.json").read_text(encoding="utf-8"))
+        self.assertIsNone(metadata["notes"]["prompt"])
+        self.assertIsNone(metadata["notes"]["negative_prompt"])
+        self.assertIsNone(metadata["analysis"]["tagger_model"])
+        self.assertIsNone(metadata["analysis"]["tagger_backend"])
+        payload = json.loads(
+            self.image.with_suffix(".png.transparency.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(payload["eu_transparency_assist_enabled"])
+        self.assertEqual(payload["generated_or_modified"], "unknown")
+        self.assertEqual(payload["disclosure"]["prompt"], {"level": "none"})
+        self.assertNotIn("private generation prompt", json.dumps(payload))
+
+    def test_transparency_sidecar_can_be_the_only_export(self):
+        paths = export_records(
+            (MediaExportRecord(self.item, MediaNotes()),),
+            ExportSettings(
+                caption_sidecar=False,
+                metadata_sidecar=False,
+                transparency_assist=True,
+            ),
+        )
+        self.assertEqual(len(paths), 1)
+        self.assertTrue(self.image.with_suffix(".png.transparency.json").is_file())
+
+    def test_transparency_export_applies_explicit_prompt_model_and_workflow_levels(self):
+        workflow = self.root / "private-workflow.json"
+        workflow.write_text('{"nodes":{"1":{"class_type":"Loader"}}}', encoding="utf-8")
+        notes = MediaNotes(prompt="private generation prompt")
+        export_records(
+            (MediaExportRecord(self.item, notes),),
+            ExportSettings(
+                caption_sidecar=False,
+                metadata_sidecar=False,
+                transparency_assist=True,
+                transparency_prompt_disclosure="hash_only",
+                transparency_model_disclosure="model_id_and_version",
+                transparency_model_id="model-7",
+                transparency_model_version="2.1",
+                transparency_workflow_disclosure="hash",
+                transparency_workflow_json_path=str(workflow),
+            ),
+        )
+        payload = json.loads(
+            self.image.with_suffix(".png.transparency.json").read_text(encoding="utf-8")
+        )
+        disclosure = payload["disclosure"]
+        self.assertEqual(disclosure["prompt"]["level"], "hash_only")
+        self.assertNotIn("text", disclosure["prompt"])
+        self.assertEqual(disclosure["model"]["id"], "model-7")
+        self.assertEqual(disclosure["model"]["version"], "2.1")
+        self.assertIn("sha256", disclosure["workflow"])
+        self.assertNotIn("Loader", json.dumps(payload))
+        self.assertNotIn("private-workflow.json", json.dumps(payload))
+
+    def test_transparency_png_export_writes_verified_copy_and_sidecar_hash(self):
+        from comfyui_support_tools.shared.transparency_sidecar import sha256_file
+
+        source_bytes = self.image.read_bytes()
+        paths = export_records(
+            (MediaExportRecord(self.item, MediaNotes()),),
+            ExportSettings(
+                caption_sidecar=False,
+                metadata_sidecar=False,
+                transparency_assist=True,
+                transparency_png_copy=True,
+            ),
+        )
+        copy = self.root / "画像 sample.transparency.png"
+        sidecar = self.root / "画像 sample.png.transparency.json"
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+        self.assertIn(str(copy), paths)
+        self.assertTrue(copy.is_file())
+        self.assertEqual(payload["output"]["sha256"], sha256_file(copy))
+        self.assertEqual(self.image.read_bytes(), source_bytes)
+
+    def test_visible_disclosure_requires_an_explicit_ai_classification_and_copy(self):
+        with self.assertRaisesRegex(ValueError, "classification"):
+            export_records(
+                (MediaExportRecord(self.item, MediaNotes()),),
+                ExportSettings(
+                    caption_sidecar=False,
+                    metadata_sidecar=False,
+                    transparency_assist=True,
+                    transparency_png_copy=True,
+                    transparency_visible_disclosure=True,
+                ),
+            )
+        with self.assertRaisesRegex(ValueError, "PNG別コピー"):
+            export_records(
+                (MediaExportRecord(self.item, MediaNotes()),),
+                ExportSettings(
+                    caption_sidecar=False,
+                    metadata_sidecar=False,
+                    transparency_assist=True,
+                    transparency_classification="generated",
+                    transparency_visible_disclosure=True,
+                ),
+            )
+
     def test_image_to_text_caption_has_priority_over_tag_join(self):
         notes = MediaNotes(
             content_tags=("tag",),

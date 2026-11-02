@@ -179,6 +179,7 @@ class SequenceEndToEndTests(unittest.TestCase):
                         "workflow": workflow,
                         "api_url": self.comfy_url,
                         "output_dir": str(generated_dir),
+                        "transparency": {"enabled": True},
                     }),
                     SequenceStep("tag", "tagger", {
                         "image": {"$ref": "context.generate.image"},
@@ -198,6 +199,10 @@ class SequenceEndToEndTests(unittest.TestCase):
             )
 
             result = json.loads(output.getvalue())
+            transparency_sidecar = Path(
+                result["steps"][1]["outputs"]["transparency_sidecar"]
+            )
+            transparency_payload = json.loads(transparency_sidecar.read_text(encoding="utf-8"))
 
         self.assertEqual(status, 0, result)
         self.assertEqual(result["state"], "done")
@@ -212,6 +217,10 @@ class SequenceEndToEndTests(unittest.TestCase):
         self.assertEqual(result["steps"][2]["inputs"]["image"], result["steps"][1]["outputs"]["image"])
         self.assertEqual(result["steps"][2]["outputs"]["tags"], ["blue sky", "sample character"])
         self.assertEqual(result["steps"][2]["outputs"]["caption_text"], "tagged generated image")
+        self.assertEqual(transparency_payload["generated_or_modified"], "generated")
+        self.assertEqual(transparency_payload["disclosure"]["prompt"], {"level": "none"})
+        self.assertEqual(transparency_payload["backend"], "comfyui")
+        self.assertNotIn("corrected image prompt", json.dumps(transparency_payload))
         self.assertTrue(_TaggerHandler.image_data.startswith(b"\x89PNG"))
         self.assertEqual(_OllamaHandler.payload["model"], "fixture-ollama")
         self.assertEqual(_TaggerHandler.payload["model"], "fixture-tagger")
@@ -247,6 +256,7 @@ class SequenceEndToEndTests(unittest.TestCase):
                         "height": 64,
                         "api_url": self.a1111_url,
                         "output_dir": str(generated_dir),
+                        "transparency": {"enabled": True},
                     }),
                     SequenceStep("tag", "tagger", {
                         "image": {"$ref": "context.generate.image"},
@@ -266,11 +276,16 @@ class SequenceEndToEndTests(unittest.TestCase):
             )
 
             result = json.loads(output.getvalue())
+            transparency_sidecar = Path(
+                result["steps"][1]["outputs"]["transparency_sidecar"]
+            )
+            transparency_payload = json.loads(transparency_sidecar.read_text(encoding="utf-8"))
 
         self.assertEqual(status, 0, result)
         self.assertEqual(result["state"], "done")
         self.assertEqual([step["state"] for step in result["steps"]], ["done", "done", "done"])
         self.assertEqual(result["steps"][1]["outputs"]["backend"], "a1111")
+        self.assertEqual(transparency_payload["backend"], "a1111")
         self.assertEqual(result["steps"][2]["inputs"]["image"], result["steps"][1]["outputs"]["image"])
         self.assertEqual(result["steps"][2]["outputs"]["tags"], ["blue sky", "sample character"])
         self.assertEqual(_A1111Handler.payload["prompt"], "corrected image prompt")

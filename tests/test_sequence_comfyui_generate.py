@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-from hashlib import sha256
-from pathlib import Path
 import ssl
 import tempfile
 import threading
 import unittest
+from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import HTTPSHandler
@@ -15,30 +15,51 @@ from urllib.request import HTTPSHandler
 from comfyui_support_tools.applications.sequence.data.processing.comfyui_generate_command import (
     ComfyUIGenerateCommand,
 )
-from comfyui_support_tools.applications.sequence.process.processing.sequence_runner import SequenceRunner
-from comfyui_support_tools.shared.contracts.sequence_contracts import SequenceDefinition, SequenceStep
+from comfyui_support_tools.applications.sequence.process.processing.sequence_runner import (
+    SequenceRunner,
+)
+from comfyui_support_tools.shared.contracts.sequence_contracts import (
+    SequenceDefinition,
+    SequenceStep,
+)
 from tools.security.check_python_ca import AFFECTED_CERTIFICATES
 
 
 class _ComfyHandler(BaseHTTPRequestHandler):
     prompt_payload: dict[str, Any] = {}
     image_bytes = b"test-png-data"
+    uploaded_image: bytes = b""
 
     def do_POST(self) -> None:
-        type(self).prompt_payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        if self.path == "/upload/image":
+            boundary = self.headers["Content-Type"].split("boundary=", 1)[1].encode("ascii")
+            image_part = next(
+                part for part in body.split(b"--" + boundary) if b'name="image"' in part
+            )
+            type(self).uploaded_image = image_part.split(b"\r\n\r\n", 1)[1].rsplit(b"\r\n", 1)[0]
+            self._json({"name": "uploaded-input.png", "subfolder": ""})
+            return
+        type(self).prompt_payload = json.loads(body)
         self._json({"prompt_id": "fixture-prompt"})
 
     def do_GET(self) -> None:
         parsed = urlsplit(self.path)
         if parsed.path == "/history/fixture-prompt":
-            self._json({
-                "fixture-prompt": {
-                    "status": {"status_str": "success"},
-                    "outputs": {"9": {"images": [
-                        {"filename": "generated.png", "subfolder": "", "type": "output"}
-                    ]}},
+            self._json(
+                {
+                    "fixture-prompt": {
+                        "status": {"status_str": "success"},
+                        "outputs": {
+                            "9": {
+                                "images": [
+                                    {"filename": "generated.png", "subfolder": "", "type": "output"}
+                                ]
+                            }
+                        },
+                    }
                 }
-            })
+            )
         elif parsed.path == "/view":
             self.assert_view_query(parse_qs(parsed.query))
             self.send_response(200)
@@ -80,13 +101,17 @@ class ComfyUIGenerateCommandTests(unittest.TestCase):
 
     def setUp(self) -> None:
         _ComfyHandler.prompt_payload = {}
+        _ComfyHandler.uploaded_image = b""
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.command = ComfyUIGenerateCommand(timeout=3, poll_interval=0.01)
         self.workflow = {
             "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "old positive"}},
-            "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "old negative"},
-                  "_meta": {"title": "Negative Prompt"}},
+            "7": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": "old negative"},
+                "_meta": {"title": "Negative Prompt"},
+            },
             "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "test"}},
         }
 
@@ -118,47 +143,98 @@ class ComfyUIGenerateCommandTests(unittest.TestCase):
             observed.append(Path(inputs["image"]).read_bytes())
             return {"received": True}
 
-        definition = SequenceDefinition("generate-then-inspect", (
-            SequenceStep("generate", "comfyui_generate", {
-                "api_url": self.url,
-                "workflow": self.workflow,
-                "prompt": "corrected prompt",
-                "negative_prompt": "unwanted",
-                "overrides": {"9": {"filename_prefix": "sequence"}},
-                "output_dir": str(Path(self.temp.name)),
-            }),
-            SequenceStep("inspect", "inspect", {
-                "image": {"$ref": "context.generate.image"},
-            }),
-        ))
-        result = SequenceRunner({
-            "comfyui_generate": self.command,
-            "inspect": next_step,
-        }).run(definition)
+        definition = SequenceDefinition(
+            "generate-then-inspect",
+            (
+                SequenceStep(
+                    "generate",
+                    "comfyui_generate",
+                    {
+                        "api_url": self.url,
+                        "workflow": self.workflow,
+                        "prompt": "corrected prompt",
+                        "negative_prompt": "unwanted",
+                        "overrides": {"9": {"filename_prefix": "sequence"}},
+                        "output_dir": str(Path(self.temp.name)),
+                    },
+                ),
+                SequenceStep(
+                    "inspect",
+                    "inspect",
+                    {
+                        "image": {"$ref": "context.generate.image"},
+                    },
+                ),
+            ),
+        )
+        result = SequenceRunner(
+            {
+                "comfyui_generate": self.command,
+                "inspect": next_step,
+            }
+        ).run(definition)
 
         self.assertEqual(result.state, "done", result.steps)
         self.assertEqual(observed, [_ComfyHandler.image_bytes])
-        self.assertEqual(_ComfyHandler.prompt_payload["prompt"]["6"]["inputs"]["text"], "corrected prompt")
+        self.assertEqual(
+            _ComfyHandler.prompt_payload["prompt"]["6"]["inputs"]["text"], "corrected prompt"
+        )
         self.assertEqual(_ComfyHandler.prompt_payload["prompt"]["7"]["inputs"]["text"], "unwanted")
-        self.assertEqual(_ComfyHandler.prompt_payload["prompt"]["9"]["inputs"]["filename_prefix"], "sequence")
+        self.assertEqual(
+            _ComfyHandler.prompt_payload["prompt"]["9"]["inputs"]["filename_prefix"], "sequence"
+        )
         self.assertEqual(self.workflow["6"]["inputs"]["text"], "old positive")
         self.assertEqual(result.context["generate"]["prompt_id"], "fixture-prompt")
 
+    # {
+    #   責務: [test_input_image_upload_is_bound_to_load_image_node: verify safe workflow image conditioning]
+    #   処理: [upload image bytes and confirm the returned ComfyUI input name is assigned before submission]
+    #   引数: [self: test case]
+    #   戻り値: []
+    # }
+    def test_input_image_upload_is_bound_to_load_image_node(self) -> None:
+        workflow = {
+            "1": {"class_type": "CLIPTextEncode", "inputs": {"text": ""}},
+            "2": {"class_type": "LoadImage", "inputs": {"image": "old.png"}},
+            "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "test"}},
+        }
+        self.command(
+            {
+                "api_url": self.url,
+                "workflow": workflow,
+                "prompt": "expression retouch",
+                "image_uploads": {"2": ("retouch-source.png", b"source-image")},
+                "output_dir": str(Path(self.temp.name)),
+            },
+            {},
+        )
+        self.assertEqual(_ComfyHandler.uploaded_image, b"source-image")
+        self.assertEqual(
+            _ComfyHandler.prompt_payload["prompt"]["2"]["inputs"]["image"],
+            "uploaded-input.png",
+        )
+
     def test_rejects_non_loopback_url_and_invalid_workflow(self) -> None:
         with self.assertRaisesRegex(ValueError, "localhost/loopback"):
-            self.command({
-                "api_url": "https://example.com",
-                "workflow": self.workflow,
-                "prompt": "test",
-                "output_dir": str(Path(self.temp.name)),
-            }, {})
+            self.command(
+                {
+                    "api_url": "https://example.com",
+                    "workflow": self.workflow,
+                    "prompt": "test",
+                    "output_dir": str(Path(self.temp.name)),
+                },
+                {},
+            )
         with self.assertRaisesRegex(ValueError, "API-format nodes"):
-            self.command({
-                "api_url": self.url,
-                "workflow": {"nodes": []},
-                "prompt": "test",
-                "output_dir": str(Path(self.temp.name)),
-            }, {})
+            self.command(
+                {
+                    "api_url": self.url,
+                    "workflow": {"nodes": []},
+                    "prompt": "test",
+                    "output_dir": str(Path(self.temp.name)),
+                },
+                {},
+            )
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import ipaddress
 import json
+import re
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
@@ -103,6 +104,7 @@ class ComfyUIGenerateCommand:
         api_url = self._validate_api_url(inputs.get("api_url", "http://127.0.0.1:8188"))
         timeout = inputs.get("timeout", self._timeout)
         self._validate_timeout(timeout)
+        self._upload_images(api_url, workflow, inputs.get("image_uploads", {}), timeout)
         output_dir = self._output_directory(inputs.get("output_dir"))
 
         prompt_id = self._submit(api_url, workflow, timeout)
@@ -139,6 +141,92 @@ class ComfyUIGenerateCommand:
         if transparency["transparency_enabled"]:
             result.update(transparency)
         return result
+
+    # {
+    #   責務: [_upload_images: upload local source images and bind them to workflow loader nodes]
+    #   処理: [1: validate loader node and bounded image bytes, 2: POST multipart to ComfyUI, 3: assign returned input names]
+    #   引数: [self: command, base_url: validated local endpoint, workflow: API graph, image_uploads: node-to-filename-and-bytes mapping, timeout: request limit]
+    #   戻り値: []
+    # }
+    def _upload_images(
+        self,
+        base_url: str,
+        workflow: dict[str, Any],
+        image_uploads: Any,
+        timeout: float,
+    ) -> None:
+        if not isinstance(image_uploads, Mapping):
+            raise ValueError("image_uploads must map loader node IDs to filename and image bytes")
+        for node_id, upload in image_uploads.items():
+            if (
+                not isinstance(node_id, str)
+                or node_id not in workflow
+                or workflow[node_id]["class_type"] not in {"LoadImage", "LoadImageMask"}
+                or "image" not in workflow[node_id]["inputs"]
+            ):
+                raise ValueError(f"image upload node {node_id!r} must be a ComfyUI image loader")
+            if (
+                not isinstance(upload, tuple)
+                or len(upload) != 2
+                or not isinstance(upload[0], str)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}\.(?:png|jpe?g|webp)", upload[0], re.I)
+                or not isinstance(upload[1], bytes)
+                or not 1 <= len(upload[1]) <= MAX_IMAGE_BYTES
+            ):
+                raise ValueError(
+                    "image upload must be a safe filename and 1..100 MiB of image bytes"
+                )
+            uploaded = self._upload_image(base_url, upload[0], upload[1], timeout)
+            workflow[node_id]["inputs"]["image"] = uploaded
+
+    # {
+    #   責務: [_upload_image: send one image to the local ComfyUI input directory]
+    #   処理: [1: construct bounded multipart request, 2: parse server image name, 3: reject unsafe returned paths]
+    #   引数: [self: command, base_url: validated local endpoint, filename: safe image filename, content: image bytes, timeout: request limit]
+    #   戻り値: [str: ComfyUI input filename]
+    # }
+    def _upload_image(self, base_url: str, filename: str, content: bytes, timeout: float) -> str:
+        boundary = f"CodexImage{uuid.uuid4().hex}"
+        header = (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{filename}"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+        ).encode("ascii")
+        type_field = (
+            f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="type"\r\n\r\ninput'
+        ).encode("ascii")
+        body = b"".join((header, content, type_field, f"\r\n--{boundary}--\r\n".encode("ascii")))
+        request = Request(
+            f"{base_url}/upload/image",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+        )
+        try:
+            with self._opener.open(request, timeout=min(timeout, 60)) as response:
+                raw = response.read(MAX_JSON_BYTES + 1)
+        except (HTTPError, URLError, TimeoutError, OSError) as error:
+            raise RuntimeError(f"ComfyUI image upload failed: {error}") from error
+        if len(raw) > MAX_JSON_BYTES:
+            raise RuntimeError("ComfyUI image upload response exceeds 4 MiB")
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError("ComfyUI image upload response is invalid JSON") from error
+        if not isinstance(payload, Mapping):
+            raise RuntimeError("ComfyUI image upload returned an invalid response")
+        name = payload.get("name")
+        subfolder = payload.get("subfolder", "")
+        if (
+            not isinstance(name, str)
+            or Path(name).name != name
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,160}", name)
+            or not isinstance(subfolder, str)
+            or (subfolder and any(part in {"", ".", ".."} for part in Path(subfolder).parts))
+            or Path(subfolder).is_absolute()
+            or "\\" in subfolder
+        ):
+            raise RuntimeError("ComfyUI returned an unsafe uploaded image path")
+        return f"{subfolder}/{name}" if subfolder else name
 
     # {
     #   責務: [_required_text: ComfyUI workflow command operation]

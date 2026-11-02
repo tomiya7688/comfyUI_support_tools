@@ -113,6 +113,74 @@ class PixelArtCreatorTests(unittest.TestCase):
             PixelArtApplication().text_to_pixel(request)
 
     # {
+    # 責務: [test_image_modes_are_functional_and_palette_mode_requires_palette: verify mode semantics]
+    # 処理: [compare visible sprite bounds, target grid, and constrained palette behavior]
+    # 引数: [None: unittest scenario]
+    # 戻り値: [None: assertions pass or raise]
+    # }
+    def test_image_modes_are_functional_and_palette_mode_requires_palette(self):
+        source = Image.new("RGBA", (32, 16), (0, 0, 0, 0))
+        for x in range(12, 20):
+            for y in range(3, 13):
+                source.putpixel((x, y), (230, 40, 20, 255))
+        app = PixelArtApplication()
+        settings = PixelArtSettings(size=8, palette_mode="count", color_count=4)
+        faithful = app.image_to_pixel(source, settings, "faithful")
+        sprite = app.image_to_pixel(source, settings, "sprite")
+        self.assertTrue(set(from_grid(faithful.grid).getchannel("A").getdata()) <= {0, 255})
+        faithful_alpha = from_grid(faithful.grid).getchannel("A")
+        sprite_alpha = from_grid(sprite.grid).getchannel("A")
+        self.assertGreater(
+            sum(value >= 128 for value in sprite_alpha.getdata()),
+            sum(value >= 128 for value in faithful_alpha.getdata()),
+        )
+        with self.assertRaises(ValueError):
+            app.image_to_pixel(source, settings, "palette_constrained")
+        palette_settings = PixelArtSettings(
+            size=8,
+            palette_mode="custom",
+            palette=((0, 0, 0, 255), (230, 40, 20, 255)),
+        )
+        constrained = app.image_to_pixel(source, palette_settings, "palette_constrained")
+        opaque_colors = {color[:3] for color in constrained.grid.pixels if color[3] >= 128}
+        self.assertLessEqual(len(opaque_colors), 2)
+        candidates = app.image_to_pixel_candidates(source, settings)
+        self.assertEqual(
+            tuple(name for name, _result in candidates),
+            ("faithful", "simplified", "silhouette_first", "palette_first"),
+        )
+        self.assertEqual(candidates[0][1].metadata["changed_pixels"], 0)
+        self.assertGreater(candidates[2][1].metadata["changed_pixels"], 0)
+
+    # {
+    # 責務: [test_batch_image_conversion_preserves_relative_paths_and_refuses_overwrite: cover batch output]
+    # 処理: [convert supported images, inspect manifest, and verify collision protection]
+    # 引数: [None: unittest scenario]
+    # 戻り値: [None: assertions pass or raise]
+    # }
+    def test_batch_image_conversion_preserves_relative_paths_and_refuses_overwrite(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "input"
+            nested = source / "frames"
+            nested.mkdir(parents=True)
+            Image.new("RGBA", (4, 4), (30, 80, 120, 255)).save(nested / "hero.png")
+            output = root / "output"
+            app = PixelArtApplication()
+            manifest = app.batch_image_to_pixel(
+                source, output, PixelArtSettings(size=8), recursive=True
+            )
+            records = json.loads(manifest.read_text(encoding="utf-8"))["records"]
+            self.assertEqual(records[0]["source"], "frames/hero.png")
+            self.assertTrue((output / "8x8" / "frames" / "hero.png").is_file())
+            with self.assertRaises(FileExistsError):
+                app.batch_image_to_pixel(source, output, PixelArtSettings(size=8), recursive=True)
+            with self.assertRaises(ValueError):
+                app.batch_image_to_pixel(
+                    source, source / "generated", PixelArtSettings(size=8), recursive=True
+                )
+
+    # {
     # 責務: [test_pixel_edits_are_reversible_and_project_history_survives_reload: edit and save history]
     # 処理: [pencil, fill, undo/redo, snapshot save, and project load]
     # 引数: [None: unittest scenario]

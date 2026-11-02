@@ -6,9 +6,10 @@ import json
 import os
 import shutil
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from .contracts import (
     PixelArtRequest,
@@ -90,7 +91,115 @@ class PixelArtApplication:
     ) -> PixelArtResult:
         if mode not in {"faithful", "simplified", "sprite", "icon", "palette_constrained"}:
             raise ValueError("unsupported image-to-pixel mode")
-        return _make_result(image, settings, {"workflow": "image", "mode": mode})
+        validate_settings(settings)
+        source = image.convert("RGBA")
+        active_settings = settings
+        if mode == "simplified":
+            rgb = source.convert("RGB").filter(ImageFilter.MedianFilter(3))
+            source = Image.merge("RGBA", (*rgb.split(), source.getchannel("A")))
+        elif mode == "sprite":
+            source = _crop_visible_subject(source)
+            active_settings = replace(settings, crop_policy="transparent_pad")
+        elif mode == "icon":
+            active_settings = replace(settings, crop_policy="center_crop")
+        elif mode == "palette_constrained" and settings.palette_mode != "custom":
+            raise ValueError("palette_constrained mode requires a loaded custom palette")
+        return _make_result(
+            source,
+            active_settings,
+            {"workflow": "image", "mode": mode, "source_size": image.size},
+        )
+
+    # {
+    # 責務: [image_to_pixel_candidates: create comparable structure/palette conversion variants]
+    # 処理: [run faithful, simplified, silhouette-first, and palette-first deterministic modes]
+    # 引数: [image: source artwork, settings: shared pixel-grid constraints]
+    # 戻り値: [tuple[(mode, result), ...]: named candidates for human comparison]
+    # }
+    def image_to_pixel_candidates(self, image, settings):
+        silhouette_settings = replace(settings, palette_mode="monochrome", dithering="none")
+        palette_settings = replace(
+            settings,
+            palette_mode="custom" if settings.palette_mode == "custom" else "count",
+            color_count=min(settings.color_count, 8),
+            dithering="none",
+        )
+        silhouette = self.image_to_pixel(image, silhouette_settings, "faithful")
+        silhouette.metadata["mode"] = "silhouette_first"
+        palette = self.image_to_pixel(image, palette_settings, "faithful")
+        palette.metadata["mode"] = "palette_first"
+        faithful = self.image_to_pixel(image, settings, "faithful")
+        candidates = (
+            ("faithful", faithful),
+            ("simplified", self.image_to_pixel(image, settings, "simplified")),
+            ("silhouette_first", silhouette),
+            ("palette_first", palette),
+        )
+        for mode, result in candidates:
+            result.metadata.update(_diff_metadata(faithful.grid, result.grid))
+            result.metadata["candidate_mode"] = mode
+        return candidates
+
+    # {
+    # 責務: [batch_image_to_pixel: convert an input folder with reproducible per-file outputs]
+    # 処理: [optionally recurse, preserve relative paths, refuse overwrite, and write a manifest]
+    # 引数: [source_dir: image folder, output_dir: target root, settings: conversion settings, recursive: recurse flag]
+    # 戻り値: [Path: JSON manifest with output records and pixel metrics]
+    # }
+    def batch_image_to_pixel(
+        self, source_dir, output_dir, settings, recursive=False, mode="faithful"
+    ):
+        source_root = Path(source_dir).resolve(strict=True)
+        output_root = Path(output_dir).resolve()
+        if (
+            not source_root.is_dir()
+            or output_root == source_root
+            or source_root in output_root.parents
+        ):
+            raise ValueError("batch output must be outside the source folder")
+        if mode not in {"faithful", "simplified", "sprite", "icon", "palette_constrained"}:
+            raise ValueError("unsupported image-to-pixel mode")
+        validate_settings(settings)
+        patterns = source_root.rglob("*") if recursive else source_root.glob("*")
+        paths = tuple(
+            sorted(
+                path
+                for path in patterns
+                if path.is_file()
+                and path.suffix.casefold() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+            )
+        )
+        if not paths:
+            raise ValueError("batch input contains no supported images")
+        records = []
+        width, height = settings.custom_size or (settings.size, settings.size)
+        for path in paths:
+            relative = path.relative_to(source_root)
+            with Image.open(path) as image:
+                result = self.image_to_pixel(image.copy(), settings, mode)
+            exported = self.export(
+                result, output_root / f"{width}x{height}" / relative.parent, path.stem
+            )
+            records.append(
+                {
+                    "source": relative.as_posix(),
+                    "outputs": [item.relative_to(output_root).as_posix() for item in exported],
+                    "color_count": dict(result.metric.counts)["color_count"],
+                    "score_proxy": result.metric.score,
+                }
+            )
+        manifest = output_root / "batch-manifest.json"
+        payload = (
+            json.dumps(
+                {"schema_version": 1, "mode": mode, "records": records},
+                ensure_ascii=False,
+                indent=2,
+                allow_nan=False,
+            )
+            + "\n"
+        )
+        _write_reserved((manifest,), (payload.encode("utf-8"),))
+        return manifest
 
     # {
     # 責務: [retouch: apply pixel-precise edits and run common evaluation]
@@ -450,6 +559,29 @@ def _result_for_grid(
     grid: PixelGrid, metadata: dict[str, object], scale: int = 8
 ) -> PixelArtResult:
     return PixelArtResult(grid, evaluate_grid(grid), nearest_preview(grid, scale), metadata)
+
+
+# {
+# 責務: [_crop_visible_subject: trim transparent margins around a sprite subject]
+# 処理: [crop alpha bounds with a small proportional margin and retain RGBA content]
+# 引数: [image: source RGBA artwork]
+# 戻り値: [Image: bounded visible subject or unchanged fully opaque image]
+# }
+def _crop_visible_subject(image):
+    alpha = image.getchannel("A")
+    bounds = alpha.getbbox()
+    if bounds is None or bounds == (0, 0, image.width, image.height):
+        return image
+    left, top, right, bottom = bounds
+    margin = max(1, round(max(right - left, bottom - top) * 0.05))
+    return image.crop(
+        (
+            max(0, left - margin),
+            max(0, top - margin),
+            min(image.width, right + margin),
+            min(image.height, bottom + margin),
+        )
+    )
 
 
 # {

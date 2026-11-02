@@ -23,10 +23,11 @@ The Windows build batch and GitHub Actions set the same certifi bundle in `SSL_C
 
 | Environment | Python | pip | certifi | Result |
 | --- | --- | --- | --- | --- |
-| Managed base runtime | 3.12.14 | 26.2.1 | 2026.10.23 | Failed. The pip bundle contained emSign ECC Root CA - G3, and the default OS trust store contained emSign ECC Root CA - G3 and AAA Certificate Services. |
-| Repository `.venv` | 3.12.14 | 26.2.2 | 2026.10.23 | Passed. The pip bundle, certifi bundle, and default SSL store selected through `SSL_CERT_FILE` contained none of the affected fingerprints. |
+| Managed base runtime | 3.12.14 | 26.2.1 | 2026.10.23 | Failed. The pip bundle still contains emSign ECC Root CA - G3. With `SSL_CERT_FILE` unset, the default SSL store has zero CA certificates. This runtime is managed outside the repository and cannot be upgraded here. |
+| Repository `.venv` | 3.12.14 | 26.2.2 | 2026.10.23 | Passed. The pip bundle, certifi bundle, and default SSL store selected through `SSL_CERT_FILE` contained none of the affected fingerprints. Unsetting `SSL_CERT_FILE` leaves zero default CA certificates and correctly fails the check. |
+| `/workspace/comfy-tools-venv` | 3.12.14 | 26.2.2 | 2026.10.23 | Passed after upgrading from pip 25.0.1 using the official SHA-256-pinned wheel. Its pip/certifi bundles and selected SSL store contain none of the affected fingerprints. |
 
-No virtual environments were found under `/workspace` before setup, and no distribution `build/` or `dist/` artifacts were present. The updated `.venv` installs certifi locally so it does not inherit affected roots from the default OS store. Local bundle inspection confirmed the affected emSign/AAA root and intermediate fingerprints are absent. This verifies that these trust stores reject chains terminating in those certificates; it is not a live TLS connection to an external host.
+The audit found two virtual environments under `/workspace` and no distribution `build/` or `dist/` artifacts. Both venvs' pip installations were updated with the official Python.org pip 26.2.2 wheel pinned by SHA-256 and rechecked. The venv checks select each environment's certifi bundle with `SSL_CERT_FILE`. Local bundle inspection confirmed the affected emSign/AAA root and intermediate fingerprints are absent. This verifies the selected stores reject those certificates; it is not a live TLS connection to an external host. The managed base runtime lives under `/opt`, outside the writable workspace, so its pip 26.2.1 could not be updated from this task.
 
 The repository does not use uv or sigstore. uv 0.12.23 was present in the cloud runtime but is unused. The Python sigstore package was not installed. GitHub Artifact Attestations use GitHub's official Actions and `gh attestation`, without a Python sigstore dependency.
 

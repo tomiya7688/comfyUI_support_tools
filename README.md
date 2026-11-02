@@ -191,3 +191,15 @@ standalone `python -m comfyui_support_tools.applications.pixel_art` の既定起
 `comfyui_support_tools.shared.pixel_art` provides common Text/Image/Retouch grids, palettes, 8–256 size presets, transparent RGBA export, nearest-neighbor previews, deterministic metrics/evaluation, sprite-sheet cell utilities, and undo/redo project history. `PixelArtWindow` exposes all three entries in one UI; Image conversion and Retouch share the same pipeline. Text generation uses an injected replaceable `PixelTextBackend`. Native readability and outline measures are heuristic proxies; semantic quality still needs human review.
 
 The standalone `python -m comfyui_support_tools.applications.pixel_art` launch does not configure a Text backend by default, so text generation requires an injected compatible backend. Adapters that call the independent #372/#373/#374 generators are not wired automatically. Palette-aware diffusion, an AI semantic judge, and tile/sprite editing UI are not bundled.
+
+### Music-to-MMD Dance基盤
+
+`comfyui_support_tools.shared.music_to_mmd` はWAVと任意FFmpeg decoderによる音声読込、RMS/onset/BPM推定、energy基準の粗い楽曲section、beat-aligned choreography plan、差し替え可能なsection-generation backend、MMD標準bone profileへのretarget、floor/contact補正、VMD export、section単位rerollと評価レポートを提供します。既定の `procedural_baseline` はofflineで再現できるbeat/style連動のprocedural motionを作ります。
+
+既定backendは学習済みfull-body dance modelではなく、作品としての振付品質・実歌詞/chorus意味理解を保証しません。sectionラベルはenergy heuristicです。PMX geometry、IK、skirt/hair physics previewは含まず、floor/contact指標もbone名とcontact labelに基づくproxyです。AtomicDance/ChoreDiffusion等はbackend adapterとして追加できますが、同梱・接続されていません。
+
+### Music-to-MMD Dance foundation
+
+`comfyui_support_tools.shared.music_to_mmd` provides audio loading through WAV and an optional FFmpeg decoder, RMS/onset/BPM estimates, coarse energy-based song sections, a beat-aligned choreography plan, replaceable section-generation backends, retargeting through an MMD bone profile, floor/contact correction, VMD export, per-section reroll, and evaluation reports. The default `procedural_baseline` creates deterministic offline motion modulated by beat and style.
+
+The default backend is not a trained full-body dance model and does not guarantee choreography quality or understand lyrics/chorus semantics. Section labels are energy heuristics. PMX geometry, IK, and skirt/hair physics previews are not included; floor/contact metrics are proxies based on bone names and contact labels. AtomicDance/ChoreDiffusion and similar systems can be added through backend adapters but are not bundled or connected.

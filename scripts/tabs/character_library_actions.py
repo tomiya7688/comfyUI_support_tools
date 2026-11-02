@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import tkinter as tk
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
-import tkinter as tk
 from uuid import uuid4
 
 from comfyui_support_tools.applications.character_registry.data.processing.character_store import (
@@ -18,12 +18,12 @@ from comfyui_support_tools.applications.character_registry.data.processing.image
     ImageStorageMode,
     register_character_image,
 )
+from comfyui_support_tools.applications.character_registry.process.processing.dataset_readiness import (
+    assess_dataset_readiness,
+)
 from comfyui_support_tools.applications.character_registry.process.processing.prompt_resolver import (
     resolve_character_prompt,
     validate_character_profile,
-)
-from comfyui_support_tools.applications.character_registry.process.processing.dataset_readiness import (
-    assess_dataset_readiness,
 )
 from comfyui_support_tools.shared.contracts.character_registry import (
     CharacterProfile,

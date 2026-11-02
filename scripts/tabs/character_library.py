@@ -14,6 +14,7 @@ from comfyui_support_tools.shared.contracts.character_registry import (
     CharacterTrait,
 )
 from scripts.tabs.character_library_actions import CharacterLibraryActions
+
 from ..context import USER_INPUT_DIR
 
 

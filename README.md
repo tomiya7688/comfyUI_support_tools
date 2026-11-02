@@ -64,6 +64,10 @@ Tensor検出器は `ModelFamilyDetectorRegistry` へ登録でき、結果にdete
 
 このbackendはAPI接続型で、認証情報と実Pixiv応答がない環境では実アカウントへの通信を実行しません。GUIのquery builder/preview controls、CLI command、非original派生画像の取得、動画(MP4)変換は未実装です。権利許可は常に`unknown`として保存され、duplicateはgroup化のみで自動削除しません。詳細は[Pixiv Dataset Downloader](doc/dataset/pixiv_dataset.md)を参照してください。
 
+### LoRA Composition Lab
+
+`comfyui_support_tools.shared.lora_composition` は互換性preflight、LoRA update norm/cosine/subspace/sign conflict分析、weighted/top-K/Zip-style training-free merge、rank圧縮、global/per-layer scale grid探索、seed固定の評価bridge、user scale preference prior、provenance付きsafetensorsとruntime recipe出力を提供します。任意依存は `pip install -r requirements-lora-composition.txt` で導入します。分析するdense updateは1 layerあたり8,388,608要素に制限します。Zip-style/top-Kは研究論文実装そのものではなく、比較可能なtraining-free baselineです。GUIと画像生成/evaluation adapterの統合は未実装です。詳細は[LoRA Composition Lab](doc/lora_composition.md)を参照してください。
+
 ### Image Dataset Classifier / Sorter
 
 `comfyui_support_tools.shared.dataset_classifier.DatasetClassifierApplication` は再帰inventory、axis classifier registry、複数evidenceの重み付きfusion、metadata優先、alternate label/disagreement/uncertain分類、manual review保存、AND/OR/NOT query、style embedding clustering adapter、dry-run/copy/move/manifest-only、collision回避、caption/metadata sidecar検証付き転送を提供します。JSON sidecarのlabelは既定priorityで他model evidenceより優先し、queryは必要なaxisだけを分類できます。結果manifestにはsource/output、labels、confidence、evidence provenance、manual overrideを記録し、#356向けhandoff payloadも作れます。
@@ -147,6 +151,10 @@ Tensor detectors register through `ModelFamilyDetectorRegistry`, and classificat
 `comfyui_support_tools.shared.pixiv_dataset` provides a PixivPy3 adapter, refresh-token authentication and health checks, tag/creator/bookmark/ranking/ID queries, filtering, throttling and bounded retries, JobRuntime integration, resumable checkpoints, ordered illustration/manga pages and ugoira archives, optional GIF/WebP previews, work/provenance JSON, exact/perceptual duplicate grouping, and a #356 handoff. `PixivRateLimitProfile` configures requests/minute, API/download concurrency caps, interval, retries/backoff, 429 cooldown, and automatic pause at application/query/job scope; the effective policy and bounded retry/429 history are recorded in the checkpoint. Install PixivPy3 separately with `pip install -r requirements-pixiv.txt`; supply the refresh token at runtime through the caller's secure secret store. Presets and dataset files never store it.
 
 This backend requires live Pixiv credentials and API responses for account-level validation, which are not available in the offline test suite. The query-builder GUI, CLI command, non-original rendition selection, and MP4 conversion are not implemented. Rights remain `unknown`; duplicate handling groups records and never deletes files. See [Pixiv Dataset Downloader](doc/dataset/pixiv_dataset.md).
+
+### LoRA Composition Lab
+
+`comfyui_support_tools.shared.lora_composition` provides compatibility preflight; LoRA update norm, cosine, subspace, and sign-conflict analysis; weighted, top-K, and Zip-style training-free merging; rank compression; global/per-layer scale-grid search; a fixed-seed evaluator bridge; user scale-preference priors; and safetensors plus runtime-recipe export with provenance. Install optional dependencies with `pip install -r requirements-lora-composition.txt`. Dense analysis is limited to 8,388,608 elements per layer. The Zip-style and top-K methods are comparable training-free baselines, not reproductions of the research papers. GUI and image-generation/evaluator adapter integration remain unimplemented. See [LoRA Composition Lab](doc/lora_composition.en.md).
 
 ### Image Dataset Classifier / Sorter
 

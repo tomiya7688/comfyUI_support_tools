@@ -45,6 +45,7 @@ class CompletionGateTests(unittest.TestCase):
                 "nuno/_touka/touka_batch.py",
                 "nuno/_touka/train_fashionpedia_segmentation.py",
                 "nuno/_touka/translucent_surface_augmenter.py",
+                "nuno/_touka/test_image_enhancer.py",
                 "scripts/__init__.py",
                 "scripts/app.py",
                 "scripts/context.py",

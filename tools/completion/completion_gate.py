@@ -146,6 +146,8 @@ def comment_coverage_check() -> CheckResult:
             "--path",
             "nuno/_touka/translucent_surface_augmenter.py",
             "--path",
+            "nuno/_touka/test_image_enhancer.py",
+            "--path",
             "scripts/__init__.py",
             "--path",
             "scripts/app.py",

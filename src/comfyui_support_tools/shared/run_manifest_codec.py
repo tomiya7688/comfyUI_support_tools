@@ -10,10 +10,10 @@ from enum import Enum
 from pathlib import Path
 
 from comfyui_support_tools.shared.contracts.run_manifest import (
+    RUN_MANIFEST_SCHEMA_VERSION,
     ArtifactReference,
     ComponentVersion,
     PrivacyMode,
-    RUN_MANIFEST_SCHEMA_VERSION,
     ReproducibilityLevel,
     RunDecision,
     RunLineage,

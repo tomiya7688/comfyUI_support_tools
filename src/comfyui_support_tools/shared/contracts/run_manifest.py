@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from enum import Enum
 
+RUN_MANIFEST_SCHEMA_VERSION = 2
+
 
 # {
 #   責務: [RunStatus: run manifestのlifecycle状態を定義する]
@@ -106,7 +108,7 @@ class RunManifest:
     reproducibility: ReproducibilityLevel
     input_refs: tuple[ArtifactReference, ...]
     resolved_settings: tuple[tuple[str, object], ...]
-    random_seeds: tuple[tuple[str, int], ...]
+    random_seeds: tuple[tuple[str, object], ...]
     random_selections: tuple[tuple[str, object], ...]
     component_versions: tuple[ComponentVersion, ...]
     environment: tuple[tuple[str, object], ...]
@@ -121,7 +123,8 @@ class RunManifest:
     lineage: RunLineage
     provenance: tuple[tuple[str, object], ...]
     privacy_modes: tuple[tuple[str, PrivacyMode], ...]
-    schema_version: int = 1
+    job_id: str = ""
+    schema_version: int = RUN_MANIFEST_SCHEMA_VERSION
 
 
 # {
@@ -146,7 +149,7 @@ class RunReplayRequest:
     application_id: str
     input_refs: tuple[ArtifactReference, ...]
     resolved_settings: tuple[tuple[str, object], ...]
-    random_seeds: tuple[tuple[str, int], ...]
+    random_seeds: tuple[tuple[str, object], ...]
     reproducibility: ReproducibilityLevel
     source_run_id: str
 

@@ -1,11 +1,15 @@
 """Run manifest provenance, privacy, migration, replay, and adapter tests."""
 
 import argparse
+import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from comfyui_support_tools.shared.contracts.job_contracts import JobSnapshot
 from comfyui_support_tools.shared.contracts.run_manifest import (
     ArtifactReference,
     ComponentVersion,
@@ -24,6 +28,7 @@ from comfyui_support_tools.shared.run_manifest import (
     compare_run_manifests,
     create_run_manifest,
     create_run_manifest_event,
+    create_run_manifest_for_job,
     finish_run_manifest,
     generate_random_seed,
     manifest_replay_request,
@@ -38,6 +43,30 @@ from comfyui_support_tools.shared.run_manifest import (
 #   フィールド: [temporary manifest directory、deterministic run helper]
 # }
 class RunManifestTests(unittest.TestCase):
+    # {
+    #   責務: [test_job_snapshot_adapter_records_stable_job_identity: Job Queue snapshotからmanifest identityを引き継ぐ]
+    #   処理: [1: queued JobSnapshotを作る 2: adapterでmanifestを生成する 3: job/run ID結合を確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_job_snapshot_adapter_records_stable_job_identity(self):
+        job = JobSnapshot(
+            "job-123",
+            "image.generate",
+            "Generate",
+            "queued",
+            None,
+            100.0,
+            None,
+            None,
+            operation_id="operation-456",
+        )
+        manifest = create_run_manifest_for_job(
+            job, "image.generate", "1.2.0", "settings-v3", run_id="run-123"
+        )
+        self.assertEqual(manifest.job_id, job.id)
+        self.assertEqual(manifest.run_id, "run-123")
+
     # {
     #   責務: [_manifest: sample running manifestを同じ引数で構築する]
     #   処理: [1: sample refs/settings/versions/lineageを渡す 2: optional privacy/run IDを適用する]
@@ -63,6 +92,7 @@ class RunManifestTests(unittest.TestCase):
             user_overrides={"steps": 20},
             lineage=RunLineage(parent_run_id="run-parent", retry_of_run_id="run-older"),
             run_id=run_id,
+            job_id="job-source-123",
             started_at=100.0,
         )
 
@@ -93,11 +123,24 @@ class RunManifestTests(unittest.TestCase):
             reference = store.save(completed)
             self.assertEqual(Path(reference).name, "run-test.json")
             self.assertEqual(store.load("run-test"), completed)
+            self.assertEqual(store.load("run-test").job_id, "job-source-123")
             path = Path(reference)
             envelope = json.loads(path.read_text(encoding="utf-8"))
             envelope["manifest"]["application_version"] = "tampered"
             path.write_text(json.dumps(envelope), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "digest"):
+                store.load("run-test")
+            envelope["manifest"]["status"] = "unknown-status"
+            payload = json.dumps(
+                envelope["manifest"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+            envelope["manifest_sha256"] = hashlib.sha256(payload).hexdigest()
+            path.write_text(json.dumps(envelope), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "payload"):
                 store.load("run-test")
 
     # {
@@ -118,6 +161,7 @@ class RunManifestTests(unittest.TestCase):
                 "artifact_uri": PrivacyMode.NONE,
                 "artifact_hash": PrivacyMode.NONE,
                 "artifact_id": PrivacyMode.HASH,
+                "random_seeds.primary": PrivacyMode.HASH,
             }
         )
         settings = dict(manifest.resolved_settings)
@@ -125,6 +169,7 @@ class RunManifestTests(unittest.TestCase):
         self.assertEqual(settings["workflow"].keys(), {"sha256"})
         self.assertEqual(dict(manifest.environment)["device"], "cuda:0")
         self.assertEqual(manifest.user_overrides, ())
+        self.assertIn("sha256", dict(manifest.random_seeds)["primary"])
         self.assertEqual(manifest.input_refs[0].uri, "")
         self.assertEqual(manifest.input_refs[0].sha256, "")
         self.assertTrue(manifest.input_refs[0].artifact_id.startswith("sha256:"))
@@ -177,6 +222,45 @@ class RunManifestTests(unittest.TestCase):
             self.assertEqual(selection["actual_timestamp"], 10.04)
             self.assertEqual(selection["pts"], 250)
             self.assertEqual(dict(manifest.random_seeds)["sampling"], seed)
+            for invalid_limit in (-1, True, 1.5):
+                with self.subTest(invalid_limit=invalid_limit), self.assertRaises(ValueError):
+                    capture_artifact_reference(image, hash_limit_bytes=invalid_limit)
+
+    # {
+    #   責務: [test_hash_capture_rejects_artifact_replaced_during_read: hash中のpath差し替えを検知する]
+    #   処理: [1: open後にpathを別inodeへ置換する 2: snapshot captureが不整合を拒否することを確認する]
+    #   引数: []
+    #   戻り値: []
+    # }
+    def test_hash_capture_rejects_artifact_replaced_during_read(self):
+        with tempfile.TemporaryDirectory() as temp:
+            image = Path(temp) / "image.png"
+            replacement = Path(temp) / "replacement.png"
+            image.write_bytes(b"original")
+            original_open = os.open
+            replaced = False
+
+            # {
+            #   責務: [open_then_replace: descriptorを開いた直後にartifact pathを入れ替える]
+            #   処理: [1: 元fileをopenする 2: pathをreplacement inodeへrenameする]
+            #   引数: [path: file path, flags: OS open flags]
+            #   戻り値: [descriptor: 元file descriptor]
+            # }
+            def open_then_replace(path, flags):
+                nonlocal replaced
+                descriptor = original_open(path, flags)
+                if Path(path) == image and not replaced:
+                    replacement.write_bytes(b"changed!")
+                    replacement.replace(image)
+                    replaced = True
+                return descriptor
+
+            with patch(
+                "comfyui_support_tools.shared.run_manifest.os.open",
+                side_effect=open_then_replace,
+            ):
+                with self.assertRaisesRegex(OSError, "artifact changed"):
+                    capture_artifact_reference(image, hash_content=True)
 
     # {
     #   責務: [test_jsonl_event_store_orders_progress_and_applies_privacy: event journal preserves order and privacy-filtered payload]
@@ -203,6 +287,8 @@ class RunManifestTests(unittest.TestCase):
             self.assertEqual(dict(events[1].payload), {"status": "ok"})
             with self.assertRaisesRegex(ValueError, "increase"):
                 store.append(earlier)
+            with self.assertRaisesRegex(ValueError, "invalid"):
+                create_run_manifest_event("run-log", True, "bad-sequence")
 
     # {
     #   責務: [test_schema_v0_migrates_and_compare_detects_relevant_differences: additive schema v0 loads and run compare reports settings/version delta]
@@ -227,13 +313,19 @@ class RunManifestTests(unittest.TestCase):
                 "provenance",
                 "privacy_modes",
                 "reproducibility",
+                "job_id",
             ):
                 payload.pop(field, None)
-            self.assertEqual(migrate_run_manifest_payload(payload)["schema_version"], 1)
+            self.assertEqual(migrate_run_manifest_payload(payload)["schema_version"], 2)
             path = Path(temp) / "run-v0.json"
             path.write_text(json.dumps(payload), encoding="utf-8")
             restored = JsonRunManifestStore(Path(temp)).load("run-v0")
             self.assertEqual(restored.reproducibility, ReproducibilityLevel.BEST_EFFORT)
+            self.assertEqual(restored.job_id, "")
+            version_one = run_manifest_to_dict(first)
+            version_one["schema_version"] = 1
+            version_one.pop("job_id")
+            self.assertEqual(migrate_run_manifest_payload(version_one)["schema_version"], 2)
             second = create_run_manifest(
                 "image.generate",
                 "1.3.0",

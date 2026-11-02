@@ -273,6 +273,22 @@ class JobRuntime(JobRuntimeControlMixin):
             self._persist_locked()
 
     # {
+    #   責務: [set_manifest_ref: 作成済みJobへRun Manifestのdurable referenceを結び付ける]
+    #   処理: [1: reference length/typeを確認する 2: Job recordを更新してpersistする]
+    #   引数: [job_id: 対象Job, manifest_ref: durable manifest location]
+    #   戻り値: []
+    # }
+    def set_manifest_ref(self, job_id: str, manifest_ref: str) -> None:
+        if not isinstance(manifest_ref, str) or not manifest_ref or len(manifest_ref) > 512:
+            raise ValueError("manifest_ref must contain 1..512 characters")
+        with self._condition:
+            record = self._records.get(job_id)
+            if record is None:
+                raise KeyError(job_id)
+            record.manifest_ref = manifest_ref
+            self._persist_locked()
+
+    # {
     #   責務: [finish: Jobをterminal stateへ遷移させる]
     #   処理: [1: terminal stateを検証する 2: slot/queueを解放して終端情報をpersistする]
     #   引数: [job_id: 対象Job, state: terminal state, message: 結果表示, error: error detail]

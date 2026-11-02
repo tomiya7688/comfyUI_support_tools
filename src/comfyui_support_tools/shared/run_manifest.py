@@ -4,16 +4,18 @@ import hashlib
 import json
 import os
 import secrets
+import stat
 import threading
 import time
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, replace
-from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
+from comfyui_support_tools.shared.contracts.job_contracts import JobSnapshot
 from comfyui_support_tools.shared.contracts.run_manifest import (
+    RUN_MANIFEST_SCHEMA_VERSION,
     ArtifactReference,
     ComponentVersion,
     ManifestDifference,
@@ -27,8 +29,31 @@ from comfyui_support_tools.shared.contracts.run_manifest import (
     RunStatus,
 )
 from comfyui_support_tools.shared.output_artifact import ConflictPolicy, atomic_write_bytes
+from comfyui_support_tools.shared.run_manifest_codec import (
+    MAX_RUN_MANIFEST_BYTES,
+    _artifact_stat_identity,
+    _canonical_json,
+    _json_safe,
+    _load_manifest_file,
+    _safe_run_id,
+    _validate_manifest,
+    _validate_manifest_event,
+    _validate_seed,
+    run_manifest_to_dict,
+)
+from comfyui_support_tools.shared.run_manifest_codec import (
+    migrate_run_manifest_payload as migrate_run_manifest_payload,
+)
+from comfyui_support_tools.shared.run_manifest_privacy import (
+    _secure_artifact,
+    _secure_decision,
+    _secure_locator,
+    _secure_mapping,
+    _secure_strings,
+)
 
-RUN_MANIFEST_SCHEMA_VERSION = 1
+MAX_RUN_EVENT_BYTES = 1024 * 1024
+MAX_RUN_EVENT_STREAM_BYTES = 64 * 1024 * 1024
 
 
 # {
@@ -81,12 +106,15 @@ class JsonRunManifestStore:
             "manifest": payload,
             "manifest_sha256": hashlib.sha256(_canonical_json(payload)).hexdigest(),
         }
+        encoded = _canonical_json(envelope) + b"\n"
+        if len(encoded) > MAX_RUN_MANIFEST_BYTES:
+            raise ValueError("run manifest exceeds maximum size")
         target = self.root / f"{_safe_run_id(manifest.run_id)}.json"
         with self._lock:
             self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
             atomic_write_bytes(
                 target,
-                _canonical_json(envelope) + b"\n",
+                encoded,
                 policy=ConflictPolicy.OVERWRITE,
                 validator=lambda staged: _load_manifest_file(staged),
             )
@@ -125,14 +153,16 @@ class JsonLineRunEventStore:
     #   戻り値: [path: JSONL event stream]
     # }
     def append(self, event: RunManifestEvent) -> Path:
-        if not event.run_id or type(event.sequence) is not int or event.sequence < 0:
-            raise ValueError("event run ID and nonnegative sequence are required")
-        if not event.event_type.strip():
-            raise ValueError("event type is required")
+        _validate_manifest_event(event)
         path = self.root / f"{_safe_run_id(event.run_id)}.jsonl"
         data = _canonical_json(asdict(event)) + b"\n"
+        if len(data) > MAX_RUN_EVENT_BYTES:
+            raise ValueError("run manifest event exceeds maximum size")
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         with self._lock:
+            current_size = path.stat().st_size if path.exists() else 0
+            if current_size + len(data) > MAX_RUN_EVENT_STREAM_BYTES:
+                raise ValueError("run manifest event stream exceeds maximum size")
             existing = self.load(event.run_id) if path.exists() else ()
             if existing and event.sequence <= existing[-1].sequence:
                 raise ValueError("run event sequence must increase")
@@ -158,9 +188,11 @@ class JsonLineRunEventStore:
     def load(self, run_id: str) -> tuple[RunManifestEvent, ...]:
         path = self.root / f"{_safe_run_id(run_id)}.jsonl"
         try:
+            if path.stat().st_size > MAX_RUN_EVENT_STREAM_BYTES:
+                raise ValueError("run manifest event stream exceeds maximum size")
             records = [
                 json.loads(line)
-                for line in path.read_text(encoding="utf-8").splitlines()
+                for line in path.read_bytes().decode("utf-8").splitlines()
                 if line.strip()
             ]
         except (OSError, UnicodeError, ValueError) as error:
@@ -181,6 +213,8 @@ class JsonLineRunEventStore:
         sequences = [event.sequence for event in events]
         if any(event.run_id != run_id for event in events) or len(set(sequences)) != len(sequences):
             raise ValueError("run event identity or sequence is invalid")
+        for event in events:
+            _validate_manifest_event(event)
         return tuple(sorted(events, key=lambda item: item.sequence))
 
 
@@ -207,10 +241,47 @@ def create_run_manifest(
     lineage: RunLineage | None = None,
     provenance: Mapping | None = None,
     run_id: str | None = None,
+    job_id: str = "",
     started_at: float | None = None,
 ) -> RunManifest:
-    if not application_id.strip() or not settings_schema_version.strip():
+    if (
+        not isinstance(application_id, str)
+        or not application_id.strip()
+        or not isinstance(application_version, str)
+        or not isinstance(settings_schema_version, str)
+        or not settings_schema_version.strip()
+        or not isinstance(job_id, str)
+    ):
         raise ValueError("application ID and settings schema version are required")
+    if any(
+        value is not None and not isinstance(value, Mapping)
+        for value in (
+            resolved_settings,
+            random_seeds,
+            random_selections,
+            environment,
+            privacy_modes,
+            user_overrides,
+            provenance,
+        )
+    ):
+        raise ValueError("run manifest settings and policies must be mappings")
+    if not isinstance(input_refs, Sequence) or isinstance(input_refs, (str, bytes)):
+        raise ValueError("input_refs must be a sequence of artifact references")
+    if not all(isinstance(item, ArtifactReference) for item in input_refs):
+        raise ValueError("input_refs must contain ArtifactReference values")
+    if not isinstance(component_versions, Sequence) or not all(
+        isinstance(item, ComponentVersion) for item in component_versions
+    ):
+        raise ValueError("component_versions must contain ComponentVersion values")
+    if lineage is not None and not isinstance(lineage, RunLineage):
+        raise ValueError("lineage must be a RunLineage")
+    if run_id is not None:
+        if not isinstance(run_id, str):
+            raise ValueError("run_id must be a string")
+        _safe_run_id(run_id)
+    if privacy_modes is not None and not all(isinstance(key, str) for key in privacy_modes):
+        raise ValueError("privacy mode names must be strings")
     privacy = tuple(
         sorted((key, PrivacyMode(value)) for key, value in (privacy_modes or {}).items())
     )
@@ -220,12 +291,20 @@ def create_run_manifest(
     secure_environment = _secure_mapping("environment", environment or {}, modes)
     secure_overrides = _secure_mapping("user_overrides", user_overrides or {}, modes)
     secure_provenance = _secure_mapping("provenance", provenance or {}, modes)
-    seeds = tuple(
-        sorted((str(key), _validate_seed(value)) for key, value in (random_seeds or {}).items())
-    )
+    seed_values = {}
+    for key, value in (random_seeds or {}).items():
+        if not isinstance(key, str) or not key:
+            raise ValueError("random seed names must be nonempty strings")
+        seed_values[key] = _validate_seed(value)
+    seeds = _secure_mapping("random_seeds", seed_values, modes)
     selections = _secure_mapping("random_selections", random_selections or {}, modes)
-    now = time.time() if started_at is None else float(started_at)
-    return RunManifest(
+    if started_at is None:
+        now = time.time()
+    elif isinstance(started_at, bool) or not isinstance(started_at, (int, float)):
+        raise ValueError("started_at must be a finite timestamp")
+    else:
+        now = float(started_at)
+    manifest = RunManifest(
         run_id=run_id or f"run-{uuid.uuid4().hex}",
         application_id=application_id,
         application_version=application_version,
@@ -251,7 +330,36 @@ def create_run_manifest(
         lineage=lineage or RunLineage(),
         provenance=secure_provenance,
         privacy_modes=privacy,
+        job_id=job_id,
         schema_version=RUN_MANIFEST_SCHEMA_VERSION,
+    )
+    _validate_manifest(manifest)
+    return manifest
+
+
+# {
+#   責務: [create_run_manifest_for_job: existing JobSnapshotへrun manifest contractをadaptする]
+#   処理: [1: Job identityを確認する 2: caller metadataでmanifestを作りJob IDを結ぶ]
+#   引数: [job: existing Job snapshot, application identity/version, manifest_options: settings/input/provenance fields]
+#   戻り値: [manifest: Job-linked running RunManifest]
+# }
+def create_run_manifest_for_job(
+    job: JobSnapshot,
+    application_id: str,
+    application_version: str,
+    settings_schema_version: str,
+    **manifest_options,
+) -> RunManifest:
+    if not isinstance(job, JobSnapshot) or not job.id:
+        raise ValueError("a JobSnapshot with a stable ID is required")
+    if "job_id" in manifest_options:
+        raise ValueError("job_id is derived from the supplied JobSnapshot")
+    return create_run_manifest(
+        application_id,
+        application_version,
+        settings_schema_version,
+        job_id=job.id,
+        **manifest_options,
     )
 
 
@@ -281,21 +389,35 @@ def capture_artifact_reference(
     hash_limit_bytes: int = 8 * 1024 * 1024,
     media_type: str = "",
 ) -> ArtifactReference:
+    if type(hash_limit_bytes) is not int or hash_limit_bytes < 0:
+        raise ValueError("hash limit must be a nonnegative integer")
+    if type(hash_content) is not bool:
+        raise ValueError("hash_content must be a boolean")
+    if not isinstance(artifact_id, str) or not isinstance(media_type, str):
+        raise ValueError("artifact ID and media type must be strings")
     source = Path(path).expanduser().absolute()
     metadata = source.stat()
-    if hash_limit_bytes < 0:
-        raise ValueError("hash limit must be nonnegative")
     digest = ""
-    if hash_content and source.is_file() and metadata.st_size <= hash_limit_bytes:
+    if hash_content and stat.S_ISREG(metadata.st_mode) and metadata.st_size <= hash_limit_bytes:
         hasher = hashlib.sha256()
-        with source.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                hasher.update(chunk)
+        descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        try:
+            if _artifact_stat_identity(os.fstat(descriptor)) != _artifact_stat_identity(metadata):
+                raise OSError("artifact changed while its hash was captured")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            if _artifact_stat_identity(os.fstat(descriptor)) != _artifact_stat_identity(metadata):
+                raise OSError("artifact changed while its hash was captured")
+            if _artifact_stat_identity(source.stat()) != _artifact_stat_identity(metadata):
+                raise OSError("artifact path changed while its hash was captured")
+        finally:
+            os.close(descriptor)
         digest = hasher.hexdigest()
     return ArtifactReference(
         artifact_id or source.name,
         str(source),
-        metadata.st_size if source.is_file() else None,
+        metadata.st_size if stat.S_ISREG(metadata.st_mode) else None,
         digest,
         (),
         media_type,
@@ -317,14 +439,30 @@ def create_run_manifest_event(
     privacy_modes: Mapping[str, PrivacyMode | str] | None = None,
     created_at: float | None = None,
 ) -> RunManifestEvent:
+    if not isinstance(run_id, str) or not run_id:
+        raise ValueError("event run ID is required")
+    if not isinstance(event_type, str) or not event_type.strip():
+        raise ValueError("event type is required")
+    if payload is not None and not isinstance(payload, Mapping):
+        raise ValueError("event payload must be a mapping")
+    if privacy_modes is not None and not isinstance(privacy_modes, Mapping):
+        raise ValueError("privacy_modes must be a mapping")
+    if created_at is None:
+        timestamp = time.time()
+    elif isinstance(created_at, bool) or not isinstance(created_at, (int, float)):
+        raise ValueError("event timestamp must be finite")
+    else:
+        timestamp = float(created_at)
     modes = {key: PrivacyMode(value) for key, value in (privacy_modes or {}).items()}
-    return RunManifestEvent(
+    event = RunManifestEvent(
         run_id,
         sequence,
-        time.time() if created_at is None else float(created_at),
+        timestamp,
         event_type,
         _secure_mapping("event", payload or {}, modes),
     )
+    _validate_manifest_event(event)
+    return event
 
 
 # {
@@ -347,15 +485,39 @@ def finish_run_manifest(
     lineage: RunLineage | None = None,
     finished_at: float | None = None,
 ) -> RunManifest:
+    _validate_manifest(manifest)
     terminal = RunStatus(status)
     if terminal is RunStatus.RUNNING:
         raise ValueError("finished manifest must have a terminal status")
     privacy = dict(manifest.privacy_modes)
+    if not isinstance(output_artifacts, Sequence) or isinstance(output_artifacts, (str, bytes)):
+        raise ValueError("output_artifacts must be a sequence of artifact references")
+    if not all(isinstance(item, ArtifactReference) for item in output_artifacts):
+        raise ValueError("output_artifacts must contain ArtifactReference values")
+    if any(
+        values is not None
+        and (not isinstance(values, Sequence) or isinstance(values, (str, bytes)))
+        for values in (
+            warnings,
+            errors,
+            decisions,
+            selected_candidate_refs,
+            rejected_candidate_refs,
+            repair_history,
+        )
+    ):
+        raise ValueError("run outcome values must be sequences")
     candidate_mode = privacy.get("candidate_ref", PrivacyMode.FULL)
-    return replace(
+    if finished_at is None:
+        finish_time = time.time()
+    elif isinstance(finished_at, bool) or not isinstance(finished_at, (int, float)):
+        raise ValueError("finished_at must be a finite timestamp")
+    else:
+        finish_time = float(finished_at)
+    result = replace(
         manifest,
         status=terminal,
-        finished_at=time.time() if finished_at is None else float(finished_at),
+        finished_at=finish_time,
         output_artifacts=tuple(
             _secure_artifact(item, dict(manifest.privacy_modes)) for item in output_artifacts
         ),
@@ -377,6 +539,8 @@ def finish_run_manifest(
         ),
         lineage=lineage or manifest.lineage,
     )
+    _validate_manifest(result)
+    return result
 
 
 # {
@@ -389,6 +553,8 @@ def manifest_replay_request(manifest: RunManifest) -> RunReplayRequest:
     modes = dict(manifest.privacy_modes)
     settings_mode = modes.get("settings", PrivacyMode.FULL)
     inputs_mode = modes.get("artifact_uri", PrivacyMode.FULL)
+    seeds_mode = modes.get("random_seeds", PrivacyMode.FULL)
+    selections_mode = modes.get("random_selections", PrivacyMode.FULL)
     if (
         settings_mode is not PrivacyMode.FULL
         or any(
@@ -398,6 +564,24 @@ def manifest_replay_request(manifest: RunManifest) -> RunReplayRequest:
         or any(
             modes.get(f"settings.{key}", settings_mode) is not PrivacyMode.FULL
             for key, _value in manifest.resolved_settings
+        )
+        or seeds_mode is not PrivacyMode.FULL
+        or any(
+            key.startswith("random_seeds.") and mode is not PrivacyMode.FULL
+            for key, mode in modes.items()
+        )
+        or any(
+            modes.get(f"random_seeds.{key}", seeds_mode) is not PrivacyMode.FULL
+            for key, _value in manifest.random_seeds
+        )
+        or selections_mode is not PrivacyMode.FULL
+        or any(
+            key.startswith("random_selections.") and mode is not PrivacyMode.FULL
+            for key, mode in modes.items()
+        )
+        or any(
+            modes.get(f"random_selections.{key}", selections_mode) is not PrivacyMode.FULL
+            for key, _value in manifest.random_selections
         )
     ):
         raise ValueError("manifest settings are redacted and cannot be replayed")
@@ -483,337 +667,3 @@ def run_manifest_cli_result(arguments) -> dict:
     left = _load_manifest_file(arguments.left)
     right = _load_manifest_file(arguments.right)
     return {"differences": _json_safe(compare_run_manifests(left, right))}
-
-
-# {
-#   責務: [run_manifest_to_dict: manifest contractをversioned JSON-safe mappingへ変換する]
-#   処理: [1: nested dataclassを展開する 2: Enumをstable stringへ変換する]
-#   引数: [manifest: run record]
-#   戻り値: [payload: schema versioned object]
-# }
-def run_manifest_to_dict(manifest: RunManifest) -> dict:
-    return _json_safe(manifest)
-
-
-# {
-#   責務: [_load_manifest_file: integrity envelopeを検証してmigration済manifestを復元する]
-#   処理: [1: JSON parse 2: optional digest check 3: migration 4: contract rehydrate]
-#   引数: [path: manifest path]
-#   戻り値: [manifest: validated record]
-# }
-def _load_manifest_file(path: Path) -> RunManifest:
-    try:
-        envelope = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as error:
-        raise ValueError("run manifest cannot be read") from error
-    if isinstance(envelope, dict) and "manifest" in envelope:
-        payload = envelope["manifest"]
-        expected_digest = envelope.get("manifest_sha256")
-        if expected_digest != hashlib.sha256(_canonical_json(payload)).hexdigest():
-            raise ValueError("run manifest digest does not match")
-    else:
-        payload = envelope
-    payload = migrate_run_manifest_payload(payload)
-    return _manifest_from_dict(payload)
-
-
-# {
-#   責務: [migrate_run_manifest_payload: prior schema payloadをcurrent schemaへ段階migrationする]
-#   処理: [1: source schema versionを確認する 2: supported additive migrationsを適用する]
-#   引数: [payload: parsed manifest mapping]
-#   戻り値: [migrated: schema version 1 mapping]
-# }
-def migrate_run_manifest_payload(payload: dict) -> dict:
-    if not isinstance(payload, dict):
-        raise ValueError("run manifest payload must be an object")
-    current = dict(payload)
-    version = current.get("schema_version", 0)
-    if version == 0:
-        current.setdefault("random_selections", [])
-        current.setdefault("component_versions", [])
-        current.setdefault("environment", [])
-        current.setdefault("selected_candidate_refs", [])
-        current.setdefault("rejected_candidate_refs", [])
-        current.setdefault("repair_history", [])
-        current.setdefault("user_overrides", [])
-        current.setdefault("lineage", {})
-        current.setdefault("provenance", [])
-        current.setdefault("privacy_modes", [])
-        current.setdefault("reproducibility", ReproducibilityLevel.BEST_EFFORT.value)
-        current["schema_version"] = 1
-        version = 1
-    if version != RUN_MANIFEST_SCHEMA_VERSION:
-        raise ValueError(f"unsupported run manifest schema version: {version}")
-    return current
-
-
-# {
-#   責務: [_manifest_from_dict: JSON mappingをnested immutable run contractsへ復元する]
-#   処理: [1: enum/nested referencesを復元する 2: manifest invariantを検証する]
-#   引数: [payload: schema version mapping]
-#   戻り値: [manifest: validated RunManifest]
-# }
-def _manifest_from_dict(payload: dict) -> RunManifest:
-    try:
-        manifest = RunManifest(
-            run_id=payload["run_id"],
-            application_id=payload["application_id"],
-            application_version=payload["application_version"],
-            settings_schema_version=payload["settings_schema_version"],
-            started_at=payload["started_at"],
-            finished_at=payload.get("finished_at"),
-            status=RunStatus(payload["status"]),
-            reproducibility=ReproducibilityLevel(payload["reproducibility"]),
-            input_refs=tuple(_artifact_from_dict(item) for item in payload.get("input_refs", ())),
-            resolved_settings=tuple(tuple(item) for item in payload.get("resolved_settings", ())),
-            random_seeds=tuple(
-                (str(key), _validate_seed(value)) for key, value in payload.get("random_seeds", ())
-            ),
-            random_selections=tuple(tuple(item) for item in payload.get("random_selections", ())),
-            component_versions=tuple(
-                ComponentVersion(**item) for item in payload.get("component_versions", ())
-            ),
-            environment=tuple(tuple(item) for item in payload.get("environment", ())),
-            output_artifacts=tuple(
-                _artifact_from_dict(item) for item in payload.get("output_artifacts", ())
-            ),
-            warnings=tuple(payload.get("warnings", ())),
-            errors=tuple(payload.get("errors", ())),
-            decisions=tuple(_decision_from_dict(item) for item in payload.get("decisions", ())),
-            selected_candidate_refs=tuple(payload.get("selected_candidate_refs", ())),
-            rejected_candidate_refs=tuple(payload.get("rejected_candidate_refs", ())),
-            repair_history=tuple(
-                _decision_from_dict(item) for item in payload.get("repair_history", ())
-            ),
-            user_overrides=tuple(tuple(item) for item in payload.get("user_overrides", ())),
-            lineage=RunLineage(
-                **{
-                    **payload.get("lineage", {}),
-                    "child_run_ids": tuple(payload.get("lineage", {}).get("child_run_ids", ())),
-                }
-            ),
-            provenance=tuple(tuple(item) for item in payload.get("provenance", ())),
-            privacy_modes=tuple(
-                (key, PrivacyMode(value)) for key, value in payload.get("privacy_modes", ())
-            ),
-            schema_version=payload["schema_version"],
-        )
-    except (KeyError, TypeError, ValueError) as error:
-        raise ValueError("run manifest schema payload is invalid") from error
-    _validate_manifest(manifest)
-    return manifest
-
-
-# {
-#   責務: [_artifact_from_dict: artifact mappingのtiming metadataをimmutable tuple化する]
-#   処理: [1: dataclass mappingをcopyする 2: nested timing pairsをtupleへ変換する]
-#   引数: [payload: artifact object mapping]
-#   戻り値: [artifact: immutable reference]
-# }
-def _artifact_from_dict(payload) -> ArtifactReference:
-    return ArtifactReference(
-        **{
-            **payload,
-            "media_timing": tuple(tuple(item) for item in payload.get("media_timing", ())),
-        }
-    )
-
-
-# {
-#   責務: [_decision_from_dict: decision mappingをimmutable detail tupleへ復元する]
-#   処理: [1: payload fieldsをcopyする 2: detailsをtuple化する]
-#   引数: [payload: decision mapping]
-#   戻り値: [decision: immutable RunDecision]
-# }
-def _decision_from_dict(payload) -> RunDecision:
-    return RunDecision(
-        **{**payload, "details": tuple(tuple(item) for item in payload.get("details", ()))}
-    )
-
-
-# {
-#   責務: [_validate_manifest: schema, identity, time, and random seed invariantsを検証する]
-#   処理: [1: required ID/time/statusを確認する 2: JSON-safe valuesとseedsを検証する]
-#   引数: [manifest: run contract]
-#   戻り値: []
-# }
-def _validate_manifest(manifest: RunManifest) -> None:
-    if manifest.schema_version != RUN_MANIFEST_SCHEMA_VERSION:
-        raise ValueError("unsupported run manifest schema version")
-    if not manifest.run_id or not manifest.application_id or not manifest.settings_schema_version:
-        raise ValueError("run ID, application ID, and settings schema version are required")
-    if manifest.started_at < 0 or (
-        manifest.finished_at is not None and manifest.finished_at < manifest.started_at
-    ):
-        raise ValueError("run timestamps are invalid")
-    if manifest.status is RunStatus.RUNNING and manifest.finished_at is not None:
-        raise ValueError("running manifest cannot have a finish time")
-    if manifest.status is not RunStatus.RUNNING and manifest.finished_at is None:
-        raise ValueError("terminal manifest requires a finish time")
-    for _key, seed in manifest.random_seeds:
-        _validate_seed(seed)
-    _canonical_json(run_manifest_to_dict(manifest))
-
-
-# {
-#   責務: [_secure_artifact: privacy policyに従ってartifact locator/hashを保存する]
-#   処理: [1: URI privacyを適用する 2: size/hash/media timing metadataを保持またはfilterする]
-#   引数: [artifact: input/output artifact, modes: field privacy modes]
-#   戻り値: [secured: privacy-filtered ref]
-# }
-def _secure_artifact(artifact: ArtifactReference, modes: Mapping[str, PrivacyMode]):
-    uri_mode = modes.get("artifact_uri", PrivacyMode.FULL)
-    id_mode = modes.get("artifact_id", PrivacyMode.FULL)
-    hash_mode = modes.get("artifact_hash", PrivacyMode.FULL)
-    return replace(
-        artifact,
-        artifact_id=_secure_locator(artifact.artifact_id, id_mode),
-        uri=_secure_locator(artifact.uri, uri_mode),
-        sha256=_secure_locator(artifact.sha256, hash_mode) if artifact.sha256 else "",
-        media_timing=_secure_mapping("media_timing", dict(artifact.media_timing), modes),
-    )
-
-
-# {
-#   責務: [_secure_decision: decision reason/details/candidate refsへprivacy policyを適用する]
-#   処理: [1: reason/ref field modesを適用する 2: detail mappingをfilterする]
-#   引数: [decision: candidate decision, modes: privacy modes]
-#   戻り値: [secured: filtered decision]
-# }
-def _secure_decision(decision: RunDecision, modes: Mapping[str, PrivacyMode]):
-    reason_mode = modes.get("decision_reason", PrivacyMode.FULL)
-    candidate_mode = modes.get("candidate_ref", PrivacyMode.FULL)
-    return replace(
-        decision,
-        reason=_secure_value(decision.reason, reason_mode),
-        candidate_ref=_secure_value(decision.candidate_ref, candidate_mode),
-        details=_secure_mapping("decision_details", dict(decision.details), modes),
-    )
-
-
-# {
-#   責務: [_secure_mapping: field category/key privacy policyでmappingを保存可能値へ変換する]
-#   処理: [1: category/key-specific modeを解決する 2: none fieldsをdropし他modeでfilterする]
-#   引数: [category: privacy policy scope, values: input mapping, modes: policy map]
-#   戻り値: [secure values: immutable key/value pairs]
-# }
-def _secure_mapping(category: str, values: Mapping, modes: Mapping[str, PrivacyMode]):
-    secured = []
-    category_mode = modes.get(category, PrivacyMode.FULL)
-    for key, value in values.items():
-        field_mode = modes.get(f"{category}.{key}", category_mode)
-        if field_mode is PrivacyMode.NONE:
-            continue
-        secured.append((str(key), _secure_value(value, field_mode)))
-    return tuple(sorted(secured))
-
-
-# {
-#   責務: [_secure_value: full/hash/summary/none privacy ruleをJSON-safe valueへ適用する]
-#   処理: [1: none/hash/summary modeを処理する 2: full valuesのJSON compatibilityを確認する]
-#   引数: [value: value to protect, mode: privacy mode]
-#   戻り値: [safe value or digest/summary]
-# }
-def _secure_value(value, mode: PrivacyMode):
-    if mode is PrivacyMode.NONE:
-        return None
-    safe = _json_safe(value)
-    encoded = _canonical_json(safe)
-    if mode is PrivacyMode.HASH:
-        return {"sha256": hashlib.sha256(encoded).hexdigest()}
-    if mode is PrivacyMode.SUMMARY:
-        if isinstance(value, str):
-            return value[:160]
-        return {"type": type(value).__name__, "json_bytes": len(encoded)}
-    return safe
-
-
-# {
-#   責務: [_secure_locator: URI/path privacy resultをtyped stable locator stringへ正規化する]
-#   処理: [1: full/summary/hash/none modeを適用する 2: redacted locatorを返す]
-#   引数: [value: source URI, mode: privacy mode]
-#   戻り値: [locator: safe string]
-# }
-def _secure_locator(value: str, mode: PrivacyMode) -> str:
-    if mode is PrivacyMode.NONE:
-        return ""
-    if mode is PrivacyMode.HASH:
-        return "sha256:" + hashlib.sha256(_canonical_json(value)).hexdigest()
-    if mode is PrivacyMode.SUMMARY:
-        return value[:160]
-    return value
-
-
-# {
-#   責務: [_secure_strings: warning/error text listへprivacy modeとlength limitを適用する]
-#   処理: [1: none itemを省く 2: hash/summary/full textをbounded tupleへ変換する]
-#   引数: [values: text sequence, mode: privacy setting, limit: maximum character count]
-#   戻り値: [messages: privacy-filtered text]
-# }
-def _secure_strings(values: Sequence[str], mode: PrivacyMode, limit: int) -> tuple[str, ...]:
-    if mode is PrivacyMode.NONE:
-        return ()
-    return tuple(_secure_locator(str(value)[:limit], mode) for value in values)
-
-
-# {
-#   責務: [_validate_seed: random seedをJSON integer range内で確認する]
-#   処理: [1: bool/int distinctionを確認する 2: signed 256-bit rangeを検証する]
-#   引数: [value: seed value]
-#   戻り値: [seed: validated integer]
-# }
-def _validate_seed(value: int) -> int:
-    if type(value) is not int or not 0 <= value < 2**256:
-        raise ValueError("random seeds must be integers in 0..2^256-1")
-    return value
-
-
-# {
-#   責務: [_safe_run_id: path injectionを拒否してrun ID file stemを返す]
-#   処理: [1: allow-listed ASCII ID charsを検証する 2: safe filenameを返す]
-#   引数: [run_id: stable ID]
-#   戻り値: [safe: path-safe run ID]
-# }
-def _safe_run_id(run_id: str) -> str:
-    if not run_id or any(
-        character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
-        for character in run_id
-    ):
-        raise ValueError("run ID contains unsafe filename characters")
-    return run_id
-
-
-# {
-#   責務: [_json_safe: dataclass/enums/tuplesをJSON-compatible recursive valueへ変換する]
-#   処理: [1: dataclassを展開する 2: Enum/Mapping/sequence/scalarを再帰変換する]
-#   引数: [value: typed payload]
-#   戻り値: [json value]
-# }
-def _json_safe(value):
-    if hasattr(value, "__dataclass_fields__"):
-        return _json_safe(asdict(value))
-    if isinstance(value, Enum):
-        return value.value
-    if isinstance(value, Mapping):
-        return {str(key): _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (tuple, list)):
-        return [_json_safe(item) for item in value]
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    raise ValueError(f"value of type {type(value).__name__} is not JSON-compatible")
-
-
-# {
-#   責務: [_canonical_json: JSON objectをdeterministic UTF-8 bytesへencodeする]
-#   処理: [1: key order/separatorsを固定する 2: NaN/Infinityを拒否する]
-#   引数: [value: JSON-safe payload]
-#   戻り値: [encoded: canonical bytes]
-# }
-def _canonical_json(value) -> bytes:
-    return json.dumps(
-        _json_safe(value),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")

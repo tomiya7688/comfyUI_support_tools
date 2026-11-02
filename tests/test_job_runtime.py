@@ -36,6 +36,23 @@ def wait_for(predicate, timeout=4):
 
 class JobRuntimeTests(unittest.TestCase):
     # {
+    #   責務: [test_run_manifest_reference_can_be_attached_after_job_creation: Job recordへmanifest pathを結び付ける]
+    #   処理: [1: Jobを作る 2: durable manifest referenceを設定する 3: immutable snapshotへ反映されることを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_run_manifest_reference_can_be_attached_after_job_creation(self):
+        runtime = JobRuntime(max_concurrent=1)
+        job = runtime.create("image.generate", "Generate", operation_id="operation-1")
+        runtime.set_manifest_ref(job, "/state/manifests/run-1.json")
+        snapshot = runtime.snapshots()[0]
+        self.assertEqual(snapshot.manifest_ref, "/state/manifests/run-1.json")
+        with self.assertRaises(ValueError):
+            runtime.set_manifest_ref(job, "")
+        runtime.finish(job, "cancelled")
+        runtime.close()
+
+    # {
     #   責務: [test_separate_runtimes_share_global_resource_admission: 複数JobRuntimeが共通resource capを共有する]
     #   処理: [1: CPU process budgetを1にする 2: 別Applicationのjob開始をblockする 3: lease解放後に開始する]
     #   引数: [self: unittest test case]

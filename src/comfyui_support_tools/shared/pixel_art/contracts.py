@@ -49,7 +49,7 @@ class PixelArtSettings:
 
 # {
 # 責務: [PixelArtRequest: prompt駆動生成と候補数を指定する]
-# フィールド: [prompt, negative prompt, settings, style, seed, candidates]
+# フィールド: [prompts, settings, style, outline/shading/detail intent, seed, candidates]
 # 処理: [shared text workflow input for replaceable generation backends]
 # }
 @dataclass(frozen=True)
@@ -58,6 +58,9 @@ class PixelArtRequest:
     settings: PixelArtSettings = PixelArtSettings()
     negative_prompt: str = ""
     style: str = "modern_indie"
+    outline_policy: str = "clear_outline"
+    shading_level: str = "medium"
+    detail_level: str = "auto"
     seed: int | None = None
     candidate_count: int = 1
 

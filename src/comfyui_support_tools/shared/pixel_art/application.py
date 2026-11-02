@@ -61,12 +61,30 @@ class PixelArtApplication:
         if self.text_backend is None:
             raise RuntimeError("text generation requires a configured PixelTextBackend")
         if (
-            not request.prompt.strip()
+            not isinstance(request.prompt, str)
+            or not request.prompt.strip()
+            or len(request.prompt) > 20_000
+            or not isinstance(request.negative_prompt, str)
+            or len(request.negative_prompt) > 10_000
+            or not isinstance(request.style, str)
+            or not request.style.strip()
+            or len(request.style) > 64
+            or request.outline_policy not in {"clear_outline", "soft_outline", "no_outline", "auto"}
+            or request.shading_level not in {"flat", "low", "medium", "high"}
+            or request.detail_level not in {"auto", "minimal", "balanced", "rich"}
             or not isinstance(request.candidate_count, int)
             or isinstance(request.candidate_count, bool)
             or not 1 <= request.candidate_count <= 16
+            or (
+                request.seed is not None
+                and (
+                    not isinstance(request.seed, int)
+                    or isinstance(request.seed, bool)
+                    or not 0 <= request.seed < 2**32
+                )
+            )
         ):
-            raise ValueError("prompt must be non-empty and candidate_count must be in 1..16")
+            raise ValueError("prompt settings, seed, or candidate_count are invalid")
         drafts = self.text_backend.generate(request)
         if not drafts:
             raise ValueError("text backend returned no candidates")
@@ -79,6 +97,9 @@ class PixelArtApplication:
                     "candidate": index,
                     "prompt": request.prompt,
                     "style": request.style,
+                    "outline_policy": request.outline_policy,
+                    "shading_level": request.shading_level,
+                    "detail_level": request.detail_level,
                     "seed": request.seed,
                 },
             )

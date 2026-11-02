@@ -182,7 +182,7 @@ Video inference such as GVHMR/WHAM/DWPose, actual camera estimation, person trac
 
 ### Pixel Art Creator共通基盤
 
-`comfyui_support_tools.shared.pixel_art` はText/Image/Retouchの共通grid、palette、size presets（8〜256）、transparent RGBA export、nearest-neighbor preview、deterministic metric/evaluator、sprite sheet cell utilities、undo/redo project historyを提供します。`PixelArtWindow` は3入口を一つのUIで選び、Image変換とRetouchは共通pipelineを使います。Text生成は差し替え可能な `PixelTextBackend` を注入します。native readabilityやoutline指標はheuristic proxyで、semantic qualityは人の確認が必要です。
+`comfyui_support_tools.shared.pixel_art` はText/Image/Retouchの共通grid、palette、size presets（8〜256）、transparent RGBA export、nearest-neighbor preview、deterministic metric/evaluator、sprite sheet cell utilities、undo/redo project historyを提供します。`PixelArtWindow` は3入口を一つのUIで選び、Image変換とRetouchは共通pipelineを使います。Text生成では `Text backend…` からローカルComfyUI API-format workflowを設定できます。対応workflowとComfyUI環境は利用者が用意し、model/LoRAは同梱しません。native readabilityやoutline指標はheuristic proxyで、semantic qualityは人の確認が必要です。
 
 Retouch UIはpixel-level pencil/eraser/line/rectangle/fill、mirror、exact-color replacement、palette reduction、binary-alpha cleanup、isolated-pixel/outline cleanup候補を提供します。automatic cleanupはcandidate選択後にだけapplyでき、変更pixelをmagenta overlayとpixel count/region boundsでレビューできます。
 
@@ -190,7 +190,7 @@ standalone `python -m comfyui_support_tools.applications.pixel_art` の既定起
 
 ### Shared Pixel Art Creator foundation
 
-`comfyui_support_tools.shared.pixel_art` provides common Text/Image/Retouch grids, palettes, 8–256 size presets, transparent RGBA export, nearest-neighbor previews, deterministic metrics/evaluation, sprite-sheet cell utilities, and undo/redo project history. `PixelArtWindow` exposes all three entries in one UI; Image conversion and Retouch share the same pipeline. Text generation uses an injected replaceable `PixelTextBackend`. Native readability and outline measures are heuristic proxies; semantic quality still needs human review.
+`comfyui_support_tools.shared.pixel_art` provides common Text/Image/Retouch grids, palettes, 8–256 size presets, transparent RGBA export, nearest-neighbor previews, deterministic metrics/evaluation, sprite-sheet cell utilities, and undo/redo project history. `PixelArtWindow` exposes all three entries in one UI; Image conversion and Retouch share the same pipeline. Text generation can be configured with a local ComfyUI API-format workflow through `Text backend…`; users provide the compatible workflow and ComfyUI installation, and no model or LoRA is bundled. Native readability and outline measures are heuristic proxies; semantic quality still needs human review.
 
 The Retouch UI provides pixel-level pencil/eraser/line/rectangle/fill, mirror, exact-color replacement, palette reduction, binary-alpha cleanup, and isolated-pixel/outline cleanup candidates. Automatic cleanup only applies after candidate selection; changed pixels are reviewable with a magenta overlay, changed-pixel count, and region bounds.
 

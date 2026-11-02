@@ -1,0 +1,9 @@
+# Operation plan contract
+
+`shared.contracts.operation_plan` defines the common immutable plan for GUI and CLI workflows. A feature adapter analyzes inputs once and creates `OperationPlan` with source snapshots, proposed actions, reasons, conflicts, resource estimates, destinations, counts, and a settings digest. The same decision builder must be passed to `apply_operation_plan` so Apply can recompute and compare the proposed decisions before changing anything.
+
+`capture_source_snapshot` records path identity and metadata, plus SHA-256 for regular files up to 8 MiB. Larger files use size, modification time, mode, device, and inode; callers that need stronger guarantees should provide a domain-specific content fingerprint in their plan settings. Source and settings changes block Apply. Unresolved conflicts also block Apply. Delete, remove, overwrite, replace, move, rename, high-risk, and review-marked actions require explicit confirmation. The executor remains responsible for making each individual filesystem mutation atomic and for supplying a rollback callback when it can reverse completed actions.
+
+`preview_operation_plan` always returns aggregate affected/skipped/review counts and reason distribution. Its bounded sample prioritizes high-risk actions, then reason representatives, then seeded random examples. The JSON manifest includes an integrity digest and uses the shared atomic artifact writer. The digest detects accidental corruption; it is not a signature or authorization token.
+
+`add_operation_cli_arguments` and `resolve_operation_cli_options` provide shared mode parsing (`--dry-run`, `--apply-plan`, `--manifest-only`, `--plan-out`, `--preview-sample`). Applications connect these helpers to their own planner, output format, and mutation adapter. Dataset sorting and filters can migrate to this common contract while retaining their domain-specific decisions.

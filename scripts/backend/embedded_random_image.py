@@ -4,7 +4,9 @@ import json
 from PIL import Image
 
 from ..context import *
+from comfyui_support_tools.shared.anime_generation import AnimeContentMode
 from comfyui_support_tools.shared.contracts.feature_settings import FeatureSettings
+from .anime_generation_backend import AnimeGenerationBackend
 from .text_to_image_request import TextToImageRequest
 from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
@@ -55,6 +57,9 @@ class EmbeddedRandomImage:
     enable_prompt_correction = False
     ollama_api_url = "http://127.0.0.1:11434"
     ollama_model = ""
+    anime_intent = None
+    anime_content_mode = AnimeContentMode.UNSPECIFIED
+    anime_auto_route = False
 
     def __init__(self):
         self.root_dir = self.wildcard_root_dir
@@ -65,6 +70,7 @@ class EmbeddedRandomImage:
         self.model_catalog = {key: list(value) for key, value in self.model_catalog.items()}
         self._stop_event = threading.Event()
         self._active_backend = None
+        self._anime_resolution = None
         self._worker_thread = None
         self._settings_lock = threading.Lock()
         self._pending_settings = None
@@ -282,6 +288,13 @@ class EmbeddedRandomImage:
             "checkpoint": self.sd_model_checkpoint,
             **parameters,
         }
+        if self._anime_resolution is not None:
+            metadata["anime_generation"] = {
+                "profile_id": self._anime_resolution.profile_id,
+                "reason": self._anime_resolution.reason,
+                "intent": self.anime_intent.value,
+                "content_mode": self.anime_content_mode.value,
+            }
         metadata_path.write_text(
             json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
@@ -347,19 +360,24 @@ class EmbeddedRandomImage:
         workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
         backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
         backend.capabilities.require("txt2img")
+        anime_backend = None
+        self._anime_resolution = None
+        if self.anime_intent is not None:
+            anime_backend = AnimeGenerationBackend(
+                backend,
+                model_catalog=self.model_catalog,
+                intent=self.anime_intent,
+                content_mode=self.anime_content_mode,
+                auto_route=self.anime_auto_route,
+                has_explicit_model_overrides=any(
+                    key.rsplit(":", 1)[-1] in {"ckpt_name", "unet_name"}
+                    for key in self.comfy_model_overrides
+                ),
+            )
+            backend = anime_backend
         workflow_has_model_overrides = (
             backend.capabilities.supports("model_overrides")
             and bool(self.comfy_model_overrides)
-        )
-        validate_prompt_loras(
-            prompt,
-            None if workflow_has_model_overrides else self.sd_model_checkpoint,
-            self.model_catalog,
-            self._log,
-            base_model_reason=(
-                "The ComfyUI workflow has per-node model overrides; the LoRA's active base node is ambiguous."
-                if workflow_has_model_overrides else None
-            ),
         )
         parameters = self._resolve_generation_parameters()
         self._log(
@@ -372,34 +390,53 @@ class EmbeddedRandomImage:
             raise ValueError("選択中の生成バックエンドはカスタムworkflowに対応していません")
         if self.enable_hr and not backend.capabilities.supports("hires_fix"):
             raise ValueError("選択中の生成バックエンドはHires Fixに対応していません")
+        generation_request = TextToImageRequest(
+            prompt=prompt,
+            negative=negative,
+            checkpoint=self.sd_model_checkpoint,
+            steps=parameters.steps,
+            cfg=parameters.cfg,
+            sampler=parameters.sampler,
+            width=parameters.width,
+            height=parameters.height,
+            use_model_vae=self.use_model_vae,
+            vae_name=self.vae_name,
+            enable_hr=self.enable_hr,
+            hr_scale=self.hr_scale,
+            hr_upscaler=self.hr_upscaler,
+            hr_second_pass_steps=self.hr_second_pass_steps,
+            denoising_strength=self.denoising_strength,
+            workflow_path=workflow_path,
+            model_overrides=self.comfy_model_overrides,
+        )
+        if anime_backend is not None:
+            generation_request = anime_backend.prepare_request(generation_request)
+            self._anime_resolution = anime_backend.last_resolution
+            self._log(f"🎨 Anime model policy: {self._anime_resolution.reason}")
+        validate_prompt_loras(
+            generation_request.prompt,
+            None if workflow_has_model_overrides else generation_request.checkpoint,
+            self.model_catalog,
+            self._log,
+            base_model_reason=(
+                "The ComfyUI workflow has per-node model overrides; the LoRA's active base node is ambiguous."
+                if workflow_has_model_overrides else None
+            ),
+        )
         self._active_backend = backend
         try:
             image_bytes = backend.generate(
-                TextToImageRequest(
-                prompt=prompt,
-                negative=negative,
-                checkpoint=self.sd_model_checkpoint,
-                steps=parameters.steps,
-                cfg=parameters.cfg,
-                sampler=parameters.sampler,
-                width=parameters.width,
-                height=parameters.height,
-                use_model_vae=self.use_model_vae,
-                vae_name=self.vae_name,
-                enable_hr=self.enable_hr,
-                hr_scale=self.hr_scale,
-                hr_upscaler=self.hr_upscaler,
-                hr_second_pass_steps=self.hr_second_pass_steps,
-                denoising_strength=self.denoising_strength,
-                workflow_path=workflow_path,
-                model_overrides=self.comfy_model_overrides,
-                ),
+                generation_request,
                 stop_event=self._stop_event,
             )
         finally:
             if self._active_backend is backend:
                 self._active_backend = None
         if image_bytes:
+            if anime_backend is not None:
+                self.sd_model_checkpoint = generation_request.checkpoint
+                prompt = generation_request.prompt
+                negative = generation_request.negative
             image_bytes = self._apply_nsfw_mosaic(image_bytes, backend)
             image_bytes, output_extension = self._encoded_output(image_bytes)
             failure = None

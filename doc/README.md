@@ -25,6 +25,7 @@
 | [Composition Template Extractor](composition_template.md) | [Composition Template Extractor](composition_template.en.md) |
 | [Manga Creator / Storyboard](manga_creator.md) | [Manga Creator / Storyboard](manga_creator.en.md) |
 | [Expression Retouch](expression_retouch.md) | [Expression Retouch](expression_retouch.en.md) |
+| [Anime / Illustration Prompt Routing](anime_generation.md) | [Anime / Illustration Prompt Routing](anime_generation.en.md) |
 
 ### 既存文書の移行
 
@@ -56,6 +57,7 @@ Project-owned README files and documentation are maintained in both Japanese and
 | [Composition Template Extractor](composition_template.md) | [Composition Template Extractor](composition_template.en.md) |
 | [Manga Creator / Storyboard](manga_creator.md) | [Manga Creator / Storyboard](manga_creator.en.md) |
 | [Expression Retouch](expression_retouch.md) | [Expression Retouch](expression_retouch.en.md) |
+| [Anime / Illustration Prompt Routing](anime_generation.md) | [Anime / Illustration Prompt Routing](anime_generation.en.md) |
 
 ### Legacy migration
 

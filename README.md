@@ -84,6 +84,10 @@ character/situation/background/styleの学習済みclassifierやembedding model�
 
 `python -m comfyui_support_tools.applications.expression_retouch`で顔選択、expression preset、局所maskの手動追加/消去、ComfyUI inpaint workflow、候補比較とsource/mask/history保存を行えます。OpenCV Haarの顔パーツ領域とidentity評価はproxyで、semantic expression evaluatorは注入可能です。ComfyUI workflowとimage/mask node IDsは`EXPRESSION_RETOUCH_*`環境変数で設定します。詳細は[Expression Retouch](doc/expression_retouch.md) / [English guide](doc/expression_retouch.en.md)を参照してください。
 
+### Anime / Illustration Prompt Routing
+
+Prompt GenerateはAnimagine XL / Illustrious XL / NoobAI XL / general SDXLのprofileを識別し、model-aware prompt tags、SFW/NSFW rating tags、family-specific LoRA互換性、任意のuse-case auto-routingを適用できます。モデル品質は未benchmarkのためrouterは画像品質を採点しません。詳細は[Anime / Illustration Prompt Routing](doc/anime_generation.md) / [English guide](doc/anime_generation.en.md)を参照してください。
+
 ### LoRA Composition Lab
 
 `comfyui_support_tools.shared.lora_composition` は互換性preflight、LoRA update norm/cosine/subspace/sign conflict分析、weighted/top-K/Zip-style training-free merge、rank圧縮、global/per-layer scale grid探索、seed固定の評価bridge、user scale preference prior、provenance付きsafetensorsとruntime recipe出力を提供します。任意依存は `pip install -r requirements-lora-composition.txt` で導入します。分析するdense updateは1 layerあたり8,388,608要素に制限します。Zip-style/top-Kは研究論文実装そのものではなく、比較可能なtraining-free baselineです。GUIと画像生成/evaluation adapterの統合は未実装です。詳細は[LoRA Composition Lab](doc/lora_composition.md)を参照してください。
@@ -193,6 +197,10 @@ Launch `python -m comfyui_support_tools.applications.manga_creator` to edit a re
 ### Expression Retouch
 
 Launch `python -m comfyui_support_tools.applications.expression_retouch` for face selection, expression presets, local mask painting/erasing, a ComfyUI inpaint workflow, candidate comparison, and source/mask/history storage. OpenCV Haar face-part regions and identity signals are proxies; a semantic expression evaluator is injectable. Set the workflow and image/mask node IDs using `EXPRESSION_RETOUCH_*` environment variables. See the [Japanese guide](doc/expression_retouch.md) / [English guide](doc/expression_retouch.en.md).
+
+### Anime / Illustration Prompt Routing
+
+Prompt Generate recognizes profile descriptors for Animagine XL, Illustrious XL, NoobAI XL, and general SDXL. It can apply model-aware prompt tags, SFW/NSFW rating tags, family-specific LoRA compatibility, and optional use-case auto-routing. Model quality has not been benchmarked, so the router does not score image quality. See [Anime / Illustration Prompt Routing](doc/anime_generation.md) / [English guide](doc/anime_generation.en.md).
 
 ### LoRA Composition Lab
 

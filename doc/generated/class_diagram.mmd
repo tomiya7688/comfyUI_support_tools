@@ -33,6 +33,17 @@ classDiagram
         +close()
         +ai_score()
     }
+    class AnimeGenerationBackend {
+        +__init__()
+        +capabilities()
+        +last_resolution()
+        +generate()
+        +prepare_request()
+        +generate_from_image()
+        +interrupt()
+    }
+    class AnimePromptResolution {
+    }
     class BackendLaunchSpec {
     }
     class BackendRuntimeProfile {

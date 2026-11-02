@@ -34,19 +34,34 @@ MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_TIMEOUT = 600
 
 
+# {
+# 責務: [_NoRedirect: urllib openerがTagger endpoint redirectを追跡しないようにする]
+# フィールド: [HTTPRedirectHandlerの標準設定。追加instance stateなし]
+# }
 class _NoRedirect(HTTPRedirectHandler):
+    # {
+    #   責務: [redirect_request: redirect responseを新しいrequestへ変換しない]
+    #   処理: [urllib openerからredirectを拒否させるため常にNoneを返す]
+    #   引数: [req/fp/code/msg/headers/newurl: HTTPRedirectHandler callback values]
+    #   戻り値: [None: redirect follow-up requestを生成しない]
+    # }
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
 
+# {
+# 責務: [TaggerCommand: local compatible Tagger serviceへimageを送りnormalized resultを作る]
+# フィールド: [_result_writer: optional sidecar writer, _timeout: timeout, _opener: proxy-free HTTPS opener]
+# }
 class TaggerCommand:
     """Send one image to a compatible Tagger service running on this machine."""
 
     # {
-    #   Responsibility: [__init__: Prepare the loopback Tagger client with the filtered CA bundle]
-    #   Processing: [1: Validate request timeout, 2: Build a direct opener with filtered HTTPS trust]
-    #   Arguments: [self: TaggerCommand instance, timeout: Request timeout in seconds]
-    #   Returns: []
+    #   責務: [__init__: timeoutを検証し、proxyを使わないfiltered-CA HTTPS openerを準備する]
+    #   処理: [result writerとtimeoutを保持し、redirect禁止handlerを含むurllib openerを作る]
+    #   引数: [self: command instance, timeout: request timeout seconds]
+    #   戻り値: [なし]
+    #   エラー: [ValueError: timeoutが0より大きくMAX_TIMEOUT以下でない]
     # }
     def __init__(self, timeout: float = 60.0) -> None:
         self._result_writer = TaggerResultWriter()
@@ -58,6 +73,14 @@ class TaggerCommand:
             HTTPSHandler(context=create_certifi_context()),
         )
 
+    # {
+    #   責務: [__call__: imageを読みTaggerへ送り、normalized tagsと任意sidecar pathを返す]
+    #   処理: [image/path/backend/threshold検証、HTTP POST、response正規化、重複出力path拒否、任意writeを行う]
+    #   引数: [inputs: image/model/url/backend/threshold/output settings, _context: runner context（未使用）]
+    #   戻り値: [backend/model/tags/tag_text/caption/rating/metadata/resultと任意txt_path/metadata_path]
+    #   エラー: [ValueError: inputやimage/URL invalid, RuntimeError: HTTP/response/JSON failure]
+    #   副作用: [TaggerへHTTP POSTし、明示されたsidecar fileをatomic writeする]
+    # }
     def __call__(self, inputs: Mapping[str, Any], _context: Mapping[str, Any]) -> Mapping[str, Any]:
         image_path = self._required_text(inputs, "image")
         model = self._required_text(inputs, "model")
@@ -127,6 +150,13 @@ class TaggerCommand:
             outputs["metadata_path"] = str(metadata_output)
         return outputs
 
+    # {
+    #   責務: [_required_text: Tagger inputsから必須のtrim済み文字列を取得する]
+    #   処理: [key値がnon-empty stringであることを確認する]
+    #   引数: [inputs: command input mapping, key: 必須field名]
+    #   戻り値: [trimmed text]
+    #   エラー: [ValueError: 値が空またはstring型でない]
+    # }
     @staticmethod
     def _required_text(inputs: Mapping[str, Any], key: str) -> str:
         value = inputs.get(key)
@@ -134,17 +164,42 @@ class TaggerCommand:
             raise ValueError(f"{key} must be a non-empty string")
         return value.strip()
 
+    # {
+    #   責務: [_threshold: inclusive 0..1範囲のscore thresholdをfloat化する]
+    #   処理: [boolと非数値、範囲外値を拒否する]
+    #   引数: [value: threshold候補, name: error message用field名]
+    #   戻り値: [float: validated threshold]
+    #   エラー: [ValueError: 値が0から1の範囲外]
+    # }
     @staticmethod
     def _threshold(value: Any, name: str) -> float:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
             raise ValueError(f"{name} must be between 0 and 1")
         return float(value)
 
+    # {
+    #   責務: [_validate_timeout: request timeoutを正の数かつMAX_TIMEOUT以下に制限する]
+    #   処理: [bool、非数値、0以下、上限超過を拒否する]
+    #   引数: [value: timeout候補]
+    #   戻り値: [なし]
+    #   エラー: [ValueError: timeoutが許容範囲外]
+    # }
     @staticmethod
     def _validate_timeout(value: Any) -> None:
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= MAX_TIMEOUT:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not 0 < value <= MAX_TIMEOUT
+        ):
             raise ValueError(f"timeout must be between 0 and {MAX_TIMEOUT} seconds")
 
+    # {
+    #   責務: [_validate_url: backend固有endpoint suffixを持つloopback Tagger URLを検証する]
+    #   処理: [HTTP(S), localhost/loopback, credential/query/fragment/port条件を確認しresolve_backendでsuffix照合する]
+    #   引数: [value: URL候補, backend_id: explicit backendまたはauto_http]
+    #   戻り値: [endpoint: 検証済みURL string]
+    #   エラー: [ValueError: URL条件、portまたはbackend endpointが不正]
+    # }
     @staticmethod
     def _validate_url(value: Any, backend_id: Any) -> str:
         if not isinstance(value, str):
@@ -168,12 +223,22 @@ class TaggerCommand:
             or parsed.query
             or parsed.fragment
         ):
-            raise ValueError("Tagger URL must target localhost/loopback without credentials, query, or fragment")
+            raise ValueError(
+                "Tagger URL must target localhost/loopback without credentials, query, or fragment"
+            )
         if port is not None and not 1 <= port <= 65535:
             raise ValueError("url contains an invalid port")
         resolve_backend(backend_id, endpoint)
         return endpoint
 
+    # {
+    #   責務: [_read_image: absolute regular image fileをsize/pixel/frame limit付きで読み検証する]
+    #   処理: [symlink拒否、20 MiB上限、read中stat安定性、40MP以下かつsingle-frame画像のdecode verifyを行う]
+    #   引数: [path: image file path]
+    #   戻り値: [data: 検証済みimage bytes]
+    #   エラー: [ValueError: path/file/size/contentが許容外、fileが読み取り中に変化]
+    #   副作用: [fileをbinary modeで読む]
+    # }
     @staticmethod
     def _read_image(path: Path) -> bytes:
         if not path.is_absolute() or path.is_symlink() or not path.is_file():
@@ -201,6 +266,14 @@ class TaggerCommand:
             raise ValueError("image is invalid, too large, or has multiple frames") from None
         return data
 
+    # {
+    #   責務: [_post_json: redirectを追わず応答サイズ/JSONを制限してTaggerへPOSTする]
+    #   処理: [NaN禁止JSON requestを送信し、HTTP/network errorを隠してbounded bodyをparseする]
+    #   引数: [self: command instance, url: Tagger endpoint, payload: request mapping, timeout: request timeout]
+    #   戻り値: [Any: decoded JSON response]
+    #   エラー: [RuntimeError: HTTP/network failure、response 1MiB超過、invalid JSON]
+    #   副作用: [HTTP POSTを実行し応答bodyを読み込む]
+    # }
     def _post_json(self, url: str, payload: Mapping[str, Any], timeout: float) -> Any:
         request = Request(
             url,
@@ -214,7 +287,9 @@ class TaggerCommand:
         except HTTPError as error:
             code = error.code
             error.close()
-            raise RuntimeError(f"Tagger API returned HTTP {code}; redirects are not followed") from None
+            raise RuntimeError(
+                f"Tagger API returned HTTP {code}; redirects are not followed"
+            ) from None
         except (URLError, TimeoutError, OSError):
             raise RuntimeError("Could not reach Tagger API; check the URL and service") from None
         if len(raw) > MAX_RESPONSE_BYTES:
@@ -224,10 +299,23 @@ class TaggerCommand:
         except (UnicodeError, json.JSONDecodeError, ValueError):
             raise RuntimeError("Tagger API returned invalid JSON") from None
 
+    # {
+    #   責務: [_reject_json_constant: JSON decoderがNaN/Infinityを受理しないようにする]
+    #   処理: [parse_constant callback値をValueErrorとして拒否する]
+    #   引数: [value: decoderが検出した非標準numeric token]
+    #   戻り値: [なし]
+    #   エラー: [ValueError: JSON tokenがRFC JSON numberでない]
+    # }
     @staticmethod
     def _reject_json_constant(value: str) -> None:
         raise ValueError(f"Invalid JSON constant: {value}")
 
+    # {
+    #   責務: [_normalized_mapping: dataclass resultをsidecar/API出力用JSON containerへ変換する]
+    #   処理: [asdict後、tag tupleとscore record tupleをlistへ変換する]
+    #   引数: [result: NormalizedTagResult]
+    #   戻り値: [dict: JSON-compatible normalized result mapping]
+    # }
     @staticmethod
     def _normalized_mapping(result: Any) -> dict[str, Any]:
         values = asdict(result)

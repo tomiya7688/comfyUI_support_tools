@@ -34,6 +34,7 @@ class CompletionGateTests(unittest.TestCase):
                 "tests",
                 "src/comfyui_support_tools/shared",
                 "src/comfyui_support_tools/entrypoints",
+                "src/comfyui_support_tools/applications/sequence",
             ],
         )
         self.assertIn("--strict", command)

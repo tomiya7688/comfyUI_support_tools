@@ -13,15 +13,34 @@ from scripts.backend.ollama_prompt_corrector import OllamaPromptCorrector
 from comfyui_support_tools.shared.python_tls import create_certifi_context
 
 
+# {
+# 責務: [OllamaPromptCommand: Ollama生成APIへprompt correction requestを送り結果を返す]
+# フィールド: [_timeout: HTTP timeout, _corrector: Ollama request payload builder]
+# }
 class OllamaPromptCommand:
     """Call Ollama and return both the original and corrected prompt."""
 
+    # {
+    #   責務: [__init__: timeoutを検証してprompt correctorを初期化する]
+    #   処理: [正のtimeoutを保存しOllamaPromptCorrectorを生成する]
+    #   引数: [self: command instance, timeout: HTTP timeout seconds]
+    #   戻り値: [なし]
+    #   エラー: [ValueError: timeoutが0以下]
+    # }
     def __init__(self, timeout: float = 180.0) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be greater than zero")
         self._timeout = timeout
         self._corrector = OllamaPromptCorrector()
 
+    # {
+    #   責務: [__call__: Ollamaへprompt correctionを要求しbefore/afterとbackend情報を返す]
+    #   処理: [prompt/model/API URLを検証し、non-streaming requestを送りresponse promptを検証する]
+    #   引数: [inputs: prompt/model/API URL mapping, _context: runner context（未使用）]
+    #   戻り値: [prompt_before, prompt_after, model, backend=ollama]
+    #   エラー: [ValueError: input/URL不正, RuntimeError: responseに有効なpromptがない]
+    #   副作用: [Ollama /api/generate endpointへHTTPS対応JSON requestを送る]
+    # }
     def __call__(self, inputs: Mapping[str, Any], _context: Mapping[str, Any]) -> Mapping[str, Any]:
         prompt = self._required_text(inputs, "prompt")
         model = self._required_text(inputs, "model")
@@ -39,6 +58,13 @@ class OllamaPromptCommand:
             "backend": "ollama",
         }
 
+    # {
+    #   責務: [_required_text: Ollama command inputの必須文字列をtrimして返す]
+    #   処理: [keyを読み、non-empty stringであることを確認する]
+    #   引数: [inputs: input mapping, name: field key]
+    #   戻り値: [trimmed text]
+    #   エラー: [ValueError: 値が空またはstring以外]
+    # }
     @staticmethod
     def _required_text(inputs: Mapping[str, Any], name: str) -> str:
         value = inputs.get(name)
@@ -46,6 +72,13 @@ class OllamaPromptCommand:
             raise ValueError(f"{name} must be a non-empty string")
         return value.strip()
 
+    # {
+    #   責務: [_validate_api_url: Ollama serverのHTTP(S) base URLを検証して正規化する]
+    #   処理: [host/pathを要求しcredential/query/fragmentやserver subpathを拒否する]
+    #   引数: [value: api_url候補]
+    #   戻り値: [schemeとauthorityからなるbase URL]
+    #   エラー: [ValueError: URLがHTTP(S) server base URLとして不正]
+    # }
     @staticmethod
     def _validate_api_url(value: Any) -> str:
         if not isinstance(value, str):

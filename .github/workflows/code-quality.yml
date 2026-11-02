@@ -36,6 +36,9 @@ jobs:
           python -m pip install 'certifi>=2026.10.19'
           python -m pip install -r requirements-dev.txt
 
+      - name: Pin default TLS trust to the updated certifi bundle
+        run: python -c "import certifi; print(f'SSL_CERT_FILE={certifi.where()}')" >> "$GITHUB_ENV"
+
       - name: Verify Python CA bundles
         run: python tools/security/check_python_ca.py
 

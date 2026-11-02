@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import re
 import ssl
+from collections.abc import Iterable
 from pathlib import Path
 
 import certifi
@@ -68,13 +69,47 @@ def affected_certificates_in_bundle(bundle_path: Path) -> tuple[str, ...]:
     )
     if not certificates:
         raise ValueError(f"No PEM certificates in {bundle_path}")
+    return affected_certificates_in_der_certificates(
+        ssl.PEM_cert_to_DER_cert(certificate) for certificate in certificates
+    )
+
+
+# {
+#   責務: [affected_certificates_in_der_certificates: DER証明書列から問題対象の指紋を列挙する]
+#   処理: [1: DER bytesをSHA-256で識別する 2: 登録済みCA名を返す]
+#   引数: [certificates: DER encoded trust anchors]
+#   戻り値: [affected_names: 含有する問題対象証明書名]
+# }
+def affected_certificates_in_der_certificates(
+    certificates: Iterable[bytes],
+) -> tuple[str, ...]:
     affected_names = {
         AFFECTED_CERTIFICATES[digest]
         for certificate in certificates
-        if (digest := hashlib.sha256(ssl.PEM_cert_to_DER_cert(certificate)).hexdigest())
-        in AFFECTED_CERTIFICATES
+        if (digest := hashlib.sha256(certificate).hexdigest()) in AFFECTED_CERTIFICATES
     }
     return tuple(sorted(affected_names))
+
+
+# {
+#   責務: [check_default_trust_store: Pythonの既定SSL contextが使うtrust storeを監査する]
+#   処理: [1: active contextからtrust anchorを読む 2: 対象fingerprintまたは空storeを拒否する]
+#   引数: []
+#   戻り値: [errors: trust storeの検証エラー]
+# }
+def check_default_trust_store() -> list[str]:
+    try:
+        default_context = ssl.create_default_context()
+        default_certificates = default_context.get_ca_certs(binary_form=True)
+        print(f"default SSL trust store: {len(default_certificates)} CA certificates")
+        affected_certificates = affected_certificates_in_der_certificates(default_certificates)
+        if affected_certificates:
+            return ["default SSL trust store still trusts " + ", ".join(affected_certificates)]
+        if not default_certificates:
+            return ["default SSL trust store contains no CA certificates"]
+    except (OSError, ssl.SSLError, ValueError) as exc:
+        return [f"Cannot inspect the default SSL trust store: {exc}"]
+    return []
 
 
 # {
@@ -110,6 +145,7 @@ def check_environment() -> list[str]:
                 )
         except (OSError, ValueError) as exc:
             errors.append(f"Cannot read {label} bundle {bundle}: {exc}")
+    errors.extend(check_default_trust_store())
     return errors
 
 

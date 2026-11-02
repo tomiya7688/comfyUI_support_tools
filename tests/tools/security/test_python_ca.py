@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import tempfile
 import ssl
+import tempfile
 import unittest
 from hashlib import sha256
 from pathlib import Path
@@ -15,7 +15,9 @@ from tools.security.check_python_ca import (
     AFFECTED_INTERMEDIATES,
     AFFECTED_ROOTS,
     affected_certificates_in_bundle,
+    affected_certificates_in_der_certificates,
     bundle_has_affected_certificate,
+    check_default_trust_store,
     check_distribution,
     version_at_least,
 )
@@ -55,6 +57,31 @@ class PythonCaTests(unittest.TestCase):
         self.assertTrue(version_at_least("26.2.2", "26.2.2"))
         self.assertTrue(version_at_least("2026.10.23", "2026.10.19"))
         self.assertFalse(version_at_least("26.2.2rc1", "26.2.2"))
+
+    # {
+    #   責務: [test_default_ssl_trust_store_rejects_affected_root: Python既定SSL storeの対象rootを拒否する]
+    #   処理: [1: fake trust storeへ対象fingerprintを注入する 2: auditが拒否することを確認する]
+    #   引数: [self: テストインスタンス]
+    #   戻り値: []
+    # }
+    def test_default_ssl_trust_store_rejects_affected_root(self) -> None:
+        affected_fingerprint = sha256(b"affected-root").hexdigest()
+        with (
+            patch(
+                "tools.security.check_python_ca.AFFECTED_CERTIFICATES",
+                {affected_fingerprint: "affected root"},
+            ),
+            patch("tools.security.check_python_ca.ssl.create_default_context") as context_factory,
+        ):
+            context_factory.return_value.get_ca_certs.return_value = [b"affected-root"]
+            self.assertEqual(
+                affected_certificates_in_der_certificates([b"affected-root"]),
+                ("affected root",),
+            )
+            self.assertEqual(
+                check_default_trust_store(),
+                ["default SSL trust store still trusts affected root"],
+            )
 
     # {
     #   責務: [test_bundle_fingerprints: emSignとAAAの指紋をCA bundleから検出する]

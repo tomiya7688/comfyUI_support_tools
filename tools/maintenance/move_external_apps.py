@@ -29,10 +29,44 @@ PRESERVED_CHILDREN = {
 PATH_KEYS = ("a1111_dir", "comfyui_dir", "pixai_tagger_dir", "taggui_dir")
 
 
+# {
+#   責務: [
+#     MigrationError: user dataを危険にさらさず続行できないmigration failureを表す
+#   ],
+#   処理: [
+#     1: 宣言に対応する状態を保持する,
+#     2: 主要methodがその状態を構築・検査・変換・出力する,
+#   ],
+#   フィールド: [],
+#   引数: [],
+#   戻り値: [
+#     MigrationError: instance of this class,
+#   ],
+# }
 class MigrationError(RuntimeError):
     """Raised when the migration cannot proceed without risking user data."""
 
 
+# {
+#   責務: [
+#     MigrationPlan: application roots、move/link operations、config rewrite planを保持する
+#   ],
+#   処理: [
+#     1: 宣言に対応する状態を保持する,
+#     2: 主要methodがその状態を構築・検査・変換・出力する,
+#   ],
+#   フィールド: [
+#     moves: list[tuple[Path, Path]] field stored by this declaration,
+#     links: list[tuple[Path, Path]] field stored by this declaration,
+#     app_roots: list[tuple[Path, Path]] field stored by this declaration,
+#     config_path: Path | None field stored by this declaration,
+#     config: dict | None field stored by this declaration,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     MigrationPlan: instance of this class,
+#   ],
+# }
 @dataclass
 class MigrationPlan:
     moves: list[tuple[Path, Path]]
@@ -42,11 +76,46 @@ class MigrationPlan:
     config: dict | None
 
 
+# {
+#   責務: [
+#     _is_reparse_point: filesystem metadataからsymlink/junction reparse pointを判定する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path: 検査または変換するfile path (Path),
+#   ],
+#   戻り値: [
+#     result: bool as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def _is_reparse_point(path: Path) -> bool:
     attributes = getattr(path.lstat(), "st_file_attributes", 0)
     return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
 
 
+# {
+#   責務: [
+#     _same_or_child: path textがsource rootそのものか配下か判定する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path_text: untrusted path text from config (str),
+#     source: legacy path root (Path),
+#     root: repository or migration root (Path),
+#   ],
+#   戻り値: [
+#     result: bool as described by the annotated return type,
+#   ],
+# }
 def _same_or_child(path_text: str, source: Path, root: Path) -> bool:
     candidate = Path(path_text).expanduser()
     if not candidate.is_absolute():
@@ -58,6 +127,24 @@ def _same_or_child(path_text: str, source: Path, root: Path) -> bool:
         return False
 
 
+# {
+#   責務: [
+#     _remap_path: config path referenceをlegacy rootからnew rootへremapする
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path_text: untrusted path text from config (str),
+#     source: legacy path root (Path),
+#     destination: new path root (Path),
+#     root: repository or migration root (Path),
+#   ],
+#   戻り値: [
+#     result: str as described by the annotated return type,
+#   ],
+# }
 def _remap_path(path_text: str, source: Path, destination: Path, root: Path) -> str:
     candidate = Path(path_text).expanduser()
     if not candidate.is_absolute():
@@ -66,6 +153,24 @@ def _remap_path(path_text: str, source: Path, destination: Path, root: Path) -> 
     return str(destination / relative)
 
 
+# {
+#   責務: [
+#     _config_path: user config directory内のsupported config fileを解決する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#   ],
+#   戻り値: [
+#     result: Path | None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def _config_path(root: Path) -> Path | None:
     candidates = (
         root / "user_data" / "input" / "config" / "common" / "paths.json",
@@ -74,6 +179,28 @@ def _config_path(root: Path) -> Path | None:
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
+# {
+#   責務: [
+#     _load_and_remap_config: config JSONを読み込み、known application referencesをremapする
+#   ],
+#   処理: [
+#     1: source/config/metadataを読み込んで解析する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#     app_roots: application source/destination root mapping (list[tuple[Path, Path]]),
+#   ],
+#   戻り値: [
+#     result: tuple[Path | None, dict | None] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     MigrationError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _load_and_remap_config(root: Path, app_roots: list[tuple[Path, Path]]) -> tuple[Path | None, dict | None]:
     config_path = _config_path(root)
     if config_path is None:
@@ -95,6 +222,28 @@ def _load_and_remap_config(root: Path, app_roots: list[tuple[Path, Path]]) -> tu
     return config_path, config
 
 
+# {
+#   責務: [
+#     build_plan: legacy paths.jsonとexternal model treeからrepair planを構築する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 対象 declarations/filesystem entriesを走査する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#   ],
+#   戻り値: [
+#     result: MigrationPlan as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     MigrationError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def build_plan(root: Path) -> MigrationPlan:
     root = root.resolve()
     external = root / "external"
@@ -125,6 +274,30 @@ def build_plan(root: Path) -> MigrationPlan:
     return MigrationPlan(moves, links, app_roots, config_path, config)
 
 
+# {
+#   責務: [
+#     _create_directory_link: platform-supported directory linkを作成してresultを検証する
+#   ],
+#   処理: [
+#     1: 必要なexternal commandを実行しreturn statusを確認する,
+#     2: 計画したfilesystem output/updateを適用する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     link: link path (Path),
+#     target: resolved target path (Path),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#     external processを起動し、結果を取得する,
+#   ],
+#   エラー: [
+#     OSError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _create_directory_link(link: Path, target: Path) -> None:
     if os.name == "nt":
         result = subprocess.run(
@@ -139,6 +312,26 @@ def _create_directory_link(link: Path, target: Path) -> None:
         os.symlink(target, link, target_is_directory=True)
 
 
+# {
+#   責務: [
+#     _remove_directory_link: directory symlink/junctionを安全に削除する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 計画したfilesystem output/updateを適用する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     link: link path (Path),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def _remove_directory_link(link: Path) -> None:
     if link.is_symlink() or _is_reparse_point(link):
         if link.is_dir():
@@ -147,6 +340,25 @@ def _remove_directory_link(link: Path) -> None:
             link.unlink()
 
 
+# {
+#   責務: [
+#     _write_config_atomically: JSON configをtemporary file経由でatomic replaceする
+#   ],
+#   処理: [
+#     1: 計画したfilesystem output/updateを適用する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path: 検査または変換するfile path (Path),
+#     config: parsed config mapping (dict),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#   ],
+# }
 def _write_config_atomically(path: Path, config: dict) -> None:
     handle, temporary_name = tempfile.mkstemp(prefix=f"{path.name}.", suffix=".tmp", dir=path.parent)
     temporary = Path(temporary_name)
@@ -159,6 +371,25 @@ def _write_config_atomically(path: Path, config: dict) -> None:
         temporary.unlink(missing_ok=True)
 
 
+# {
+#   責務: [
+#     _safe_print: terminal encodingで表示できるstatus messageを出力する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     message: status/error message (str),
+#     stream: output text stream (unspecified),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     CLI status、finding、またはerrorを標準出力へ表示する,
+#   ],
+# }
 def _safe_print(message: str, stream=None) -> None:
     stream = stream or sys.stdout
     try:
@@ -169,6 +400,29 @@ def _safe_print(message: str, stream=None) -> None:
         print(safe_message, file=stream)
 
 
+# {
+#   責務: [
+#     _apply_plan: planned moves/links/config rewriteを実行し、failure時にrollbackする
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 対象 declarations/filesystem entriesを走査する,
+#     3: 計画したfilesystem output/updateを適用する,
+#   ],
+#   引数: [
+#     plan: validated filesystem operation plan (MigrationPlan),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     MigrationError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _apply_plan(plan: MigrationPlan) -> None:
     moved: list[tuple[Path, Path]] = []
     created_links: list[Path] = []
@@ -211,6 +465,22 @@ def _apply_plan(plan: MigrationPlan) -> None:
         raise MigrationError(details) from exc
 
 
+# {
+#   責務: [
+#     migrate: dry-run planを表示し、apply flag時のみmigrationを実施する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#     apply: apply filesystem modifications instead of dry-run (bool),
+#   ],
+#   戻り値: [
+#     result: MigrationPlan as described by the annotated return type,
+#   ],
+# }
 def migrate(root: Path, apply: bool = False) -> MigrationPlan:
     plan = build_plan(root)
     for source, destination in plan.app_roots:
@@ -226,6 +496,26 @@ def migrate(root: Path, apply: bool = False) -> MigrationPlan:
     return plan
 
 
+# {
+#   責務: [
+#     main: 外部application migrationをpreviewし、--apply指定時にmove/link/config更新を実行する
+#   ],
+#   処理: [
+#     1: CLI argumentsをparseする (--root, --apply),
+#     2: 外部application migrationをpreviewし、--apply指定時にmove/link/config更新を実行する,
+#     3: resultとexit statusを返す,
+#   ],
+#   引数: [
+#     argv: command-line argument vector (list[str] | None),
+#   ],
+#   戻り値: [
+#     result: int as described by the annotated return type,
+#   ],
+#   副作用: [
+#     filesystem migrationとpaths.json更新は--apply指定時のみ実行する,
+#     preview、結果、またはerrorを標準出力または標準errorへ表示する,
+#   ],
+# }
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="既知の外部アプリだけを external/ へ移します")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])

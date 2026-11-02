@@ -35,6 +35,24 @@ DIRECT_WORK_METHODS = {
 }
 
 
+# {
+#   責務: [
+#     ModuleRole: Python moduleのUPD layerとroleを表す
+#   ],
+#   処理: [
+#     1: 宣言に対応する状態を保持する,
+#     2: 主要methodがその状態を構築・検査・変換・出力する,
+#   ],
+#   フィールド: [
+#     application: str field stored by this declaration,
+#     layer: str field stored by this declaration,
+#     role: str field stored by this declaration,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     ModuleRole: instance of this class,
+#   ],
+# }
 @dataclass(frozen=True)
 class ModuleRole:
     application: str
@@ -42,6 +60,25 @@ class ModuleRole:
     role: str
 
 
+# {
+#   責務: [
+#     Finding: UPD dependency scanで検出した違反を保持する
+#   ],
+#   処理: [
+#     1: 宣言に対応する状態を保持する,
+#     2: 主要methodがその状態を構築・検査・変換・出力する,
+#   ],
+#   フィールド: [
+#     rule: str field stored by this declaration,
+#     path: str field stored by this declaration,
+#     line: int field stored by this declaration,
+#     message: str field stored by this declaration,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     Finding: instance of this class,
+#   ],
+# }
 @dataclass(frozen=True)
 class Finding:
     rule: str
@@ -50,6 +87,21 @@ class Finding:
     message: str
 
 
+# {
+#   責務: [
+#     classify: repository pathからmoduleのUPD layer / roleを分類する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path: 検査または変換するfile path (str),
+#   ],
+#   戻り値: [
+#     result: ModuleRole | None as described by the annotated return type,
+#   ],
+# }
 def classify(path: str) -> ModuleRole | None:
     parts = Path(path).as_posix().split("/")
     try:
@@ -70,6 +122,21 @@ def classify(path: str) -> ModuleRole | None:
     return ModuleRole(application, layer, role)
 
 
+# {
+#   責務: [
+#     _name: AST attribute chainをqualified nameへ変換する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     node: AST node (ast.AST),
+#   ],
+#   戻り値: [
+#     result: str as described by the annotated return type,
+#   ],
+# }
 def _name(node: ast.AST) -> str:
     parts: list[str] = []
     while isinstance(node, ast.Attribute):
@@ -80,6 +147,21 @@ def _name(node: ast.AST) -> str:
     return ".".join(reversed(parts))
 
 
+# {
+#   責務: [
+#     _import_target: import名からtarget layerとmodule roleを解決する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     module: Python module path (str),
+#   ],
+#   戻り値: [
+#     result: tuple[str, str, str] | None as described by the annotated return type,
+#   ],
+# }
 def _import_target(module: str) -> tuple[str, str, str] | None:
     parts = module.split(".")
     if "applications" not in parts:
@@ -95,6 +177,23 @@ def _import_target(module: str) -> tuple[str, str, str] | None:
     return app, layer, role
 
 
+# {
+#   責務: [
+#     _allowed_cross_layer: UPD layer間のimportが許可されるかを判定する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     source: legacy path root (ModuleRole),
+#     target_layer: target module layer (str),
+#     target_role: target module role (str),
+#   ],
+#   戻り値: [
+#     result: bool as described by the annotated return type,
+#   ],
+# }
 def _allowed_cross_layer(source: ModuleRole, target_layer: str, target_role: str) -> bool:
     if source.layer == target_layer:
         return True
@@ -105,6 +204,22 @@ def _allowed_cross_layer(source: ModuleRole, target_layer: str, target_role: str
     return target_role in {"messenger", "commander"}
 
 
+# {
+#   責務: [
+#     scan_source: Python sourceを解析し、禁止されたimportと実行経路を違反として収集する
+#   ],
+#   処理: [
+#     1: 対象 declarations/filesystem entriesを走査する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path: 検査または変換するfile path (str),
+#     source: legacy path root (str),
+#   ],
+#   戻り値: [
+#     result: list[Finding] as described by the annotated return type,
+#   ],
+# }
 def scan_source(path: str, source: str) -> list[Finding]:
     role = classify(path)
     if role is None:
@@ -177,6 +292,25 @@ def scan_source(path: str, source: str) -> list[Finding]:
     return findings
 
 
+# {
+#   責務: [
+#     scan_repository: first-party source treeを走査してUPD境界違反を収集する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: source/config/metadataを読み込んで解析する,
+#     3: 対象 declarations/filesystem entriesを走査する,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#   ],
+#   戻り値: [
+#     result: list[Finding] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def scan_repository(root: Path) -> list[Finding]:
     source_root = root / "src" / "comfyui_support_tools" / "applications"
     if not source_root.exists():
@@ -188,6 +322,25 @@ def scan_repository(root: Path) -> list[Finding]:
     return findings
 
 
+# {
+#   責務: [
+#     main: UPD境界check CLIを解析し、module dependency違反を報告して終了statusを返す
+#   ],
+#   処理: [
+#     1: CLI argumentsをparseする (--root),
+#     2: UPD境界check CLIを解析し、module dependency違反を報告して終了statusを返す,
+#     3: resultとexit statusを返す,
+#   ],
+#   引数: [
+#     argv: command-line argument vector (list[str] | None),
+#   ],
+#   戻り値: [
+#     result: int as described by the annotated return type,
+#   ],
+#   副作用: [
+#     CLI結果とfindingを標準出力へ表示する,
+#   ],
+# }
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check new src/applications code against the UPD Commander boundaries."

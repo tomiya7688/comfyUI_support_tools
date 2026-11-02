@@ -42,11 +42,39 @@ def _require_supported_python(
         raise RuntimeError(f"The one-dir build requires CPython {minimum} through 3.{maximum}.")
 
 
+# {
+#   責務: [
+#     executable_path: one-dir output folder内の実行ファイルpathを解決する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     output: result output directory (Path),
+#   ],
+#   戻り値: [
+#     result: Path as described by the annotated return type,
+#   ],
+# }
 def executable_path(output: Path) -> Path:
     suffix = ".exe" if os.name == "nt" else ""
     return output / APP_NAME / f"{APP_NAME}{suffix}"
 
 
+# {
+#   責務: [
+#     _build_environment: build subprocess用にenvironment variableとPython pathを整える
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     result: dict[str, str] as described by the annotated return type,
+#   ],
+# }
 def _build_environment() -> dict[str, str]:
     environment = os.environ.copy()
     for key in ("PYTHONHOME", "PYTHONPATH"):
@@ -66,6 +94,31 @@ def _build_environment() -> dict[str, str]:
     return environment
 
 
+# {
+#   責務: [
+#     build: PyInstaller one-dir bundleとlicense artifactsを生成する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 必要なexternal commandを実行しreturn statusを確認する,
+#     3: 計画したfilesystem output/updateを適用する,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#     output: result output directory (Path),
+#   ],
+#   戻り値: [
+#     result: Path as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#     external processを起動し、結果を取得する,
+#   ],
+#   エラー: [
+#     FileNotFoundError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def build(root: Path, output: Path) -> Path:
     _require_supported_python()
     work_dir = root / "build" / "pyinstaller"
@@ -115,6 +168,25 @@ def build(root: Path, output: Path) -> Path:
     return executable
 
 
+# {
+#   責務: [
+#     run_smoke_test: 生成済みexecutableを一時profileで起動し、起動応答を検証する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 必要なexternal commandを実行しreturn statusを確認する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     executable: built binary path (Path),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     external processを起動し、結果を取得する,
+#   ],
+# }
 def run_smoke_test(executable: Path) -> None:
     # Do not accidentally import from the checkout or a user's Python setup.
     executable = executable.resolve()
@@ -136,6 +208,25 @@ def run_smoke_test(executable: Path) -> None:
             )
 
 
+# {
+#   責務: [
+#     main: build CLIを解析し、PyInstaller one-dir artifactを作成して任意でsmoke testする
+#   ],
+#   処理: [
+#     1: CLI argumentsをparseする (--root, --output, --smoke-test),
+#     2: build CLIを解析し、PyInstaller one-dir artifactを作成して任意でsmoke testする,
+#     3: resultとexit statusを返す,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     build directoryとdistribution artifactを作成・更新する,
+#     PyInstallerとoptional smoke testのexternal processを起動する,
+#     CLI結果とerrorを標準出力または標準errorへ表示する,
+#   ],
+# }
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build the Kadoka Tools one-dir distribution")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])

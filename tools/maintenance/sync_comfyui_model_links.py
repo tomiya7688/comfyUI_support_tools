@@ -12,10 +12,42 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+# {
+#   責務: [
+#     ModelLinkError: model linkを安全に検査・置換できないfailureを表す
+#   ],
+#   処理: [
+#     1: 宣言に対応する状態を保持する,
+#     2: 主要methodがその状態を構築・検査・変換・出力する,
+#   ],
+#   フィールド: [],
+#   引数: [],
+#   戻り値: [
+#     ModelLinkError: instance of this class,
+#   ],
+# }
 class ModelLinkError(RuntimeError):
     """Raised when a model link cannot be safely inspected or replaced."""
 
 
+# {
+#   責務: [
+#     LinkRepair: 一つのlegacy model linkのtarget/repair actionを保持する
+#   ],
+#   処理: [
+#     1: 宣言に対応する状態を保持する,
+#     2: 主要methodがその状態を構築・検査・変換・出力する,
+#   ],
+#   フィールド: [
+#     link: Path field stored by this declaration,
+#     old_target: Path field stored by this declaration,
+#     new_target: Path field stored by this declaration,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     LinkRepair: instance of this class,
+#   ],
+# }
 @dataclass(frozen=True)
 class LinkRepair:
     link: Path
@@ -23,12 +55,48 @@ class LinkRepair:
     new_target: Path
 
 
+# {
+#   責務: [
+#     RepairPlan: model link repairsとwarningsを保持する
+#   ],
+#   処理: [
+#     1: 宣言に対応する状態を保持する,
+#     2: 主要methodがその状態を構築・検査・変換・出力する,
+#   ],
+#   フィールド: [
+#     repairs: list[LinkRepair] field stored by this declaration,
+#     skipped: list[str] field stored by this declaration,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     RepairPlan: instance of this class,
+#   ],
+# }
 @dataclass
 class RepairPlan:
     repairs: list[LinkRepair]
     skipped: list[str]
 
 
+# {
+#   責務: [
+#     _safe_print: terminal encodingで表示できるstatus messageを出力する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     message: status/error message (str),
+#     stream: output text stream (unspecified),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     CLI status、finding、またはerrorを標準出力へ表示する,
+#   ],
+# }
 def _safe_print(message: str, stream=None) -> None:
     stream = stream or sys.stdout
     try:
@@ -39,6 +107,22 @@ def _safe_print(message: str, stream=None) -> None:
         print(safe_message, file=stream)
 
 
+# {
+#   責務: [
+#     _absolute_path: user pathをroot基準でabsolute normalized pathへ変換する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     value: input value (str),
+#     root: repository or migration root (Path),
+#   ],
+#   戻り値: [
+#     result: Path as described by the annotated return type,
+#   ],
+# }
 def _absolute_path(value: str, root: Path) -> Path:
     path = Path(value).expanduser()
     if not path.is_absolute():
@@ -46,6 +130,21 @@ def _absolute_path(value: str, root: Path) -> Path:
     return path.resolve(strict=False)
 
 
+# {
+#   責務: [
+#     _strip_windows_namespace: Windows extended-length path prefixを除去する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     value: input value (str),
+#   ],
+#   戻り値: [
+#     result: str as described by the annotated return type,
+#   ],
+# }
 def _strip_windows_namespace(value: str) -> str:
     if value.startswith("\\\\?\\"):
         return value[4:]
@@ -54,6 +153,27 @@ def _strip_windows_namespace(value: str) -> str:
     return value
 
 
+# {
+#   責務: [
+#     _read_link_target: symlink/junction targetを読み取り、safe absolute pathを返す
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     link: link path (Path),
+#   ],
+#   戻り値: [
+#     result: Path as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     ModelLinkError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _read_link_target(link: Path) -> Path:
     try:
         target_text = _strip_windows_namespace(os.readlink(link))
@@ -65,6 +185,24 @@ def _read_link_target(link: Path) -> Path:
     return target.resolve(strict=False)
 
 
+# {
+#   責務: [
+#     _is_reparse_point: filesystem metadataからsymlink/junction reparse pointを判定する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path: 検査または変換するfile path (Path),
+#   ],
+#   戻り値: [
+#     result: bool as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def _is_reparse_point(path: Path) -> bool:
     try:
         attributes = getattr(path.lstat(), "st_file_attributes", 0)
@@ -75,6 +213,22 @@ def _is_reparse_point(path: Path) -> bool:
     )
 
 
+# {
+#   責務: [
+#     _relative_to_legacy_root: targetがlegacy root内にある場合のrelative pathを返す
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     target: resolved target path (Path),
+#     legacy_root: legacy ComfyUI root (Path),
+#   ],
+#   戻り値: [
+#     result: Path | None as described by the annotated return type,
+#   ],
+# }
 def _relative_to_legacy_root(target: Path, legacy_root: Path) -> Path | None:
     try:
         relative = os.path.relpath(str(target), str(legacy_root))
@@ -85,6 +239,28 @@ def _relative_to_legacy_root(target: Path, legacy_root: Path) -> Path | None:
     return Path(relative)
 
 
+# {
+#   責務: [
+#     _model_directory_index: ComfyUI model subdirectoriesをcase-insensitive indexにする
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 対象 declarations/filesystem entriesを走査する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     models_root: ComfyUI model directory (Path),
+#   ],
+#   戻り値: [
+#     result: dict[str, Path] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     ModelLinkError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _model_directory_index(models_root: Path) -> dict[str, Path]:
     if not models_root.is_dir():
         raise ModelLinkError(f"Configured shared models directory does not exist: {models_root}")
@@ -95,6 +271,28 @@ def _model_directory_index(models_root: Path) -> dict[str, Path]:
     }
 
 
+# {
+#   責務: [
+#     build_plan: legacy paths.jsonとexternal model treeからrepair planを構築する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 対象 declarations/filesystem entriesを走査する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     paths: paths value used by build_plan (dict[str, str]),
+#   ],
+#   戻り値: [
+#     result: RepairPlan as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     ModelLinkError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def build_plan(paths: dict[str, str]) -> RepairPlan:
     required = ("sd_root", "comfyui_dir")
     missing = [key for key in required if not isinstance(paths.get(key), str) or not paths[key].strip()]
@@ -131,6 +329,27 @@ def build_plan(paths: dict[str, str]) -> RepairPlan:
     return RepairPlan(repairs=repairs, skipped=skipped)
 
 
+# {
+#   責務: [
+#     _load_paths: paths.json mappingを読み込み、object schemaを検証する
+#   ],
+#   処理: [
+#     1: source/config/metadataを読み込んで解析する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     config_path: paths.json/config file path (Path),
+#   ],
+#   戻り値: [
+#     result: dict[str, str] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     ModelLinkError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _load_paths(config_path: Path) -> dict[str, str]:
     try:
         data = json.loads(config_path.read_text(encoding="utf-8"))
@@ -141,6 +360,30 @@ def _load_paths(config_path: Path) -> dict[str, str]:
     return data
 
 
+# {
+#   責務: [
+#     _create_directory_link: platform-supported directory linkを作成してresultを検証する
+#   ],
+#   処理: [
+#     1: 必要なexternal commandを実行しreturn statusを確認する,
+#     2: 計画したfilesystem output/updateを適用する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     link: link path (Path),
+#     target: resolved target path (Path),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#     external processを起動し、結果を取得する,
+#   ],
+#   エラー: [
+#     OSError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _create_directory_link(link: Path, target: Path) -> None:
     if os.name == "nt":
         result = subprocess.run(
@@ -155,6 +398,26 @@ def _create_directory_link(link: Path, target: Path) -> None:
         os.symlink(target, link, target_is_directory=True)
 
 
+# {
+#   責務: [
+#     _remove_directory_link: directory symlink/junctionを安全に削除する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 計画したfilesystem output/updateを適用する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     link: link path (Path),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def _remove_directory_link(link: Path) -> None:
     if os.name == "nt" and _is_reparse_point(link):
         os.rmdir(link)
@@ -164,6 +427,27 @@ def _remove_directory_link(link: Path) -> None:
         link.unlink()
 
 
+# {
+#   責務: [
+#     _validate_plan: apply前に各existing/new link targetとoperationを再検証する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     plan: validated filesystem operation plan (RepairPlan),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     ModelLinkError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _validate_plan(plan: RepairPlan) -> None:
     for repair in plan.repairs:
         if not _is_reparse_point(repair.link):
@@ -175,6 +459,24 @@ def _validate_plan(plan: RepairPlan) -> None:
             raise ModelLinkError(f"Shared model directory disappeared: {repair.new_target}")
 
 
+# {
+#   責務: [
+#     apply_plan: repair planを適用し、partial failure時にprevious linksをrollbackする
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     plan: validated filesystem operation plan (RepairPlan),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+#   エラー: [
+#     ModelLinkError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def apply_plan(plan: RepairPlan) -> None:
     _validate_plan(plan)
     replaced: list[LinkRepair] = []
@@ -201,6 +503,22 @@ def apply_plan(plan: RepairPlan) -> None:
         raise ModelLinkError(details) from exc
 
 
+# {
+#   責務: [
+#     repair: dry-run repair planを表示し、apply時だけComfyUI model linksを変更する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     config_path: paths.json/config file path (Path),
+#     apply: apply filesystem modifications instead of dry-run (bool),
+#   ],
+#   戻り値: [
+#     result: RepairPlan as described by the annotated return type,
+#   ],
+# }
 def repair(config_path: Path, apply: bool = False) -> RepairPlan:
     plan = build_plan(_load_paths(config_path))
     for item in plan.repairs:
@@ -217,6 +535,26 @@ def repair(config_path: Path, apply: bool = False) -> RepairPlan:
     return plan
 
 
+# {
+#   責務: [
+#     main: ComfyUI shared model linksをpreviewし、--apply指定時にeligible broken linksを修復する
+#   ],
+#   処理: [
+#     1: CLI argumentsをparseする (--config, --apply),
+#     2: ComfyUI shared model linksをpreviewし、--apply指定時にeligible broken linksを修復する,
+#     3: resultとexit statusを返す,
+#   ],
+#   引数: [
+#     argv: command-line argument vector (list[str] | None),
+#   ],
+#   戻り値: [
+#     result: int as described by the annotated return type,
+#   ],
+#   副作用: [
+#     model directory linksの置換は--apply指定時のみ実行する,
+#     preview、結果、またはerrorを標準出力または標準errorへ表示する,
+#   ],
+# }
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Repair ComfyUI links to the configured shared model root")
     parser.add_argument(

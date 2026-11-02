@@ -7,10 +7,52 @@ import os
 from pathlib import Path
 
 
+# {
+#   責務: [
+#     ClassCollector: AST traversal中にclass declarationsを集める
+#   ],
+#   処理: [
+#     1: 宣言に対応する状態を保持する,
+#     2: 主要methodがその状態を構築・検査・変換・出力する,
+#   ],
+#   フィールド: [],
+#   引数: [],
+#   戻り値: [
+#     ClassCollector: instance of this class,
+#   ],
+# }
 class ClassCollector(ast.NodeVisitor):
+# {
+#   責務: [
+#     __init__: instanceの初期stateを引数から設定する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     None: initializer returns no value,
+#   ],
+# }
     def __init__(self) -> None:
         self.classes: list[tuple[str, list[str], list[str]]] = []
 
+# {
+#   責務: [
+#     visit_ClassDef: class node name, bases, methodsを収集してAST traversalを続ける
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     node: AST node (ast.ClassDef),
+#   ],
+#   戻り値: [
+#     result: None as described by the annotated return type,
+#   ],
+# }
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         bases = [self._name(base) for base in node.bases if self._name(base)]
         methods = [
@@ -21,6 +63,21 @@ class ClassCollector(ast.NodeVisitor):
         self.classes.append((node.name, bases, methods))
         self.generic_visit(node)
 
+# {
+#   責務: [
+#     _name: AST attribute chainをqualified nameへ変換する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     node: AST node (ast.AST),
+#   ],
+#   戻り値: [
+#     result: str as described by the annotated return type,
+#   ],
+# }
     @staticmethod
     def _name(node: ast.AST) -> str:
         if isinstance(node, ast.Name):
@@ -82,6 +139,25 @@ def iter_python_files(root: Path) -> list[Path]:
     return sorted(python_files)
 
 
+# {
+#   責務: [
+#     render_class_diagram: configured Python source rootsからMermaid class diagramを生成する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: source/config/metadataを読み込んで解析する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     source_roots: configured Python source directories (list[Path]),
+#   ],
+#   戻り値: [
+#     result: str as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def render_class_diagram(source_roots: list[Path]) -> str:
     lines = ["classDiagram"]
     seen_relations: set[tuple[str, str]] = set()

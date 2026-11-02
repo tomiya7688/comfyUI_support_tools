@@ -97,10 +97,41 @@ _CPYTHON_EXTENSION_PINS = {
 _SUFFIXES = {".dll", ".pyd", ".exe", ".so", ".dylib"}
 
 
+# {
+#   責務: [
+#     _key: pathをstable case-normalized lookup keyへ変換する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path: 検査または変換するfile path (Path),
+#   ],
+#   戻り値: [
+#     result: str as described by the annotated return type,
+#   ],
+# }
 def _key(path: Path) -> str:
     return os.path.normcase(str(path.resolve())).casefold()
 
 
+# {
+#   責務: [
+#     _within: candidate pathが指定root内に解決されるか判定する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     path: 検査または変換するfile path (Path),
+#     root: repository or migration root (Path | None),
+#   ],
+#   戻り値: [
+#     result: bool as described by the annotated return type,
+#   ],
+# }
 def _within(path: Path, root: Path | None) -> bool:
     if root is None:
         return False
@@ -111,6 +142,28 @@ def _within(path: Path, root: Path | None) -> bool:
         return False
 
 
+# {
+#   責務: [
+#     _load_sources: PyInstaller TOCからartifact source path mappingを読み込む
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: source/config/metadataを読み込んで解析する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     toc_path: PyInstaller TOC file path (Path | None),
+#   ],
+#   戻り値: [
+#     result: dict[str, tuple[Path, str]] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     RuntimeError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _load_sources(toc_path: Path | None) -> dict[str, tuple[Path, str]]:
     if toc_path is None or not toc_path.is_file():
         return {}
@@ -127,6 +180,24 @@ def _load_sources(toc_path: Path | None) -> dict[str, tuple[Path, str]]:
     }
 
 
+# {
+#   責務: [
+#     _package_owners: site-packages filesをlicense inventory componentへ対応付ける
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     site_packages: Python site-packages root (Path),
+#   ],
+#   戻り値: [
+#     result: dict[str, dict] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def _package_owners(site_packages: Path) -> dict[str, dict]:
     owners = {}
     for item in distributions(path=[str(site_packages)]):
@@ -142,6 +213,22 @@ def _package_owners(site_packages: Path) -> dict[str, dict]:
     return owners
 
 
+# {
+#   責務: [
+#     _license_component: distribution名からlicense componentを検索する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     name: item label or name (str),
+#     components: license inventory entries (list[dict]),
+#   ],
+#   戻り値: [
+#     result: dict | None as described by the annotated return type,
+#   ],
+# }
 def _license_component(name: str, components: list[dict]) -> dict | None:
     canonical = canonicalize_name(name)
     return next(
@@ -150,6 +237,21 @@ def _license_component(name: str, components: list[dict]) -> dict | None:
     )
 
 
+# {
+#   責務: [
+#     _source_hint: source pathからportable attribution hintを作る
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     source: legacy path root (Path),
+#   ],
+#   戻り値: [
+#     result: str as described by the annotated return type,
+#   ],
+# }
 def _source_hint(source: Path) -> str:
     parts = [
         part
@@ -159,6 +261,22 @@ def _source_hint(source: Path) -> str:
     return "/".join(parts[-3:])
 
 
+# {
+#   責務: [
+#     _cpython_extension_attribution: pinned CPython extension filenameへsource/license attributionを割り当てる
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     filename: filename value used by _cpython_extension_attribution (str),
+#     components: license inventory entries (list[dict]),
+#   ],
+#   戻り値: [
+#     result: dict | None as described by the annotated return type,
+#   ],
+# }
 def _cpython_extension_attribution(filename: str, components: list[dict]) -> dict | None:
     python = _license_component("Python", components)
     if not python:
@@ -186,6 +304,27 @@ def _cpython_extension_attribution(filename: str, components: list[dict]) -> dic
     return attribution
 
 
+# {
+#   責務: [
+#     _attribute: native artifactのpackage owner / runtime source / license attributionを構築する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     source: legacy path root (Path),
+#     typecode: PyInstaller artifact type code (str),
+#     owners: package ownership index (dict[str, dict]),
+#     components: license inventory entries (list[dict]),
+#     site_packages: Python site-packages root (Path),
+#     python_root: bundled Python runtime root (Path),
+#     system_root: system runtime root (Path | None),
+#   ],
+#   戻り値: [
+#     result: dict as described by the annotated return type,
+#   ],
+# }
 def _attribute(
     source: Path,
     typecode: str,
@@ -300,6 +439,30 @@ def _attribute(
     }
 
 
+# {
+#   責務: [
+#     collect_native_artifact_inventory: distribution treeを走査してnative artifact provenance reportを作る
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 対象 declarations/filesystem entriesを走査する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     distribution_dir: packaged build output directory (Path),
+#     toc_path: PyInstaller TOC file path (Path | None),
+#     components: license inventory entries (list[dict]),
+#     site_packages: Python site-packages root (Path),
+#     python_root: bundled Python runtime root (Path),
+#     system_root: system runtime root (Path | None),
+#   ],
+#   戻り値: [
+#     result: list[dict] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def collect_native_artifact_inventory(
     distribution_dir: Path,
     toc_path: Path | None,

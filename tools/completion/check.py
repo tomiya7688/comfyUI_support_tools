@@ -8,10 +8,44 @@ import sys
 from pathlib import Path
 
 
+# {
+#   責務: [
+#     project_root: tools module位置からrepository rootを解決する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     result: Path as described by the annotated return type,
+#   ],
+# }
 def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+# {
+#   責務: [
+#     run: subprocess commandを実行し、labelと成功状態を表示する
+#   ],
+#   処理: [
+#     1: 必要なexternal commandを実行しreturn statusを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#     label: command label shown in output (str),
+#     command: subprocess argument vector (list[str]),
+#   ],
+#   戻り値: [
+#     result: bool as described by the annotated return type,
+#   ],
+#   副作用: [
+#     external processを起動し、結果を取得する,
+#     CLI status、finding、またはerrorを標準出力へ表示する,
+#   ],
+# }
 def run(root: Path, label: str, command: list[str]) -> bool:
     print(f"[RUN] {label}: {' '.join(command)}")
     result = subprocess.run(command, cwd=root, check=False)
@@ -22,10 +56,45 @@ def run(root: Path, label: str, command: list[str]) -> bool:
     return True
 
 
+# {
+#   責務: [
+#     existing_python_roots: workspace内で既に存在するPython runtime rootsを列挙する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#   ],
+#   戻り値: [
+#     result: list[str] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def existing_python_roots(root: Path) -> list[str]:
     return [name for name in ("scripts", "nuno", "tools") if (root / name).exists()]
 
 
+# {
+#   責務: [
+#     main: 指定されたcompletion checkを1件実行し、その結果statusを返す
+#   ],
+#   処理: [
+#     1: CLI argumentsをparseする (--check-generated, --skip-tests),
+#     2: 指定されたcompletion checkを1件実行し、その結果statusを返す,
+#     3: resultとexit statusを返す,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     result: int as described by the annotated return type,
+#   ],
+#   副作用: [
+#     completion commandのexternal processを起動する,
+#   ],
+# }
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run ComfyUI Support Tools completion checks")
     parser.add_argument(

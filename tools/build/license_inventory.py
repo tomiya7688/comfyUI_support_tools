@@ -109,6 +109,19 @@ _EXTERNAL_COMPONENTS = (
 )
 
 
+# {
+#   責務: [
+#     _external_components: bundled external runtime componentsのlicense entryを構築する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [],
+#   戻り値: [
+#     result: list[dict] as described by the annotated return type,
+#   ],
+# }
 def _external_components() -> list[dict]:
     return [
         {
@@ -143,6 +156,27 @@ def _site_packages_paths() -> tuple[Path, ...]:
     return tuple(dict.fromkeys(path for path in candidates if str(path) and path.is_dir()))
 
 
+# {
+#   責務: [
+#     _runtime_dependency_names: requirementsとinstalled metadataからruntime dependenciesを特定する
+#   ],
+#   処理: [
+#     1: source/config/metadataを読み込んで解析する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#   ],
+#   戻り値: [
+#     result: list[str] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     RuntimeError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _runtime_dependency_names(root: Path) -> list[str]:
     site_packages = _site_packages_paths()
     available = {
@@ -175,6 +209,28 @@ def _runtime_dependency_names(root: Path) -> list[str]:
     return [resolved[name] for name in sorted(resolved)]
 
 
+# {
+#   責務: [
+#     _license_files: installed distribution内のlicense filesを検索する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     item: item value used by _license_files (Distribution),
+#     site_packages: Python site-packages root (Path),
+#   ],
+#   戻り値: [
+#     result: list[Path] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     RuntimeError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _license_files(item: Distribution, site_packages: Path) -> list[Path]:
     result = []
     for entry in item.files or ():
@@ -191,6 +247,21 @@ def _license_files(item: Distribution, site_packages: Path) -> list[Path]:
     return result
 
 
+# {
+#   責務: [
+#     _license_metadata: distribution metadataからlicense表記とSPDX情報を抽出する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     item: item value used by _license_metadata (Distribution),
+#   ],
+#   戻り値: [
+#     result: dict as described by the annotated return type,
+#   ],
+# }
 def _license_metadata(item: Distribution) -> dict:
     label = item.metadata.get("License", "")
     label = next((line.strip() for line in label.splitlines() if line.strip()), "")
@@ -202,6 +273,30 @@ def _license_metadata(item: Distribution) -> dict:
     return {"metadata": label or None, "classifiers": classifiers}
 
 
+# {
+#   責務: [
+#     _copy_python_package_licenses: package license filesをdistribution license directoryへcopyする
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 計画したfilesystem output/updateを適用する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     item: item value used by _copy_python_package_licenses (Distribution),
+#     site_packages: Python site-packages root (Path),
+#     target: resolved target path (Path),
+#   ],
+#   戻り値: [
+#     result: list[str] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#   ],
+#   エラー: [
+#     RuntimeError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _copy_python_package_licenses(
     item: Distribution, site_packages: Path, target: Path
 ) -> list[str]:
@@ -223,10 +318,44 @@ def _copy_python_package_licenses(
     return copied
 
 
+# {
+#   責務: [
+#     _project_urls: package metadataからproject URL entriesを抽出する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     item: item value used by _project_urls (Distribution),
+#   ],
+#   戻り値: [
+#     result: list[str] as described by the annotated return type,
+#   ],
+# }
 def _project_urls(item: Distribution) -> list[str]:
     return item.metadata.get_all("Project-URL", [])
 
 
+# {
+#   責務: [
+#     _pyinstaller_components: PyInstaller distribution contentsからpackaged Python componentsを一覧化する
+#   ],
+#   処理: [
+#     1: 引数と既存stateを検証して処理結果を算出する,
+#     2: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     site_packages: Python site-packages root (Path),
+#     distribution_dir: packaged build output directory (Path),
+#   ],
+#   戻り値: [
+#     result: list[dict] as described by the annotated return type,
+#   ],
+#   エラー: [
+#     RuntimeError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def _pyinstaller_components(site_packages: Path, distribution_dir: Path) -> list[dict]:
     """Record PyInstaller code that is incorporated into the frozen executable."""
     try:
@@ -259,6 +388,27 @@ def _pyinstaller_components(site_packages: Path, distribution_dir: Path) -> list
     ]
 
 
+# {
+#   責務: [
+#     _python_native_components: bundled Python runtimeとnative dependenciesのlicense evidenceを構成する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 対象 declarations/filesystem entriesを走査する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     distribution_dir: packaged build output directory (Path),
+#     python_license: bundled Python runtime license evidence (str),
+#     python_version: bundled Python version (str | None),
+#   ],
+#   戻り値: [
+#     result: list[dict] as described by the annotated return type,
+#   ],
+#   副作用: [
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+# }
 def _python_native_components(
     distribution_dir: Path,
     python_license: str,
@@ -427,6 +577,31 @@ def _python_native_components(
     return components
 
 
+# {
+#   責務: [
+#     collect_license_inventory: build artifactsとdependenciesからlicense inventoryを収集する
+#   ],
+#   処理: [
+#     1: input path / repository stateを確認する,
+#     2: 計画したfilesystem output/updateを適用する,
+#     3: validated resultをcallerへ返す,
+#   ],
+#   引数: [
+#     root: repository or migration root (Path),
+#     distribution_dir: packaged build output directory (Path),
+#     build_toc: PyInstaller TOC metadata path (Path | None),
+#   ],
+#   戻り値: [
+#     result: dict as described by the annotated return type,
+#   ],
+#   副作用: [
+#     指定されたfilesystem pathsを作成、更新、移動、置換、または削除する,
+#     local source/config/build filesを読み込み、filesystem stateを検査する,
+#   ],
+#   エラー: [
+#     RuntimeError: invalid input, unsafe path, or command failure,
+#   ],
+# }
 def collect_license_inventory(
     root: Path, distribution_dir: Path, build_toc: Path | None = None
 ) -> dict:

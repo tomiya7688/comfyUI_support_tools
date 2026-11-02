@@ -127,6 +127,32 @@ class SpriteSequenceRequest:
             raise ValueError("canonical sprite must have positive dimensions")
         if self.canonical.width * self.canonical.height > 50_000_000:
             raise ValueError("canonical sprite exceeds 50 megapixel limit")
+        for name, value, minimum, maximum in (
+            ("frames_per_action", self.frames_per_action, 1, 32),
+            ("cell_width", self.cell_width, 8, 2048),
+            ("cell_height", self.cell_height, 8, 2048),
+            ("palette_colors", self.palette_colors, 2, 256),
+            ("fps", self.fps, 1, 60),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not minimum <= value <= maximum
+            ):
+                raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+        for name, value in (
+            ("columns", self.columns),
+            ("rows", self.rows),
+            ("margin", self.margin),
+            ("padding", self.padding),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        if len(self.background) != 4 or any(
+            isinstance(channel, bool) or not isinstance(channel, int) or not 0 <= channel <= 255
+            for channel in self.background
+        ):
+            raise ValueError("background must contain four integer RGBA channels from 0 to 255")
         if not self.directions or len(set(self.directions)) != len(self.directions):
             raise ValueError("directions must be nonempty and unique")
         if len(self.directions) not in (1, 4, 8):
@@ -135,23 +161,13 @@ class SpriteSequenceRequest:
             raise ValueError("actions must be nonempty and unique")
         if any(not str(action).strip() for action in self.actions):
             raise ValueError("action identifiers cannot be blank")
-        if not 1 <= self.frames_per_action <= 32:
-            raise ValueError("frames_per_action must be between 1 and 32")
         total = len(self.directions) * len(self.actions) * self.frames_per_action
         if total > 256:
             raise ValueError("sprite sequence is limited to 256 frames")
-        if not 8 <= self.cell_width <= 2048 or not 8 <= self.cell_height <= 2048:
-            raise ValueError("sprite cell dimensions must be between 8 and 2048")
         if total * self.cell_width * self.cell_height > 128_000_000:
             raise ValueError("normalized sprite sequence exceeds the 128 megapixel safety limit")
-        if self.columns < 0 or self.rows < 0 or self.margin < 0 or self.padding < 0:
-            raise ValueError("sheet layout values cannot be negative")
         if self.columns and self.rows and self.columns * self.rows < total:
             raise ValueError("sprite sheet layout has fewer cells than frames")
-        if not 2 <= self.palette_colors <= 256:
-            raise ValueError("palette_colors must be between 2 and 256")
-        if not 1 <= self.fps <= 60:
-            raise ValueError("fps must be between 1 and 60")
         object.__setattr__(
             self, "directions", tuple(SpriteDirection(item) for item in self.directions)
         )

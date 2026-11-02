@@ -63,6 +63,24 @@ class PixelSpriteContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "action identifiers"):
             SpriteSequenceRequest(canonical, "sprite", actions=("../../unsafe",))
 
+    # {
+    # 責務: [test_rejects_non_integer_layout_and_invalid_background: image/layoutのruntime typeを検証する]
+    # 処理: [1: 型不正frame/layout値を指定, 2: contract境界で拒否することを確認]
+    # 引数: [self: test case]
+    # 戻り値: []
+    # }
+    def test_rejects_non_integer_layout_and_invalid_background(self) -> None:
+        canonical = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+        for options, message in (
+            ({"frames_per_action": 1.5}, "frames_per_action"),
+            ({"fps": True}, "fps"),
+            ({"columns": -1}, "columns"),
+            ({"background": (0, 0, 0)}, "background"),
+            ({"background": (0, 0, 0, 256)}, "background"),
+        ):
+            with self.subTest(options=options), self.assertRaisesRegex(ValueError, message):
+                SpriteSequenceRequest(canonical, "sprite", **options)
+
 
 if __name__ == "__main__":
     unittest.main()

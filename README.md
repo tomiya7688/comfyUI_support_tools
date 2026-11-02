@@ -58,6 +58,12 @@ Toukaの動画候補scoreは、候補生成中のmetricから独立したversion
 
 Tensor検出器は `ModelFamilyDetectorRegistry` へ登録でき、結果にdetector ID/versionと一致confidenceを保持します。path・metadata・tensor evidenceが衝突した場合や未対応layoutの場合は `unknown` を維持します。追加detectorは既存のtensor detectorを編集せずfixtureから登録できます。
 
+### Image Dataset Classifier / Sorter
+
+`comfyui_support_tools.shared.dataset_classifier.DatasetClassifierApplication` は再帰inventory、axis classifier registry、複数evidenceの重み付きfusion、metadata優先、alternate label/disagreement/uncertain分類、manual review保存、AND/OR/NOT query、style embedding clustering adapter、dry-run/copy/move/manifest-only、collision回避、caption/metadata sidecar検証付き転送を提供します。JSON sidecarのlabelは既定priorityで他model evidenceより優先し、queryは必要なaxisだけを分類できます。結果manifestにはsource/output、labels、confidence、evidence provenance、manual overrideを記録し、#356向けhandoff payloadも作れます。
+
+character/situation/background/styleの学習済みclassifierやembedding modelは同梱せず、adapter未登録のaxisは`uncertain`になります。ローカルJSON metadataと利用者が登録するmodelsを使うshared serviceです。GitHub issue #369の完全なreview GUIと本番semantic model接続は未実装です。
+
 ### 生成パラメータ
 
 Random Image の CFG、steps、resolution、sampler は共通 `ParameterSpecRegistry` から解決します。seed、scheduler、独自parameter、backend namespace付き値はspec登録で追加でき、解決済み値は既存4項目との互換形式を保ちながら `parameters` / `backend_parameters` に保存されます。UIとpresetはregistryのschema descriptorを共有できます。
@@ -129,6 +135,12 @@ Touka video candidate scores are computed by a separate, versioned evaluator fro
 ### Model family detection
 
 Tensor detectors register through `ModelFamilyDetectorRegistry`, and classifications retain detector ID/version and match confidence. Conflicting path, metadata, and tensor evidence, as well as unsupported layouts, remain `unknown`. A fixture can register an additional detector without editing the existing tensor detector.
+
+### Image Dataset Classifier / Sorter
+
+`comfyui_support_tools.shared.dataset_classifier.DatasetClassifierApplication` provides recursive inventory, an axis-classifier registry, weighted multi-evidence fusion, metadata precedence, alternate-label/disagreement/uncertainty reporting, persisted manual review, AND/OR/NOT queries, a style-embedding clustering adapter, dry-run/copy/move/manifest-only actions, collision avoidance, and verified caption/metadata sidecar transfer. JSON sidecar labels take priority over model evidence by default, and queries can classify only the axes they need. Export manifests record sources/destinations, labels, confidence, evidence provenance, and manual overrides; a #356 handoff payload is available.
+
+Pretrained character/situation/background/style classifiers and embedding models are not bundled. Axes without registered adapters remain `uncertain`. This is a shared service using local JSON metadata or user-provided models; the complete review GUI and production semantic-model integrations from issue #369 remain unfinished.
 
 ### Generation parameters
 

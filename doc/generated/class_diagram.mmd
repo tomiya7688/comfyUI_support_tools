@@ -282,11 +282,21 @@ classDiagram
     ttk.Frame <|-- BodyPromptTab
     class CharacterLibraryPanel {
         +__init__()
+        +_build_identity_panel()
+        +_build_outfit_panel()
+        +_build_trait_panel()
+        +_build_image_panel()
+        +_build_prompt_preview()
         +_entry()
+    }
+    CharacterLibraryActions <|-- CharacterLibraryPanel
+    ttk.Frame <|-- CharacterLibraryPanel
+    class CharacterLibraryActions {
         +reload_profiles()
         +_on_profile_selected()
         +new_character()
         +save_identity()
+        +_refresh_readiness()
         +_run_action()
         +add_outfit()
         +add_trait()
@@ -300,7 +310,6 @@ classDiagram
         +_refresh_trait_list()
         +_refresh_prompt_preview()
     }
-    ttk.Frame <|-- CharacterLibraryPanel
     class CheckBracesTab {
         +__init__()
         +_refresh_preset_choices()

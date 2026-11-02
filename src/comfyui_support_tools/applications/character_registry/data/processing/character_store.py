@@ -133,6 +133,12 @@ def resolve_character_reference(root: Path, query: str) -> CharacterProfile:
 #   戻り値: [CharacterProfile]
 # }
 def _deserialize_profile(raw: dict[str, object]) -> CharacterProfile:
+    # {
+    #   責務: [traits: JSON trait mappingsをimmutable CharacterTraitへ変換する]
+    #   処理: [optional confidence/source/visibility fieldsにdefaultsを適用する]
+    #   引数: [items: trait mappings]
+    #   戻り値: [CharacterTrait tuple]
+    # }
     def traits(items: object) -> tuple[CharacterTrait, ...]:
         return tuple(
             CharacterTrait(

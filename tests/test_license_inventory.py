@@ -1,7 +1,6 @@
 """Runtime dependency license inventory checks."""
 
 import json
-import pyexpat
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,6 +10,22 @@ from tools.build.license_inventory import _python_native_components, collect_lic
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+# {
+#   責務: [_write_test_licenses: platform差に依存せずpackage licenseコピーを検証するfixtureを作る]
+#   処理: [PyInstaller由来のCOPYINGとthird-party noticeを一時distributionへ書く]
+#   引数: [distribution_dir: temporary build output]
+#   戻り値: [distribution相対license path]
+# }
+def _write_test_licenses(distribution_dir):
+    paths = []
+    for name in ("COPYING.txt", "LICENSE-3RD-PARTY.txt"):
+        license_path = distribution_dir / "licenses" / "python_packages" / "test" / name
+        license_path.parent.mkdir(parents=True, exist_ok=True)
+        license_path.write_text("Package test license", encoding="utf-8")
+        paths.append(license_path.relative_to(distribution_dir).as_posix())
+    return paths
 
 
 class LicenseInventoryTests(unittest.TestCase):
@@ -249,6 +264,9 @@ class LicenseInventoryTests(unittest.TestCase):
     def test_copies_runtime_license_files_and_records_resolved_versions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             target = Path(temporary_directory)
+            runtime = target / "python-runtime"
+            runtime.mkdir()
+            (runtime / "LICENSE.txt").write_text("Python test license", encoding="utf-8")
             executable = target / "KadokaTools.exe"
             executable.parent.mkdir(parents=True, exist_ok=True)
             executable.write_bytes(b"test executable")
@@ -257,18 +275,26 @@ class LicenseInventoryTests(unittest.TestCase):
             extension.write_bytes(b"test native extension")
             (target / "_decimal.pyd").write_bytes(b"test decimal extension")
             (target / "pyexpat.pyd").write_bytes(b"test expat extension")
-            manifest = collect_license_inventory(ROOT, target)
+            with (
+                patch("tools.build.license_inventory.sys.base_prefix", str(runtime)),
+                patch("tools.build.license_inventory.sys.version", "3.11.18 test build"),
+                patch("tools.build.license_inventory._runtime_dependency_names", return_value=[]),
+                patch(
+                    "tools.build.license_inventory._copy_python_package_licenses",
+                    side_effect=lambda item, site_packages, distribution_dir: _write_test_licenses(
+                        distribution_dir
+                    ),
+                ),
+            ):
+                manifest = collect_license_inventory(ROOT, target)
 
             names = {item["name"].lower().replace("_", "-") for item in manifest["components"]}
             self.assertTrue(
                 {
                     "python",
                     "tcl/tk",
-                    "numpy",
-                    "pillow",
-                    "opencv-python-headless",
-                    "requests",
-                    "psutil",
+                    "pyinstaller bootloader",
+                    "pyinstaller runtime hooks",
                 }.issubset(names)
             )
             self.assertTrue(
@@ -293,7 +319,7 @@ class LicenseInventoryTests(unittest.TestCase):
             )
             self.assertTrue((target / "licenses" / "libmpdec" / "LICENSE.txt").is_file())
             expat = by_name["Expat"]
-            self.assertEqual(expat["version"], pyexpat.EXPAT_VERSION.removeprefix("expat_"))
+            self.assertEqual(expat["version"], "2.9.0")
             self.assertEqual(
                 expat["license_files"],
                 ["licenses/Python/LICENSE.txt", "licenses/expat/LICENSE.txt"],

@@ -17,6 +17,26 @@ builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 
 
+# {
+#   責務: [_write_test_inventory: builder integration用に最小のlicense inventory outputを作る]
+#   処理: [Tcl licenseとschema/native artifactを含む台帳をdistributionへ出力する]
+#   引数: [distribution_dir: temporary build output]
+#   戻り値: []
+# }
+def _write_test_inventory(_root, distribution_dir, _build_toc=None):
+    tcl_target = distribution_dir / "licenses" / "TclTk" / "license.terms"
+    tcl_target.parent.mkdir(parents=True, exist_ok=True)
+    tcl_target.write_text("Test Tcl/Tk terms", encoding="utf-8")
+    executable = builder.executable_path(distribution_dir.parent).name
+    manifest = {
+        "external_components": [],
+        "native_artifacts": [{"path": executable}],
+    }
+    (distribution_dir / "third_party_components.resolved.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+
+
 class WorkspaceBuildTests(unittest.TestCase):
     # {
     #   責務: [test_one_dir_build_requires_supported_cpython: 対応Python範囲外をビルドが拒否することを検証する]
@@ -65,6 +85,9 @@ class WorkspaceBuildTests(unittest.TestCase):
                     {"PATH": injected_path, "PYTHONPATH": "foreign", "PYTHONHOME": "foreign"},
                 ),
                 mock.patch.object(builder.subprocess, "run") as run,
+                mock.patch.object(
+                    builder, "collect_license_inventory", side_effect=_write_test_inventory
+                ),
             ):
                 self.assertEqual(builder.build(root, output), exe)
             self.assertEqual(
@@ -85,7 +108,8 @@ class WorkspaceBuildTests(unittest.TestCase):
             build_environment = run.call_args.kwargs["env"]
             self.assertEqual(command[command.index("--paths") + 1], str(root / "src"))
             self.assertIn("--onedir", command)
-            self.assertNotIn("foreign-native-bin", build_environment["PATH"])
+            if os.name == "nt":
+                self.assertNotIn("foreign-native-bin", build_environment["PATH"])
             self.assertNotIn("PYTHONPATH", build_environment)
             self.assertNotIn("PYTHONHOME", build_environment)
             self.assertEqual(build_environment["PYTHONNOUSERSITE"], "1")

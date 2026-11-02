@@ -67,9 +67,12 @@ def _read_link_target(link: Path) -> Path:
 
 def _is_reparse_point(path: Path) -> bool:
     try:
-        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+        file_stat = path.lstat()
     except OSError:
         return False
+    if stat.S_ISLNK(file_stat.st_mode):
+        return True
+    attributes = getattr(file_stat, "st_file_attributes", 0)
     return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
 
 
@@ -86,16 +89,14 @@ def _relative_to_legacy_root(target: Path, legacy_root: Path) -> Path | None:
 def _model_directory_index(models_root: Path) -> dict[str, Path]:
     if not models_root.is_dir():
         raise ModelLinkError(f"Configured shared models directory does not exist: {models_root}")
-    return {
-        child.name.casefold(): child
-        for child in models_root.iterdir()
-        if child.is_dir()
-    }
+    return {child.name.casefold(): child for child in models_root.iterdir() if child.is_dir()}
 
 
 def build_plan(paths: dict[str, str]) -> RepairPlan:
     required = ("sd_root", "comfyui_dir")
-    missing = [key for key in required if not isinstance(paths.get(key), str) or not paths[key].strip()]
+    missing = [
+        key for key in required if not isinstance(paths.get(key), str) or not paths[key].strip()
+    ]
     if missing:
         raise ModelLinkError(f"Missing path configuration: {', '.join(missing)}")
     models_value = paths.get("models_root") or paths.get("input_models")
@@ -148,7 +149,9 @@ def _create_directory_link(link: Path, target: Path) -> None:
             check=False,
         )
         if result.returncode:
-            raise OSError(result.stderr.strip() or result.stdout.strip() or "Could not create junction")
+            raise OSError(
+                result.stderr.strip() or result.stdout.strip() or "Could not create junction"
+            )
     else:
         os.symlink(target, link, target_is_directory=True)
 
@@ -168,7 +171,9 @@ def _validate_plan(plan: RepairPlan) -> None:
             raise ModelLinkError(f"Link changed after planning; refusing to replace: {repair.link}")
         current_target = _read_link_target(repair.link)
         if current_target != repair.old_target or current_target.exists():
-            raise ModelLinkError(f"Link target changed after planning; refusing to replace: {repair.link}")
+            raise ModelLinkError(
+                f"Link target changed after planning; refusing to replace: {repair.link}"
+            )
         if not repair.new_target.is_dir():
             raise ModelLinkError(f"Shared model directory disappeared: {repair.new_target}")
 
@@ -216,13 +221,22 @@ def repair(config_path: Path, apply: bool = False) -> RepairPlan:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Repair ComfyUI links to the configured shared model root")
+    parser = argparse.ArgumentParser(
+        description="Repair ComfyUI links to the configured shared model root"
+    )
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path(__file__).resolve().parents[2] / "user_data" / "input" / "config" / "common" / "paths.json",
+        default=Path(__file__).resolve().parents[2]
+        / "user_data"
+        / "input"
+        / "config"
+        / "common"
+        / "paths.json",
     )
-    parser.add_argument("--apply", action="store_true", help="replace the eligible broken directory links")
+    parser.add_argument(
+        "--apply", action="store_true", help="replace the eligible broken directory links"
+    )
     args = parser.parse_args(argv)
     try:
         repair(args.config, apply=args.apply)

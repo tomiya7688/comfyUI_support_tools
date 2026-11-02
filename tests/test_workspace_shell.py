@@ -1,4 +1,5 @@
 """Offline navigation, real Tk layout, and legacy-bridge regression tests."""
+
 import ast
 import importlib.util
 import os
@@ -12,7 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import NavigationProcessing, SECTIONS
+from comfyui_support_tools.applications.main_gui.process.processing.navigation_processing import (
+    NavigationProcessing,
+    SECTIONS,
+)
 from comfyui_support_tools.applications.main_gui.ui.processing.library_panel import LABELS
 from comfyui_support_tools.applications.main_gui.ui.processing.shell_window import ShellWindow
 from comfyui_support_tools.entrypoints.workspace import create_navigation
@@ -53,9 +57,11 @@ class NavigationTests(unittest.TestCase):
         self.assertEqual(nav.visible_tools()[0].id, "19")
 
     def test_unknown_values_fail_without_mutating_state(self):
-        for method, args in ((self.nav.select_section, ("unknown",)),
-                             (self.nav.filter_tools, ("tagger", "unknown")),
-                             (self.nav.request_open, ("unknown",))):
+        for method, args in (
+            (self.nav.select_section, ("unknown",)),
+            (self.nav.filter_tools, ("tagger", "unknown")),
+            (self.nav.request_open, ("unknown",)),
+        ):
             with self.assertRaises(ValueError):
                 method(*args)
         self.assertEqual(self.nav.visible_tools(), TOOLS)
@@ -79,11 +85,18 @@ class CatalogParityTests(unittest.TestCase):
     def test_catalog_matches_every_legacy_tab_in_order(self):
         # Read source without importing legacy backends or opening their windows.
         tree = ast.parse((ROOT / "scripts/app.py").read_text(encoding="utf-8"))
-        lists = [node.value for node in ast.walk(tree) if isinstance(node, ast.Assign)
-                 and any(isinstance(t, ast.Name) and t.id == "tab_titles" for t in node.targets)]
+        lists = [
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "tab_titles" for t in node.targets)
+        ]
         self.assertEqual(len(lists), 1)
-        self.assertEqual(tuple(item.elts[1].id for item in lists[0].elts),
-                         tuple(item[0] for item in TAB_CATALOG))
+        class_names = tuple(
+            item.elts[1].id if isinstance(item.elts[1], ast.Name) else item.elts[1].args[0].id
+            for item in lists[0].elts
+        )
+        self.assertEqual(class_names, tuple(item[0] for item in TAB_CATALOG))
 
 
 class ShellGuiTests(unittest.TestCase):
@@ -144,8 +157,13 @@ class ShellGuiTests(unittest.TestCase):
             for name in ("library", "inspector", "jobs"):
                 self.window.set_pane_visible(name, True)
             self.window.update()
-            self.assertEqual(self.window.horizontal.panes(),
-                             tuple(str(getattr(self.window, name)) for name in ("library", "workspace", "inspector")))
+            self.assertEqual(
+                self.window.horizontal.panes(),
+                tuple(
+                    str(getattr(self.window, name))
+                    for name in ("library", "workspace", "inspector")
+                ),
+            )
 
     def test_small_window_and_draggable_sashes(self):
         self.window.geometry("900x600")
@@ -173,7 +191,9 @@ class ShellGuiTests(unittest.TestCase):
 
 class LegacyBridgeTests(unittest.TestCase):
     def test_selects_requested_tab_and_can_return_without_subprocess(self):
-        spec = importlib.util.spec_from_file_location("workspace_launcher", ROOT / "tabbed_tools_gui.py")
+        spec = importlib.util.spec_from_file_location(
+            "workspace_launcher", ROOT / "tabbed_tools_gui.py"
+        )
         launcher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(launcher)
         fake = ModuleType("scripts.app")
@@ -187,7 +207,10 @@ class LegacyBridgeTests(unittest.TestCase):
             return mock.Mock()
 
         app.mainloop.side_effect = lambda: callbacks[0]()
-        with mock.patch.dict(sys.modules, {"scripts.app": fake}), mock.patch("tkinter.ttk.Button", side_effect=button):
+        with (
+            mock.patch.dict(sys.modules, {"scripts.app": fake}),
+            mock.patch("tkinter.ttk.Button", side_effect=button),
+        ):
             self.assertTrue(launcher._legacy_window("FolderTaggerTab"))
         app.show_tab.assert_called_once_with(tab_index("FolderTaggerTab"))
         app._close.assert_called_once()

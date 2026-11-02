@@ -21,6 +21,7 @@ TAB_CATALOG = (
     ("FlatFileCopyTab", "Flat Copy/Move", "Utility"),
     ("TextMergerTab", "Text Merger", "Utility"),
     ("ScreenshotFromMovieTab", "Movie Frames", "Image・Video"),
+    ("CharacterLibraryPanel", "Character Library", "Character"),
     ("MovieToTextTab", "Movie to Text", "Image・Video"),
     ("ImagesToWebpTab", "画像をWEBP変換", "Image・Video"),
     ("DuplicateLineDeleteTab", "重複行削除", "Utility"),

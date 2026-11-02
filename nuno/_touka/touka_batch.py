@@ -1,10 +1,13 @@
 import argparse
-import sys
+import hashlib
 import json
+import sys
 from pathlib import Path
+
 import numpy as np
-from PIL import Image, ImageDraw, ImageOps
+from guidance import apply_guidance_prior, load_guidance, score_guidance_alignment
 from image_enhancer import EnhanceSettings, process_image
+from PIL import Image, ImageDraw, ImageOps
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -41,7 +44,8 @@ def surface_alpha_for(alpha, surface_preset):
 
 
 def estimate_surface_color(rgb):
-    import cv2, numpy as np
+    import cv2
+    import numpy as np
 
     lab_image = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
     height, width = lab_image.shape[:2]
@@ -63,7 +67,8 @@ def estimate_surface_color(rgb):
 
 
 def estimate_surface_alpha(rgb):
-    import cv2, numpy as np
+    import cv2
+    import numpy as np
 
     lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
     height, width = lab.shape[:2]
@@ -81,7 +86,8 @@ def estimate_surface_alpha(rgb):
 
 
 def weaken_surface_component(rgb, clusters, alpha=0.16):
-    import cv2, numpy as np
+    import cv2
+    import numpy as np
 
     colors = (
         cv2.cvtColor(np.asarray(clusters, dtype=np.uint8).reshape(1, -1, 3), cv2.COLOR_RGB2LAB)
@@ -110,7 +116,8 @@ def enhance_local_contrast(rgb):
 
 
 def reduce_low_frequency_shading(rgb, strength=0.45):
-    import cv2, numpy as np
+    import cv2
+    import numpy as np
 
     lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
     lightness, a, b = cv2.split(lab)
@@ -189,7 +196,8 @@ def refine_object_mask(mask, preset):
 
 
 def skeleton_features(mask):
-    import cv2, numpy as np
+    import cv2
+    import numpy as np
 
     binary = (mask > 127).astype("uint8") * 255
     skeleton = np.zeros_like(binary)
@@ -246,7 +254,6 @@ def reference_shape_distance(first, second):
 
 
 def reference_shape_consistency(descriptors):
-    import math
 
     if len(descriptors) < 2:
         return 1.0
@@ -258,7 +265,10 @@ def reference_shape_consistency(descriptors):
 
 
 def reference_shape_summary(reference_dir, denoise=False):
-    import collections, cv2, numpy as np
+    import collections
+
+    import cv2
+    import numpy as np
 
     if reference_dir is None or not Path(reference_dir).is_dir():
         return {"preset": "generic", "image_count": 0, "confidence": 0.0, "distribution": {}}
@@ -346,7 +356,8 @@ def reference_shape_hint(reference_dir, denoise=False):
 
 
 def reference_surface_hint(reference_dir, denoise=False):
-    import cv2, numpy as np
+    import cv2
+    import numpy as np
 
     if reference_dir is None or not Path(reference_dir).is_dir():
         return None, None, 0
@@ -412,6 +423,12 @@ def correct_surface_image(image, surface_clusters, surface_alpha, profile):
     return Image.fromarray(np.dstack((rgb, rgba[..., 3])), "RGBA")
 
 
+# {
+#   責務: [process_images: optional user hintsを使ってlocal image candidateを生成する]
+#   処理: [load source images, apply Touka image processing, blend soft guidance regions and report paired hint scores]
+#   引数: [source: image or directory, target: output path, profile: processing policy, object_preset: category prior, reference_dir: optional object reference, surface_reference_dir: optional material reference, surface_preset: transparency prior, denoise_reference: reference filter, guidance: optional source-bound GuidanceHints]
+#   戻り値: []
+# }
 def process_images(
     source: Path,
     target: Path,
@@ -421,6 +438,7 @@ def process_images(
     surface_reference_dir=None,
     surface_preset="auto",
     denoise_reference=False,
+    guidance=None,
 ):
     paths = (
         [source]
@@ -429,6 +447,25 @@ def process_images(
     )
     if not paths:
         raise ValueError(f"画像ファイルが見つかりません: {source}")
+    semantic_surface_preset = "auto"
+    if guidance is not None and surface_preset == "auto":
+        material_prior = {
+            "thin_cloth": "thin_cloth",
+            "cloth": "thin_cloth",
+            "thick_cloth": "thick_cloth",
+            "paper": "thin_paper",
+            "plastic": "clear_film",
+            "glass": "clear_film",
+        }
+        category_prior = {
+            "cloth": "thin_cloth",
+            "clothing": "thin_cloth",
+            "paper": "thin_paper",
+            "film": "clear_film",
+        }
+        semantic_surface_preset = material_prior.get(
+            guidance.material, category_prior.get(guidance.category, "auto")
+        )
     reference_preset, reference_image_count = reference_shape_hint(reference_dir, denoise_reference)
     if object_preset == "generic" and reference_preset != "generic":
         object_preset = reference_preset
@@ -449,7 +486,12 @@ def process_images(
             (path, target / (Path(path.name) if source.is_file() else path.relative_to(source)))
             for path in paths
         ]
+    guidance_reports = []
     for path, out in destinations:
+        if guidance is not None and guidance.source_sha256:
+            current_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if current_digest != guidance.source_sha256:
+                raise ValueError(f"guidance source hash does not match input image: {path.name}")
         out.parent.mkdir(parents=True, exist_ok=True)
         image = ImageOps.exif_transpose(Image.open(path)).convert("RGBA")
         surface_clusters = reference_clusters or estimate_surface_color(
@@ -461,12 +503,58 @@ def process_images(
             else estimate_surface_alpha(np.asarray(image.convert("RGB")))
         )
         surface_alpha = surface_alpha_for(source_alpha, surface_preset)
+        if semantic_surface_preset != "auto":
+            hinted_alpha = surface_alpha_for(source_alpha, semantic_surface_preset)
+            surface_alpha = (
+                surface_alpha * (1 - guidance.confidence) + hinted_alpha * guidance.confidence
+            )
         prepared = correct_surface_image(image, surface_clusters, surface_alpha, profile)
         result = process_image(prepared, settings_for(profile))
+        if guidance is not None:
+            automatic_score, automatic_dimensions = score_guidance_alignment(
+                prepared, result, guidance
+            )
+            result, warnings = apply_guidance_prior(prepared, result, guidance)
+            guided_score, guided_dimensions = score_guidance_alignment(prepared, result, guidance)
+            guidance_reports.append(
+                {
+                    "input": path.name,
+                    "profile": profile,
+                    "automatic_guidance_alignment": automatic_score,
+                    "automatic_dimensions": automatic_dimensions,
+                    "guided_alignment": guided_score,
+                    "guided_dimensions": guided_dimensions,
+                    "warnings": warnings,
+                }
+            )
+            for warning in warnings:
+                print(f"guidance_warning={warning}", flush=True)
         if out.suffix.lower() in {".jpg", ".jpeg"}:
             result = result.convert("RGB")
         result.save(out)
         print(f"processed: {path}", flush=True)
+    if guidance is not None:
+        report_path = (
+            target.with_name(f"{target.stem}.guidance.json")
+            if target.suffix
+            else target / "guidance_report.json"
+        )
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(
+            json.dumps(
+                {
+                    "schema": "guidance-comparison.v1",
+                    "source_sha256": guidance.source_sha256,
+                    "candidate_count": len(guidance_reports),
+                    "candidates": guidance_reports,
+                    "note": "Scores measure alignment with user priors, not perceptual image quality.",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
 
 # {
@@ -488,7 +576,10 @@ def process_video(
     surface_preset="auto",
     denoise_reference=False,
 ):
-    import subprocess, cv2, numpy as np
+    import subprocess
+
+    import cv2
+    import numpy as np
 
     if not source.is_file():
         raise ValueError(f"動画入力はファイルを指定してください: {source}")
@@ -1139,6 +1230,9 @@ def main():
         "--surface-reference-dir", default="", help="透過表面の色推定に使う参考画像フォルダ"
     )
     parser.add_argument("--surface-preset", choices=tuple(SURFACE_PRESETS), default="auto")
+    parser.add_argument(
+        "--guidance", default="", help="optional guidance-hints.v1 JSON file for image mode"
+    )
     parser.add_argument("--roi", default="", help="対象範囲を正規化座標 x,y,width,height で指定")
     parser.add_argument(
         "--analyze-reference",
@@ -1154,6 +1248,9 @@ def main():
     roi = tuple(float(value) for value in args.roi.split(",")) if args.roi else None
     reference_dir = Path(args.reference_dir) if args.reference_dir else None
     surface_reference_dir = Path(args.surface_reference_dir) if args.surface_reference_dir else None
+    guidance = load_guidance(Path(args.guidance)) if args.guidance else None
+    if guidance is not None and args.mode == "video":
+        raise ValueError("--guidance currently supports image mode only")
     if reference_dir is not None and not reference_dir.is_dir():
         raise ValueError(f"参考画像フォルダが見つかりません: {reference_dir}")
     if surface_reference_dir is not None and not surface_reference_dir.is_dir():
@@ -1203,6 +1300,7 @@ def main():
                     surface_reference_dir,
                     args.surface_preset,
                     args.denoise_reference,
+                    guidance,
                 )
             else:
                 for item in process_videos(
@@ -1255,6 +1353,7 @@ def main():
             surface_reference_dir,
             args.surface_preset,
             args.denoise_reference,
+            guidance,
         )
     else:
         source, target = Path(args.input), Path(args.output)

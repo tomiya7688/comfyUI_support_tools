@@ -1,0 +1,9 @@
+# Touka Interactive Guidance
+
+Interactive Guidance is optional. It adds normalized point and scribble annotations for `surface`, `hidden_object`, `background`, `edge`, `color_sample`, `exclude`, and `contour`, plus coarse category/material hints and confidence. The Tk editor is available from the Touka tab after selecting a still image. It supports an explicitly low-confidence strongest-edge suggestion, undo, clear, preview overlays, and local JSON saving. Users opt in before the next image-mode Touka run; existing automatic runs remain unchanged. Video guidance is explicitly rejected.
+
+The `guidance-hints.v1` contract is bound to the source image SHA-256, stays under local user data, and is never uploaded. Coordinates and brush width are normalized to the source image. Confidence scales a soft regional blend: `exclude` and surface/background labels preserve the prepared observation, while hidden-object and contour labels allow the enhanced candidate in marked regions. Category/material hints can adjust existing surface priors. Hints never force pixels to a fixed label.
+
+Color samples are checked against the observed image. Overlapping high-confidence surface/hidden scribbles and point hints, and incompatible category/material pairs, produce warning codes. The local Touka processor emits warnings and lets the user review the output. Removing or disabling the hint file restores the existing automatic path.
+
+The current Touka CLI applies guidance to still-image processing only. Real-time camera input, video hint propagation, learned semantic confidence, and a calibrated hint/no-hint benchmark are not included. The widget compiles in the headless environment, but interactive display behavior requires a desktop session to verify. Run `python -m unittest tests.test_touka_guidance` for contract, soft-mask, contradiction, optionality, and serialization checks.

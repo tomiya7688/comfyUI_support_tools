@@ -169,6 +169,16 @@ classDiagram
     }
     class GenerationProfileInputs {
     }
+    class GuidancePoint {
+        +__post_init__()
+    }
+    class GuidanceScribble {
+        +__post_init__()
+    }
+    class GuidanceHints {
+        +__post_init__()
+        +to_dict()
+    }
     class ImageFailureInspector {
         +__init__()
         +inspect()
@@ -634,6 +644,8 @@ classDiagram
         +save_preset()
         +load_preset()
         +_build()
+        +open_guidance_editor()
+        +_guidance_saved()
         +open_editor()
         +diagnose_environment()
         +create_fashionpedia_presets()
@@ -722,6 +734,22 @@ classDiagram
     class DarkTheme {
         +apply()
     }
+    class GuidanceEditor {
+        +__init__()
+        +_build()
+        +_schedule_draw()
+        +_draw()
+        +_press()
+        +_drag()
+        +_release()
+        +_normalized_position()
+        +_canvas_position()
+        +suggest_edge()
+        +undo()
+        +clear()
+        +save()
+    }
+    tk.Toplevel <|-- GuidanceEditor
     class LabeledPathRow {
         +__init__()
         +browse()
@@ -788,6 +816,17 @@ classDiagram
         +__getitem__()
     }
     Dataset <|-- FashionpediaTrainingDataset
+    class GuidancePoint {
+        +__post_init__()
+    }
+    class GuidanceScribble {
+        +__post_init__()
+    }
+    class GuidanceHints {
+        +__post_init__()
+        +to_dict()
+        +from_dict()
+    }
     class EnhanceSettings {
     }
     class CurveEditor {

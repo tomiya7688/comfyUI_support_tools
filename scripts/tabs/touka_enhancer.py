@@ -1,13 +1,19 @@
-from ..context import *
-from ..context import _safe_thread
-from ..services import LogBox, LabeledPathRow
+import json
+
+from PIL import Image, ImageOps
+
+from scripts.backend.guidance_document import GuidanceHints, load_guidance
+
 from ..backend.process_cpu_limiter import ProcessCpuLimiter
 from ..backend.touka_dataset_preset_builder import ToukaDatasetPresetBuilder
 from ..backend.touka_evaluator import ToukaEvaluator
+from ..context import *
+from ..context import _safe_thread
+from ..services import LogBox
+from ..subapp_runtime import launch_packaged_executable, packaged_executable
+from ..widgets.guidance_editor import GuidanceEditor
 from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
-from ..subapp_runtime import launch_packaged_executable, packaged_executable
-import json
 
 TOUKA_SETTINGS_FILE = USER_INPUT_DIR / "config" / "touka" / "settings.json"
 
@@ -56,6 +62,8 @@ class ToukaEnhancerTab(ttk.Frame):
         self.evaluation_path = tk.StringVar()
         self.dataset_preset_name = tk.StringVar()
         self.denoise_references = tk.BooleanVar(value=False)
+        self.guidance_enabled = tk.BooleanVar(value=False)
+        self.guidance_path = USER_INPUT_DIR / "config" / "touka" / "guidance.json"
         self._restore_settings()
         self._build()
 
@@ -82,6 +90,7 @@ class ToukaEnhancerTab(ttk.Frame):
             ("evaluation_path", self.evaluation_path),
             ("dataset_preset_name", self.dataset_preset_name),
             ("denoise_references", self.denoise_references),
+            ("guidance_enabled", self.guidance_enabled),
         ):
             value = values.get(key)
             if isinstance(value, (str, bool)):
@@ -104,6 +113,7 @@ class ToukaEnhancerTab(ttk.Frame):
             "evaluation_path": self.evaluation_path.get(),
             "dataset_preset_name": self.dataset_preset_name.get(),
             "denoise_references": self.denoise_references.get(),
+            "guidance_enabled": self.guidance_enabled.get(),
         }
         try:
             TOUKA_SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -131,6 +141,7 @@ class ToukaEnhancerTab(ttk.Frame):
             "evaluation_path": self.evaluation_path.get(),
             "dataset_preset_name": self.dataset_preset_name.get(),
             "denoise_references": self.denoise_references.get(),
+            "guidance_enabled": self.guidance_enabled.get(),
         }
 
     def _refresh_preset_choices(self):
@@ -164,6 +175,7 @@ class ToukaEnhancerTab(ttk.Frame):
                 ("evaluation_path", self.evaluation_path),
                 ("dataset_preset_name", self.dataset_preset_name),
                 ("denoise_references", self.denoise_references),
+                ("guidance_enabled", self.guidance_enabled),
             ):
                 if key in values:
                     variable.set(values[key])
@@ -288,6 +300,16 @@ class ToukaEnhancerTab(ttk.Frame):
         action_row.add(self.preset_combo)
         action_row.add(ttk.Button(action_row, text="保存", command=self.save_preset))
         action_row.add(ttk.Button(action_row, text="読込", command=self.load_preset))
+        ttk.Checkbutton(
+            self,
+            text="保存済みInteractive Guidanceを次の画像処理に適用",
+            variable=self.guidance_enabled,
+        ).pack(anchor="w", pady=(2, 0))
+        ttk.Button(
+            self,
+            text="Point / Scribble Guidanceを編集",
+            command=self.open_guidance_editor,
+        ).pack(anchor="w", pady=(0, 4))
         selection_row = ResponsiveButtonRow(self)
         selection_row.pack(fill="x", pady=3)
         for text, command in (
@@ -331,6 +353,50 @@ class ToukaEnhancerTab(ttk.Frame):
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
         self._refresh_preset_choices()
+
+    # {
+    #   責務: [open_guidance_editor: selected imageにoptional points/scribblesを付ける]
+    #   処理: [open local Tk editor and save normalized hint JSON under user data]
+    #   引数: [self: ToukaEnhancerTab]
+    #   戻り値: []
+    # }
+    def open_guidance_editor(self):
+        source_path = Path(self.input_path.get().strip())
+        if not source_path.is_file() or source_path.suffix.lower() not in {
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".webp",
+            ".bmp",
+            ".tif",
+            ".tiff",
+        }:
+            self.logbox.log("Guidance editorには画像ファイルを1枚指定してください")
+            return
+        try:
+            with Image.open(source_path) as source:
+                image = ImageOps.exif_transpose(source).convert("RGB")
+            initial = (
+                load_guidance(self.guidance_path)
+                if self.guidance_path.is_file()
+                else GuidanceHints()
+            )
+            GuidanceEditor(self, image, self.guidance_path, self._guidance_saved, initial)
+        except (OSError, ValueError) as error:
+            self.logbox.log(f"Guidance editorを開けません: {error}")
+
+    # {
+    #   責務: [_guidance_saved: saved hint fileを有効化しUIへ反映する]
+    #   処理: [enable explicit opt-in and show the local path]
+    #   引数: [self: ToukaEnhancerTab, path: saved JSON file, hints: validated guidance]
+    #   戻り値: []
+    # }
+    def _guidance_saved(self, path, hints):
+        self.guidance_path = Path(path)
+        self.guidance_enabled.set(True)
+        self.logbox.log(
+            f"Guidanceを保存しました: {path} / points={len(hints.points)} strokes={len(hints.scribbles)}"
+        )
 
     def open_editor(self):
         executable = packaged_executable("ToukaEditor")
@@ -1031,6 +1097,13 @@ class ToukaEnhancerTab(ttk.Frame):
                 f"透過対象参考画像フォルダが見つかりません: {self.surface_reference_path.get()}"
             )
             return
+        if self.guidance_enabled.get():
+            if self.mode.get() != "image":
+                self.logbox.log("Interactive Guidanceは現在image modeでのみ使えます")
+                return
+            if not self.guidance_path.is_file():
+                self.logbox.log(f"Guidance JSONが見つかりません: {self.guidance_path}")
+                return
         self.save_settings()
         executable = packaged_executable("Touka")
         if not executable.is_file():
@@ -1066,6 +1139,8 @@ class ToukaEnhancerTab(ttk.Frame):
             command.extend(["--surface-reference-dir", self.surface_reference_path.get().strip()])
         if self.denoise_references.get():
             command.append("--denoise-reference")
+        if self.guidance_enabled.get():
+            command.extend(["--guidance", str(self.guidance_path)])
 
         def worker():
             try:

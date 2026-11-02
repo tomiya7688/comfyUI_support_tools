@@ -23,10 +23,11 @@ WindowsビルドバッチとGitHub Actionsは同じcertifi bundleを `SSL_CERT_F
 
 | 環境 | Python | pip | certifi | 結果 |
 | --- | --- | --- | --- | --- |
-| マネージドベースruntime | 3.12.14 | 26.2.1 | 2026.10.23 | 不合格。pip bundleにemSign ECC Root CA - G3があり、既定OS trust storeにもemSign ECC Root CA - G3とAAA Certificate Servicesがある。 |
-| リポジトリ `.venv` | 3.12.14 | 26.2.2 | 2026.10.23 | 合格。pip bundle、certifi bundle、`SSL_CERT_FILE` で選択した既定SSL storeのいずれにも対象fingerprintがない。 |
+| マネージドベースruntime | 3.12.14 | 26.2.1 | 2026.10.23 | 不合格。pip bundleにemSign ECC Root CA - G3が残る。`SSL_CERT_FILE` 未設定時の既定SSL storeはCA証明書0件。ランタイム管理下のためこのリポジトリからpipを更新できない。 |
+| リポジトリ `.venv` | 3.12.14 | 26.2.2 | 2026.10.23 | 合格。pip bundle、certifi bundle、`SSL_CERT_FILE` で選択した既定SSL storeのいずれにも対象fingerprintがない。`SSL_CERT_FILE` を外すと既定storeはCA証明書0件となるため検査は失敗する。 |
+| `/workspace/comfy-tools-venv` | 3.12.14 | 26.2.2 | 2026.10.23 | 旧pip 25.0.1から公式SHA-256固定wheelで更新後に合格。pip/certifi bundleと選択中SSL storeに対象fingerprintがない。 |
 
-調査前に `/workspace` 配下のvenvは見つからず、配布用 `build/` / `dist/` 成果物もありませんでした。更新済み `.venv` は既定OS trust storeから対象CAを引き継がないよう、ローカルcertifiを個別に導入して検査しています。ローカル環境の実CA bundle検査により、対象emSign/AAA rootおよび中間証明書のfingerprintが不在であることを確認しました。これはこのtrust storeで対象チェーンを信頼しないことを確認するもので、外部ホストへのTLS接続試験ではありません。
+監査では `/workspace` 内の2つのvenvを確認しました。両方のpipをPython.orgのSHA-256固定pip 26.2.2 wheelで更新し、各環境で再検査しました。更新済みvenvは `SSL_CERT_FILE` に各環境のcertifi bundleを指定して検査します。各CA bundle内の対象emSign/AAA rootおよび中間証明書fingerprintが不在であることを確認しました。これは選択されたtrust storeが対象証明書を信頼しないことの検査で、外部ホストへのTLS接続試験ではありません。マネージドベースruntimeは `/opt` 配下にあり、workspace外のpipをこの作業から変更できないため pip 26.2.1 のままです。
 
 リポジトリ内にuvやsigstoreの利用箇所はありません。uv 0.12.23はcloud runtimeにありましたが未使用です。sigstore Python packageはruntimeにありません。GitHub Artifact AttestationsはGitHub Actionsの公式actionと`gh attestation`を使い、Python sigstore packageには依存しません。
 

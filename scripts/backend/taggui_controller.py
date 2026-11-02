@@ -17,13 +17,42 @@ runpy.run_path(str(run_gui), run_name="__main__")
 """
 
 
+# {
+#   責務: [TagGUIController: 指定image directoryでTagGUIを起動・停止するcontroller]
+#   処理: [bootstrap executable or packaged appのprocess lifecycleを管理する]
+#   フィールド: [process reference and thread lock]
+# }
 class TagGUIController:
     """指定フォルダを読み込んだ状態でTagGUIを起動する。"""
 
+    # {
+    #   責務: [__init__: TagGUI subprocess state and lifecycle lockを初期化する]
+    #   処理: [process reference and thread lockを作る]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [__init__: TagGUI subprocess state and lifecycle lockを初期化する]
+    #   処理: [process reference and thread lockを作る]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
     def __init__(self):
         self._process = None
         self._lock = threading.Lock()
 
+    # {
+    #   責務: [_write_log: optional loggerへmessageを安全に送る]
+    #   処理: [logger absence or logger exceptionsを無視する]
+    #   引数: [log, message]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [_write_log: optional loggerへmessageを安全に送る]
+    #   処理: [logger absence or logger exceptionsを無視する]
+    #   引数: [log, message]
+    #   戻り値: [None]
+    # }
     @staticmethod
     def _write_log(log, message):
         if log is not None:
@@ -79,6 +108,18 @@ class TagGUIController:
             )
         self._write_log(log, f"✅ TagGUIを起動しました: {image_directory}")
 
+    # {
+    #   責務: [stop: TagGUI child processを終了する]
+    #   処理: [state lock内でprocess referenceをclearし、terminate後timeout時killする]
+    #   引数: [self, log]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [stop: TagGUI child processを終了する]
+    #   処理: [state lock内でprocess referenceをclearし、terminate後timeout時killする]
+    #   引数: [self, log]
+    #   戻り値: [None]
+    # }
     def stop(self, log=None):
         with self._lock:
             process = self._process

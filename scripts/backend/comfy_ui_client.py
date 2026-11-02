@@ -4,6 +4,11 @@ from pathlib import Path
 from ..context import *
 from .generation_backend_catalog import WorkflowModelInput
 
+# {
+#   責務: [ComfyUIClient: ComfyUI prompt and workflow API operationsをまとめる]
+#   処理: [workflow normalize, queue/poll, image upload, parameter/VAE updatesを提供する]
+#   フィールド: [base_url, timeout and workflow helpers]
+# }
 class ComfyUIClient:
     DEFAULT_WORKFLOW_PATH = resolve_comfy_flow_path("default.json")
     SAMPLER_MAP = {
@@ -15,24 +20,54 @@ class ComfyUIClient:
         "DPM++ SDE Karras": "dpmpp_sde",
     }
 
+    # {
+    #   責務: [__init__: ComfyUI API URL and request timeoutを初期化する]
+    #   処理: [requests dependencyを確認してnormalized base URLを保存する]
+    #   引数: [base_url, timeout]
+    #   戻り値: [None]
+    # }
     def __init__(self, base_url="http://127.0.0.1:8188", timeout=10000):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
+    # {
+    #   責務: [interrupt: ComfyUIへactive prompt interruptionを要求する]
+    #   処理: [/interrupt endpointへPOSTしてHTTP errorをraiseする]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
     def interrupt(self):
         response = requests.post(f"{self.base_url}/interrupt", timeout=10)
         response.raise_for_status()
 
+    # {
+    #   責務: [sampler_name: UI sampler nameをComfyUI sampler identifierへnormalizeする]
+    #   処理: [known alias mappingを優先しunknown namesをlowercase underscore形式へ変換する]
+    #   引数: [cls, value]
+    #   戻り値: [str]
+    # }
     @classmethod
     def sampler_name(cls, value):
         return cls.SAMPLER_MAP.get(value, value.strip().lower().replace(" ", "_"))
 
+    # {
+    #   責務: [scheduler_name: sampler labelからComfyUI scheduler nameを選ぶ]
+    #   処理: [Karras labelはkarras、その他はnormalへmapする]
+    #   引数: [value]
+    #   戻り値: [str]
+    # }
     @staticmethod
     def scheduler_name(value):
         return "karras" if "Karras" in value else "normal"
 
+    # {
+    #   責務: [_queue_and_fetch: workflowをComfyUIへqueueし、completion後のimage bytesを取得する]
+    #   処理: [prompt IDをpollしcancel/error/timeoutを扱いfirst output imageをdownloadする]
+    #   引数: [workflow, stop_event]
+    #   戻り値: [bytes | None]
+    # }
     def _queue_and_fetch(self, workflow, stop_event=None):
         response = requests.post(
             f"{self.base_url}/prompt",
@@ -76,6 +111,12 @@ class ComfyUIClient:
             time.sleep(0.5)
         raise TimeoutError(f"ComfyUI生成が{self.timeout}秒以内に完了しませんでした")
 
+    # {
+    #   責務: [_workflow: txt2img/img2img向けminimal API-format ComfyUI graphをconstructする]
+    #   処理: [sampler, checkpoint, encoders, VAE and latent nodesをlinkする]
+    #   引数: [prompt, negative, checkpoint, steps, cfg, sampler, width, height, denoise, latent_node]
+    #   戻り値: [dict]
+    # }
     def _workflow(
         self,
         prompt,
@@ -133,6 +174,12 @@ class ComfyUIClient:
             }
         return workflow
 
+    # {
+    #   責務: [_load_workflow: JSON workflowを読みAPI-format graphへnormalizeする]
+    #   処理: [object shapeをvalidateしeditor graphならsubgraph expansion and conversionを行う]
+    #   引数: [path]
+    #   戻り値: [dict]
+    # }
     @staticmethod
     def _load_workflow(path):
         with Path(path).open(encoding="utf-8") as source:
@@ -144,6 +191,12 @@ class ComfyUIClient:
             return ComfyUIClient._editor_workflow_to_api(workflow)
         return copy.deepcopy(workflow)
 
+    # {
+    #   責務: [_expand_single_subgraph: single-subgraph editor workflowをcontained nodes and linksへexpandする]
+    #   処理: [supported widget aliases and sampler valuesをadjustしSaveImage nodeをappendする]
+    #   引数: [workflow]
+    #   戻り値: [dict]
+    # }
     @staticmethod
     def _expand_single_subgraph(workflow):
         definitions = workflow.get("definitions", {})
@@ -165,6 +218,12 @@ class ComfyUIClient:
         links.append([1000,8,0,999,0,"IMAGE"])
         return {"nodes":expanded,"links":links}
 
+    # {
+    #   責務: [_editor_workflow_to_api: ComfyUI editor-format workflowをAPI prompt graphへconvertする]
+    #   処理: [links, widgets, node types and metadataをAPI node mappingへtranslateする]
+    #   引数: [workflow]
+    #   戻り値: [dict]
+    # }
     @staticmethod
     def _editor_workflow_to_api(workflow):
         links = {link[0]: link for link in workflow.get("links", []) if isinstance(link, list) and len(link) >= 5}
@@ -212,6 +271,12 @@ class ComfyUIClient:
                     result.append({"id": f"{node_id}:{name}", "label": f"{title} / {name}", "value": str(value)})
         return result
 
+    # {
+    #   責務: [_apply_parameters: API workflow nodesへprompt, model, sampler, seed, resolution settingsをapplyする]
+    #   処理: [explicit model overridesを反映しrecognized node inputsをmutateする]
+    #   引数: [workflow, prompt, negative, checkpoint, steps, cfg, sampler, width, height, model_overrides]
+    #   戻り値: [None]
+    # }
     @staticmethod
     def _apply_parameters(workflow, prompt, negative, checkpoint, steps, cfg, sampler, width, height, model_overrides=None):
         model_overrides = model_overrides or {}
@@ -240,6 +305,12 @@ class ComfyUIClient:
             elif kind == "EmptyLatentImage":
                 inputs.update({"width": width, "height": height, "batch_size": 1})
 
+    # {
+    #   責務: [_apply_vae_selection: explicit VAE choiceをall workflow VAE consumersへconnectする]
+    #   処理: [existing loader update or new loader creation後、decode/encode nodesをwireしconsumer absenceをrejectする]
+    #   引数: [workflow, vae_name]
+    #   戻り値: [None]
+    # }
     @staticmethod
     def _apply_vae_selection(workflow, vae_name):
         """Apply an explicit VAE to every VAE consumer in an API-format graph."""
@@ -266,6 +337,12 @@ class ComfyUIClient:
         if consumers == 0:
             raise ValueError("選択VAEを接続できるVAEEncode/VAEDecodeノードがフローにありません")
 
+    # {
+    #   責務: [txt2img: txt2img requestをworkflowへ反映しComfyUIで画像生成する]
+    #   処理: [selected/custom workflow, optional hires graph, VAE choiceを準備してqueue/fetchする]
+    #   引数: [prompt, negative, checkpoint, steps, cfg, sampler, width, height, stop_event, hires/workflow/model/VAE options]
+    #   戻り値: [bytes | None]
+    # }
     def txt2img(
         self,
         prompt,
@@ -352,6 +429,12 @@ class ComfyUIClient:
         self._apply_vae_selection(workflow, vae_name)
         return self._queue_and_fetch(workflow, stop_event)
 
+    # {
+    #   責務: [img2img: source imageをComfyUIへuploadしimg2img workflowを実行する]
+    #   処理: [input imageをupload後scale/encode graphを構成しqueue/fetchする]
+    #   引数: [image_path, prompt, negative, checkpoint, steps, cfg, sampler, denoise, width, height, stop_event, vae_name]
+    #   戻り値: [bytes | None]
+    # }
     def img2img(
         self,
         image_path,

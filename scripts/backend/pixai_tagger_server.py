@@ -3,11 +3,45 @@ import os
 from ..context import *
 from ..runtime_python import venv_python
 
+# {
+#   責務: [PixAITaggerServer: PixAI Tagger API subprocess lifecycleを管理する]
+#   処理: [health probe, process start, output forwarding and graceful shutdownを提供する]
+#   フィールド: [process state and lock]
+# }
+# {
+#   責務: [PixAITaggerServer: PixAI Tagger API subprocess lifecycleを管理する]
+#   処理: [health probe, process start, output forwarding and graceful shutdownを提供する]
+#   フィールド: [process state and lock]
+# }
 class PixAITaggerServer:
+    # {
+    #   責務: [__init__: server process state and synchronization lockを初期化する]
+    #   処理: [empty process reference and thread lockを作る]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [__init__: server process state and synchronization lockを初期化する]
+    #   処理: [empty process reference and thread lockを作る]
+    #   引数: [self]
+    #   戻り値: [None]
+    # }
     def __init__(self):
         self._process = None
         self._lock = threading.Lock()
 
+    # {
+    #   責務: [_write_log: optional loggerへmessageを安全に送る]
+    #   処理: [logger absence or logger exceptionsを無視する]
+    #   引数: [log, message]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [_write_log: optional loggerへmessageを安全に送る]
+    #   処理: [logger absence or logger exceptionsを無視する]
+    #   引数: [log, message]
+    #   戻り値: [None]
+    # }
     @staticmethod
     def _write_log(log, message):
         if log is not None:
@@ -16,6 +50,18 @@ class PixAITaggerServer:
             except Exception:
                 pass
 
+    # {
+    #   責務: [_is_online: local PixAI health endpointの応答を確認する]
+    #   処理: [requests未導入、non-200 response, and request errorsをofflineとして扱う]
+    #   引数: [self]
+    #   戻り値: [bool]
+    # }
+    # {
+    #   責務: [_is_online: local PixAI health endpointの応答を確認する]
+    #   処理: [requests未導入、non-200 response, and request errorsをofflineとして扱う]
+    #   引数: [self]
+    #   戻り値: [bool]
+    # }
     def _is_online(self):
         if requests is None:
             return False
@@ -25,6 +71,18 @@ class PixAITaggerServer:
         except Exception:
             return False
 
+    # {
+    #   責務: [_forward_output: child stdoutをloggerへ転送しprocess終了を追跡する]
+    #   処理: [output linesをprefix付きで記録し、終了後にmatching process stateをclearする]
+    #   引数: [self, process, log]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [_forward_output: child stdoutをloggerへ転送しprocess終了を追跡する]
+    #   処理: [output linesをprefix付きで記録し、終了後にmatching process stateをclearする]
+    #   引数: [self, process, log]
+    #   戻り値: [None]
+    # }
     def _forward_output(self, process, log):
         if process.stdout is not None:
             for line in process.stdout:
@@ -37,6 +95,18 @@ class PixAITaggerServer:
                 self._process = None
         self._write_log(log, f"PixAI Tagger API終了（コード: {return_code}）")
 
+    # {
+    #   責務: [start: 必要時にPixAI Tagger APIを起動してready状態を待つ]
+    #   処理: [API-only/current-process checks, venv validation, subprocess launch, health pollingを行う]
+    #   引数: [self, log]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [start: 必要時にPixAI Tagger APIを起動してready状態を待つ]
+    #   処理: [API-only/current-process checks, venv validation, subprocess launch, health pollingを行う]
+    #   引数: [self, log]
+    #   戻り値: [None]
+    # }
     def start(self, log=None):
         if API_ONLY_MODE:
             self._write_log(log, "API専用モードではPixAI Taggerを起動せず、設定済みAPIへ接続します")
@@ -95,6 +165,18 @@ class PixAITaggerServer:
                 self._process = None
         raise TimeoutError("PixAI Tagger APIが30秒以内に起動しませんでした")
 
+    # {
+    #   責務: [stop: GUIが起動したPixAI Tagger processを終了する]
+    #   処理: [terminateを試しtimeout時killし、process stateをclearする]
+    #   引数: [self, log]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [stop: GUIが起動したPixAI Tagger processを終了する]
+    #   処理: [terminateを試しtimeout時killし、process stateをclearする]
+    #   引数: [self, log]
+    #   戻り値: [None]
+    # }
     def stop(self, log=None):
         with self._lock:
             process = self._process

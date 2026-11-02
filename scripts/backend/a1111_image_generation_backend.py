@@ -33,20 +33,68 @@ class A1111ImageGenerationBackend:
         )
     )
 
+    # {
+    #   責務: [__init__: A1111 API endpoint and injectable POST clientを保存する]
+    #   処理: [URL, timeout, request callableをinstance stateへ設定する]
+    #   引数: [api_url, timeout, request_post]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [__init__: A1111 API endpoint and injectable POST clientを保存する]
+    #   処理: [URL, timeout, request callableをinstance stateへ設定する]
+    #   引数: [api_url, timeout, request_post]
+    #   戻り値: [None]
+    # }
     def __init__(self, api_url: str, timeout: int, request_post: Callable[..., Any]) -> None:
         self.api_url = api_url
         self.timeout = timeout
         self.request_post = request_post
 
+    # {
+    #   責務: [capabilities: A1111 backend capability declarationを返す]
+    #   処理: [class-level immutable capability setを公開する]
+    #   引数: [なし]
+    #   戻り値: [GenerationCapabilities]
+    # }
+    # {
+    #   責務: [capabilities: A1111 backend capability declarationを返す]
+    #   処理: [class-level immutable capability setを公開する]
+    #   引数: [なし]
+    #   戻り値: [GenerationCapabilities]
+    # }
     @property
     def capabilities(self) -> GenerationCapabilities:
         return self.CAPABILITIES
 
+    # {
+    #   責務: [interrupt: A1111 APIへactive generation interruptionを要求する]
+    #   処理: [API rootをnormalizeしてinterrupt endpointへPOSTする]
+    #   引数: [なし]
+    #   戻り値: [None]
+    # }
+    # {
+    #   責務: [interrupt: A1111 APIへactive generation interruptionを要求する]
+    #   処理: [API rootをnormalizeしてinterrupt endpointへPOSTする]
+    #   引数: [なし]
+    #   戻り値: [None]
+    # }
     def interrupt(self) -> None:
         api_root = self.api_url.split("/sdapi/", 1)[0].rstrip("/")
         response = self.request_post(f"{api_root}/sdapi/v1/interrupt", timeout=10)
         response.raise_for_status()
 
+    # {
+    #   責務: [generate: txt2img requestをA1111 payloadへ変換して画像を返す]
+    #   処理: [stop eventを先に確認し、settingsをPOSTして最初のbase64 imageをdecodeする]
+    #   引数: [request, stop_event]
+    #   戻り値: [bytes | None]
+    # }
+    # {
+    #   責務: [generate: txt2img requestをA1111 payloadへ変換して画像を返す]
+    #   処理: [stop eventを先に確認し、settingsをPOSTして最初のbase64 imageをdecodeする]
+    #   引数: [request, stop_event]
+    #   戻り値: [bytes | None]
+    # }
     def generate(self, request: TextToImageRequest, stop_event=None) -> bytes | None:
         if stop_event is not None and stop_event.is_set():
             return None
@@ -75,6 +123,18 @@ class A1111ImageGenerationBackend:
         images = response.json().get("images", [])
         return base64.b64decode(images[0]) if images else None
 
+    # {
+    #   責務: [generate_from_image: img2img requestをA1111 payloadへ変換して画像を返す]
+    #   処理: [source imageをbase64化しsettingsをPOSTして最初のimageをdecodeする]
+    #   引数: [request, stop_event]
+    #   戻り値: [bytes | None]
+    # }
+    # {
+    #   責務: [generate_from_image: img2img requestをA1111 payloadへ変換して画像を返す]
+    #   処理: [source imageをbase64化しsettingsをPOSTして最初のimageをdecodeする]
+    #   引数: [request, stop_event]
+    #   戻り値: [bytes | None]
+    # }
     def generate_from_image(self, request: ImageToImageRequest, stop_event=None) -> bytes | None:
         if stop_event is not None and stop_event.is_set():
             return None

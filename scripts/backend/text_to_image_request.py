@@ -6,6 +6,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+# {
+#   責務: [TextToImageRequest: one backend-neutral txt2img operationのsettingsを保持する]
+#   処理: [generation, optional hires, workflow, model override and VAE valuesをtransportする]
+#   フィールド: [prompt, negative, checkpoint, steps, cfg, sampler, dimensions, hires, workflow, overrides, VAE]
+# }
+# {
+#   責務: [TextToImageRequest: one backend-neutral txt2img operationのsettingsを保持する]
+#   処理: [generation, optional hires, workflow, model override and VAE valuesをtransportする]
+#   フィールド: [prompt, negative, checkpoint, steps, cfg, sampler, width, height, hires options, workflow_path, model_overrides, vae_name]
+# }
 @dataclass(frozen=True)
 class TextToImageRequest:
     prompt: str

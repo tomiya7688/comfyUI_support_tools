@@ -65,6 +65,18 @@ class GenerationBackendCatalog(Protocol):
     #   責務: [runtime_checkpoint_folders: backend runtime内でcheckpointが配置されるフォルダ名を公開する]
     #   戻り値: [tuple[str, ...]: checkpoint検索対象フォルダ名]
     # }
+    # {
+    #   責務: [runtime_checkpoint_folders: backend runtime内のcheckpoint directoriesを宣言する]
+    #   処理: [共通catalog protocolのproperty contract]
+    #   引数: [self]
+    #   戻り値: [tuple[str, ...]]
+    # }
+    # {
+    #   責務: [runtime_checkpoint_folders: backend runtime内のcheckpoint directoriesを宣言する]
+    #   処理: [共通catalog protocolのproperty contract]
+    #   引数: [self]
+    #   戻り値: [tuple[str, ...]]
+    # }
     @property
     def runtime_checkpoint_folders(self) -> tuple[str, ...]:
         """Return checkpoint folders used by this backend runtime."""
@@ -74,11 +86,35 @@ class GenerationBackendCatalog(Protocol):
     #   責務: [capabilities: backendが対応する生成機能を呼び出し側へ公開する]
     #   戻り値: [GenerationCapabilities: workflow等の機能対応情報]
     # }
+    # {
+    #   責務: [capabilities: backend generation feature setを呼び出し側へ公開する]
+    #   処理: [共通catalog protocolのproperty contract]
+    #   引数: [self]
+    #   戻り値: [GenerationCapabilities]
+    # }
+    # {
+    #   責務: [capabilities: backend generation feature setを呼び出し側へ公開する]
+    #   処理: [共通catalog protocolのproperty contract]
+    #   引数: [self]
+    #   戻り値: [GenerationCapabilities]
+    # }
     @property
     def capabilities(self) -> GenerationCapabilities:
         """Return the backend features used by generation UI and callers."""
         ...
 
+    # {
+    #   責務: [query_choices: APIからbackend choices and non-fatal warningsを取得する]
+    #   処理: [各実装がChoiceMap and endpoint warning listを返すcontractを定義する]
+    #   引数: [self, base_url, request_get]
+    #   戻り値: [tuple[ChoiceMap, list[str]]]
+    # }
+    # {
+    #   責務: [query_choices: APIからbackend choices and non-fatal warningsを取得する]
+    #   処理: [各実装がChoiceMap and endpoint warning listを返すcontractを定義する]
+    #   引数: [self, base_url, request_get]
+    #   戻り値: [tuple[ChoiceMap, list[str]]]
+    # }
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         """Return API choices and non-fatal per-endpoint warnings."""
         ...

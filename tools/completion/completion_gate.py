@@ -169,6 +169,8 @@ def comment_coverage_check() -> CheckResult:
             "tabbed_tool_gui.py",
             "--path",
             "scripts/tabs",
+            "--path",
+            "scripts/backend",
             "--strict",
         ]
     )

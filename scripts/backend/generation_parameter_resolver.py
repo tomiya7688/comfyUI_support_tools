@@ -11,9 +11,20 @@ from src.comfyui_support_tools.shared.contracts.resolved_generation_parameters i
 )
 
 
+# {
+#   責務: [GenerationParameterResolver: generation settingsをvalidateし、1画像分の値へresolveする]
+#   処理: [fixed, range, candidate modesを検証してnumeric/resolution/sampler valuesを選択する]
+#   フィールド: [random source]
+# }
 class GenerationParameterResolver:
     """Validate and resolve fixed, ranged, and candidate generation settings."""
 
+    # {
+    #   責務: [__init__: random selection用sourceを保存する]
+    #   処理: [injected random sourceを使い、未指定時はSystemRandomを生成する]
+    #   引数: [random_source]
+    #   戻り値: [None]
+    # }
     def __init__(self, random_source: Any | None = None) -> None:
         self._random = random_source or random.SystemRandom()
 
@@ -38,6 +49,12 @@ class GenerationParameterResolver:
             sampler,
         )
 
+    # {
+    #   責務: [_resolve_number: numeric settingをvalidate and resolveしてfloatへ返す]
+    #   処理: [range/candidatesを検証し有限値とboundsを確認する]
+    #   引数: [spec, name, minimum, maximum]
+    #   戻り値: [float]
+    # }
     def _resolve_number(self, spec: Any, name: str, minimum: float, maximum: float) -> float:
         self._validate_numeric_options(spec, name, minimum, maximum)
         value = self._resolve_scalar(spec, name, allow_range=True, allow_candidates=True)
@@ -47,6 +64,12 @@ class GenerationParameterResolver:
             raise ValueError(f"{name} must be between {minimum} and {maximum}")
         return float(value)
 
+    # {
+    #   責務: [_resolve_integer: integer settingをvalidate and resolveする]
+    #   処理: [range/candidatesとinteger type/boundsを検証する]
+    #   引数: [spec, name, minimum, maximum]
+    #   戻り値: [int]
+    # }
     def _resolve_integer(self, spec: Any, name: str, minimum: int, maximum: int) -> int:
         self._validate_integer_options(spec, name, minimum, maximum)
         value = self._resolve_scalar(spec, name, allow_range=True, allow_candidates=True)
@@ -56,6 +79,12 @@ class GenerationParameterResolver:
             raise ValueError(f"{name} must be between {minimum} and {maximum}")
         return value
 
+    # {
+    #   責務: [_resolve_resolution: resolution specを選択しwidth/height mappingへresolveする]
+    #   処理: [candidate resolutionsを検証しscalar configurationを解決する]
+    #   引数: [spec]
+    #   戻り値: [dict[str, int]]
+    # }
     def _resolve_resolution(self, spec: Any) -> dict[str, int]:
         if isinstance(spec, Mapping) and spec.get("mode") == "candidate":
             for candidate in self._candidate_values(spec, "resolution"):
@@ -63,6 +92,12 @@ class GenerationParameterResolver:
         value = self._resolve_scalar(spec, "resolution", allow_range=False, allow_candidates=True)
         return self._validate_resolution_value(value)
 
+    # {
+    #   責務: [_validate_resolution_value: resolution valueのwidth and height dimensionsを検証する]
+    #   処理: [mapping shapeと各8-pixel-aligned dimension boundsを確認する]
+    #   引数: [value]
+    #   戻り値: [dict[str, int]]
+    # }
     def _validate_resolution_value(self, value: Any) -> dict[str, int]:
         if not isinstance(value, Mapping):
             raise ValueError("resolution value must contain width and height")
@@ -70,12 +105,24 @@ class GenerationParameterResolver:
         height = self._dimension(value.get("height"), "height")
         return {"width": width, "height": height}
 
+    # {
+    #   責務: [_dimension: dimension valueを許容されるmultiple-of-eight integerに検証する]
+    #   処理: [bool/non-int, range, and alignment errorsを拒否する]
+    #   引数: [value, name]
+    #   戻り値: [int]
+    # }
     @staticmethod
     def _dimension(value: Any, name: str) -> int:
         if isinstance(value, bool) or not isinstance(value, int) or not 64 <= value <= 4096 or value % 8:
             raise ValueError(f"{name} must be a multiple of 8 between 64 and 4096")
         return value
 
+    # {
+    #   責務: [_resolve_sampler: sampler configurationからnon-empty nameをresolveする]
+    #   処理: [candidate namesを検証し選択結果をtrimする]
+    #   引数: [spec]
+    #   戻り値: [str]
+    # }
     def _resolve_sampler(self, spec: Any) -> str:
         if isinstance(spec, Mapping) and spec.get("mode") == "candidate":
             for candidate in self._candidate_values(spec, "sampler"):
@@ -86,6 +133,12 @@ class GenerationParameterResolver:
             raise ValueError("sampler must resolve to non-empty text")
         return value.strip()
 
+    # {
+    #   責務: [_validate_numeric_options: numeric range/candidate optionsをbounds and finitenessに検証する]
+    #   処理: [mode-specific valuesをcandidate validatorへ渡しrange orderを確認する]
+    #   引数: [spec, name, minimum, maximum]
+    #   戻り値: [None]
+    # }
     def _validate_numeric_options(self, spec: Any, name: str, minimum: float, maximum: float) -> None:
         if not isinstance(spec, Mapping):
             return
@@ -98,6 +151,12 @@ class GenerationParameterResolver:
             for value in self._candidate_values(spec, name):
                 self._validate_numeric_candidates((value,), name, minimum, maximum)
 
+    # {
+    #   責務: [_validate_integer_options: integer range/candidate valuesのtype, order and boundsを検証する]
+    #   処理: [range endpoints and each candidateをstrict integerとして確認する]
+    #   引数: [spec, name, minimum, maximum]
+    #   戻り値: [None]
+    # }
     def _validate_integer_options(self, spec: Any, name: str, minimum: int, maximum: int) -> None:
         if not isinstance(spec, Mapping):
             return
@@ -115,6 +174,12 @@ class GenerationParameterResolver:
                 if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
                     raise ValueError(f"{name} candidates must be integers between {minimum} and {maximum}")
 
+    # {
+    #   責務: [_validate_numeric_candidates: numeric candidate valuesがfinite and boundedか検証する]
+    #   処理: [bool/non-number, overflow, non-finite, and bounds errorsを拒否する]
+    #   引数: [values, name, minimum, maximum]
+    #   戻り値: [None]
+    # }
     @staticmethod
     def _validate_numeric_candidates(values, name: str, minimum: float, maximum: float) -> None:
         for value in values:
@@ -127,6 +192,12 @@ class GenerationParameterResolver:
             if not finite or not minimum <= value <= maximum:
                 raise ValueError(f"{name} values must be finite numbers between {minimum} and {maximum}")
 
+    # {
+    #   責務: [_candidate_values: configurationからnon-empty candidate sequenceを取得する]
+    #   処理: [string/bytes and non-sequence/empty valuesを拒否する]
+    #   引数: [spec, name]
+    #   戻り値: [Sequence[Any]]
+    # }
     @staticmethod
     def _candidate_values(spec: Mapping[str, Any], name: str) -> Sequence[Any]:
         values = spec.get("values")
@@ -134,6 +205,12 @@ class GenerationParameterResolver:
             raise ValueError(f"{name} candidates must be a non-empty list")
         return values
 
+    # {
+    #   責務: [_resolve_scalar: fixed, range, or candidate scalar configurationを解決する]
+    #   処理: [mode permissionを確認しrandom sourceでvalueを選択する]
+    #   引数: [spec, name, allow_range, allow_candidates]
+    #   戻り値: [Any]
+    # }
     def _resolve_scalar(
         self,
         spec: Any,

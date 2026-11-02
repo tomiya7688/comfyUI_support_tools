@@ -3,6 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 
+# {
+#   責務: [TagCategorySplitter: tag linesをsemantic categories and combined categoriesへ分ける]
+#   処理: [keyword matching後、source-relative output filesまたはcategory text filesを書き出す]
+#   フィールド: [CATEGORIES and keyword classification rules]
+# }
 class TagCategorySplitter:
     """タグ行を用途別カテゴリと複合カテゴリへ分けて書き出す。"""
 
@@ -20,10 +25,22 @@ class TagCategorySplitter:
         "image_style": ("masterpiece", "best quality", "high quality", "quality", "detailed", "anime", "illustration", "realistic", "photorealistic", "style", "artist", "render", "watercolor", "sketch", "lineart", "8k", "4k", "美麗", "高品質"),
     }
 
+    # {
+    #   責務: [split_tags: comma-separated tag lineをtrimmed tag listへ分ける]
+    #   処理: [empty tagsを除外して元の順序を保つ]
+    #   引数: [line]
+    #   戻り値: [list[str]]
+    # }
     @staticmethod
     def split_tags(line: str) -> list[str]:
         return [tag.strip() for tag in line.split(",") if tag.strip()]
 
+    # {
+    #   責務: [classify: tag listをbase and combined categoriesへgroupする]
+    #   処理: [each tagをclassifyし、configured category combinationsをconstructする]
+    #   引数: [tags]
+    #   戻り値: [dict[str, list[str]]]
+    # }
     def classify(self, tags: list[str]) -> dict[str, list[str]]:
         groups = {category: [] for category in self.CATEGORIES[:7]}
         for tag in tags:
@@ -36,6 +53,12 @@ class TagCategorySplitter:
         groups["background_image_style"] = [*groups["background"], *groups["image_style"]]
         return groups
 
+    # {
+    #   責務: [_category_for: one tagに一致するfirst keyword categoryを選ぶ]
+    #   処理: [casefold and underscore normalization後、優先順のkeyword groupsを確認する]
+    #   引数: [tag]
+    #   戻り値: [str]
+    # }
     def _category_for(self, tag: str) -> str:
         normalized = tag.casefold().replace("_", " ")
         for category in ("clothes", "expression", "pose", "background", "situation", "image_style"):
@@ -43,6 +66,12 @@ class TagCategorySplitter:
                 return category
         return "character"
 
+    # {
+    #   責務: [process_file: one input tag fileをcategoryごとの相対pathへ書き出す]
+    #   処理: [各lineをsplit and classifyし、category directoriesを作成してUTF-8で保存する]
+    #   引数: [source, input_root, output_root]
+    #   戻り値: [dict[str, Path]]
+    # }
     def process_file(self, source: Path, input_root: Path, output_root: Path) -> dict[str, Path]:
         relative = source.relative_to(input_root)
         category_lines = {category: [] for category in self.CATEGORIES}
@@ -58,6 +87,12 @@ class TagCategorySplitter:
             outputs[category] = target
         return outputs
 
+    # {
+    #   責務: [write_category_lines: category line mappingをcategoryごとのtext fileへ書く]
+    #   処理: [configured categoriesを順に出力し、空category fileも作成する]
+    #   引数: [category_lines, output_root]
+    #   戻り値: [dict[str, Path]]
+    # }
     def write_category_lines(self, category_lines: dict[str, list[str]], output_root: Path) -> dict[str, Path]:
         outputs = {}
         for category in self.CATEGORIES:

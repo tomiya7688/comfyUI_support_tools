@@ -4,9 +4,37 @@ import ctypes
 import os
 
 
+# {
+#   責務: [ProcessCpuLimiter: spawned processのCPU affinity operationsを提供する]
+#   処理: [CPU countをboundし、Windowsでのみprocess affinityをsetする]
+# {
+#   責務: [core_count: configured CPU countをavailable logical CPUs内へnormalizeする]
+#   処理: [blankはunlimitedとして扱い、integerを1..cpu_countへclampする]
+#   引数: [value]
+#   戻り値: [int | None]
+# }
+#   フィールド: [stateless CPU affinity helpers]
+# {
+#   責務: [apply: PIDへoptional Windows CPU affinity limitを適用する]
+#   処理: [入力/platform/process errorsをstatus textへ変換し、open handleをcloseする]
+#   引数: [pid, value]
+#   戻り値: [str]
+# }
+# }
+# {
+#   責務: [ProcessCpuLimiter: spawned processへoptional CPU affinity limitを適用する]
+#   処理: [CPU countをclampし、Windows APIでprocess affinityを設定する]
+#   フィールド: [stateless CPU affinity helpers]
+# }
 class ProcessCpuLimiter:
     """Apply a Windows CPU affinity limit to a spawned process."""
 
+    # {
+    #   責務: [core_count: configured CPU countをavailable logical CPUs内へnormalizeする]
+    #   処理: [blankをunlimitedとして扱い、integerを1..cpu_countへclampする]
+    #   引数: [value]
+    #   戻り値: [int | None]
+    # }
     @staticmethod
     def core_count(value: str | int | None) -> int | None:
         if value is None or str(value).strip() == "":
@@ -14,6 +42,12 @@ class ProcessCpuLimiter:
         requested = int(str(value).strip())
         return max(1, min(requested, os.cpu_count() or 1))
 
+    # {
+    #   責務: [apply: PIDへoptional Windows CPU affinity limitを適用する]
+    #   処理: [入力/platform/process failuresをstatus textへ変換し、open handleをcloseする]
+    #   引数: [pid, value]
+    #   戻り値: [str]
+    # }
     @classmethod
     def apply(cls, pid: int, value: str | int | None) -> str:
         try:

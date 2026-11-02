@@ -3,17 +3,40 @@ from __future__ import annotations
 from pathlib import Path
 
 
+# {
+#   責務: [TagTextMerger: folder直下のTXT tagsを既存outputへmergeする]
+#   処理: [optional normalized deduplicationを行い、files/added/skipped countsを返す]
+#   フィールド: [stateless text merge operations]
+# }
 class TagTextMerger:
     """Merge text files while optionally retaining only the first occurrence of each tag."""
 
+    # {
+    #   責務: [_key: tagをdeduplication comparison keyへnormalizeする]
+    #   処理: [casefold, underscore conversion, and whitespace collapseを行う]
+    #   引数: [tag]
+    #   戻り値: [str]
+    # }
     @staticmethod
     def _key(tag: str) -> str:
         return " ".join(tag.strip().casefold().replace("_", " ").split())
 
+    # {
+    #   責務: [_tags: text contentをcomma/newline separated tagsへparseする]
+    #   処理: [empty trimmed tokensを除外する]
+    #   引数: [text]
+    #   戻り値: [list[str]]
+    # }
     @staticmethod
     def _tags(text: str) -> list[str]:
         return [tag.strip() for tag in text.replace("\n", ",").split(",") if tag.strip()]
 
+    # {
+    #   責務: [merge: folder内のTXT filesを順序固定でoutputへ追記する]
+    #   処理: [destination itselfをskipし、必要なら既存内容も含めてduplicate tagsをskipする]
+    #   引数: [folder, output, deduplicate]
+    #   戻り値: [dict[str, int]]
+    # }
     def merge(self, folder: str, output: str, deduplicate: bool) -> dict[str, int]:
         source = Path(folder)
         destination = Path(output)

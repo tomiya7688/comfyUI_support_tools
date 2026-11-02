@@ -30,6 +30,18 @@ class A1111BackendCatalog:
     #   責務: [runtime_checkpoint_folders: A1111 runtimeのcheckpoint配置先を返す]
     #   戻り値: [tuple[str, ...]: A1111のcheckpointフォルダ名]
     # }
+    # {
+    #   責務: [runtime_checkpoint_folders: A1111 runtime内のcheckpoint folderを返す]
+    #   処理: [Stable-diffusion catalog rootを公開する]
+    #   引数: [なし]
+    #   戻り値: [tuple[str, ...]]
+    # }
+    # {
+    #   責務: [runtime_checkpoint_folders: A1111 runtime内のcheckpoint folderを返す]
+    #   処理: [Stable-diffusion catalog rootを公開する]
+    #   引数: [なし]
+    #   戻り値: [tuple[str, ...]]
+    # }
     @property
     def runtime_checkpoint_folders(self) -> tuple[str, ...]:
         return ("Stable-diffusion",)
@@ -46,6 +58,18 @@ class A1111BackendCatalog:
     #   責務: [capabilities: A1111 adapterが提供する生成機能を返す]
     #   戻り値: [GenerationCapabilities: A1111の対応機能]
     # }
+    # {
+    #   責務: [capabilities: A1111 image backendが提供するcapabilitiesを返す]
+    #   処理: [backend capability declarationをcatalogから公開する]
+    #   引数: [なし]
+    #   戻り値: [GenerationCapabilities]
+    # }
+    # {
+    #   責務: [capabilities: A1111 image backendが提供するcapabilitiesを返す]
+    #   処理: [backend capability declarationをcatalogから公開する]
+    #   引数: [なし]
+    #   戻り値: [GenerationCapabilities]
+    # }
     @property
     def capabilities(self) -> GenerationCapabilities:
         return A1111ImageGenerationBackend.CAPABILITIES
@@ -59,6 +83,18 @@ class A1111BackendCatalog:
     def workflow_model_inputs(self, workflow_path: str | Path) -> list[WorkflowModelInput]:
         return []
 
+    # {
+    #   責務: [query_choices: A1111 APIからcheckpoint, LoRA, VAE, upscaler, sampler choicesを取得する]
+    #   処理: [各endpointへGETし、response fieldsを抽出して失敗はwarningへ記録する]
+    #   引数: [base_url, request_get]
+    #   戻り値: [tuple[ChoiceMap, list[str]]]
+    # }
+    # {
+    #   責務: [query_choices: A1111 APIからcheckpoint, LoRA, VAE, upscaler, sampler choicesを取得する]
+    #   処理: [各endpointへGETし、response fieldsを抽出して失敗はwarningへ記録する]
+    #   引数: [base_url, request_get]
+    #   戻り値: [tuple[ChoiceMap, list[str]]]
+    # }
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         normalized_url = base_url.strip().rstrip("/")
         if "/sdapi/" in normalized_url:

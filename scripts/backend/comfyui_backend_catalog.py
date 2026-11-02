@@ -31,6 +31,18 @@ class ComfyUIBackendCatalog:
     #   責務: [runtime_checkpoint_folders: ComfyUI runtimeのcheckpoint配置先を返す]
     #   戻り値: [tuple[str, ...]: ComfyUIのcheckpointフォルダ名]
     # }
+    # {
+    #   責務: [runtime_checkpoint_folders: ComfyUI runtime内のcheckpoint folderを返す]
+    #   処理: [checkpoints catalog rootを公開する]
+    #   引数: [なし]
+    #   戻り値: [tuple[str, ...]]
+    # }
+    # {
+    #   責務: [runtime_checkpoint_folders: ComfyUI runtime内のcheckpoint folderを返す]
+    #   処理: [checkpoints catalog rootを公開する]
+    #   引数: [なし]
+    #   戻り値: [tuple[str, ...]]
+    # }
     @property
     def runtime_checkpoint_folders(self) -> tuple[str, ...]:
         return ("checkpoints",)
@@ -48,6 +60,18 @@ class ComfyUIBackendCatalog:
     #   責務: [capabilities: ComfyUI adapterが提供する生成機能を返す]
     #   戻り値: [GenerationCapabilities: ComfyUIの対応機能]
     # }
+    # {
+    #   責務: [capabilities: ComfyUI image backendが提供するcapabilitiesを返す]
+    #   処理: [backend capability declarationをcatalogから公開する]
+    #   引数: [なし]
+    #   戻り値: [GenerationCapabilities]
+    # }
+    # {
+    #   責務: [capabilities: ComfyUI image backendが提供するcapabilitiesを返す]
+    #   処理: [backend capability declarationをcatalogから公開する]
+    #   引数: [なし]
+    #   戻り値: [GenerationCapabilities]
+    # }
     @property
     def capabilities(self) -> GenerationCapabilities:
         return ComfyUIImageGenerationBackend.CAPABILITIES
@@ -61,6 +85,18 @@ class ComfyUIBackendCatalog:
     def workflow_model_inputs(self, workflow_path: str | Path) -> list[WorkflowModelInput]:
         return ComfyUIClient.model_inputs(workflow_path)
 
+    # {
+    #   責務: [query_choices: ComfyUI object_info APIからmodel and sampler choicesを取得する]
+    #   処理: [各node endpoint responseのrequired input choicesを抽出し失敗はwarningへ記録する]
+    #   引数: [base_url, request_get]
+    #   戻り値: [tuple[ChoiceMap, list[str]]]
+    # }
+    # {
+    #   責務: [query_choices: ComfyUI object_info APIからmodel and sampler choicesを取得する]
+    #   処理: [各node endpoint responseのrequired input choicesを抽出し失敗はwarningへ記録する]
+    #   引数: [base_url, request_get]
+    #   戻り値: [tuple[ChoiceMap, list[str]]]
+    # }
     def query_choices(self, base_url: str, request_get: RequestGet) -> tuple[ChoiceMap, list[str]]:
         normalized_url = base_url.strip().rstrip("/")
         choices: ChoiceMap = {"checkpoints": [], "unets": [], "loras": [], "vaes": [], "upscalers": [], "samplers": []}

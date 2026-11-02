@@ -16,6 +16,12 @@ _BASE_MODEL_KINDS = {
 }
 
 
+# {
+#   責務: [classify_base_model_choice: active backend choicesを参照してbase model family/kindをclassifyする]
+#   処理: [resolve unique checkpoint/UNet catalog membership, preserve ambiguity, and use local evidence when possible]
+#   引数: [model_name, choices]
+#   戻り値: [ModelClassification]
+# }
 def classify_base_model_choice(
     model_name: str,
     choices: dict[str, list[str]],
@@ -40,6 +46,12 @@ def classify_base_model_choice(
     return classify_model(name)
 
 
+# {
+#   責務: [describe_model_classification: classification family, kind, and reasonsをcompact UI labelへformatする]
+#   処理: [combine evidence into one display string]
+#   引数: [result]
+#   戻り値: [str]
+# }
 def describe_model_classification(result: ModelClassification) -> str:
     """Format the classification and its evidence for a compact UI label."""
     return (

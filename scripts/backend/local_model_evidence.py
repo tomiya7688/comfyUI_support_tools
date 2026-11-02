@@ -14,6 +14,12 @@ from src.comfyui_support_tools.shared.safetensors_metadata import (
 )
 
 
+# {
+#   責務: [_model_roots: model kindに応じてconfigured and legacy search rootsをresolveする]
+#   処理: [combine shared/runtime paths with backend catalog checkpoint directories]
+#   引数: [kind]
+#   戻り値: [list[Path]]
+# }
 def _model_roots(kind: ModelKind) -> list[Path]:
     from scripts import context
 
@@ -31,6 +37,12 @@ def _model_roots(kind: ModelKind) -> list[Path]:
     return [root / folder for root in [*shared, runtime] for folder in folders]
 
 
+# {
+#   責務: [_matching_files: catalog model nameに一致するsafe local model filesを探す]
+#   処理: [reject absolute/traversal paths, find exact files, support LoRA stems, tolerate OS errors, and sort unique matches]
+#   引数: [name, kind]
+#   戻り値: [list[Path]]
+# }
 def _matching_files(name: str, kind: ModelKind) -> list[Path]:
     if kind is ModelKind.CHECKPOINT:
         name = re.sub(r" \[[0-9a-fA-F]{8,64}\]$", "", name)
@@ -59,6 +71,12 @@ def _matching_files(name: str, kind: ModelKind) -> list[Path]:
     return sorted(files, key=str)
 
 
+# {
+#   責務: [_file_classification: safetensors header evidenceをstat signature keyでcacheしてclassifyする]
+#   処理: [read metadata/shapes, fallback to name-based classification on unavailable metadata, and retain evidence reason]
+#   引数: [path, mtime_ns, size, kind]
+#   戻り値: [ModelClassification]
+# }
 @lru_cache(maxsize=128)
 def _file_classification(path: str, mtime_ns: int, size: int, kind: ModelKind) -> ModelClassification:
     # Cache compact results, not large headers; the stat signature detects replacements.
@@ -73,6 +91,12 @@ def _file_classification(path: str, mtime_ns: int, size: int, kind: ModelKind) -
     return classify_model(path, metadata=metadata, tensor_shapes=shapes, declared_kind=kind)
 
 
+# {
+#   責務: [classify_local_model_choice: local model header evidenceを使いambiguous catalog namesにはuncertaintyを保持する]
+#   処理: [matching filesを解決し、duplicate時はunknown kindを返し、safetensors evidenceまたはname classificationへfallbackする]
+#   引数: [name: catalog model name, kind: declared model kind]
+#   戻り値: [ModelClassification: family/kind and evidence reasons]
+# }
 def classify_local_model_choice(name: str, kind: ModelKind) -> ModelClassification:
     """Use local header evidence, retaining uncertainty for duplicate filenames."""
     files = _matching_files(name, kind)

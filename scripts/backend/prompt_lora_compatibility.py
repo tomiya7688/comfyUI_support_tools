@@ -23,6 +23,16 @@ _LORA_REFERENCE = re.compile(r"<lora:([^:<>]+)(?::[^<>]*)?>", re.IGNORECASE)
 _MODEL_SUFFIXES = {".safetensors", ".ckpt", ".pt", ".pth", ".bin"}
 
 
+# {
+#   責務: [PromptLoraFinding: prompt内LoRA reference and compatibility resultを保持する]
+#   処理: [reference, resolved catalog name, and evidence resultを一つにまとめる]
+#   フィールド: [reference, resolved_name, result]
+# }
+# {
+#   責務: [PromptLoraFinding: prompt内LoRA reference and compatibility resultを保持する]
+#   処理: [reference, resolved catalog name, and evidence resultを一つにまとめる]
+#   フィールド: [reference, resolved_name, result]
+# }
 @dataclass(frozen=True)
 class PromptLoraFinding:
     reference: str
@@ -30,6 +40,12 @@ class PromptLoraFinding:
     result: CompatibilityResult
 
 
+# {
+#   責務: [extract_lora_references: prompt markupからunique LoRA namesを出現順で抽出する]
+#   処理: [LoRA tag syntaxをscanし、case-only duplicatesを除外する]
+#   引数: [prompt]
+#   戻り値: [list[str]]
+# }
 def extract_lora_references(prompt: str) -> list[str]:
     """Return unique LoRA names in prompt order, ignoring case-only repeats."""
     references = []
@@ -43,6 +59,18 @@ def extract_lora_references(prompt: str) -> list[str]:
     return references
 
 
+# {
+#   責務: [_normalized_name: catalog names and prompt referencesを同一形式へnormalizeする]
+#   処理: [separator, case, and known model suffixをcanonicalizeする]
+#   引数: [value]
+#   戻り値: [str]
+# }
+# {
+#   責務: [_normalized_name: catalog names and prompt referencesを同一形式へnormalizeする]
+#   処理: [separator, case, and known model suffixをcanonicalizeする]
+#   引数: [value]
+#   戻り値: [str]
+# }
 def _normalized_name(value: str) -> str:
     name = value.replace("\\", "/").strip().strip("/").casefold()
     path = PurePosixPath(name)
@@ -51,6 +79,18 @@ def _normalized_name(value: str) -> str:
     return name
 
 
+# {
+#   責務: [_resolve_lora: prompt LoRA referenceをcatalog candidateへambiguity-aware resolutionする]
+#   処理: [full normalized nameを優先し、一意なbasenameのみfallbackする]
+#   引数: [reference, candidates]
+#   戻り値: [tuple[str | None, str]]
+# }
+# {
+#   責務: [_resolve_lora: prompt LoRA referenceをcatalog candidateへambiguity-aware resolutionする]
+#   処理: [full normalized nameを優先し、一意なbasenameのみfallbackする]
+#   引数: [reference, candidates]
+#   戻り値: [tuple[str | None, str]]
+# }
 def _resolve_lora(reference: str, candidates: list[str]) -> tuple[str | None, str]:
     requested = _normalized_name(reference)
     exact = [name for name in candidates if _normalized_name(name) == requested]
@@ -75,6 +115,12 @@ def _resolve_lora(reference: str, candidates: list[str]) -> tuple[str | None, st
     return None, "No matching LoRA was found in the current backend catalog."
 
 
+# {
+#   責務: [assess_prompt_loras: prompt LoRAsをcatalog and selected base model evidenceでassessする]
+#   処理: [reference resolution and local model evidenceからcompatibility findingsを作る]
+#   引数: [prompt, base_model_name, choices, base_model_reason]
+#   戻り値: [list[PromptLoraFinding]]
+# }
 def assess_prompt_loras(
     prompt: str,
     base_model_name: str | None,
@@ -119,6 +165,12 @@ def assess_prompt_loras(
     return findings
 
 
+# {
+#   責務: [validate_prompt_loras: LoRA findingsをlogし、確定したfamily mismatchを拒否する]
+#   処理: [unknown evidenceはwarningとして記録し、incompatible referencesがあればValueErrorをraiseする]
+#   引数: [prompt, base_model_name, choices, log, base_model_reason]
+#   戻り値: [list[PromptLoraFinding]]
+# }
 def validate_prompt_loras(
     prompt: str,
     base_model_name: str | None,
@@ -144,6 +196,12 @@ def validate_prompt_loras(
     return findings
 
 
+# {
+#   責務: [format_prompt_lora_findings: LoRA compatibility findingsをPrompt Generate UI textへrenderする]
+#   処理: [empty result向け文言または各finding status/reasonをjoinする]
+#   引数: [findings]
+#   戻り値: [str]
+# }
 def format_prompt_lora_findings(findings: list[PromptLoraFinding]) -> str:
     """Render LoRA findings for the Prompt Generate tab."""
     if not findings:

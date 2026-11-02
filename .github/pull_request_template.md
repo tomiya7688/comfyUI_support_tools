@@ -8,7 +8,7 @@
 
 ## 検証
 
-- [ ] `python tools/completion/completion_gate.py` が成功した
+- [ ] `python tools/completion/check.py` が成功した
 - [ ] 必須GitHub Actionsが最新headで成功した
 - [ ] 差分はこのIssueの範囲のみ
 - [ ] 他プロジェクトからのコード移植はIssueで明示されている場合のみ

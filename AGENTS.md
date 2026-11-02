@@ -18,7 +18,7 @@ Every work session starts with `git fetch origin`. Verify the repository and wor
 12. Stop exploration when Goal / Required / Acceptance can be implemented safely.
 13. Keep unrelated refactors out of the task.
 14. Apply coding rules to new/modified code only; do not mass-refactor unrelated legacy code.
-15. Before commit/PR, run `python tools/completion/completion_gate.py`; do not proceed if it fails.
+15. Before commit/PR, run the single local entrypoint `python tools/completion/check.py`; do not proceed if a required check fails or is UNVERIFIED. CI continues to run the full completion gate and heavier platform checks.
 16. Before automated PR handling/merge, run `python tools/completion/pr_safety.py <pr-number>` and stop on conflict, unknown mergeability, failed checks, default-branch work, repository/base/head mismatch, or unexpected diff.
 17. Never write implementation changes directly to `main`/`master`, including through GitHub API/connector file-write actions. Always create a task branch, commit there, open a PR, wait for required CI to pass, run PR safety, then merge the PR.
 18. Before editing, verify the repository is `tomiya7688/comfyUI_support_tools` and that the change belongs to the selected Issue/task. Do not carry implementation from another project into this repository unless the task explicitly requests a port.

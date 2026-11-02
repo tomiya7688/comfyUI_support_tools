@@ -13,6 +13,8 @@ ComfyUI と関連するローカル画像生成ワークフローを支援する
 - [Coding Standards (English)](doc/coding-standards.md)
 - [共同開発ワークフロー](doc/ワークフロー/ワークフロー.md) / [Development workflow](doc/ワークフロー/workflow.md)
 
+PR前の標準ローカル検査は `python tools/completion/check.py` です。差分に応じたsyntax/quality/tests/docs検査を一括実行します。
+
 README とプロジェクト管理下のドキュメントは、日本語・英語の両方を維持します。
 新規文書と実質的に変更する文書は、同じ変更内で両言語を更新します。
 
@@ -60,6 +62,8 @@ A collection of support tools for ComfyUI and related local image-generation wor
 - [Coding Standards (English)](doc/coding-standards.md)
 - [コーディング規約（日本語）](doc/コーディング規約.md)
 - [Development workflow](doc/ワークフロー/workflow.md) / [共同開発ワークフロー](doc/ワークフロー/ワークフロー.md)
+
+Run `python tools/completion/check.py` as the standard pre-PR local check. It selects syntax, quality, tests, and generated-doc checks from the current diff.
 
 The README and project-owned documentation are maintained in both Japanese and English.
 New documents and documents that are substantively modified must update both languages in the same change.

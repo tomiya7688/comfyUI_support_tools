@@ -10,6 +10,7 @@ from src.comfyui_support_tools.shared.contracts.feature_settings import FeatureS
 from ..services import *
 from ..widgets.preset_store import PresetStore
 from ..widgets.responsive_button_row import ResponsiveButtonRow
+from comfyui_support_tools.shared.fast_generation import GenerationIntent, GenerationMode, Quantization
 
 class RandomImageTab(ttk.Frame):
     # {
@@ -75,6 +76,13 @@ class RandomImageTab(ttk.Frame):
         self.var_ollama_model = tk.StringVar()
         self.var_api_timeout = tk.IntVar()
         self.var_comfy_flow = tk.StringVar()
+        self.var_fast_generation_mode = tk.StringVar(value=GenerationMode.QUALITY.value)
+        self.var_fast_generation_intent = tk.StringVar(value=GenerationIntent.PREVIEW.value)
+        self.var_fast_generation_auto_route = tk.BooleanVar(value=False)
+        self.var_fast_quantizations = {
+            value: tk.BooleanVar(value=False)
+            for value in Quantization
+        }
         self.var_preset_name = tk.StringVar()
         self.var_additional_position = tk.StringVar(value="prefix")
         self.var_wildcard_cache_scope = tk.StringVar(value="each_image")
@@ -163,6 +171,8 @@ class RandomImageTab(ttk.Frame):
             self.flow_models_frame = ttk.LabelFrame(self, text="フロー固有モデル", padding=6)
             self.flow_models_frame.pack(fill="x", pady=4)
 
+            self._build_fast_generation_controls()
+
         parameter_options = ttk.LabelFrame(self, text="生成ごとのパラメータ抽選", padding=8)
         parameter_options.pack(fill="x", pady=6)
         ttk.Label(parameter_options, text="CFG（固定値 または min..max）").grid(row=0, column=0, sticky="w", padx=4, pady=2)
@@ -203,6 +213,49 @@ class RandomImageTab(ttk.Frame):
 
         self.logbox = LogBox(self)
         self.logbox.pack(fill="both", expand=True)
+
+    # {
+    #   責務: [_build_fast_generation_controls: workflow対応backend向けFast/Draft設定UIを描画する]
+    #   処理: [速度・用途・auto-route・利用者宣言precision controlsをまとめる]
+    #   引数: [self: Random Image tab]
+    #   戻り値: []
+    # }
+    def _build_fast_generation_controls(self):
+        fast_generation = ttk.LabelFrame(self, text="Fast / Low-VRAM Draft", padding=8)
+        fast_generation.pack(fill="x", pady=6)
+        ttk.Label(fast_generation, text="Priority").grid(row=0, column=0, sticky="w")
+        ttk.Combobox(
+            fast_generation,
+            state="readonly",
+            textvariable=self.var_fast_generation_mode,
+            values=[item.value for item in GenerationMode],
+            width=12,
+        ).grid(row=0, column=1, padx=4, sticky="w")
+        ttk.Label(fast_generation, text="Use case").grid(row=0, column=2, sticky="w", padx=(8, 0))
+        ttk.Combobox(
+            fast_generation,
+            state="readonly",
+            textvariable=self.var_fast_generation_intent,
+            values=[item.value for item in GenerationIntent],
+            width=14,
+        ).grid(row=0, column=3, padx=4, sticky="w")
+        ttk.Checkbutton(
+            fast_generation,
+            text="Auto-select compatible installed model",
+            variable=self.var_fast_generation_auto_route,
+        ).grid(row=1, column=0, columnspan=4, sticky="w")
+        ttk.Label(fast_generation, text="Supported precision formats:").grid(row=2, column=0, sticky="w")
+        for column, (quantization, variable) in enumerate(self.var_fast_quantizations.items(), 1):
+            ttk.Checkbutton(
+                fast_generation,
+                text=quantization.value.upper(),
+                variable=variable,
+            ).grid(row=2, column=column, sticky="w")
+        ttk.Label(
+            fast_generation,
+            text="Auto routing requires ComfyUI memory data; precision options are explicit runtime declarations.",
+            wraplength=900,
+        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(3, 0))
 
     # {
     #   責務: [_build_nsfw_mosaic_controls: NudeNet設定UIをbackend capabilityに応じて構築する]
@@ -248,6 +301,12 @@ class RandomImageTab(ttk.Frame):
         self.var_output_format.set(getattr(self.mod, "output_format", "png"))
         self.var_api_timeout.set(getattr(self.mod, "api_timeout"))
         self.var_comfy_flow.set(getattr(self.mod, "comfy_flow", ""))
+        self.var_fast_generation_mode.set(getattr(self.mod, "fast_generation_mode", GenerationMode.QUALITY.value))
+        self.var_fast_generation_intent.set(getattr(self.mod, "fast_generation_intent", GenerationIntent.PREVIEW.value))
+        self.var_fast_generation_auto_route.set(getattr(self.mod, "fast_generation_auto_route", False))
+        configured_quantizations = set(getattr(self.mod, "fast_generation_quantizations", ()))
+        for value, variable in self.var_fast_quantizations.items():
+            variable.set(value.value in configured_quantizations)
         self.var_additional_position.set(getattr(self.mod, "additional_position", "prefix"))
         self.var_wildcard_cache_scope.set(getattr(self.mod, "wildcard_cache_scope", "each_image"))
         self.var_keep_main_wildcard_until_stop.set(getattr(self.mod, "wildcard_cache_scope", "each_image") == "until_stop")
@@ -261,7 +320,7 @@ class RandomImageTab(ttk.Frame):
         self._refresh_preset_choices()
 
     def _preset_values(self):
-        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
+        return {"input_file": self.var_input_file.get(), "negative_input_file": self.var_negative_input_file.get(), "wildcard_root_dir": self.var_wildcard_root_dir.get(), "output_dir": self.var_output_dir.get(), "api_url": self.var_api_url.get(), "width": self.var_width.get(), "height": self.var_height.get(), "steps": self.var_steps.get(), "generation_parameter_input": self._generation_parameter_input(), "enable_hr": self.var_enable_hr.get(), "hr_scale": self.var_hr_scale.get(), "hr_upscaler": self.var_hr_upscaler.get(), "hr_second_pass_steps": self.var_hr_second_pass_steps.get(), "denoising_strength": self.var_denoising_strength.get(), "sampler_index": self.var_sampler_index.get(), "sd_model_checkpoint": self.var_sd_model_checkpoint.get(), "api_timeout": self.var_api_timeout.get(), "comfy_flow": self.var_comfy_flow.get(), "fast_generation_mode": self.var_fast_generation_mode.get(), "fast_generation_intent": self.var_fast_generation_intent.get(), "fast_generation_auto_route": self.var_fast_generation_auto_route.get(), "fast_generation_quantizations": [value.value for value, variable in self.var_fast_quantizations.items() if variable.get()], "additional_position": self.var_additional_position.get(), "wildcard_cache_scope": self.var_wildcard_cache_scope.get(), "additional_files": self._additional_specs(), "action_wildcards": self._action_wildcard_specs(), "enable_nsfw_mosaic": self.var_enable_nsfw_mosaic.get(), "nsfw_mosaic_factor": self.var_nsfw_mosaic_factor.get(), "enable_failure_isolation": self.var_enable_failure_isolation.get(), "image_failure_min_variance": self.var_image_failure_min_variance.get(), "enable_prompt_correction": self.var_enable_prompt_correction.get(), "ollama_api_url": self.var_ollama_api_url.get(), "ollama_model": self.var_ollama_model.get(), "flow_model_overrides": {key: variable.get() for key, _, variable in self.flow_model_vars}}
 
     def _refresh_preset_choices(self):
         self.preset_combo.configure(values=self.preset_store.names())
@@ -286,6 +345,11 @@ class RandomImageTab(ttk.Frame):
             values = self.preset_store.load(self.var_preset_name.get())
             for key, variable in (("input_file", self.var_input_file), ("negative_input_file", self.var_negative_input_file), ("wildcard_root_dir", self.var_wildcard_root_dir), ("output_dir", self.var_output_dir), ("api_url", self.var_api_url), ("width", self.var_width), ("height", self.var_height), ("steps", self.var_steps), ("enable_hr", self.var_enable_hr), ("hr_scale", self.var_hr_scale), ("hr_upscaler", self.var_hr_upscaler), ("hr_second_pass_steps", self.var_hr_second_pass_steps), ("denoising_strength", self.var_denoising_strength), ("sampler_index", self.var_sampler_index), ("sd_model_checkpoint", self.var_sd_model_checkpoint), ("api_timeout", self.var_api_timeout), ("comfy_flow", self.var_comfy_flow), ("additional_position", self.var_additional_position), ("wildcard_cache_scope", self.var_wildcard_cache_scope), ("enable_nsfw_mosaic", self.var_enable_nsfw_mosaic), ("nsfw_mosaic_factor", self.var_nsfw_mosaic_factor), ("enable_failure_isolation", self.var_enable_failure_isolation), ("image_failure_min_variance", self.var_image_failure_min_variance)):
                 if key in values: variable.set(values[key])
+            self.var_fast_generation_mode.set(values.get("fast_generation_mode", GenerationMode.QUALITY.value))
+            self.var_fast_generation_intent.set(values.get("fast_generation_intent", GenerationIntent.PREVIEW.value))
+            self.var_fast_generation_auto_route.set(values.get("fast_generation_auto_route", False))
+            quantizations = set(values.get("fast_generation_quantizations", []))
+            for quantization, variable in self.var_fast_quantizations.items(): variable.set(quantization.value in quantizations)
             self._set_additional_file_rows(values.get("additional_files", [])); self._set_action_wildcard_rows(values.get("action_wildcards", [])); self._apply_flow_model_choices(values.get("flow_model_overrides", {})); self.var_use_model_vae.set(values.get("use_model_vae", True)); self.var_vae_name.set(values.get("vae_name", "")); self.logbox.log("プリセットを読み込みました")
             self.var_save_prompts.set(values.get("save_prompts", False)); self.var_prompt_output.set(values.get("prompt_output", ""))
             self.var_sequential_loop.set(values.get("sequential_loop", False))
@@ -515,6 +579,12 @@ class RandomImageTab(ttk.Frame):
                 self.var_comfy_flow.get().strip()
                 if self.backend_capabilities.supports("workflow") else ""
             ),
+            "fast_generation_mode": self.var_fast_generation_mode.get(),
+            "fast_generation_intent": self.var_fast_generation_intent.get(),
+            "fast_generation_auto_route": self.var_fast_generation_auto_route.get(),
+            "fast_generation_quantizations": [
+                value.value for value, variable in self.var_fast_quantizations.items() if variable.get()
+            ],
             "comfy_model_overrides": {key: variable.get().strip() for key, _, variable in self.flow_model_vars if variable.get().strip()},
             "model_catalog": {
                 key: list(self.model_choices.get(key, []))

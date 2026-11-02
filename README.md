@@ -88,6 +88,10 @@ character/situation/background/styleの学習済みclassifierやembedding model�
 
 Prompt GenerateはAnimagine XL / Illustrious XL / NoobAI XL / general SDXLのprofileを識別し、model-aware prompt tags、SFW/NSFW rating tags、family-specific LoRA互換性、任意のuse-case auto-routingを適用できます。モデル品質は未benchmarkのためrouterは画像品質を採点しません。詳細は[Anime / Illustration Prompt Routing](doc/anime_generation.md) / [English guide](doc/anime_generation.en.md)を参照してください。
 
+### Fast / Low-VRAM Txt2Img
+
+Random Image の ComfyUI 経路で FLUX.2 Klein / Sana profile、GPU VRAM・system RAM に基づく任意のモデル選択、few-step設定、precision metadata、latencyとサンプリングVRAM履歴を扱います。profileの資源条件とstep数は暫定で、実測ベンチマークではありません。既存workflowとローカルモデルが必要です。候補比較UI、HQ handoff、prompt evaluator、配布workflow、実モデルbenchmarkは未接続です。詳細は[Fast / Low-VRAM Txt2Img](doc/fast_generation.md) / [English guide](doc/fast_generation.en.md)を参照してください。
+
 ### LoRA Composition Lab
 
 `comfyui_support_tools.shared.lora_composition` は互換性preflight、LoRA update norm/cosine/subspace/sign conflict分析、weighted/top-K/Zip-style training-free merge、rank圧縮、global/per-layer scale grid探索、seed固定の評価bridge、user scale preference prior、provenance付きsafetensorsとruntime recipe出力を提供します。任意依存は `pip install -r requirements-lora-composition.txt` で導入します。分析するdense updateは1 layerあたり8,388,608要素に制限します。Zip-style/top-Kは研究論文実装そのものではなく、比較可能なtraining-free baselineです。GUIと画像生成/evaluation adapterの統合は未実装です。詳細は[LoRA Composition Lab](doc/lora_composition.md)を参照してください。
@@ -201,6 +205,10 @@ Launch `python -m comfyui_support_tools.applications.expression_retouch` for fac
 ### Anime / Illustration Prompt Routing
 
 Prompt Generate recognizes profile descriptors for Animagine XL, Illustrious XL, NoobAI XL, and general SDXL. It can apply model-aware prompt tags, SFW/NSFW rating tags, family-specific LoRA compatibility, and optional use-case auto-routing. Model quality has not been benchmarked, so the router does not score image quality. See [Anime / Illustration Prompt Routing](doc/anime_generation.md) / [English guide](doc/anime_generation.en.md).
+
+### Fast / Low-VRAM Txt2Img
+
+The Random Image ComfyUI path supports FLUX.2 Klein / Sana profiles, optional model selection from GPU VRAM and system RAM, few-step settings, precision metadata, and latency plus sampled-VRAM history. Resource requirements and step counts are provisional, not measured benchmarks. Existing workflows and local models are required. Candidate comparison UI, HQ handoff, prompt evaluator, distributable workflows, and real-model benchmarks are not connected. See [Fast / Low-VRAM Txt2Img](doc/fast_generation.md) / [English guide](doc/fast_generation.en.md).
 
 ### LoRA Composition Lab
 

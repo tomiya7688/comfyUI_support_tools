@@ -149,7 +149,63 @@ class PixelArtApplication:
                 ),
             ),
         )
-        return tuple((mode, self.retouch(grid, edits)) for mode, edits in modes)
+        candidates = []
+        for mode, edits in modes:
+            result = self.retouch(grid, edits)
+            result.metadata.update(_diff_metadata(grid, result.grid))
+            result.metadata["cleanup_mode"] = mode
+            result.metadata["semantic_confidence"] = None
+            candidates.append((mode, result))
+        return tuple(candidates)
+
+    # {
+    # 責務: [replace_palette_color: replace one exact color throughout a pixel grid]
+    # 処理: [apply a reversible global palette substitution and report the result]
+    # 引数: [grid: source art, source: exact color, target: replacement RGBA color]
+    # 戻り値: [PixelArtResult: edited grid with common pixel metrics]
+    # }
+    def replace_palette_color(self, grid, source, target):
+        if source == target:
+            return self.retouch(grid, ())
+        return self.retouch(grid, (PixelEdit("replace_color", color=target, source_color=source),))
+
+    # {
+    # 責務: [reduce_palette: quantize a pixel grid to a bounded color count]
+    # 処理: [preserve native dimensions and transparency while using shared quantization]
+    # 引数: [grid: source art, color_count: requested opaque palette size]
+    # 戻り値: [PixelArtResult: reduced-palette art and metrics]
+    # }
+    def reduce_palette(self, grid, color_count):
+        if not 1 <= color_count <= 256:
+            raise ValueError("color_count must be in 1..256")
+        settings = PixelArtSettings(
+            size=max(grid.width, grid.height),
+            custom_size=(grid.width, grid.height),
+            palette_mode="count",
+            color_count=color_count,
+            transparent=True,
+        )
+        return _make_result(
+            from_grid(grid), settings, {"workflow": "retouch", "operation": "reduce_palette"}
+        )
+
+    # {
+    # 責務: [cleanup_transparent_edges: remove partially transparent pixel edges]
+    # 処理: [map alpha below threshold to transparent and remaining alpha to opaque]
+    # 引数: [grid: source art, threshold: alpha cutoff from 1 through 254]
+    # 戻り値: [PixelArtResult: binary-alpha retouch result]
+    # }
+    def cleanup_transparent_edges(self, grid, threshold=128):
+        if not 1 <= threshold <= 254:
+            raise ValueError("threshold must be in 1..254")
+        pixels = tuple(
+            color if color[3] in {0, 255} else (*color[:3], 0 if color[3] < threshold else 255)
+            for color in grid.pixels
+        )
+        return _result_for_grid(
+            PixelGrid(grid.width, grid.height, pixels),
+            {"workflow": "retouch", "operation": "clean_alpha_edges"},
+        )
 
     # {
     # 責務: [new_project: create an undoable retouch session from a result]
@@ -263,6 +319,18 @@ class PixelProject:
     # }
     def apply(self, edits: tuple[PixelEdit, ...]) -> PixelGrid:
         updated = apply_edits(self.grid, edits)
+        return self.apply_grid(updated)
+
+    # {
+    # 責務: [apply_grid: append a reviewed candidate grid to undoable project history]
+    # 処理: [validate dimensions and pixels before replacing the current snapshot]
+    # 引数: [updated: explicitly accepted candidate state]
+    # 戻り値: [PixelGrid: new current project snapshot]
+    # }
+    def apply_grid(self, updated: PixelGrid) -> PixelGrid:
+        if (updated.width, updated.height) != (self.grid.width, self.grid.height):
+            raise ValueError("candidate grid dimensions must match the active project")
+        from_grid(updated)
         self._states = self._states[: self._cursor + 1] + [updated]
         self._cursor += 1
         if len(self._states) > MAX_PROJECT_HISTORY:
@@ -388,6 +456,45 @@ def _result_for_grid(
     grid: PixelGrid, metadata: dict[str, object], scale: int = 8
 ) -> PixelArtResult:
     return PixelArtResult(grid, evaluate_grid(grid), nearest_preview(grid, scale), metadata)
+
+
+# {
+# 責務: [_diff_metadata: summarize pixel changes and connected changed regions]
+# 処理: [count changed cells and group adjacent changes into compact bounding boxes]
+# 引数: [before: source grid, after: candidate grid]
+# 戻り値: [dict[str, object]: counts, palette sizes, and changed-region bounds]
+# }
+def _diff_metadata(before, after):
+    if (before.width, before.height) != (after.width, after.height):
+        raise ValueError("pixel diff requires grids with matching dimensions")
+    changed = {
+        (index % before.width, index // before.width)
+        for index, (left, right) in enumerate(zip(before.pixels, after.pixels, strict=True))
+        if left != right
+    }
+    regions = []
+    while changed:
+        seed = changed.pop()
+        component = {seed}
+        pending = [seed]
+        while pending:
+            x, y = pending.pop()
+            neighbors = {(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy}
+            adjacent = changed & neighbors
+            changed.difference_update(adjacent)
+            component.update(adjacent)
+            pending.extend(adjacent)
+        xs = [point[0] for point in component]
+        ys = [point[1] for point in component]
+        regions.append((min(xs), min(ys), max(xs) + 1, max(ys) + 1))
+    return {
+        "changed_pixels": sum(
+            left != right for left, right in zip(before.pixels, after.pixels, strict=True)
+        ),
+        "changed_regions": tuple(sorted(regions, key=lambda region: (region[1], region[0]))),
+        "palette_before": len(set(before.pixels)),
+        "palette_after": len(set(after.pixels)),
+    }
 
 
 # {

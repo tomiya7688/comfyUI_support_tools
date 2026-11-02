@@ -46,7 +46,9 @@ def main() -> int:
         ("generated docs", docs_command),
     ]
     if not args.skip_tests and (root / "tests").exists():
-        checks.append(("unit tests", [python, "-m", "unittest", "discover", "-s", "tests", "-v"]))
+        checks.append(
+            ("unit tests", [python, "-m", "unittest", "discover", "-s", "tests", "-t", ".", "-v"])
+        )
 
     roots = existing_python_roots(root)
     if roots:

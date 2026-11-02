@@ -32,6 +32,12 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 現在のPyInstaller onedir版にはPyTorch/Transformersを同梱していないため、凍結実行ファイルではOSSモデルによる推論を利用できません。明示metadataの分類とコピーは使えますが、モデル判定が必要な画像は `uncertain` に残ります。OSSモデル推論を使う場合は、対応依存を導入したソース版GUIを起動してください。
 
+### Audio-to-MMD-Face基盤
+
+`comfyui_support_tools.shared.audio_to_face` は日本語transcriptをmoraへ分割し、WAV長さから推定timingを作って「あいうえお」morph、blink、任意emotionを含むfacial VMDとGIF previewを生成します。既存body VMDのbone/camera等のsectionを保持したままmorph trackを統合し、phoneme timeline、morph curve、簡易timing consistency metricsをJSONへ保存します。AnyTalk-style speech backendはadapterで接続できます。PMX固有morph名・scale/offsetはcalibration descriptorで指定できます。
+
+modelなしのtranscript timingは音声内の実際の発話位置ではなく一様配分の推定です。MP3/ASR、歌唱phoneme/onset、PMX自動morph解析、gaze/head motion、3D scene previewは外部adapter/後続実装が必要です。標準のtiming metricsは生成curveの整合性を測り、実音声とlabeled referenceのlip-sync精度を保証しません。
+
 ---
 
 ## English
@@ -63,3 +69,9 @@ The `AI画像クラスタ` tab analyzes an image folder and previews three group
 To use the detector, install `requirements-ai-image-clustering.txt` and a compatible PyTorch build into the GUI's Python environment. The model weights are downloaded from Hugging Face on first inference and stored under `user_data/cache/ai_origin` by default. The model targets anime images and its score thresholds are uncalibrated. Treat image-only results as estimates and keep ambiguous results in `uncertain`. Images are not sent to an external service. The model weights are Apache-2.0 licensed and are not bundled with the application.
 
 The current PyInstaller onedir build does not bundle PyTorch or Transformers, so OSS model inference is unavailable in the frozen executable. Explicit metadata classification and copying still work, while images requiring model inference remain `uncertain`. To use OSS model inference, launch the source version of the GUI with the supported dependencies installed.
+
+### Audio-to-MMD-Face foundation
+
+`comfyui_support_tools.shared.audio_to_face` segments a Japanese transcript into mora, assigns estimated timing from WAV duration, and generates facial VMD plus an animated GIF preview with Japanese vowel morphs, blinks, and an optional emotion. It merges the morph track while preserving the body VMD's bone, camera, and other sections, then writes the phoneme timeline, morph curves, and basic timing-consistency metrics as JSON. AnyTalk-style speech backends plug in through an adapter. PMX-specific morph names and scales/offsets can be supplied through a calibration descriptor.
+
+Without a model backend, transcript timings are evenly estimated from the audio duration; they do not locate actual spoken sounds. MP3/ASR, singing phoneme/onset analysis, automatic PMX morph inspection, gaze/head motion, and 3D scene preview need external adapters or later implementation. The default timing metrics check generated-curve consistency and do not establish lip-sync accuracy against audio or labeled references.

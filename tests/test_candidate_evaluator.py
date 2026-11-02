@@ -1,9 +1,13 @@
 import unittest
 
 from nuno._touka.candidate_evaluator import (
+    CALIBRATED_LINEAR_VERSION,
     HEURISTIC_BASELINE_VERSION,
+    CalibratedLinearEvaluator,
     HeuristicBaselineEvaluator,
+    calibrate_linear_evaluator,
 )
+from nuno._touka.ranking_validation import rank_candidates
 
 
 # {
@@ -56,6 +60,40 @@ class CandidateEvaluatorTests(unittest.TestCase):
             {"area_ratio": 0.1, "symmetry": 0.5}, "shirt"
         )
         self.assertAlmostEqual(result.breakdown["preset_bonus"], 1.4)
+
+    # {
+    # 責務: [test_calibrates_linear_weights_from_quality_labels: labeled examplesから係数をfitする]
+    # 処理: [1: monotonic validation setをfitする 2: provenanceと順位を確認する]
+    # 引数: [self: test instance]
+    # 戻り値: []
+    # }
+    def test_calibrates_linear_weights_from_quality_labels(self):
+        evaluator = calibrate_linear_evaluator(
+            [{"edge": 0.0}, {"edge": 1.0}, {"edge": 2.0}],
+            [1.0, 3.0, 5.0],
+        )
+        self.assertIsInstance(evaluator, CalibratedLinearEvaluator)
+        self.assertEqual(evaluator.version, CALIBRATED_LINEAR_VERSION)
+        self.assertAlmostEqual(evaluator.weights["edge"], 2.0, places=5)
+        self.assertAlmostEqual(evaluator.intercept, 1.0, places=5)
+        self.assertLess(
+            evaluator.evaluate({"edge": 0.0}, "generic").score,
+            evaluator.evaluate({"edge": 2.0}, "generic").score,
+        )
+        ranked = rank_candidates([{"edge": 0.0}, {"edge": 2.0}], [evaluator], "generic")
+        self.assertEqual(ranked[0].candidate_index, 1)
+
+    # {
+    # 責務: [test_rejects_invalid_calibration_examples: 不正labelとshapeを拒否する]
+    # 処理: [1: mismatch/non-finite入力をfitする 2: ValueErrorを確認する]
+    # 引数: [self: test instance]
+    # 戻り値: []
+    # }
+    def test_rejects_invalid_calibration_examples(self):
+        with self.assertRaises(ValueError):
+            calibrate_linear_evaluator([{"edge": 1.0}], [1.0])
+        with self.assertRaises(ValueError):
+            calibrate_linear_evaluator([{"edge": float("nan")}, {"edge": 1.0}], [0.0, 1.0])
 
 
 if __name__ == "__main__":

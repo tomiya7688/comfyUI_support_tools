@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Protocol
+
+from .candidate_evaluator import CandidateEvaluator
 
 
 # {
@@ -17,21 +18,6 @@ class RankingValidation:
     top1_accuracy: float
     top_k_inclusion: float
     candidate_count: int
-
-
-# {
-# 責務: [ ScoreProvider: 候補featureを独立評価するevaluator契約を定義する ]
-# フィールド: []
-# 処理: []
-# }
-class ScoreProvider(Protocol):
-    # {
-    # 責務: [ score: candidate featureとpresetから評価scoreを返す ]
-    # 処理: [ 1: candidateを採点する, 2: scalar scoreを返す ]
-    # 引数: [ self: evaluator, features: candidate feature, object_preset: preset ]
-    # 戻り値: [ score: evaluator score ]
-    # }
-    def score(self, features: Mapping[str, float], object_preset: str) -> float: ...
 
 
 # {
@@ -107,7 +93,7 @@ def validate_ranking(
 # }
 def rank_candidates(
     candidates: Sequence[Mapping[str, float]],
-    evaluators: Sequence[ScoreProvider],
+    evaluators: Sequence[CandidateEvaluator],
     object_preset: str,
     *,
     disagreement_threshold: float = 1.0,
@@ -117,7 +103,7 @@ def rank_candidates(
     if disagreement_threshold < 0:
         raise ValueError("disagreement_threshold cannot be negative")
     score_columns = [
-        [float(evaluator.score(item, object_preset)) for item in candidates]
+        [float(evaluator.evaluate(item, object_preset).score) for item in candidates]
         for evaluator in evaluators
     ]
     normalized_columns: list[list[float]] = []

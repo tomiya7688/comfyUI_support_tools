@@ -758,6 +758,18 @@ classDiagram
         +_settings_from_tab()
         +_feature_id()
     }
+    class EvaluationResult {
+    }
+    class CandidateEvaluator {
+        +evaluate()
+    }
+    Protocol <|-- CandidateEvaluator
+    class HeuristicBaselineEvaluator {
+        +evaluate()
+    }
+    class CalibratedLinearEvaluator {
+        +evaluate()
+    }
     class FashionpediaTrainingDataset {
         +__init__()
         +_read_annotations()
@@ -802,6 +814,10 @@ classDiagram
         +save_image()
     }
     tk.Tk <|-- App
+    class RankingValidation {
+    }
+    class RankedCandidate {
+    }
     class ProcessingTests {
         +setUp()
         +test_identity_normal_blend_preserves_image()

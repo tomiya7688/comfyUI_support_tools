@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from math import isfinite
 from typing import Protocol
 
 HEURISTIC_BASELINE_VERSION = "touka-heuristic-v1"
@@ -97,3 +98,115 @@ class HeuristicBaselineEvaluator:
             evaluator_id="touka.heuristic_baseline",
             version=HEURISTIC_BASELINE_VERSION,
         )
+
+
+CALIBRATED_LINEAR_VERSION = "touka-calibrated-linear-v1"
+
+
+# {
+# 責務: [CalibratedLinearEvaluator: validation labelsで校正したlinear evaluatorを保持する]
+# フィールド: [weights: feature係数, intercept: bias, evaluator_id: stable ID, version: calibration version]
+# 処理: [1: feature寄与とbiasを計算する 2: provenance付き結果を返す]
+# 引数: [metrics: candidate features, object_preset: unused preset compatibility field]
+# 戻り値: [EvaluationResult]
+# }
+@dataclass(frozen=True)
+class CalibratedLinearEvaluator:
+    weights: Mapping[str, float]
+    intercept: float
+    evaluator_id: str = "touka.calibrated.linear"
+    version: str = CALIBRATED_LINEAR_VERSION
+
+    # {
+    # 責務: [evaluate: 校正済み係数で候補を採点する]
+    # 処理: [1: 各feature寄与を算出する 2: 合計とprovenanceを返す]
+    # 引数: [self: evaluator, metrics: candidate features, object_preset: unused preset]
+    # 戻り値: [EvaluationResult]
+    # }
+    def evaluate(self, metrics: Mapping[str, float], object_preset: str) -> EvaluationResult:
+        del object_preset
+        breakdown = {
+            name: float(metrics.get(name, 0.0)) * coefficient
+            for name, coefficient in self.weights.items()
+        }
+        breakdown["intercept"] = self.intercept
+        return EvaluationResult(
+            sum(breakdown.values()),
+            breakdown,
+            self.evaluator_id,
+            self.version,
+        )
+
+
+# {
+# 責務: [_solve_linear_system: regularized normal equationをGaussian eliminationで解く]
+# 処理: [1: 最大pivotを選ぶ 2: 行を消去する 3: coefficient vectorを返す]
+# 引数: [matrix: square coefficient matrix, target: right-hand vector]
+# 戻り値: [solution: linear coefficients]
+# }
+def _solve_linear_system(matrix: list[list[float]], target: list[float]) -> list[float]:
+    size = len(target)
+    augmented = [row[:] + [target[index]] for index, row in enumerate(matrix)]
+    for column in range(size):
+        pivot = max(range(column, size), key=lambda row: abs(augmented[row][column]))
+        if abs(augmented[pivot][column]) < 1e-12:
+            raise ValueError("calibration data is numerically singular")
+        augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
+        divisor = augmented[column][column]
+        augmented[column] = [value / divisor for value in augmented[column]]
+        for row in range(size):
+            if row == column:
+                continue
+            factor = augmented[row][column]
+            augmented[row] = [
+                value - factor * pivot_value
+                for value, pivot_value in zip(augmented[row], augmented[column], strict=True)
+            ]
+    return [augmented[row][-1] for row in range(size)]
+
+
+# {
+# 責務: [calibrate_linear_evaluator: labeled validation examplesからridge linear evaluatorをfitする]
+# 処理: [1: 入力shapeとfinite値を検証する 2: normal equationを構築する 3: fitted evaluatorを返す]
+# 引数: [features: candidate feature maps, ground_truth_quality: human quality labels, regularization: positive ridge strength]
+# 戻り値: [CalibratedLinearEvaluator]
+# }
+def calibrate_linear_evaluator(
+    features: list[Mapping[str, float]],
+    ground_truth_quality: list[float],
+    *,
+    regularization: float = 1e-6,
+    evaluator_id: str = "touka.calibrated.linear",
+) -> CalibratedLinearEvaluator:
+    if len(features) != len(ground_truth_quality) or len(features) < 2:
+        raise ValueError("calibration requires at least two feature/quality pairs")
+    if not evaluator_id.strip() or not isfinite(regularization) or regularization <= 0:
+        raise ValueError("evaluator_id must be non-empty and regularization must be positive")
+    names = tuple(sorted({name for item in features for name in item}))
+    if not names:
+        raise ValueError("calibration requires at least one feature")
+    rows = [[float(item.get(name, 0.0)) for name in names] + [1.0] for item in features]
+    labels = [float(value) for value in ground_truth_quality]
+    if not all(isfinite(value) for row in rows for value in row) or not all(
+        isfinite(value) for value in labels
+    ):
+        raise ValueError("calibration features and labels must be finite numbers")
+    dimension = len(names) + 1
+    matrix = [
+        [
+            sum(row[left] * row[right] for row in rows)
+            + (regularization if left == right and left < len(names) else 0.0)
+            for right in range(dimension)
+        ]
+        for left in range(dimension)
+    ]
+    target = [
+        sum(row[index] * label for row, label in zip(rows, labels, strict=True))
+        for index in range(dimension)
+    ]
+    coefficients = _solve_linear_system(matrix, target)
+    return CalibratedLinearEvaluator(
+        weights=dict(zip(names, coefficients[:-1], strict=True)),
+        intercept=coefficients[-1],
+        evaluator_id=evaluator_id,
+    )

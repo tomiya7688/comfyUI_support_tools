@@ -34,7 +34,7 @@ README とプロジェクト管理下のドキュメントは、日本語・英�
 
 ### Touka候補評価
 
-Toukaの動画候補scoreは、候補生成中のmetricから独立したversion付きbaseline evaluatorで計算し、`candidate_scores.json` にscore内訳とevaluator versionを記録します。ranking検証ユーティリティはground-truth品質値に対するpairwise accuracy、top-1選択率、top-k良候補包含率を計算します。現行baselineは未校正のため、実データで検証するまではscoreを画質の保証として扱わないでください。
+Toukaの動画候補scoreは、候補生成中のmetricから独立したversion付きevaluatorで計算し、`candidate_scores.json` にscore内訳とevaluator versionを記録します。`calibrate_linear_evaluator` は人手のground-truth品質ラベルからlinear evaluatorをfitし、同じevaluator contractで候補を順位付けできます。ranking検証ユーティリティはpairwise accuracy、top-1選択率、top-k良候補包含率を測定します。リポジトリには代表的な人手ラベルsetがないため既定は既存係数をversion付きbaselineとして使用します。校正・検証するまではscoreを画質の保証として扱わないでください。
 
 ---
 
@@ -70,4 +70,4 @@ The current PyInstaller onedir build does not bundle PyTorch or Transformers, so
 
 ### Touka candidate evaluation
 
-Touka video candidate scores are computed by a separate, versioned baseline evaluator from candidate metrics. `candidate_scores.json` records the metric breakdown and evaluator version. The ranking validation utility reports pairwise accuracy, top-1 selection accuracy, and top-k inclusion against ground-truth quality labels. The current baseline is uncalibrated; do not treat its score as a quality guarantee until it is validated on representative data.
+Touka video candidate scores are computed by a separate, versioned evaluator from candidate metrics. `candidate_scores.json` records the metric breakdown and evaluator version. `calibrate_linear_evaluator` fits the same evaluator contract from human ground-truth quality labels; the ranking validator measures pairwise accuracy, top-1 selection, and top-k inclusion. The repository has no representative labeled dataset, so the default remains the versioned legacy baseline. Do not treat its score as a quality guarantee until it is calibrated and validated on representative data.

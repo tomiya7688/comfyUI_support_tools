@@ -1,5 +1,6 @@
 import unittest
 
+from nuno._touka.candidate_evaluator import EvaluationResult
 from nuno._touka.ranking_validation import rank_candidates, validate_ranking
 
 
@@ -10,7 +11,7 @@ from nuno._touka.ranking_validation import rank_candidates, validate_ranking
 # }
 class RankingValidationTests(unittest.TestCase):
     # {
-    # 責務: [ _FakeScoreProvider: featureからfixture scoreを返す ]
+    # 責務: [ _FakeScoreProvider: 共通evaluator contractでfixture scoreを返す ]
     # フィールド: [ feature: 参照feature, reverse: score反転 ]
     # 処理: []
     # }
@@ -26,14 +27,15 @@ class RankingValidationTests(unittest.TestCase):
             self.reverse = reverse
 
         # {
-        # 責務: [ score: fixture candidateを採点する ]
-        # 処理: [ 1: metricを読む, 2: 必要なら順序を反転する ]
+        # 責務: [ evaluate: fixture candidateを共通結果contractで採点する ]
+        # 処理: [ 1: metricを読む, 2: 必要なら順序を反転する 3: provenanceを付けて返す ]
         # 引数: [ self: instance, features: candidate feature, object_preset: unused preset ]
-        # 戻り値: [ score: numeric fixture score ]
+        # 戻り値: [ EvaluationResult ]
         # }
-        def score(self, features, object_preset):
+        def evaluate(self, features, object_preset):
             value = features[self.feature]
-            return -value if self.reverse else value
+            score = -value if self.reverse else value
+            return EvaluationResult(score, {self.feature: score}, "test.fake", "1")
 
     # {
     # 責務: [ test_reports_perfect_ranking_and_top_k: synthetic GTの一致指標を確認する ]

@@ -27,6 +27,8 @@ __anime_character_lora/aoba_moca__ __anime_character/バンドリ/青葉モカ__
 
 This keeps LoRA choices and character tags in separate files while the wrapper pairs the same character. Keep LoRA syntax in the LoRA-call file and character tags in the regular character wildcard.
 
+Within one prompt-resolution request, each wildcard file is expanded on its first use and its result is reused. Repeating the same wrapper therefore cannot select different LoRA strengths or character tags at each occurrence. Callers can pass a shared cache to reuse the same choices across multiple prompts.
+
 In sequential input files, each line is a generation job. The `@weight=` prefix is removed and jobs with weight `0` are skipped. Positive relative weights control candidate selection inside wildcard files; sequential jobs remain in the given order and run once each.
 
 The current `ResolvedPrompt` carries expanded text, detected LoRA names, wildcard provenance, and warnings. Automatic merging of trigger/recommended prompts from LoRA metadata and migration of every ComfyUI/A1111/Built-in route are separate steps.

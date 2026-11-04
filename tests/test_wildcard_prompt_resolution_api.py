@@ -7,6 +7,9 @@ from src.comfyui_support_tools.applications.wildcard_prompt_resolution.api impor
     resolve_prompt,
     validate_prompt,
 )
+from src.comfyui_support_tools.applications.wildcard_prompt_resolution.process.processing import (
+    wildcard_prompt_resolver,
+)
 from src.comfyui_support_tools.applications.wildcard_prompt_resolution.process.messenger import (
     wildcard_data_messenger,
 )
@@ -64,6 +67,33 @@ class WildcardPromptResolutionApiTests(unittest.TestCase):
                 str((FIXTURE_ROOT / "nested.txt").as_posix()),
             ),
         )
+
+    # {
+    #   責務: [test_character_wrapper_keeps_lora_and_tags_consistent: 同一request内でwrapper構成要素を一度だけ解決する]
+    #   処理: [LoRA参照wildcardとcharacter tag wildcardをwrapperから呼び, 同じwrapperの反復結果が一致することを確認する]
+    #   引数: [self: unittest test instance]
+    #   戻り値: []
+    # }
+    def test_character_wrapper_keeps_lora_and_tags_consistent(self):
+        """Reuse each wildcard choice within one prompt resolution request."""
+        with mock.patch.object(
+            wildcard_prompt_resolver.random,
+            "choices",
+            side_effect=lambda choices, weights, k: [choices[0]],
+        ) as choose:
+            result = resolve_prompt(
+                PromptResolutionRequest(
+                    positive_prompt=(
+                        "__character_with_lora/aoba_moca__ __character_with_lora/aoba_moca__"
+                    ),
+                    wildcard_root=FIXTURE_ROOT,
+                )
+            )
+
+        expected_wrapper = "<lora:aoba_moca:0.8> blue hair green eyes"
+        self.assertEqual(result.positive_prompt, f"{expected_wrapper} {expected_wrapper}")
+        self.assertEqual(choose.call_count, 3)
+        self.assertEqual(result.resolved_loras, ("aoba_moca",))
 
     # {
     #   責務: [test_validation_reports_unresolved_wildcard_syntax: 未解決記法をwarningにする]

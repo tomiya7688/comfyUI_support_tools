@@ -20,7 +20,7 @@ from src.comfyui_support_tools.shared.contracts.resolved_prompt import ResolvedP
 # {
 #   責務: [resolve_prompt: 입력request를 backend 독립 ResolvedPrompt로 변환한다]
 #   処理: [1: requestをvalidationする, 2: sourceまたは直接本文をwildcard展開する, 3: LoRA参照とprovenanceを収集する]
-#   引数: [request: prompt解決request, wildcard_cache: 複数prompt間で共有するwildcard cache]
+#   引数: [request: prompt解決request, wildcard_cache: 指定時は複数prompt間で共有するcache, 未指定時はrequest内cache]
 #   戻り値: [ResolvedPrompt: backendへ渡す展開済みpromptと解決情報]
 #   エラー: [ValueError: requestが不正またはwildcard重み記法が不正な場合]
 # }
@@ -29,6 +29,7 @@ def resolve_prompt(
     wildcard_cache: dict[str, str] | None = None,
 ) -> ResolvedPrompt:
     """Resolve request sources and prompt syntax into a backend-neutral result."""
+    request_cache = wildcard_cache if wildcard_cache is not None else {}
     validation = validate_prompt_request(request)
     if not validation.is_valid:
         raise ValueError("; ".join(validation.errors))
@@ -38,26 +39,26 @@ def resolve_prompt(
         resolve_wildcard_reference(
             request.positive_source,
             request.wildcard_root,
-            cache=wildcard_cache,
+            cache=request_cache,
             trace=traces,
             warnings=warnings,
         )
         if request.positive_source
         else resolve_text(
-            request.positive_prompt, request.wildcard_root, wildcard_cache, traces, warnings
+            request.positive_prompt, request.wildcard_root, request_cache, traces, warnings
         )
     )
     negative = (
         resolve_wildcard_reference(
             request.negative_source,
             request.wildcard_root,
-            cache=wildcard_cache,
+            cache=request_cache,
             trace=traces,
             warnings=warnings,
         )
         if request.negative_source
         else resolve_text(
-            request.negative_prompt, request.wildcard_root, wildcard_cache, traces, warnings
+            request.negative_prompt, request.wildcard_root, request_cache, traces, warnings
         )
     )
     return ResolvedPrompt(

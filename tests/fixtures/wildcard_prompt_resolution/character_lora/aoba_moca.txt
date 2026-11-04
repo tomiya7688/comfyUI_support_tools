@@ -1,0 +1,2 @@
+@weight=3::<lora:aoba_moca:0.8>
+<lora:aoba_moca:0.6>

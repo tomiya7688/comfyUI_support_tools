@@ -1,7 +1,9 @@
 {
   "source_roots": [
     "scripts",
-    "nuno"
+    "nuno",
+    "src/comfyui_support_tools/applications/wildcard_prompt_resolution",
+    "src/comfyui_support_tools/shared/contracts"
   ],
   "outputs": {
     "class_diagram": "doc/generated/class_diagram.mmd"

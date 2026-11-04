@@ -1,0 +1,1 @@
+"""Wildcard resolution process boundary."""

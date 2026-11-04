@@ -82,8 +82,6 @@ classDiagram
         +__init__()
         +queue_settings_update()
         +_apply_pending_settings()
-        +_select_source()
-        +_read_lines()
         +_expand_text()
         +process_file()
         +_additional_entries()
@@ -99,7 +97,6 @@ classDiagram
         +_encoded_output()
         +_correct_prompt()
         +_generate()
-        +_sequential_prompt_sources()
         +_generate_sequential()
         +_start_thread()
         +_stop()
@@ -810,3 +807,69 @@ classDiagram
         +test_curve_lut_endpoints()
     }
     unittest.TestCase <|-- ProcessingTests
+    class ApplicationConfig {
+    }
+    class ApplicationStatus {
+    }
+    class FeatureSettings {
+        +__post_init__()
+        +to_dict()
+    }
+    class ScoredLabel {
+    }
+    class NormalizedTagResult {
+    }
+    class MediaNotes {
+    }
+    class TaggerSettings {
+    }
+    class ExportSettings {
+    }
+    class MediaExportRecord {
+    }
+    class ActionDefinition {
+    }
+    class ActionAvailability {
+    }
+    class ActionRequest {
+    }
+    class ActionEvent {
+    }
+    class InspectorStatus {
+    }
+    class JobSnapshot {
+    }
+    class MediaEvent {
+    }
+    class MediaItem {
+    }
+    class MediaPreview {
+    }
+    class PromptResolutionRequest {
+    }
+    class PromptValidationResult {
+        +is_valid()
+    }
+    class ResolvedGenerationParameters {
+        +to_dict()
+    }
+    class ResolvedPrompt {
+    }
+    class FailurePolicy {
+    }
+    str <|-- FailurePolicy
+    Enum <|-- FailurePolicy
+    class SequenceStep {
+    }
+    class SequenceDefinition {
+        +__post_init__()
+        +__post_init__()
+    }
+    class SequenceStepResult {
+    }
+    class SequenceRunResult {
+    }
+    class TaggerBackendDefinition {
+    }
+    class ToolEntry {
+    }

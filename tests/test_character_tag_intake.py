@@ -10,6 +10,9 @@ from src.comfyui_support_tools.applications.character_registry.api import previe
 from src.comfyui_support_tools.applications.character_registry.data.processing import (
     tagged_dataset_reader,
 )
+from src.comfyui_support_tools.applications.character_registry.data.processing.tagged_dataset_reader import (
+    _find_image,
+)
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_tag_taxonomy import (
     classify_character_tag,
 )
@@ -154,6 +157,23 @@ class CharacterTagIntakeTest(unittest.TestCase):
                     preview_character_intake(
                         CharacterTagIntakeRequest("sample_character", "Sample", (), root)
                     )
+
+    # {
+    #   責務: [test_case_sensitive_image_stems_keep_exact_sidecar_matches: stem大小文字による別画像を正しく割り当てる]
+    #   処理: [同一casefold stemのcaption/imageを配置し, 完全一致pathが優先されることをassertする]
+    #   引数: [self: unittest.TestCase instance]
+    #   戻り値: []
+    # }
+    def test_case_sensitive_image_stems_keep_exact_sidecar_matches(self) -> None:
+        exact_stem_index = {
+            ("A", ".png"): Path("assets/A.png"),
+            ("a", ".png"): Path("assets/a.png"),
+        }
+        folded_stem_index = {("a", ".png"): Path("assets/A.png")}
+        image_indexes = (exact_stem_index, folded_stem_index)
+
+        self.assertEqual(_find_image(Path("assets/A.txt"), image_indexes), Path("assets/A.png"))
+        self.assertEqual(_find_image(Path("assets/a.txt"), image_indexes), Path("assets/a.png"))
 
 
 if __name__ == "__main__":

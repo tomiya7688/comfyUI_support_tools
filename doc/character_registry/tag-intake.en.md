@@ -10,7 +10,7 @@ The built-in taxonomy only proposes categories. A person must review and correct
 
 ## Input format
 
-The dataset can be any explicitly supplied local directory. Put a UTF-8 `.txt` file with the same basename next to each image. Image extensions are matched case-insensitively. Captions without a matching image remain in the preview with a warning. Captions under `outfits/<outfit_id>/` are grouped as outfit candidates. Other captions contribute to shared identity candidates or an unassigned outfit group. The unassigned group is marked with `is_unassigned=true`, so it cannot merge with a real profile named `unassigned`.
+The dataset can be any explicitly supplied local directory. Put a UTF-8 `.txt` file with the same basename next to each image. Image extensions are matched case-insensitively. Exact filename stems take precedence, so files differing only by case are not cross-associated. Captions without a matching image remain in the preview with a warning. Captions under `outfits/<outfit_id>/` are grouped as outfit candidates. Other captions contribute to shared identity candidates or an unassigned outfit group. The unassigned group is marked with `is_unassigned=true`, so it cannot merge with a real profile named `unassigned`.
 
 An optional `manifest.json` uses this shape:
 

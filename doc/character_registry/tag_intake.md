@@ -10,7 +10,7 @@
 
 ## 入力形式
 
-データセットは任意のローカルディレクトリで、画像の隣に同じbasenameのUTF-8 `.txt` を置きます。画像拡張子の大文字・小文字は区別しません。画像がないcaptionもpreviewに残りますが、確認用warningが付きます。`outfits/<outfit_id>/` に置いたcaptionは該当outfitの候補になります。それ以外は共通identity候補またはoutfit未割当です。未割当groupは`is_unassigned=true`で識別するため、`outfits/unassigned/`という実profileとは混ざりません。
+データセットは任意のローカルディレクトリで、画像の隣に同じbasenameのUTF-8 `.txt` を置きます。画像拡張子は大文字・小文字を区別せずに照合します。stemは完全一致を優先するため、大文字・小文字だけが異なる別ファイルを取り違えません。画像がないcaptionもpreviewに残りますが、確認用warningが付きます。`outfits/<outfit_id>/` に置いたcaptionは該当outfitの候補になります。それ以外は共通identity候補またはoutfit未割当です。未割当groupは`is_unassigned=true`で識別するため、`outfits/unassigned/`という実profileとは混ざりません。
 
 任意の `manifest.json` は次の形です。
 

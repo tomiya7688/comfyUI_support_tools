@@ -85,30 +85,41 @@ def _is_inside_dataset(dataset_root: Path, candidate: Path) -> bool:
 
 # {
 #   責務: [_index_images: 1つのcaption directoryにある画像をstem/拡張子でindex化する]
-#   処理: [1: image fileを順番に走査する, 2: stemとcasefold suffixでmappingを返す]
+#   処理: [1: image fileを順番に走査する, 2: exact/folded stemとcasefold suffixのmappingを返す]
 #   引数: [directory: 画像を探すdirectory]
-#   戻り値: [dict[tuple[str, str], Path]: 正規化stemとsuffixから画像pathを得るindex]
+#   戻り値: [tuple[dict[tuple[str, str], Path], dict[tuple[str, str], Path]]: exact/folded stem index]
 # }
-def _index_images(directory: Path) -> dict[tuple[str, str], Path]:
-    image_index: dict[tuple[str, str], Path] = {}
+def _index_images(
+    directory: Path,
+) -> tuple[dict[tuple[str, str], Path], dict[tuple[str, str], Path]]:
+    exact_stem_index: dict[tuple[str, str], Path] = {}
+    folded_stem_index: dict[tuple[str, str], Path] = {}
     for candidate in sorted(
         directory.iterdir(), key=lambda path: (path.name.casefold(), path.name)
     ):
         suffix = candidate.suffix.casefold()
         if candidate.is_file() and suffix in IMAGE_SUFFIXES:
-            image_index.setdefault((candidate.stem.casefold(), suffix), candidate)
-    return image_index
+            exact_stem_index.setdefault((candidate.stem, suffix), candidate)
+            folded_stem_index.setdefault((candidate.stem.casefold(), suffix), candidate)
+    return exact_stem_index, folded_stem_index
 
 
 # {
 #   責務: [_find_image: captionと同名の画像をdataset内から探す]
 #   処理: [caption stemとimage indexを照合し, 設定された拡張子優先順でpathを返す]
-#   引数: [caption: caption file path, image_index: 親directoryの画像index]
+#   引数: [caption: caption file path, image_indexes: exact/folded stemの画像index]
 #   戻り値: [Path | None: 画像が存在する場合の相対path]
 # }
-def _find_image(caption: Path, image_index: dict[tuple[str, str], Path]) -> Path | None:
+def _find_image(
+    caption: Path,
+    image_indexes: tuple[dict[tuple[str, str], Path], dict[tuple[str, str], Path]],
+) -> Path | None:
+    exact_stem_index, folded_stem_index = image_indexes
     for suffix in IMAGE_SUFFIXES:
-        image = image_index.get((caption.stem.casefold(), suffix.casefold()))
+        normalized_suffix = suffix.casefold()
+        image = exact_stem_index.get((caption.stem, normalized_suffix)) or folded_stem_index.get(
+            (caption.stem.casefold(), normalized_suffix)
+        )
         if image:
             return image
     return None
@@ -136,7 +147,10 @@ def read_tagged_dataset(
         key=lambda path: path.as_posix().casefold(),
     )
     result: list[CharacterSourceAsset] = []
-    image_indexes: dict[Path, dict[tuple[str, str], Path]] = {}
+    image_indexes: dict[
+        Path,
+        tuple[dict[tuple[str, str], Path], dict[tuple[str, str], Path]],
+    ] = {}
     for caption in caption_files:
         if not _is_inside_dataset(dataset_root, caption):
             warnings.append(f"dataset外を指すcaption symlinkを除外しました: {caption}")

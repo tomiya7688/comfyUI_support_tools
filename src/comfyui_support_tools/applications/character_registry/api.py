@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
@@ -10,8 +9,7 @@ from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview imp
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_request import (
     CharacterTagIntakeRequest,
 )
-
-CHARACTER_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+from src.comfyui_support_tools.shared.contracts.character_id import is_valid_character_id
 
 
 # {
@@ -23,7 +21,7 @@ CHARACTER_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 # }
 def preview_character_intake(request: CharacterTagIntakeRequest) -> CharacterTagIntakePreview:
     """Return identity/outfit/unclassified tag suggestions for manual review."""
-    if not CHARACTER_ID_PATTERN.fullmatch(request.character_id):
+    if not is_valid_character_id(request.character_id):
         raise ValueError("character_idは小文字英数字と-_を使う1〜64文字で指定してください")
     if not request.display_name.strip():
         raise ValueError("display_nameを指定してください")

@@ -1,0 +1,1 @@
+"""Character Registry data boundary."""

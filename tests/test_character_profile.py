@@ -2,7 +2,7 @@
 
 import unittest
 from dataclasses import FrozenInstanceError, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from src.comfyui_support_tools.shared.contracts.character_id import (
     create_character_id,
@@ -107,6 +107,24 @@ class CharacterProfileContractTest(unittest.TestCase):
                 "Sample",
                 created_at=datetime(2026, 11, 4),
             )
+        with self.assertRaises(ValueError):
+            CharacterProfile(
+                create_character_id(),
+                "Sample",
+                created_at=datetime(2026, 11, 4, tzinfo=timezone(timedelta(hours=9))),
+            )
+
+    # {
+    #   責務: [test_default_timestamps_share_a_single_utc_value: 既定timestampが同一UTC時刻になることを検証する]
+    #   処理: [timestampを省略したprofileのcreated_atとupdated_atが同値かつUTCであることをassertする]
+    #   引数: [self: unittest.TestCase instance]
+    #   戻り値: []
+    # }
+    def test_default_timestamps_share_a_single_utc_value(self) -> None:
+        profile = CharacterProfile(create_character_id(), "Sample")
+
+        self.assertEqual(profile.updated_at, profile.created_at)
+        self.assertEqual(profile.created_at.utcoffset(), timedelta(0))
 
 
 if __name__ == "__main__":

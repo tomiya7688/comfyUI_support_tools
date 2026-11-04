@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .character_id import is_valid_character_id
 from .character_outfit_profile import CharacterOutfitProfile
@@ -36,7 +36,7 @@ class CharacterProfile:
     reference_image_ids: tuple[str, ...] = ()
     provenance: tuple[CharacterSourceAsset, ...] = ()
     created_at: datetime = field(default_factory=_utc_now)
-    updated_at: datetime = field(default_factory=_utc_now)
+    updated_at: datetime | None = None
 
     # {
     #   責務: [__post_init__: profileのstable ID, 衣装参照, trait, timestampを検証する]
@@ -46,6 +46,8 @@ class CharacterProfile:
     #   エラー: [ValueError: profile schemaが不正な場合]
     # }
     def __post_init__(self) -> None:
+        if self.updated_at is None:
+            object.__setattr__(self, "updated_at", self.created_at)
         if not is_valid_character_id(self.character_id):
             raise ValueError("character_idは1〜64文字の小文字英数字と-_で指定してください")
         if not isinstance(self.display_name, str) or not self.display_name.strip():
@@ -70,10 +72,10 @@ class CharacterProfile:
         if (
             not isinstance(self.created_at, datetime)
             or not isinstance(self.updated_at, datetime)
-            or self.created_at.utcoffset() is None
-            or self.updated_at.utcoffset() is None
+            or self.created_at.utcoffset() != timedelta(0)
+            or self.updated_at.utcoffset() != timedelta(0)
         ):
-            raise ValueError("created_atとupdated_atはtimezone-awareで指定してください")
+            raise ValueError("created_atとupdated_atはUTCのtimezone-awareで指定してください")
         if not isinstance(self.provenance, tuple) or any(
             not isinstance(asset, CharacterSourceAsset) for asset in self.provenance
         ):

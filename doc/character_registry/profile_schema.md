@@ -10,6 +10,10 @@
 
 両型はimmutable dataclassです。空の表示名、無効なID、重複outfit ID、不存在のdefault outfit参照、timezoneのない時刻を拒否します。confidenceは有限の0.0〜1.0の値に限ります。
 
+## 保存形式
+
+`CharacterProfileStore` は呼び出し側から明示されたstorage rootだけを使い、`<character_id>.json`としてschema version 1のJSONをatomicに保存/読込します。保存rootの既定pathやユーザーデータの探索はしません。アプリ設定から決めたpathを呼び出し側が渡します。JSONは未知version、壊れた型、root外path、profile fileのsymlinkを拒否します。
+
 ## 現在の境界
 
-これは登録・保存処理が利用するデータ契約です。永続化、画像コピー、GUIでの手動編集、prompt注入、学習処理はまだ行いません。タグ候補を確定traitへ自動昇格させず、確認状態を呼び出し側が明示する設計です。
+Profileの契約とJSON保存/読込は利用できます。画像コピー、Character Library UIでの手動編集、prompt注入、学習処理はまだ行いません。タグ候補を確定traitへ自動昇格させず、確認状態を呼び出し側が明示する設計です。

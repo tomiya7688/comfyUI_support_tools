@@ -10,6 +10,10 @@
 
 Both types are immutable dataclasses. They reject blank display names, invalid IDs, duplicate outfit IDs, missing default outfit references, and naive timestamps. Confidence must be a finite value from 0.0 through 1.0.
 
+## Storage format
+
+`CharacterProfileStore` accepts only an explicit storage root from its caller and atomically saves/loads schema version 1 JSON as `<character_id>.json`. It has no default storage path and does not search user data. The caller passes the path chosen from application settings. Unknown versions, malformed field types, paths outside the root, and profile-file symlinks are rejected.
+
 ## Current boundary
 
-These are data contracts for future registration and storage. Persistence, image copying, manual GUI editing, prompt injection, and training are not implemented in this slice. Suggested tags are not automatically promoted to confirmed traits; the caller must make confirmation explicit.
+The profile contracts and JSON save/load are available. Image copying, manual edits in a Character Library UI, prompt injection, and training are not implemented here. Suggested tags are not automatically promoted to confirmed traits; the caller must make confirmation explicit.

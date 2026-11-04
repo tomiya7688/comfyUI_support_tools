@@ -1,6 +1,10 @@
 from src.comfyui_support_tools.applications.character_registry.process.messenger.character_source_requests import (
     load_character_sources,
 )
+from src.comfyui_support_tools.applications.character_registry.process.messenger.civitai_lora_catalog_requests import (
+    load_selected_civitai_lora_version,
+    search_civitai_lora_candidates,
+)
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_tag_intake_processor import (
     build_character_tag_preview,
 )
@@ -10,6 +14,40 @@ from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview imp
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_request import (
     CharacterTagIntakeRequest,
 )
+from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
+    CivitaiLoraCandidate,
+)
+from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
+    CivitaiLoraVersionMetadata,
+)
+
+
+# {
+#   責務: [search_civitai_loras: Character Registry内のCivitai LoRA検索を制御する]
+#   処理: [検索条件をprocess messengerへ送り, 候補とpagination cursorを返す]
+#   引数: [query: 検索語, limit: 1〜100件, cursor: opaque pagination token]
+#   戻り値: [tuple[tuple[CivitaiLoraCandidate, ...], str | None]: version候補とcursor]
+#   エラー: [ValueError: 入力不正, RuntimeError: 外部API失敗]
+# }
+def search_civitai_loras(
+    query: str,
+    limit: int,
+    cursor: str | None,
+) -> tuple[tuple[CivitaiLoraCandidate, ...], str | None]:
+    return search_civitai_lora_candidates(query, limit, cursor)
+
+
+# {
+#   責務: [fetch_civitai_lora_version: 選択LoRA版のtrigger metadata取得を制御する]
+#   処理: [選択candidateをprocess messengerへ送り, version metadataを返す]
+#   引数: [candidate: 検索結果から選択したLoRA版]
+#   戻り値: [CivitaiLoraVersionMetadata: trained wordsと公開状態]
+#   エラー: [ValueError: candidate不正, RuntimeError: 外部API失敗またはID不一致]
+# }
+def fetch_civitai_lora_version(
+    candidate: CivitaiLoraCandidate,
+) -> CivitaiLoraVersionMetadata:
+    return load_selected_civitai_lora_version(candidate)
 
 
 # {

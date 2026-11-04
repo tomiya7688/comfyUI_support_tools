@@ -3,6 +3,10 @@ from pathlib import Path
 from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     preview_character_intake as _preview_character_intake,
 )
+from src.comfyui_support_tools.applications.character_registry.process.processing.character_wildcard_exporter import (
+    build_character_wildcard_files as _build_character_wildcard_files,
+)
+from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview import (
     CharacterTagIntakePreview,
 )
@@ -28,3 +32,17 @@ def preview_character_intake(request: CharacterTagIntakeRequest) -> CharacterTag
     if not isinstance(request.dataset_root, Path):
         raise ValueError("dataset_root must be a pathlib.Path")
     return _preview_character_intake(request)
+
+
+# {
+#   責務: [build_character_wildcard_files: public APIから確認済みCharacterProfileのwildcard bundleを作る]
+#   処理: [process exporterへprofileの変換を委譲する]
+#   引数: [profile: 書き出すCharacterProfile]
+#   戻り値: [dict[str, str]: root相対wildcard pathと本文の対応]
+#   エラー: [ValueError: 確認済みidentityがない等, profileを安全に書き出せない場合]
+# }
+def build_character_wildcard_files(profile: CharacterProfile) -> dict[str, str]:
+    """Build a filesystem-independent wildcard bundle from a confirmed profile."""
+    if not isinstance(profile, CharacterProfile):
+        raise ValueError("profileはCharacterProfileで指定してください")
+    return _build_character_wildcard_files(profile)

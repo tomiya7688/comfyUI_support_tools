@@ -10,6 +10,7 @@ from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
 from .generation_parameter_resolver import GenerationParameterResolver
 from .prompt_lora_compatibility import validate_prompt_loras
+from .wildcard_line_selector import select_weighted_wildcard_line
 
 _GENERATION_PROFILE = create_configured_image_generation_profile(datetime.now().strftime("%Y%m%d"))
 
@@ -147,6 +148,13 @@ class EmbeddedRandomImage:
             text = text.replace(key, value)
         return text
 
+    # {
+    #   責務: [process_file: wildcardファイルから重み付きの1行を選び再帰展開する]
+    #   処理: [1: 深さとキャッシュを確認する, 2: 対象ファイルを選ぶ, 3: 行を選択しwildcardを展開する, 4: 結果をキャッシュする]
+    #   引数: [self: generator instance, rel_path: wildcardファイルの相対パスまたは絶対パス, root: wildcard root, depth: 再帰深度, wildcard_cache: 選択済み結果のcache]
+    #   戻り値: [str: 選択行を展開した文字列]
+    #   エラー: [ValueError: 重み行の記法が不正な場合]
+    # }
     def process_file(self, rel_path, root=None, depth=0, wildcard_cache=None):
         if depth > 50:
             return ""
@@ -161,7 +169,10 @@ class EmbeddedRandomImage:
         lines = self._read_lines(path)
         if not lines:
             return ""
-        text = secrets.choice(lines)
+        try:
+            text = select_weighted_wildcard_line(lines)
+        except ValueError as exc:
+            raise ValueError(f"Invalid wildcard file {path}: {exc}") from exc
         text = self._expand_text(text, root, depth, wildcard_cache)
         if wildcard_cache is not None:
             wildcard_cache[cache_key] = text

@@ -1,1 +1,1 @@
-"""Character Registry process messenger boundary."""
+"""Character Registry Process-to-Data transport boundary."""

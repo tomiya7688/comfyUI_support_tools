@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from src.comfyui_support_tools.shared.contracts.character_source_asset import CharacterSourceAsset
 
@@ -34,9 +34,9 @@ def _load_manifest(manifest_path: Path) -> tuple[dict[str, dict[str, str]], list
         if caption_file in indexed:
             raise ValueError(f"manifestにcaption_fileの重複があります: {caption_file}")
         image_file = item.get("image_file", "")
+        if image_file is not None and not isinstance(image_file, str):
+            raise ValueError("manifestのimage_fileは文字列またはnullである必要があります")
         if image_file:
-            if not isinstance(image_file, str):
-                raise ValueError("manifestのimage_fileは文字列である必要があります")
             image_file = _safe_relative_path(image_file, "image_file")
         indexed[caption_file] = {
             key: (image_file if key == "image_file" else str(item.get(key) or "").strip())
@@ -59,17 +59,14 @@ def _load_manifest(manifest_path: Path) -> tuple[dict[str, dict[str, str]], list
 #   エラー: [ValueError: 空pathまたはdataset外を参照する場合]
 # }
 def _safe_relative_path(value: str, field_name: str) -> str:
-    candidate = Path(value)
-    if not value.strip() or candidate.is_absolute() or candidate.drive:
+    normalized_text = value.replace("\\", "/")
+    posix_path = PurePosixPath(normalized_text)
+    windows_path = PureWindowsPath(value)
+    if not value.strip() or posix_path.is_absolute() or windows_path.drive or windows_path.root:
         raise ValueError(f"manifestの{field_name}はdataset内の相対pathにしてください")
-    normalized = Path(value.replace("\\", "/"))
-    if (
-        not normalized.parts
-        or normalized == Path(".")
-        or any(part == ".." for part in normalized.parts)
-    ):
+    if not posix_path.parts or posix_path == PurePosixPath(".") or ".." in posix_path.parts:
         raise ValueError(f"manifestの{field_name}に不正なpath要素があります")
-    return normalized.as_posix()
+    return posix_path.as_posix()
 
 
 # {
@@ -87,22 +84,39 @@ def _is_inside_dataset(dataset_root: Path, candidate: Path) -> bool:
 
 
 # {
+#   責務: [_index_images: 1つのcaption directoryにある画像をstem/拡張子でindex化する]
+#   処理: [1: image fileを順番に走査する, 2: stemとcasefold suffixでmappingを返す]
+#   引数: [directory: 画像を探すdirectory]
+#   戻り値: [dict[tuple[str, str], Path]: 正規化stemとsuffixから画像pathを得るindex]
+# }
+def _index_images(directory: Path) -> dict[tuple[str, str], Path]:
+    image_index: dict[tuple[str, str], Path] = {}
+    for candidate in sorted(
+        directory.iterdir(), key=lambda path: (path.name.casefold(), path.name)
+    ):
+        suffix = candidate.suffix.casefold()
+        if candidate.is_file() and suffix in IMAGE_SUFFIXES:
+            image_index.setdefault((candidate.stem.casefold(), suffix), candidate)
+    return image_index
+
+
+# {
 #   責務: [_find_image: captionと同名の画像をdataset内から探す]
-#   処理: [caption suffixを対応画像形式へ置き換えて最初に見つかったpathを返す]
-#   引数: [caption: caption file path]
+#   処理: [caption stemとimage indexを照合し, 設定された拡張子優先順でpathを返す]
+#   引数: [caption: caption file path, image_index: 親directoryの画像index]
 #   戻り値: [Path | None: 画像が存在する場合の相対path]
 # }
-def _find_image(caption: Path) -> Path | None:
+def _find_image(caption: Path, image_index: dict[tuple[str, str], Path]) -> Path | None:
     for suffix in IMAGE_SUFFIXES:
-        image = caption.with_suffix(suffix)
-        if image.is_file():
+        image = image_index.get((caption.stem.casefold(), suffix.casefold()))
+        if image:
             return image
     return None
 
 
 # {
 #   責務: [read_tagged_dataset: sidecar captionとprovenance manifestをsource assetへ変換する]
-#   処理: [1: manifestを読む, 2: captionをpath順に走査する, 3: tags/image/source/license metadataをまとめる]
+#   処理: [1: manifest範囲を検証して読む, 2: captionとimageの安全な参照だけを走査する, 3: provenanceを保持したassetへ変換する]
 #   引数: [dataset_root: identity/とoutfits/を含むdataset root]
 #   戻り値: [tuple[tuple[CharacterSourceAsset, ...], tuple[str, ...]]: asset一覧とwarning]
 #   エラー: [ValueError: dataset rootまたはcaption/manifest形式が不正な場合]
@@ -122,6 +136,7 @@ def read_tagged_dataset(
         key=lambda path: path.as_posix().casefold(),
     )
     result: list[CharacterSourceAsset] = []
+    image_indexes: dict[Path, dict[tuple[str, str], Path]] = {}
     for caption in caption_files:
         if not _is_inside_dataset(dataset_root, caption):
             warnings.append(f"dataset外を指すcaption symlinkを除外しました: {caption}")
@@ -136,7 +151,9 @@ def read_tagged_dataset(
             warnings.append(f"空captionを除外しました: {relative}")
             continue
         metadata = manifest.get(relative, {})
-        image_path = _find_image(caption)
+        if caption.parent not in image_indexes:
+            image_indexes[caption.parent] = _index_images(caption.parent)
+        image_path = _find_image(caption, image_indexes[caption.parent])
         image = metadata.get("image_file") or (
             image_path.relative_to(dataset_root).as_posix() if image_path else ""
         )
@@ -148,6 +165,8 @@ def read_tagged_dataset(
         ):
             warnings.append(f"dataset内に安全な画像fileが見つかりません: {relative} -> {image}")
             image = ""
+        if not image:
+            warnings.append(f"画像がないcaptionです: {relative}")
         parts = Path(relative).parts
         outfit_id = parts[1] if len(parts) > 2 and parts[0].casefold() == "outfits" else None
         if relative not in manifest:

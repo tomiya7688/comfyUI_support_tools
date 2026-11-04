@@ -10,7 +10,7 @@ The built-in taxonomy only proposes categories. A person must review and correct
 
 ## Input format
 
-The dataset can be any explicitly supplied local directory. Put a UTF-8 `.txt` file with the same basename next to each image. Captions under `outfits/<outfit_id>/` are grouped as outfit candidates. Other captions contribute to shared identity candidates or an unassigned outfit group.
+The dataset can be any explicitly supplied local directory. Put a UTF-8 `.txt` file with the same basename next to each image. Image extensions are matched case-insensitively. Captions without a matching image remain in the preview with a warning. Captions under `outfits/<outfit_id>/` are grouped as outfit candidates. Other captions contribute to shared identity candidates or an unassigned outfit group. The unassigned group is marked with `is_unassigned=true`, so it cannot merge with a real profile named `unassigned`.
 
 An optional `manifest.json` uses this shape:
 
@@ -29,7 +29,7 @@ An optional `manifest.json` uses this shape:
 }
 ```
 
-`caption_file` and `image_file` must be relative paths within the dataset. Parent traversal and absolute paths are rejected. If the manifest or rights metadata is missing, the status stays `unknown`. Downloadability is not treated as permission to train on or redistribute an asset.
+`caption_file` and `image_file` must be relative paths within the dataset. POSIX/Windows absolute paths, parent traversal, and manifest symlinks resolving outside the dataset are rejected. If the manifest or rights metadata is missing, the status stays `unknown`. Downloadability is not treated as permission to train on or redistribute an asset.
 
 ## Current limitations
 

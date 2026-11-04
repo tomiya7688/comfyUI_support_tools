@@ -10,7 +10,7 @@
 
 ## 入力形式
 
-データセットは任意のローカルディレクトリで、画像の隣に同じbasenameのUTF-8 `.txt` を置きます。`outfits/<outfit_id>/` に置いたcaptionは該当outfitの候補になります。それ以外は共通identity候補またはoutfit未割当です。
+データセットは任意のローカルディレクトリで、画像の隣に同じbasenameのUTF-8 `.txt` を置きます。画像拡張子の大文字・小文字は区別しません。画像がないcaptionもpreviewに残りますが、確認用warningが付きます。`outfits/<outfit_id>/` に置いたcaptionは該当outfitの候補になります。それ以外は共通identity候補またはoutfit未割当です。未割当groupは`is_unassigned=true`で識別するため、`outfits/unassigned/`という実profileとは混ざりません。
 
 任意の `manifest.json` は次の形です。
 
@@ -29,7 +29,7 @@
 }
 ```
 
-`caption_file` と `image_file` はデータセット内の相対pathである必要があります。親ディレクトリ参照や絶対pathは拒否します。manifestがない場合や利用条件が記録されていない場合、状態は `unknown` のままです。ダウンロード可能であることを学習・再配布許可の根拠として扱いません。
+`caption_file` と `image_file` はデータセット内の相対pathである必要があります。POSIX/Windows形式の絶対path、親ディレクトリ参照、dataset外manifest symlinkは拒否します。manifestがない場合や利用条件が記録されていない場合、状態は `unknown` のままです。ダウンロード可能であることを学習・再配布許可の根拠として扱いません。
 
 ## 現在の制限
 

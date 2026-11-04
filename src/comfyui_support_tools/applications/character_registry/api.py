@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from src.comfyui_support_tools.applications.character_registry.process.messenger.character_registry_messenger import (
+from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     preview_character_intake as _preview_character_intake,
 )
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview import (

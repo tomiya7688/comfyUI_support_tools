@@ -48,7 +48,9 @@ def build_character_tag_preview(
     identity_sources: dict[str, set[str]] = defaultdict(set)
     context_sources: dict[str, set[str]] = defaultdict(set)
     unclassified_sources: dict[str, set[str]] = defaultdict(set)
-    outfit_sources: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    outfit_sources: dict[tuple[str, bool], dict[str, set[str]]] = defaultdict(
+        lambda: defaultdict(set)
+    )
     for asset in assets:
         for tag in asset.tags:
             category = classify_character_tag(tag)
@@ -56,23 +58,21 @@ def build_character_tag_preview(
                 identity_sources[tag].add(asset.caption_file)
             elif category == "outfit":
                 outfit_id = asset.outfit_id or "unassigned"
-                outfit_sources[outfit_id][tag].add(asset.caption_file)
+                outfit_sources[(outfit_id, asset.outfit_id is None)][tag].add(asset.caption_file)
             elif category == "context":
                 context_sources[tag].add(asset.caption_file)
             else:
                 unclassified_sources[tag].add(asset.caption_file)
     outfit_groups = tuple(
-        CharacterOutfitTagGroup(
-            outfit_id,
-            _candidate_list(tags, "outfit", 0.85),
-        )
-        for outfit_id, tags in sorted(outfit_sources.items())
+        CharacterOutfitTagGroup(outfit_id, is_unassigned, _candidate_list(tags, "outfit", 0.85))
+        for (outfit_id, is_unassigned), tags in sorted(outfit_sources.items())
     )
     warnings = list(source_warnings)
     if unclassified_sources:
         warnings.append("未分類tagはidentity/outfitへ自動登録せず、手動確認してください。")
     if any(
-        asset.license_status == "unknown" or asset.training_permission == "unknown"
+        asset.license_status.casefold() == "unknown"
+        or asset.training_permission.casefold() == "unknown"
         for asset in assets
     ):
         warnings.append(

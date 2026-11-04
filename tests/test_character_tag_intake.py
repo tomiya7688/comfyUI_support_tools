@@ -60,21 +60,23 @@ class CharacterTagIntakeTest(unittest.TestCase):
             root = Path(temporary_directory)
             (root / "identity").mkdir()
             (root / "outfits" / "school").mkdir(parents=True)
-            (root / "identity" / "ref.png").write_bytes(b"fixture")
+            (root / "outfits" / "unassigned").mkdir()
+            (root / "identity" / "ref.PNG").write_bytes(b"fixture")
             (root / "identity" / "ref.txt").write_text(
                 "blue_hair, blue_eyes, looking_at_viewer, rare_tag", encoding="utf-8-sig"
             )
             (root / "outfits" / "school" / "uniform.txt").write_text(
                 "school_uniform, blue_skirt", encoding="utf-8"
             )
+            (root / "outfits" / "unassigned" / "explicit.txt").write_text("shirt", encoding="utf-8")
+            (root / "loose.txt").write_text("shirt", encoding="utf-8")
             manifest = {
                 "assets": [
                     {
                         "caption_file": "identity/ref.txt",
-                        "image_file": "identity/ref.png",
                         "source_url": "https://example.invalid/work/1",
                         "source_work_id": "work-1",
-                        "license_status": None,
+                        "license_status": "UnKnOwN",
                         "training_permission": None,
                     }
                 ]
@@ -91,13 +93,20 @@ class CharacterTagIntakeTest(unittest.TestCase):
         self.assertEqual(
             [candidate.tag for candidate in preview.context_candidates], ["looking_at_viewer"]
         )
-        self.assertEqual(preview.outfit_groups[0].outfit_id, "school")
+        school_group = next(group for group in preview.outfit_groups if group.outfit_id == "school")
+        self.assertFalse(school_group.is_unassigned)
+        unassigned_groups = [
+            group for group in preview.outfit_groups if group.outfit_id == "unassigned"
+        ]
+        self.assertEqual({group.is_unassigned for group in unassigned_groups}, {False, True})
+        self.assertEqual(preview.source_assets[0].image_file, "identity/ref.PNG")
         self.assertEqual(
             [candidate.tag for candidate in preview.unclassified_candidates], ["rare_tag"]
         )
         self.assertEqual(preview.source_assets[0].source_work_id, "work-1")
-        self.assertEqual(preview.source_assets[0].license_status, "unknown")
+        self.assertEqual(preview.source_assets[0].license_status, "UnKnOwN")
         self.assertTrue(any("権利情報" in warning for warning in preview.warnings))
+        self.assertTrue(any("画像がないcaption" in warning for warning in preview.warnings))
 
     # {
     #   責務: [test_manifest_rejects_parent_traversal: manifestのdataset外参照を拒否する]
@@ -106,7 +115,14 @@ class CharacterTagIntakeTest(unittest.TestCase):
     #   戻り値: []
     # }
     def test_manifest_rejects_parent_traversal(self) -> None:
-        invalid_references = (("../outside.txt", "inside.png"), ("inside.txt", "../outside.png"))
+        invalid_references = (
+            ("../outside.txt", "inside.png"),
+            ("inside.txt", "../outside.png"),
+            ("inside.txt", r"C:\outside.png"),
+            ("inside.txt", r"\outside.png"),
+            ("inside.txt", 0),
+            ("inside.txt", []),
+        )
         for caption_file, image_file in invalid_references:
             with self.subTest(caption_file=caption_file, image_file=image_file):
                 with tempfile.TemporaryDirectory() as temporary_directory:

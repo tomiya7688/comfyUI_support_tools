@@ -117,9 +117,12 @@ def _find_image(
     exact_stem_index, folded_stem_index = image_indexes
     for suffix in IMAGE_SUFFIXES:
         normalized_suffix = suffix.casefold()
-        image = exact_stem_index.get((caption.stem, normalized_suffix)) or folded_stem_index.get(
-            (caption.stem.casefold(), normalized_suffix)
-        )
+        image = exact_stem_index.get((caption.stem, normalized_suffix))
+        if image:
+            return image
+    for suffix in IMAGE_SUFFIXES:
+        normalized_suffix = suffix.casefold()
+        image = folded_stem_index.get((caption.stem.casefold(), normalized_suffix))
         if image:
             return image
     return None

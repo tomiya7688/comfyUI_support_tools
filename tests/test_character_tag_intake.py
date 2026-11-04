@@ -168,12 +168,24 @@ class CharacterTagIntakeTest(unittest.TestCase):
         exact_stem_index = {
             ("A", ".png"): Path("assets/A.png"),
             ("a", ".png"): Path("assets/a.png"),
+            ("a", ".jpg"): Path("assets/a.jpg"),
         }
-        folded_stem_index = {("a", ".png"): Path("assets/A.png")}
+        folded_stem_index = {
+            ("a", ".png"): Path("assets/A.png"),
+            ("a", ".jpg"): Path("assets/A.jpg"),
+        }
         image_indexes = (exact_stem_index, folded_stem_index)
 
         self.assertEqual(_find_image(Path("assets/A.txt"), image_indexes), Path("assets/A.png"))
         self.assertEqual(_find_image(Path("assets/a.txt"), image_indexes), Path("assets/a.png"))
+        cross_extension_indexes = (
+            {("a", ".jpg"): Path("assets/a.jpg")},
+            {("a", ".png"): Path("assets/A.png")},
+        )
+        self.assertEqual(
+            _find_image(Path("assets/a.txt"), cross_extension_indexes),
+            Path("assets/a.jpg"),
+        )
 
 
 if __name__ == "__main__":

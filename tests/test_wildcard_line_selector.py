@@ -3,12 +3,15 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from scripts.backend.wildcard_line_selector import select_weighted_wildcard_line
+from scripts.backend.wildcard_line_selector import (
+    parse_wildcard_line,
+    select_weighted_wildcard_line,
+)
 
 
 # {
 #   責務: [WeightedWildcardLineSelectorTests: 重み付きwildcard行選択を検証する]
-#   処理: [1: 相対重みを検証する, 2: 通常行とゼロ重みを確認する, 3: 不正な記法を確認する]
+#   処理: [1: 相対重みを検証する, 2: 通常行とゼロ重みを確認する, 3: 行番号と範囲外重みを検証する]
 #   フィールド: []
 # }
 class WeightedWildcardLineSelectorTests(unittest.TestCase):
@@ -59,12 +62,33 @@ class WeightedWildcardLineSelectorTests(unittest.TestCase):
             ["@weight=-1::negative"],
             ["@weight=bad::malformed"],
             ["@weight=1::"],
+            ["@weight=0." + "0" * 400 + "1::underflow"],
             ["@weight=0::disabled"],
         ]
         for lines in invalid_inputs:
             with self.subTest(lines=lines):
                 with self.assertRaises(ValueError):
                     select_weighted_wildcard_line(lines)
+
+    # {
+    #   責務: [test_source_line_numbers_are_preserved: 空行を含む元ファイルの行番号を保持する]
+    #   処理: [1: 物理行番号付きの候補を渡す, 2: 不正記法のエラーが元の行番号を示すことを確認する]
+    #   引数: [self: unittest test instance]
+    #   戻り値: []
+    # }
+    def test_source_line_numbers_are_preserved(self):
+        with self.assertRaisesRegex(ValueError, "line 5"):
+            select_weighted_wildcard_line([(2, "valid prompt"), (5, "@weight=bad::invalid prompt")])
+
+    # {
+    #   責務: [test_sequential_prompt_line_is_parsed: 順次promptから重み記法を分離する]
+    #   処理: [1: 正の重み行と0重み行を個別に解析する]
+    #   引数: [self: unittest test instance]
+    #   戻り値: []
+    # }
+    def test_sequential_prompt_line_is_parsed(self):
+        self.assertEqual(parse_wildcard_line("@weight=2::prompt", 8), ("prompt", 2.0))
+        self.assertEqual(parse_wildcard_line("@weight=0::disabled", 9), ("disabled", 0.0))
 
 
 if __name__ == "__main__":

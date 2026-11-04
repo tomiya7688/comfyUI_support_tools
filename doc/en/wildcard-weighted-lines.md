@@ -24,3 +24,5 @@ __anime_character_lora/aoba_moca__ __anime_character/バンドリ/青葉モカ__
 ```
 
 This keeps LoRA choices and character tags in separate files while the wrapper pairs the same character. Keep LoRA syntax in the LoRA-call file and character tags in the regular character wildcard.
+
+In sequential input files, each line is a generation job. The `@weight=` prefix is removed and jobs with weight `0` are skipped. Positive relative weights control candidate selection inside wildcard files; sequential jobs remain in the given order and run once each.

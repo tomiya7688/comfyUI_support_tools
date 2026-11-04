@@ -10,7 +10,7 @@ from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
 from .generation_parameter_resolver import GenerationParameterResolver
 from .prompt_lora_compatibility import validate_prompt_loras
-from .wildcard_line_selector import select_weighted_wildcard_line
+from .wildcard_line_selector import parse_wildcard_line, select_weighted_wildcard_line
 
 _GENERATION_PROFILE = create_configured_image_generation_profile(datetime.now().strftime("%Y%m%d"))
 
@@ -121,13 +121,33 @@ class EmbeddedRandomImage:
         self._log(f"📁 ワイルドカードディレクトリから選択: {selected}")
         return selected
 
-    def _read_lines(self, path):
+    # {
+    #   責務: [_read_numbered_lines: wildcardファイルから物理行番号付きの行を読む]
+    #   処理: [1: UTF-8でファイルを開く, 2: 空行を除いて元の行番号と本文を返す]
+    #   引数: [self: generator instance, path: 読み込むテキストファイル]
+    #   戻り値: [list[tuple[int, str]]: 元ファイル上の行番号と空白を除いた本文]
+    #   エラー: [FileNotFoundError: 警告を記録し空リストを返す]
+    # }
+    def _read_numbered_lines(self, path):
         try:
             with open(path, encoding="utf-8") as source:
-                return [line.strip() for line in source if line.strip()]
+                return [
+                    (line_number, line.strip())
+                    for line_number, line in enumerate(source, start=1)
+                    if line.strip()
+                ]
         except FileNotFoundError:
             self._log(f"⚠️ ファイルが見つかりません: {path}")
             return []
+
+    # {
+    #   責務: [_read_lines: ファイルから空行を除いた本文だけを読む]
+    #   処理: [1: 行番号付き読み込みを呼び出す, 2: 行番号を除いて本文を返す]
+    #   引数: [self: generator instance, path: 読み込むテキストファイル]
+    #   戻り値: [list[str]: 空行を除いた行本文]
+    # }
+    def _read_lines(self, path):
+        return [line for _, line in self._read_numbered_lines(path)]
 
     def _expand_text(self, text, root, depth=0, wildcard_cache=None):
         pattern = re.compile(r"\{([^{}]+)\}")
@@ -166,7 +186,7 @@ class EmbeddedRandomImage:
         path = self._select_source(rel_path, root)
         if path is None:
             return ""
-        lines = self._read_lines(path)
+        lines = self._read_numbered_lines(path)
         if not lines:
             return ""
         try:
@@ -447,7 +467,16 @@ class EmbeddedRandomImage:
 
     def _generate_sequential(self):
         sources = self._sequential_prompt_sources()
-        prompts = [(path, line) for path in sources for line in self._read_lines(path)]
+        prompts = []
+        for path in sources:
+            for line_number, line in self._read_numbered_lines(path):
+                try:
+                    prompt, weight = parse_wildcard_line(line, line_number)
+                except ValueError as error:
+                    self._log(f"⚠️ 順次promptを読み飛ばしました: {path}:{line_number}: {error}")
+                    continue
+                if weight > 0:
+                    prompts.append((path, prompt))
         if not prompts:
             self._log("⚠️ 順次生成するプロンプトがありません。")
             return

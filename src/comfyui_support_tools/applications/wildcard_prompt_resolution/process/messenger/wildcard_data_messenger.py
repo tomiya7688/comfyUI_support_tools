@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from ...data.messenger.wildcard_source_messenger import load_sequential_prompts, load_wildcard_lines
@@ -8,6 +9,19 @@ from ..processing.wildcard_prompt_resolver import (
 )
 
 MAX_RECURSION_DEPTH = 50
+
+
+# {
+#   責務: [_wildcard_cache_key: OSのpath case規則に沿ったcache keyを作る]
+#   処理: [rootと参照pathを結合し, 絶対path化してplatformのnormcaseを適用する]
+#   引数: [reference: wildcard参照, root: wildcard root]
+#   戻り値: [str: platform固有に正規化されたabsolute path]
+# }
+def _wildcard_cache_key(reference: str, root: Path) -> str:
+    """Normalize cache identity with the host filesystem's case rules."""
+    requested_path = Path(reference)
+    path = requested_path if requested_path.is_absolute() else root / requested_path
+    return os.path.normcase(os.path.abspath(path))
 
 
 # {
@@ -30,10 +44,7 @@ def resolve_wildcard_reference(
         if warnings is not None:
             warnings.append(f"Wildcard recursion limit reached: {reference}")
         return ""
-    requested_path = Path(reference)
-    cache_key = str(
-        (requested_path if requested_path.is_absolute() else root / requested_path).resolve()
-    ).casefold()
+    cache_key = _wildcard_cache_key(reference, root)
     if cache is not None and cache_key in cache:
         return cache[cache_key]
 

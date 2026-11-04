@@ -1,10 +1,14 @@
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from src.comfyui_support_tools.applications.wildcard_prompt_resolution.api import (
     load_sequential_prompt_lines,
     resolve_prompt,
     validate_prompt,
+)
+from src.comfyui_support_tools.applications.wildcard_prompt_resolution.process.messenger import (
+    wildcard_data_messenger,
 )
 from src.comfyui_support_tools.shared.contracts.prompt_resolution_request import (
     PromptResolutionRequest,
@@ -20,6 +24,24 @@ FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "wildcard_prompt_resolution"
 #   フィールド: []
 # }
 class WildcardPromptResolutionApiTests(unittest.TestCase):
+    # {
+    #   責務: [test_cache_keys_follow_platform_case_rules: cache keyがOSのcase規則を使うことを確認する]
+    #   処理: [normcaseを大文字小文字保存に置き換え, 異なるpath表記が別keyになることを確認する]
+    #   引数: [self: unittest test instance]
+    #   戻り値: []
+    # }
+    def test_cache_keys_follow_platform_case_rules(self):
+        """Do not merge distinct wildcard paths before platform normalization."""
+        with mock.patch.object(
+            wildcard_data_messenger.os.path,
+            "normcase",
+            side_effect=lambda path: path,
+        ):
+            uppercase = wildcard_data_messenger._wildcard_cache_key("Character.txt", FIXTURE_ROOT)
+            lowercase = wildcard_data_messenger._wildcard_cache_key("character.txt", FIXTURE_ROOT)
+
+        self.assertNotEqual(uppercase, lowercase)
+
     # {
     #   責務: [test_resolve_prompt_returns_backend_independent_result: wildcardとLoRA参照を解決する]
     #   処理: [fixture sourceからResolvedPromptを作り, promptとprovenanceを検証する]

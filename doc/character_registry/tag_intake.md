@@ -33,6 +33,15 @@
 
 ## 現在の制限
 
-- スクレイピング元の選択・ダウンロードは行いません。取得元固有のAPI・規約・ライセンス確認と分離しています。
+- Civitai候補検索は公式の匿名REST APIを使い、LoRAのmodel/version情報、作者、base model、利用条件とtrained wordsを読み取れます。利用条件はAPI応答のまま保持し、未設定はunknownのままです。
+- Civitai接続はJSON APIだけに限定します。HTMLの巡回、画像/LoRA重みのダウンロード、学習素材への自動登録はしません。利用条件と出典を人が確認してから登録してください。
 - タグの分類は候補です。誤分類を直すUIとprofile登録は後続作業です。
 - 管理対象の学習素材やユーザーデータを自動走査しません。呼び出し元が明示したdataset rootだけを読みます。
+
+## Civitai候補API
+
+`search_civitai_loras(query, limit=20, cursor=None)` はLoRAの検索結果をversion単位で返し、続きがある場合はopaque cursorを返します。`fetch_civitai_lora_version(candidate)` は選択した版の `trainedWords` と公開状態を取得します。Civitai公式APIの利用制限に従い、429を含むHTTPエラーは呼び出し元へ返し、自動再試行しません。
+
+API仕様: [Models](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/models.md)、[Model Versions](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/model-versions.md)、[Authentication](https://github.com/civitai/civitai-developer-docs/blob/main/site/guide/authentication.md)。公開情報の取得は匿名API接続で行います。
+
+候補には `allowNoCredit`、`allowCommercialUse`、`allowDerivatives`、`allowDifferentLicense` を保存します。これらは配布物・学習・生成物の全条件を保証するものではありません。実利用前に元ページと適用ライセンスを確認してください。

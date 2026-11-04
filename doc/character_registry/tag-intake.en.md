@@ -33,6 +33,15 @@ An optional `manifest.json` uses this shape:
 
 ## Current limitations
 
-- This feature does not choose a scraping source or download files. It is separate from source-specific APIs, terms, and license checks.
+- Civitai discovery uses its official anonymous REST API and reads LoRA model/version metadata, creator, base model, usage permissions, and trained words. Permission values are preserved as returned; missing values remain unknown.
+- Civitai access is JSON API only. It does not crawl HTML, download images or LoRA weights, or register training assets automatically. A person must verify the usage conditions and provenance before registration.
 - Tag categories are suggestions. Manual correction UI and profile registration are follow-up work.
 - It does not scan managed training materials or user data automatically. It reads only the dataset root explicitly supplied by its caller.
+
+## Civitai candidate API
+
+`search_civitai_loras(query, limit=20, cursor=None)` returns search results per version and an opaque cursor when another page is available. `fetch_civitai_lora_version(candidate)` retrieves `trainedWords` and publication state for the selected version. It follows the Civitai API's rate limits and returns HTTP errors, including 429, to the caller without automatic retries.
+
+API references: [Models](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/models.md), [Model Versions](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/model-versions.md), and [Authentication](https://github.com/civitai/civitai-developer-docs/blob/main/site/guide/authentication.md). Public metadata is accessed anonymously.
+
+Candidates retain `allowNoCredit`, `allowCommercialUse`, `allowDerivatives`, and `allowDifferentLicense`. These fields do not establish every condition for redistribution, training, or generated output. Check the source page and applicable license before use.

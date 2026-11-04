@@ -1,0 +1,1 @@
+"""Character Registry tag processing."""

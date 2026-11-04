@@ -1,0 +1,1 @@
+"""Character source data processing."""

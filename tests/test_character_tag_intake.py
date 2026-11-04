@@ -4,8 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.comfyui_support_tools.applications.character_registry.api import preview_character_intake
+from src.comfyui_support_tools.applications.character_registry.data.processing import (
+    tagged_dataset_reader,
+)
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_tag_taxonomy import (
     classify_character_tag,
 )
@@ -33,6 +37,7 @@ class CharacterTagTaxonomyTest(unittest.TestCase):
         self.assertEqual(classify_character_tag("t-shirt"), "outfit")
         self.assertEqual(classify_character_tag("school_uniform"), "outfit")
         self.assertEqual(classify_character_tag("looking_at_viewer"), "context")
+        self.assertEqual(classify_character_tag("closed_eyes"), "context")
         self.assertEqual(classify_character_tag("rare_character_keyword"), "unclassified")
 
 
@@ -69,8 +74,8 @@ class CharacterTagIntakeTest(unittest.TestCase):
                         "image_file": "identity/ref.png",
                         "source_url": "https://example.invalid/work/1",
                         "source_work_id": "work-1",
-                        "license_status": "unknown",
-                        "training_permission": "unknown",
+                        "license_status": None,
+                        "training_permission": None,
                     }
                 ]
             }
@@ -118,6 +123,21 @@ class CharacterTagIntakeTest(unittest.TestCase):
                         preview_character_intake(
                             CharacterTagIntakeRequest("sample_character", "Sample", (), root)
                         )
+
+    # {
+    #   責務: [test_manifest_outside_dataset_root_is_rejected: dataset外manifestを拒否する]
+    #   処理: [manifestの解決先がroot外の場合, previewがValueErrorにすることをassertする]
+    #   引数: [self: unittest.TestCase instance]
+    #   戻り値: []
+    # }
+    def test_manifest_outside_dataset_root_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            with patch.object(tagged_dataset_reader, "_is_inside_dataset", return_value=False):
+                with self.assertRaises(ValueError):
+                    preview_character_intake(
+                        CharacterTagIntakeRequest("sample_character", "Sample", (), root)
+                    )
 
 
 if __name__ == "__main__":

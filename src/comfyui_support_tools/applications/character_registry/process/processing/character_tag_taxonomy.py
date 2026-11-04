@@ -125,8 +125,8 @@ def classify_character_tag(tag: str) -> str:
     tokens = _normalized_tokens(tag)
     if any(_contains_phrase(tokens, phrase) for phrase in OUTFIT_PHRASES):
         return "outfit"
-    if any(_contains_phrase(tokens, phrase) for phrase in IDENTITY_PHRASES):
-        return "identity"
     if any(_contains_phrase(tokens, phrase) for phrase in CONTEXT_PHRASES):
         return "context"
+    if any(_contains_phrase(tokens, phrase) for phrase in IDENTITY_PHRASES):
+        return "identity"
     return "unclassified"

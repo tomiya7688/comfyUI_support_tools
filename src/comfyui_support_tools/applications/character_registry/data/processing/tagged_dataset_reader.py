@@ -39,7 +39,7 @@ def _load_manifest(manifest_path: Path) -> tuple[dict[str, dict[str, str]], list
                 raise ValueError("manifestのimage_fileは文字列である必要があります")
             image_file = _safe_relative_path(image_file, "image_file")
         indexed[caption_file] = {
-            key: (image_file if key == "image_file" else str(item.get(key, "")).strip())
+            key: (image_file if key == "image_file" else str(item.get(key) or "").strip())
             for key in (
                 "image_file",
                 "source_url",
@@ -113,7 +113,10 @@ def read_tagged_dataset(
     """Read sidecar tag files and keep their source metadata attached."""
     if not dataset_root.is_dir():
         raise ValueError(f"tagged dataset directoryがありません: {dataset_root}")
-    manifest, warnings = _load_manifest(dataset_root / MANIFEST_NAME)
+    manifest_path = dataset_root / MANIFEST_NAME
+    if not _is_inside_dataset(dataset_root, manifest_path):
+        raise ValueError("manifest.jsonはdataset root外を参照できません")
+    manifest, warnings = _load_manifest(manifest_path)
     caption_files = sorted(
         (path for path in dataset_root.rglob("*.txt") if path.name.lower() != MANIFEST_NAME),
         key=lambda path: path.as_posix().casefold(),

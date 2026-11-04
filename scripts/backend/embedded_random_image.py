@@ -10,7 +10,12 @@ from .image_failure_inspector import ImageFailureInspector
 from .ollama_prompt_corrector import OllamaPromptCorrector
 from .generation_parameter_resolver import GenerationParameterResolver
 from .prompt_lora_compatibility import validate_prompt_loras
-from .wildcard_line_selector import parse_wildcard_line, select_weighted_wildcard_line
+from src.comfyui_support_tools.applications.wildcard_prompt_resolution.api import (
+    load_sequential_prompt_lines,
+    parse_wildcard_line,
+    resolve_prompt,
+)
+from src.comfyui_support_tools.shared.contracts.prompt_resolution_request import PromptResolutionRequest
 
 _GENERATION_PROFILE = create_configured_image_generation_profile(datetime.now().strftime("%Y%m%d"))
 
@@ -104,106 +109,54 @@ class EmbeddedRandomImage:
         self._log("🔄 次の生成へ設定更新を適用しました")
         return True
 
-    def _select_source(self, rel_path, root=None):
-        root = root or self.root_dir
-        path = Path(rel_path) if os.path.isabs(rel_path) else Path(root) / rel_path
-        if not path.exists() and path.suffix.lower() == ".txt":
-            directory_candidate = path.with_suffix("")
-            if directory_candidate.is_dir():
-                path = directory_candidate
-        if not path.is_dir():
-            return path
-        candidates = sorted((item for item in path.rglob("*.txt") if item.is_file()), key=lambda item: item.as_posix().casefold())
-        if not candidates:
-            self._log(f"⚠️ ワイルドカード用txtがありません: {path}")
-            return None
-        selected = secrets.choice(candidates)
-        self._log(f"📁 ワイルドカードディレクトリから選択: {selected}")
-        return selected
-
     # {
-    #   責務: [_read_numbered_lines: wildcardファイルから物理行番号付きの行を読む]
-    #   処理: [1: UTF-8でファイルを開く, 2: 空行を除いて元の行番号と本文を返す]
-    #   引数: [self: generator instance, path: 読み込むテキストファイル]
-    #   戻り値: [list[tuple[int, str]]: 元ファイル上の行番号と空白を除いた本文]
-    #   エラー: [FileNotFoundError: 警告を記録し空リストを返す]
+    #   責務: [_expand_text: legacy呼び出しをWildcard Application APIへ委譲する]
+    #   処理: [prompt textとrootをrequestにしてresolve_promptを呼び出す]
+    #   引数: [self: generator, text: 展開するprompt, root: wildcard root, depth: 互換引数, wildcard_cache: 共有cache]
+    #   戻り値: [str: 展開済みprompt]
     # }
-    def _read_numbered_lines(self, path):
-        try:
-            with open(path, encoding="utf-8") as source:
-                return [
-                    (line_number, line.strip())
-                    for line_number, line in enumerate(source, start=1)
-                    if line.strip()
-                ]
-        except FileNotFoundError:
-            self._log(f"⚠️ ファイルが見つかりません: {path}")
-            return []
-
-    # {
-    #   責務: [_read_lines: ファイルから空行を除いた本文だけを読む]
-    #   処理: [1: 行番号付き読み込みを呼び出す, 2: 行番号を除いて本文を返す]
-    #   引数: [self: generator instance, path: 読み込むテキストファイル]
-    #   戻り値: [list[str]: 空行を除いた行本文]
-    # }
-    def _read_lines(self, path):
-        return [line for _, line in self._read_numbered_lines(path)]
-
     def _expand_text(self, text, root, depth=0, wildcard_cache=None):
-        pattern = re.compile(r"\{([^{}]+)\}")
-        while pattern.search(text):
-            match = pattern.search(text)
-            text = text[:match.start()] + secrets.choice(match.group(1).split("|")) + text[match.end():]
-        placeholders = {}
-        text = re.sub(r"<[^>]*>", lambda match: placeholders.setdefault(f"__LORA_{len(placeholders)}__", match.group(0)), text)
-
-        def expand_wildcard(match):
-            name = match.group(1)
-            if name.startswith("LORA_"):
-                return match.group(0)
-            return self.process_file(name.strip("_") + ".txt", root, depth + 1, wildcard_cache)
-
-        text = re.sub(r"__(.*?)__", expand_wildcard, text)
-        for key, value in placeholders.items():
-            text = text.replace(key, value)
-        return text
-
-    # {
-    #   責務: [process_file: wildcardファイルから重み付きの1行を選び再帰展開する]
-    #   処理: [1: 深さとキャッシュを確認する, 2: 対象ファイルを選ぶ, 3: 行を選択しwildcardを展開する, 4: 結果をキャッシュする]
-    #   引数: [self: generator instance, rel_path: wildcardファイルの相対パスまたは絶対パス, root: wildcard root, depth: 再帰深度, wildcard_cache: 選択済み結果のcache]
-    #   戻り値: [str: 選択行を展開した文字列]
-    #   エラー: [ValueError: 重み行の記法が不正な場合]
-    # }
-    def process_file(self, rel_path, root=None, depth=0, wildcard_cache=None):
         if depth > 50:
             return ""
+        resolved = resolve_prompt(
+            PromptResolutionRequest(positive_prompt=text, wildcard_root=Path(root)),
+            wildcard_cache,
+        )
+        for warning in resolved.warnings:
+            self._log(f"⚠️ {warning}")
+        return resolved.positive_prompt
+
+    # {
+    #   責務: [process_file: legacy呼び出しをWildcard Application APIへ委譲する]
+    #   処理: [pathとrootをrequestにしてresolve_promptを呼び, warningを記録する]
+    #   引数: [self: generator instance, rel_path: wildcardファイルの相対パスまたは絶対パス, root: wildcard root, depth: 再帰深度, wildcard_cache: 選択済み結果のcache]
+    #   戻り値: [str: 選択行を展開した文字列]
+    #   エラー: [ValueError: wildcard行の記法が不正な場合]
+    # }
+    def process_file(self, rel_path, root=None, depth=0, wildcard_cache=None):
         root = root or self.root_dir
-        requested_path = rel_path if os.path.isabs(rel_path) else os.path.join(root, rel_path)
-        cache_key = os.path.normcase(os.path.abspath(requested_path))
-        if wildcard_cache is not None and cache_key in wildcard_cache:
-            return wildcard_cache[cache_key]
-        path = self._select_source(rel_path, root)
-        if path is None:
+        if depth > 50:
             return ""
-        lines = self._read_numbered_lines(path)
-        if not lines:
-            return ""
-        try:
-            text = select_weighted_wildcard_line(lines)
-        except ValueError as exc:
-            raise ValueError(f"Invalid wildcard file {path}: {exc}") from exc
-        text = self._expand_text(text, root, depth, wildcard_cache)
-        if wildcard_cache is not None:
-            wildcard_cache[cache_key] = text
-        return text
+        resolved = resolve_prompt(
+            PromptResolutionRequest(positive_source=rel_path, wildcard_root=Path(root)),
+            wildcard_cache,
+        )
+        for warning in resolved.warnings:
+            self._log(f"⚠️ {warning}")
+        return resolved.positive_prompt
 
     def _additional_entries(self):
         if self.additional_inputs:
             return [item for item in self.additional_inputs if item.get("path")]
         return [
-            {"path": path, "label": "", "position": self.additional_position, "cache_scope": self.wildcard_cache_scope}
-            for path in self.additional_input_files if path
+            {
+                "path": path,
+                "label": "",
+                "position": self.additional_position,
+                "cache_scope": self.wildcard_cache_scope,
+            }
+            for path in self.additional_input_files
+            if path
         ]
 
     def _additional_prompts(self, wildcard_cache=None):
@@ -369,18 +322,51 @@ class EmbeddedRandomImage:
     def _generate(self, prompt=None, negative=None, wildcard_cache=None):
         if requests is None:
             raise RuntimeError("requests がインストールされていません")
-        if negative is None:
-            negative = self.process_file(self.negative_input_file, self.root_dir, wildcard_cache=wildcard_cache) if self.negative_input_file else ""
-        if prompt is None:
-            prompt = self.process_file(self.input_file, self.root_dir, wildcard_cache=wildcard_cache)
-        prompt = self._with_action_prompt(self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache)
+        resolved_source = resolve_prompt(
+            PromptResolutionRequest(
+                positive_prompt=prompt or "",
+                negative_prompt=negative or "",
+                positive_source=self.input_file if prompt is None else None,
+                negative_source=self.negative_input_file
+                if negative is None and self.negative_input_file
+                else None,
+                wildcard_root=Path(self.root_dir),
+            ),
+            wildcard_cache,
+        )
+        for warning in resolved_source.warnings:
+            self._log(f"⚠️ {warning}")
+        prompt = resolved_source.positive_prompt
+        negative = resolved_source.negative_prompt
+        prompt = self._with_action_prompt(
+            self._with_additional_prompt(prompt, wildcard_cache), wildcard_cache
+        )
+        resolved_prompt = resolve_prompt(
+            PromptResolutionRequest(
+                positive_prompt=prompt,
+                negative_prompt=negative,
+                wildcard_root=Path(self.root_dir),
+            ),
+            wildcard_cache,
+        )
+        prompt = resolved_prompt.positive_prompt
+        negative = resolved_prompt.negative_prompt
         prompt = self._correct_prompt(prompt)
+        resolved_prompt = resolve_prompt(
+            PromptResolutionRequest(
+                positive_prompt=prompt,
+                negative_prompt=negative,
+                wildcard_root=Path(self.root_dir),
+            ),
+            wildcard_cache,
+        )
+        prompt = resolved_prompt.positive_prompt
+        negative = resolved_prompt.negative_prompt
         workflow_path = resolve_comfy_flow_path(self.comfy_flow) if self.comfy_flow else None
         backend = create_configured_image_generation_backend(self.api_url, self.api_timeout)
         backend.capabilities.require("txt2img")
-        workflow_has_model_overrides = (
-            backend.capabilities.supports("model_overrides")
-            and bool(self.comfy_model_overrides)
+        workflow_has_model_overrides = backend.capabilities.supports("model_overrides") and bool(
+            self.comfy_model_overrides
         )
         validate_prompt_loras(
             prompt,
@@ -409,6 +395,7 @@ class EmbeddedRandomImage:
                 TextToImageRequest(
                 prompt=prompt,
                 negative=negative,
+                resolved_prompt=resolved_prompt,
                 checkpoint=self.sd_model_checkpoint,
                 steps=parameters.steps,
                 cfg=parameters.cfg,
@@ -445,7 +432,9 @@ class EmbeddedRandomImage:
             metadata_path = self._save_generation_metadata(output, parameters.to_dict())
             prompt_path = self._save_prompt(output, prompt)
             if failure:
-                report_path = self._save_failure_report(output, failure, prompt, negative, parameters.to_dict())
+                report_path = self._save_failure_report(
+                    output, failure, prompt, negative, parameters.to_dict()
+                )
                 self._log(f"⚠️ 破綻候補を隔離しました: {output} / 記録: {report_path}")
             else:
                 self._log(
@@ -453,30 +442,23 @@ class EmbeddedRandomImage:
                     + (f" / prompt: {prompt_path}" if prompt_path else "")
                 )
 
-    def _sequential_prompt_sources(self):
-        source = Path(self.input_file)
-        if not source.is_absolute():
-            source = Path(self.root_dir) / source
-        if not source.exists() and source.suffix.lower() == ".txt" and source.with_suffix("").is_dir():
-            source = source.with_suffix("")
-        if source.is_file():
-            return [source]
-        if source.is_dir():
-            return sorted((path for path in source.rglob("*.txt") if path.is_file()), key=lambda path: path.as_posix().casefold())
-        return []
-
+    # {
+    #   責務: [_generate_sequential: wildcard Applicationから順次promptを受け取り画像生成する]
+    #   処理: [1: 入力prompt行を読み込む, 2: 重み0と不正行を除外する, 3: 各promptを解決して順番に生成する]
+    #   引数: [self: generator settingsとworker状態]
+    #   戻り値: []
+    # }
     def _generate_sequential(self):
-        sources = self._sequential_prompt_sources()
         prompts = []
-        for path in sources:
-            for line_number, line in self._read_numbered_lines(path):
-                try:
-                    prompt, weight = parse_wildcard_line(line, line_number)
-                except ValueError as error:
-                    self._log(f"⚠️ 順次promptを読み飛ばしました: {path}:{line_number}: {error}")
-                    continue
-                if weight > 0:
-                    prompts.append((path, prompt))
+        source_lines = load_sequential_prompt_lines(self.input_file, Path(self.root_dir))
+        for source, line_number, line in source_lines:
+            try:
+                prompt, weight = parse_wildcard_line(line, line_number)
+            except ValueError as error:
+                self._log(f"⚠️ 順次promptを読み飛ばしました: {source}:{line_number}: {error}")
+                continue
+            if weight > 0:
+                prompts.append((Path(source), prompt))
         if not prompts:
             self._log("⚠️ 順次生成するプロンプトがありません。")
             return

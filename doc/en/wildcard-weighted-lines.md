@@ -4,6 +4,8 @@
 
 The built-in wildcard expansion used by Random Image and Prompt Generate accepts a line weight prefix to control how often a line is selected.
 
+Random Image resolves prompts through the public API of the Wildcard / Prompt Resolution Application. The Application owns wildcard references, file reads, weighted selection, and nested expansion, then returns prompt text in a `ResolvedPrompt`. Sequential input lines are also loaded through this Application.
+
 ```text
 @weight=3::<lora:character:0.8>
 <lora:character:0.6>
@@ -26,3 +28,5 @@ __anime_character_lora/aoba_moca__ __anime_character/バンドリ/青葉モカ__
 This keeps LoRA choices and character tags in separate files while the wrapper pairs the same character. Keep LoRA syntax in the LoRA-call file and character tags in the regular character wildcard.
 
 In sequential input files, each line is a generation job. The `@weight=` prefix is removed and jobs with weight `0` are skipped. Positive relative weights control candidate selection inside wildcard files; sequential jobs remain in the given order and run once each.
+
+The current `ResolvedPrompt` carries expanded text, detected LoRA names, wildcard provenance, and warnings. Automatic merging of trigger/recommended prompts from LoRA metadata and migration of every ComfyUI/A1111/Built-in route are separate steps.

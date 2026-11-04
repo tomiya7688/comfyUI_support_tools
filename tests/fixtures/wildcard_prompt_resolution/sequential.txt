@@ -1,0 +1,4 @@
+@weight=0::disabled
+first prompt
+
+@weight=3::third prompt

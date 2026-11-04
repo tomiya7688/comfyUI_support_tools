@@ -1,0 +1,1 @@
+"""Wildcard data messenger boundary."""

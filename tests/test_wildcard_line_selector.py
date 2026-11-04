@@ -3,8 +3,10 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from scripts.backend.wildcard_line_selector import (
+from src.comfyui_support_tools.applications.wildcard_prompt_resolution.api import (
     parse_wildcard_line,
+)
+from src.comfyui_support_tools.applications.wildcard_prompt_resolution.process.processing.wildcard_prompt_resolver import (
     select_weighted_wildcard_line,
 )
 
@@ -23,7 +25,7 @@ class WeightedWildcardLineSelectorTests(unittest.TestCase):
     # }
     def test_relative_weights_are_normalized(self):
         with mock.patch(
-            "scripts.backend.wildcard_line_selector.random.choices",
+            "src.comfyui_support_tools.applications.wildcard_prompt_resolution.process.processing.wildcard_prompt_resolver.random.choices",
             side_effect=lambda choices, weights, k: [choices[0]],
         ) as choose:
             selected = select_weighted_wildcard_line(
@@ -42,7 +44,7 @@ class WeightedWildcardLineSelectorTests(unittest.TestCase):
     def test_default_and_zero_weights(self):
         lora_line = "<lora:character:0.8>"
         with mock.patch(
-            "scripts.backend.wildcard_line_selector.random.choices",
+            "src.comfyui_support_tools.applications.wildcard_prompt_resolution.process.processing.wildcard_prompt_resolver.random.choices",
             side_effect=lambda choices, weights, k: [choices[0]],
         ) as choose:
             selected = select_weighted_wildcard_line(["@weight=0::disabled", lora_line])

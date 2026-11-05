@@ -174,7 +174,8 @@ Subject A
 - UPD decides which layer owns state and meaning.
 - Part Swap Design keeps subject internals replaceable.
 - Message Orientated Design defines communication between independent subjects.
-- Commander coordinates complex workflow sequencing.
+- Process Orchestrator owns complex workflow iteration/progression.
+- Commander, when used, selects dispatch/continuation targets.
 - Message Manager only delivers Messages.
 
 Do not automatically equate UPD Messenger with Message Orientated Design's Sender/Receptor/Message Manager.

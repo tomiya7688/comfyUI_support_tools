@@ -94,6 +94,86 @@ For deliberate extension points, prefer:
 
 When the Contract allows implementations to produce different results, test required invariants, failure semantics, and Acceptance rather than byte-identical behavior.
 
+## When to use Message Orientated Design
+
+Message Orientated Design is **selectively applied between independent state-owning subjects**.
+Do not turn every module/class interaction into a Message.
+
+A "subject" here means an Application, service, worker, job runtime, training session, plugin host, or similar unit with independent state/lifecycle.
+Inside one subject/part, normal function calls remain the default.
+
+### Use a Message boundary
+
+Use it when:
+- async / event / queue coordination is useful
+- communication crosses a process, service, Application, plugin, or worker boundary
+- progress / cancel / completion / failure / state changes are first-class events
+- sender and receiver have independent lifecycles
+- the receiver interprets a request according to its own state
+- the receiver or transport should be replaceable
+
+### Do not use a Message boundary
+
+Keep direct calls for:
+- pure helpers
+- internals of one Part Swap part
+- local algorithms with one owner/lifecycle
+- small synchronous validation/conversion
+- cases where Message infrastructure does not reduce coupling
+
+### Message Contract
+
+When the Message Orientated boundary is selected:
+
+~~~text
+Subject A
+  -> Sender
+  -> immutable Message
+  -> Message Manager / transport
+  -> Receptor
+  -> Subject B internal processing
+~~~
+
+- Do not directly call another subject's private/internal functions.
+- Do not directly read/write another subject's owned state.
+- Messages are immutable; create a new Message when meaning, destination, or content changes.
+- Responses across the selected Message boundary are new Messages.
+- Prefer typed/frozen contracts over a repository-wide untyped dictionary protocol.
+- Receptor identifies the message type and dispatches only; domain decisions stay in subject processing.
+- Sender is the subject's outbound Message boundary.
+- Message Manager performs delivery only. It does not own domain decisions, retry policy, model selection, persistence, or workflow orchestration.
+- A global Message Manager is not required; route through the smallest useful manager/domain scope.
+- A global Message ID is not required. Add request/run/job correlation IDs only when a protocol needs them.
+
+### Relationship to the other architecture rules
+
+- UPD decides which layer owns state and meaning.
+- Part Swap Design keeps subject internals replaceable.
+- Message Orientated Design defines communication between independent subjects.
+- Commander coordinates complex workflow sequencing.
+- Message Manager only delivers Messages.
+
+Do not automatically equate UPD Messenger with Message Orientated Design's Sender/Receptor/Message Manager.
+They may share one transport/boundary implementation only when their responsibilities genuinely coincide.
+
+### Representative flow
+
+~~~text
+Character Registry
+  -> TrainCharacterRequested
+  -> Training Application
+
+Training Application
+  -> TrainingProgress
+  -> Character Registry / Job UI
+
+Training Application
+  -> TrainingCompleted
+  -> Character Registry
+~~~
+
+Character Registry does not call trainer internals or mutate training-session state directly.
+
 ## When to use Commander
 
 Commander / Orchestrator is **optional**, not a default requirement.

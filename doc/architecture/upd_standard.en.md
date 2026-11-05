@@ -210,6 +210,239 @@ When used:
 
 Do not require pass-through Messenger objects for simple adjacent UPD layers inside one process.
 
+## Architecture decision flow
+
+When adding a responsibility, decide in this order.
+
+| Question | Yes | No |
+|---|---|---|
+| External input/presentation/output? | UI | Continue |
+| Application rule/decision/domain flow? | Process | Continue |
+| Persistence/retrieval/external data access? | Data | Continue |
+| Is independent replacement valuable? | Define a Part Contract | Keep inside the owner |
+| Is the peer an independent state/lifecycle subject? | Consider Message | Consider function call |
+| Async/process/service boundary? | Prefer Message/transport | Sync Contract is fine |
+| Is multi-part flow control complex? | Consider Commander | Plain Process is enough |
+| Is communication itself complex? | Consider Messenger/transport | Direct adjacent Contract is enough |
+
+### Stop rule
+
+Do not add abstraction when all or most of these are true:
+
+- one owner
+- one implementation
+- simple synchronous call
+- shared lifecycle
+- little independent replacement value
+- no testability improvement
+
+Do not add Message / Commander / registry / interface only because it might be useful someday.
+
+## Standard patterns
+
+### Pattern A: simple synchronous feature
+
+~~~text
+UI
+ -> Process
+ -> Data
+~~~
+
+No Commander.
+No Message.
+
+### Pattern B: swappable backend
+
+~~~text
+UI
+ -> Process
+ -> Backend Contract
+      ├─ Qwen Part
+      ├─ SDXL Part
+      └─ FLUX Part
+~~~
+
+UPD + Part Swap.
+The consumer does not know concrete backend internals.
+
+### Pattern C: long-running worker
+
+~~~text
+Application
+ -> StartRequested Message
+ -> Worker Subject
+ -> Progress Message
+ -> Completed / Failed Message
+~~~
+
+UPD + Message Orientated Design.
+Worker-internal algorithms remain normal function calls.
+
+### Pattern D: quality orchestration
+
+~~~text
+Process Commander
+ -> Router Part
+ -> Generator Part(s)
+ -> Evaluator Part(s)
+ -> Ranker
+ -> Repair
+ -> Retry / Fallback
+~~~
+
+UPD + Part Swap + Commander.
+Add Message only if a process/service boundary actually needs it.
+
+### Pattern E: cross-Application training
+
+~~~text
+Character Registry Subject
+ -> TrainCharacterRequested
+ -> Training Subject
+
+Training Subject
+ -> TrainingProgress
+ -> TrainingCompleted
+ -> Character Registry Subject
+~~~
+
+UPD + Part Swap + Message.
+Add Commander inside Training only if method/workflow selection becomes complex.
+
+## Contract taxonomy
+
+Keep Contracts separated by meaning.
+
+### Value / DTO Contract
+Stateless boundary data.
+
+Examples:
+- settings snapshot
+- generation request values
+- evaluation result
+- artifact reference
+
+### Part Contract
+Input/output/capability for a replaceable implementation.
+
+Examples:
+- GenerationBackend
+- Evaluator
+- OCR detector
+- Trainer adapter
+
+### Message Contract
+Immutable communication between independent stateful subjects.
+
+Examples:
+- TrainCharacterRequested
+- TrainingProgress
+- CancelRequested
+- TrainingCompleted
+
+A generic `request/response` kind is not mandatory; the Message type itself may carry the meaning.
+
+### Operation / Job Contract
+Execution semantics such as run / cancel / resume / progress / retry / artifact.
+
+Prefer the shared #435-#441 contracts.
+
+### External API Contract
+Transport boundary for HTTP / WebSocket / IPC.
+
+Do not expose internal models as wire formats without an adapter when their lifecycle/evolution differs.
+
+## State ownership
+
+Every mutable state has one owner.
+
+- Do not mutate owned state from outside its owner.
+- Across a subject boundary, request changes through Messages.
+- Across a Part boundary, pass input and return a result.
+- Do not use shared mutable global state as a communication channel.
+- Caches must have explicit owner / lifecycle / invalidation.
+- Process/Data must not directly manipulate UI widget state.
+- Another Application must not directly mutate worker/job state.
+
+## Error / cancellation semantics
+
+### Plain function / Part boundary
+
+For local synchronous boundaries, use as appropriate:
+- typed result
+- explicit exception
+- result object carrying failure detail
+
+### Message boundary
+
+Use semantic Messages when needed, for example:
+- RequestRejected
+- OperationFailed
+- CancelRequested
+- CancelAccepted
+- Cancelled
+- Completed
+
+Message Manager must not interpret failures and decide retries/domain behavior.
+Retry/fallback decisions belong to Process / Commander.
+
+### Correlation
+
+A global Message ID is not required.
+Add a correlation ID only when needed to:
+- match request/response
+- distinguish concurrent jobs
+- target progress/cancellation to a run
+- trace distributed transport
+
+Reuse #435 Run Manifest run_id or other existing identity when it already satisfies the need.
+
+## Testing matrix
+
+| Design axis | Primary tests |
+|---|---|
+| UPD | layer responsibility / UI->Data bypass / Application internal dependency |
+| Part Swap | public contract / fake replacement / consumer unchanged |
+| Message | immutability / type dispatch / response-failure-cancel / delivery-only manager / receiver replacement |
+| Commander | workflow transition / branching / retry-fallback / no direct work |
+| External transport | serialization / timeout / protocol error / reconnect where applicable |
+
+Internal helper tests alone do not prove a boundary is complete.
+Conversely, do not require Message infrastructure tests for local code that intentionally uses normal function calls.
+
+## Directory patterns
+
+Physical directories support responsibility; they are not the goal.
+
+### Simple Application
+
+~~~text
+applications/example/
+├ ui/
+│  └ view.py
+├ process/
+│  └ service.py
+└ data/
+   └ store.py
+~~~
+
+### Complex Application
+
+Add only roles with real responsibility.
+
+~~~text
+applications/example/
+├ ui/
+├ process/
+│  ├ commander/
+│  ├ processing/
+│  └ messaging/        # only when a Message boundary exists
+└ data/
+~~~
+
+Existing `messenger/` / `commander/` layouts may remain while they have a real responsibility.
+Do not create empty role folders in new code merely for symmetry.
+
 ## Shared
 
 Allowed under `src/comfyui_support_tools/shared/`:

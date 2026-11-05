@@ -42,6 +42,8 @@
 
 `search_civitai_loras(query, limit=20, cursor=None)` はLoRAの検索結果をversion単位で返し、続きがある場合はopaque cursorを返します。`fetch_civitai_lora_version(candidate)` は選択した版の `trainedWords` と公開状態を取得します。Civitai公式APIの利用制限に従い、429を含むHTTPエラーは呼び出し元へ返し、自動再試行しません。
 
+`preview_character_intake(request, civitai_candidate=...)` を使うと、明示選択した版の `trainedWords` をローカルcaptionと同じidentity/outfit/context/unclassified分類previewへ加えられます。Civitai情報には `civitai://` のstable source reference、元ページURL、作者、base model、APIの利用条件flagを保持します。ライセンス/学習許可は未確認として扱い、利用条件flagだけで許可を確定しません。画像が無いtrigger候補は見た目の証拠ではなく、必ず人が確認します。
+
 API仕様: [Models](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/models.md)、[Model Versions](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/model-versions.md)、[Authentication](https://github.com/civitai/civitai-developer-docs/blob/main/site/guide/authentication.md)。公開情報の取得は匿名API接続で行います。
 
 候補には `allowNoCredit`、`allowCommercialUse`、`allowDerivatives`、`allowDifferentLicense` を保存します。これらは配布物・学習・生成物の全条件を保証するものではありません。実利用前に元ページと適用ライセンスを確認してください。

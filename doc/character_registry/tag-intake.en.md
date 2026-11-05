@@ -42,6 +42,8 @@ An optional `manifest.json` uses this shape:
 
 `search_civitai_loras(query, limit=20, cursor=None)` returns search results per version and an opaque cursor when another page is available. `fetch_civitai_lora_version(candidate)` retrieves `trainedWords` and publication state for the selected version. It follows the Civitai API's rate limits and returns HTTP errors, including 429, to the caller without automatic retries.
 
+`preview_character_intake(request, civitai_candidate=...)` adds `trainedWords` from an explicitly selected version to the same identity/outfit/context/unclassified preview used for local captions. The Civitai source keeps a stable `civitai://` reference, source page URL, creator, base model, and API usage-permission flags. License and training permission remain unverified; the flags alone do not establish permission. Trigger words without images are suggestions, not visual evidence, and require manual review.
+
 API references: [Models](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/models.md), [Model Versions](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/model-versions.md), and [Authentication](https://github.com/civitai/civitai-developer-docs/blob/main/site/guide/authentication.md). Public metadata is accessed anonymously.
 
 Candidates retain `allowNoCredit`, `allowCommercialUse`, `allowDerivatives`, and `allowDifferentLicense`. These fields do not establish every condition for redistribution, training, or generated output. Check the source page and applicable license before use.

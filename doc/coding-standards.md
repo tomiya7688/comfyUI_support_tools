@@ -4,11 +4,12 @@
 
 These standards define the general coding rules for comfyUI_support_tools.
 
-The project combines **UPD / UPD Commander Base Design** with **Part Swap Design**.
+The project standard is **UPD + Part Swap Design**.
 
 - UPD defines where a responsibility belongs and how requests/results cross UI / Process / Data boundaries.
 - Part Swap Design defines where a replaceable part begins and ends, and keeps callers dependent on the part's stable input/output contract rather than its internals.
-- Python classes, Protocols, adapters, registries, and composition are implementation tools for these boundaries; they are not goals by themselves.
+- UPD Commander Base Design is an optional orchestration pattern for flows whose sequencing, branching, retry/fallback, cancellation, or cross-boundary coordination is itself a meaningful responsibility. Plain UPD is valid and preferred for simple flows.
+- Python classes, Protocols, adapters, registries, composition, Commander, and Messenger are implementation tools for these boundaries; they are not goals by themselves.
 
 References:
 - https://github.com/tomiya7688/upd-design
@@ -185,8 +186,9 @@ A "part" may be one module, a package, an Application-internal subsystem, an ada
 - The **Application** is the largest normal responsibility boundary. A complete Application should remain independently understandable and must not import another Application's internals.
 - Within an Application, UPD determines whether work belongs in UI, Process, or Data and whether Commander, Messenger, or Processing owns the action.
 - Replaceable algorithms/backends inside those responsibilities are Part Swap Design parts.
-- Commander/orchestration code may select, order, replace, retry, or fall back between parts, but it must not absorb the part's actual algorithm.
-- Messenger carries the public contract across a layer boundary; it must not expose the internal structure of the selected part.
+- An upper orchestrator selects and orders parts. Use a Commander when orchestration itself has meaningful complexity; when a Commander exists, it may select, order, replace, retry, or fall back between parts, but it must not absorb the part's actual algorithm.
+- Use a Messenger when communication/transport itself is a meaningful boundary concern, such as asynchronous delivery, IPC, HTTP/WebSocket, queues/events, or explicit cross-process/Application communication. A simple in-process UPD flow does not need pass-through Messenger objects merely for structure.
+- Do not create empty pass-through Commander or Messenger classes/files only to satisfy a naming pattern.
 - Shared contracts/value objects may cross part boundaries. Shared implementation should exist only when the responsibility is genuinely common rather than because several callers found the same internal helper.
 
 Natural replaceable parts in this repository include:
@@ -577,18 +579,50 @@ Prefer safe continuous improvement over large rule-only rewrites.
 
 New major Applications follow `doc/architecture/upd_standard.md` for UPD responsibility boundaries and the Part Swap Design rules in section 8 for replaceable implementation boundaries. They are organized under `src/comfyui_support_tools/applications/` by Application with UI / Process / Data separation.
 
-- Commander coordinates calls only.
-- Messenger handles layer communication only.
-- Processing performs actual work.
-- UI must not directly depend on Data.
+### Default: plain UPD
+
+Plain UPD is the default for simple Application flows.
+
+- UI owns external input/output and presentation concerns.
+- Process owns application decisions, validation, transformations, and domain flow.
+- Data owns persistence, retrieval, and external data access.
+- UI must not directly bypass Process to depend on Data.
 - Do not directly depend on another Application's internal modules.
-- Applications communicate through explicit APIs/contracts.
+- Adjacent layers may communicate through a small explicit in-process contract/function when that is sufficient. Do not create pass-through Commander/Messenger objects only to make the directory tree look complete.
+
+### Add Commander when orchestration becomes a responsibility
+
+Use a Commander/orchestrator when one or more of these are materially present:
+
+- multiple independent parts must be sequenced
+- routing/branching chooses the next part
+- retry, fallback, Top-K, repair, or repeated evaluation changes the flow
+- long-job state, cancellation, pause/resume, or checkpoints influence sequencing
+- the workflow itself needs focused tests independent of the parts
+
+When used, Commander coordinates calls and decisions only. Actual algorithms, I/O, inference, and persistence remain in the appropriate Processing/part.
+
+### Add Messenger when communication becomes a responsibility
+
+Use a Messenger/transport boundary when communication itself needs isolation, for example:
+
+- asynchronous/event/queue delivery
+- IPC or subprocess service communication
+- HTTP/WebSocket or other remote API transport
+- explicit cross-process or cross-Application communication
+- protocol translation/reliability concerns that should be tested separately
+
+When used, Messenger transports contracts and does not perform domain work.
+
+### Part Swap requirements
+
 - Replaceable backends/algorithms/adapters inside an Application use closed part contracts; consumers do not import their internals.
 - Swapping an implementation should normally affect only the composition root, registry/config binding, or the part itself—not unrelated consumers.
 - Deliberate extension points should have contract/swap tests when practical.
+- Do not over-fragment one-owner internals merely to create interfaces, Commander, or Messenger layers.
 - Migrate legacy `scripts/` progressively as responsibilities are touched.
 
-New Application code must pass `tools/architecture/upd_check.py` in strict mode where applicable and must be reviewed against the Part Swap Design rules even where static analysis cannot prove the boundary.
+Architecture checks must enforce responsibility/boundary violations without requiring empty Commander/Messenger scaffolding for every simple flow. Where the current checker is stricter than this policy, the policy is canonical and the checker must be updated rather than forcing unnecessary structure.
 
 ---
 

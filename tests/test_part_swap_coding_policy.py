@@ -19,6 +19,12 @@ class PartSwapCodingPolicyTests(unittest.TestCase):
         english = (ROOT / "doc" / "coding-standards.md").read_text(encoding="utf-8")
         japanese = (ROOT / "doc" / "コーディング規約.md").read_text(encoding="utf-8")
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        architecture_en = (ROOT / "doc" / "architecture" / "upd_standard.en.md").read_text(
+            encoding="utf-8"
+        )
+        architecture_ja = (ROOT / "doc" / "architecture" / "upd_standard.md").read_text(
+            encoding="utf-8"
+        )
 
         reference = "https://github.com/tomiya7688/part-swap-design"
         self.assertIn(reference, english)
@@ -28,7 +34,11 @@ class PartSwapCodingPolicyTests(unittest.TestCase):
         self.assertIn("fake/minimal replacement implementation", english)
         self.assertIn("fake / minimal implementation", japanese)
         self.assertIn("Part Swap Design", agents)
-        self.assertIn("UPD / UPD Commander", agents)
+        self.assertIn("Plain UPD is valid for simple flows", agents)
+        self.assertIn("Commander / Orchestrator is **optional**", architecture_en)
+        self.assertIn("Commander / Orchestratorは**標準必須ではない**", architecture_ja)
+        self.assertIn("pass-through Commander/Messenger", english)
+        self.assertIn("形式だけのCommander", japanese)
 
 
 if __name__ == "__main__":

@@ -95,11 +95,22 @@ def _import_target(module: str) -> tuple[str, str, str] | None:
     return app, layer, role
 
 
+# {
+# 責務: [_allowed_cross_layer: plain UPDとoptional Commander/Messengerの両方で許可する層間依存を判定する]
+# 処理: [1: 同一layerを許可する, 2: roleなしplain UPDはUI->Process->Dataのみ許可する, 3: Messenger経路は従来規則を維持する]
+# 引数: [source: 呼び出し元module role, target_layer: 依存先layer, target_role: 依存先role]
+# 戻り値: [allowed: 許可された依存ならtrue]
+# }
 def _allowed_cross_layer(source: ModuleRole, target_layer: str, target_role: str) -> bool:
     if source.layer == target_layer:
         return True
     if abs(LAYER_ORDER[source.layer] - LAYER_ORDER[target_layer]) != 1:
         return False
+    if source.role == "":
+        return target_role == "" and (source.layer, target_layer) in {
+            ("ui", "process"),
+            ("process", "data"),
+        }
     if source.role != "messenger":
         return False
     return target_role in {"messenger", "commander"}
@@ -190,7 +201,7 @@ def scan_repository(root: Path) -> list[Finding]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Check new src/applications code against the UPD Commander boundaries."
+        description="Check new src/applications code against UPD responsibility boundaries."
     )
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     args = parser.parse_args(argv)

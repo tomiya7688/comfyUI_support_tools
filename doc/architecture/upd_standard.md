@@ -134,10 +134,10 @@ Message
 └ content
 ~~~
 
-- `from`: 送信主体
-- `to`: 受信主体
-- `type`: Messageの意味
-- `content`: そのMessageが運ぶ内容
+- `from`: 送信主体。class名/pathではなくstable semantic subject IDを優先する。
+- `to`: 受信主体。runtime object参照ではなくstable semantic subject IDを優先する。
+- `type`: Messageの意味。protocol上安定したsemantic typeを使う。
+- `content`: そのMessageが運ぶtyped payload。receiver内部stateそのものを露出しない。
 
 Python実装では、frozen dataclass等のtyped Message / envelopeを使ってよい。
 Message typeをclass型で表現する場合でも、routing/serialization時に上記4要素の意味を失わない。
@@ -385,6 +385,11 @@ stateを持たない境界data。
 - OCR detector
 - Trainer adapter
 
+配置:
+- 1 Application内だけで使うContractは、そのApplication内へ置く。
+- cross-Application/public contractとして複数Applicationが依存する場合だけ `shared/contracts` へ昇格する。
+- `shared/contracts` を「置き場所に迷った型」の保管庫にしない。
+
 ### Message Contract
 独立stateful subject間のimmutable communication。
 
@@ -393,6 +398,11 @@ stateを持たない境界data。
 - TrainingProgress
 - CancelRequested
 - TrainingCompleted
+
+配置:
+- Application内部subject間だけならApplication-local contractとして保持してよい。
+- cross-Application / cross-processで公開されるMessageだけ、shared/public protocolとして扱う。
+- transport用wire schemaとinternal typed Messageを同一にする必要はない。adapterで変換してよい。
 
 generic `request/response` kindを必須にせず、message type自体で意味を表してよい。
 
@@ -493,12 +503,15 @@ applications/example/
 applications/example/
 ├ ui/
 ├ process/
-│  ├ commander/
+│  ├ commander/                         # dispatch controlが必要な場合だけ
 │  ├ processing/
-│  └ messaging/        # Message boundaryが必要な場合のみ
+│  │  ├ workflow_orchestrator.py        # dynamic workflowが必要な場合
+│  │  └ ...
+│  └ messenger/                         # transport responsibilityが必要な場合だけ
 └ data/
 ~~~
 
+Process Orchestratorは新しい第4roleではなく、**Process Processingの一種**として配置する。
 既存の `messenger/` / `commander/` 配置は有効な責務がある限り維持してよい。
 新規コードで形式だけのfolderを作らない。
 

@@ -573,9 +573,9 @@ Prefer safe continuous improvement over large rule-only rewrites.
 
 ---
 
-## 28. UPD standard for new Applications
+## 28. UPD + Part Swap standard for new Applications
 
-New major Applications follow `doc/architecture/upd_standard.md` and are organized under `src/comfyui_support_tools/applications/` by Application with UI / Process / Data separation.
+New major Applications follow `doc/architecture/upd_standard.md` for UPD responsibility boundaries and the Part Swap Design rules in section 8 for replaceable implementation boundaries. They are organized under `src/comfyui_support_tools/applications/` by Application with UI / Process / Data separation.
 
 - Commander coordinates calls only.
 - Messenger handles layer communication only.
@@ -583,9 +583,12 @@ New major Applications follow `doc/architecture/upd_standard.md` and are organiz
 - UI must not directly depend on Data.
 - Do not directly depend on another Application's internal modules.
 - Applications communicate through explicit APIs/contracts.
+- Replaceable backends/algorithms/adapters inside an Application use closed part contracts; consumers do not import their internals.
+- Swapping an implementation should normally affect only the composition root, registry/config binding, or the part itself—not unrelated consumers.
+- Deliberate extension points should have contract/swap tests when practical.
 - Migrate legacy `scripts/` progressively as responsibilities are touched.
 
-New Application code must pass `tools/architecture/upd_check.py` in strict mode where applicable.
+New Application code must pass `tools/architecture/upd_check.py` in strict mode where applicable and must be reviewed against the Part Swap Design rules even where static analysis cannot prove the boundary.
 
 ---
 

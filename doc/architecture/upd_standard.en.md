@@ -18,6 +18,34 @@ Canonical sources:
 - https://github.com/tomiya7688/part-swap-design
 - https://github.com/tomiya7688/upd-commander-base-design
 
+## Roles at a glance
+
+Do not conflate similarly named concepts.
+
+| Concept | Responsibility | May own | Must not own |
+|---|---|---|---|
+| UI | external input/output and presentation | widgets/input formatting | domain decisions / persistence |
+| Process | application rules and decisions | validation / domain flow | UI widgets / storage details |
+| Data | persistence and retrieval | file/DB/API data access and normalization | domain decisions / UI |
+| Part | replaceable implementation boundary | private internals / implementation-specific algorithms | leaked internals required by consumers |
+| Subject | independent state/lifecycle owner | owned mutable state | another subject's state ownership |
+| Message | immutable communication between Subjects | from/to/type/content | mutable shared state / behavior |
+| Process Orchestrator | workflow algorithm | loops / retry / candidate progression / state machine | UI or I/O implementation |
+| Commander | dispatch/continuation control | next Processing/Messenger selection / minimal continuation ID | complex loops / domain algorithms / I/O |
+| Messenger | layer/transport communication | delivery / protocol boundary | domain algorithms |
+| Message Manager | Message delivery | target lookup / delivery | workflow / retry policy / persistence / model selection |
+| Adapter | external/implementation-specific translation | protocol/config/result translation | domain-wide orchestration |
+
+### Basic decision rule
+
+- **Who owns state?** -> Subject / UPD owner.
+- **Should the implementation be replaceable?** -> Part.
+- **How do independent Subjects communicate?** -> Message.
+- **How does a workflow iterate?** -> Process Orchestrator.
+- **Which Processing should receive the next request/result?** -> Commander when needed.
+- **Where should communication be delivered?** -> Messenger / Message Manager.
+- **How are implementation-specific differences translated?** -> Adapter.
+
 ## Scope
 
 New code normally lives under `src/comfyui_support_tools/applications/<application>/`.

@@ -8,13 +8,15 @@ The project standard is **UPD + Part Swap Design**.
 
 - UPD defines where a responsibility belongs and how requests/results cross UI / Process / Data boundaries.
 - Part Swap Design defines where a replaceable part begins and ends, and keeps callers dependent on the part's stable input/output contract rather than its internals.
+- Message Orientated Design is an optional communication model for independent state-owning subjects. It is used when those subjects should coordinate through immutable Messages instead of direct internal calls/state access.
 - UPD Commander Base Design is an optional orchestration pattern for flows whose sequencing, branching, retry/fallback, cancellation, or cross-boundary coordination is itself a meaningful responsibility. Plain UPD is valid and preferred for simple flows.
-- Python classes, Protocols, adapters, registries, composition, Commander, and Messenger are implementation tools for these boundaries; they are not goals by themselves.
+- Python classes, Protocols, adapters, registries, composition, Messages, Commander, and Messenger are implementation tools for these boundaries; they are not goals by themselves.
 
 References:
 - https://github.com/tomiya7688/upd-design
 - https://github.com/tomiya7688/upd-commander-base-design
 - https://github.com/tomiya7688/part-swap-design
+- https://github.com/tomiya7688/Message-Orientated-Design
 - `specification/recommended-practices.md`
 - `specification/implementation-quality.md`
 
@@ -222,6 +224,85 @@ For a deliberate extension point or replaceable part:
 - Consumer tests must not depend on concrete implementation class names, private module paths, or internal state layout unless the concrete implementation itself is the subject of the test.
 - Keep implementation-specific tests inside the part in addition to boundary tests.
 - When the contract permits implementations to produce different results, test required invariants, result shape, failure semantics, and acceptance criteria rather than forcing identical internal behavior.
+
+### Message Orientated Design is optional at independent stateful-subject boundaries
+
+This project adopts [Message Orientated Design](https://github.com/tomiya7688/Message-Orientated-Design) **selectively**, not as a rule that every class or function must communicate through Messages.
+
+Project interpretation:
+
+- A Message Orientated "object" means an **independent state-owning subject** with a meaningful lifecycle or autonomy, such as an Application, service, worker, long-running job runtime, training session, plugin host, or similar boundary.
+- Inside one subject/part, normal function calls are the default.
+- Between independent subjects, use Messages when direct calls/state access would couple lifecycles, ownership, concurrency, or transport.
+- Do not turn pure helpers, local validation, small transformations, or one-owner algorithms into Message endpoints merely for consistency.
+
+#### Use Message Orientated Design when
+
+Prefer a Message boundary when one or more of these are materially present:
+
+- the sender and receiver own independent mutable state/lifecycles
+- asynchronous/event/queue coordination is useful
+- communication crosses a process, service, Application, plugin, or worker boundary
+- progress, cancellation, completion, failure, or state-change notifications are first-class interactions
+- multiple receivers or replaceable receivers may consume the same semantic request/event
+- the receiver should decide how to interpret a request based on its own state
+
+Typical examples in this repository include:
+
+- Main GUI <-> external/subprocess service
+- Job Runtime <-> worker
+- Character Registry <-> training/personalization Application
+- LoRA trainer <-> Training Doctor
+- long-running video/image processing worker
+- cross-Application notifications where direct internal imports would violate boundaries
+
+#### Do not use Message Orientated Design when
+
+Keep direct function/contract calls for:
+
+- pure/stateless helpers
+- internal calls inside one closed Part Swap part
+- small synchronous validation/conversion
+- local algorithms whose caller and callee share one lifecycle/owner
+- cases where Message Sender/Receptor/Manager would add objects without reducing coupling
+
+#### Message boundary rules
+
+When a Message Orientated boundary is selected:
+
+- **Across subjects = Message; inside a subject = function call.**
+- One subject must not directly call another subject's private/internal functions.
+- One subject must not directly read or mutate another subject's owned internal state.
+- Messages are immutable after creation. To change meaning, destination, or content, create a new Message.
+- A response across the selected Message boundary is a new Message, not a hidden direct callback into the other subject's internals.
+- Prefer typed/explicit Message contracts (for example frozen dataclasses or equivalent typed DTOs) over repository-wide unstructured `dict[str, object]` payloads.
+- A global Message ID is not required. Add request/run/job correlation identifiers only when the protocol actually needs them.
+- Sender is the subject's message-emission boundary. Receptor receives, identifies the message type, and dispatches to internal processing.
+- Receptor does not absorb domain validation, authorization, scoring, or business decisions; the internal subject processing owns those decisions.
+- Message Manager performs **delivery only**. It must not become a global service locator, workflow engine, model router, retry policy, persistence layer, or domain decision point.
+- Use the smallest useful manager/domain scope. Do not force all traffic through one global event bus.
+
+#### Relationship to UPD, Part Swap, and Commander
+
+- UPD decides which responsibility/layer owns the state and meaning.
+- Part Swap Design keeps the receiver's internal implementation replaceable behind a stable boundary.
+- Message Orientated Design defines communication between independent stateful subjects.
+- Commander/Orchestrator, when needed, decides workflow sequencing. A Message Manager does not replace Commander, and Commander does not replace Message delivery.
+- UPD Messenger and Message Orientated Design's Sender/Receptor/Message Manager are related communication tools but are not automatically the same abstraction. Combine them only where their responsibilities genuinely coincide.
+
+#### Message contract tests
+
+For a Message Orientated boundary, test at least:
+
+- message immutability / typed shape
+- accepted and unsupported message types
+- receptor dispatch to internal processing
+- no domain work in delivery infrastructure
+- response/event contract
+- failure/cancellation semantics where applicable
+- replacement of a receiver/transport without requiring the sender to depend on receiver internals
+
+Do not require Message infrastructure tests for code that intentionally remains a normal in-process function call.
 
 ### Modules are the primary design unit
 

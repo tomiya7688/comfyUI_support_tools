@@ -45,6 +45,9 @@ class PartSwapCodingPolicyTests(unittest.TestCase):
         self.assertIn("独立した状態主体間で選択適用", architecture_ja)
         self.assertIn("Message Manager performs delivery only", architecture_en)
         self.assertIn("Message Managerは配送だけ", architecture_ja)
+        self.assertIn("Message\n├ from\n├ to\n├ type\n└ content", architecture_en)
+        self.assertIn("Process Orchestrator is not a fourth UPD role", architecture_en)
+        self.assertIn("Process Orchestratorは新しい第4roleではなく", architecture_ja)
         self.assertIn("pass-through Commander/Messenger", english)
         self.assertIn("形式だけのCommander", japanese)
 

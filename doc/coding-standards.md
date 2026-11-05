@@ -4,15 +4,21 @@
 
 These standards define the general coding rules for comfyUI_support_tools.
 
-The project uses ideas from `upd-commander-base-design` for responsibility boundaries and dependency direction, while also adopting conventional Python practices for readability, maintainability, testability, security, and compatibility.
+The project combines **UPD / UPD Commander Base Design** with **Part Swap Design**.
+
+- UPD defines where a responsibility belongs and how requests/results cross UI / Process / Data boundaries.
+- Part Swap Design defines where a replaceable part begins and ends, and keeps callers dependent on the part's stable input/output contract rather than its internals.
+- Python classes, Protocols, adapters, registries, and composition are implementation tools for these boundaries; they are not goals by themselves.
 
 References:
+- https://github.com/tomiya7688/upd-design
 - https://github.com/tomiya7688/upd-commander-base-design
+- https://github.com/tomiya7688/part-swap-design
 - `specification/recommended-practices.md`
 - `specification/implementation-quality.md`
 
 Names such as Commander and Processing are not mandatory everywhere.
-The important requirements are clear responsibility boundaries, explicit dependency direction, readability, and verifiability.
+The important requirements are clear responsibility boundaries, explicit dependency direction, replaceable closed call relationships, readable contracts, and verifiability.
 
 ---
 
@@ -146,6 +152,74 @@ Object-oriented design in this project does **not** mean maximizing classes, inh
 The highest priority is that **each module owns an independent responsibility, does not depend on another module's internals, and can be replaced, removed, or unit-tested with limited impact**.
 
 Encapsulation, abstraction, interfaces, Protocols, and classes are tools for that independence, not goals by themselves.
+
+### Part Swap Design is the default composition rule
+
+This project applies [Part Swap Design](https://github.com/tomiya7688/part-swap-design) together with UPD.
+
+UPD answers **where a responsibility belongs and how work flows between layers**.
+Part Swap Design answers **what can be replaced as one unit without requiring callers to understand or edit its internals**.
+
+A "part" may be one module, a package, an Application-internal subsystem, an adapter, or a group of modules. It does not have to be one class. The essential property is a **closed call relationship**: callers use the part through its public entry contract, while subordinate implementation details remain inside the part.
+
+#### Closed call relationships
+
+- Code outside a part must not directly call or import its private/internal subordinate modules merely because doing so is convenient.
+- A part's internal helpers must not become accidental shared APIs used by unrelated features.
+- If multiple external consumers genuinely need the same responsibility, define an explicit shared contract or extract that responsibility as its own part instead of exposing another part's internals.
+- Sibling parts should not coordinate by reaching into each other's implementation. Return control to an upper Commander/orchestrator and let it select the next part.
+- `shared`, `common`, `utils`, and registries must not be used to create an "open call relationship" that bypasses the intended part boundary.
+
+#### Stable part boundaries
+
+- Expose the smallest practical public input/output contract for each replaceable part.
+- Replacing one implementation with another should normally require no consumer changes. A composition root, registry entry, configuration binding, or dependency-injection binding may change.
+- Keep input/output shape and semantic guarantees stable across interchangeable implementations. Internal algorithms and output quality may differ when the contract allows it; byte-for-byte identical results are not required unless the specification requires them.
+- A breaking part-contract change requires an explicit version/migration path. Do not silently force every caller to learn a new internal representation.
+- Consumers should depend on semantic IDs, capabilities, Protocols/contracts, or result types—not concrete implementation class names, file paths, model names, or private dictionary layouts.
+- Implementation-specific options belong behind a typed part configuration/binding. Do not scatter `if backend == ...`, `if model == ...`, or equivalent concrete branching through consumers.
+- Differences between implementations should be exposed through capability/result contracts and resolved by an upper router/orchestrator when practical.
+
+#### Combining Part Swap Design with UPD
+
+- The **Application** is the largest normal responsibility boundary. A complete Application should remain independently understandable and must not import another Application's internals.
+- Within an Application, UPD determines whether work belongs in UI, Process, or Data and whether Commander, Messenger, or Processing owns the action.
+- Replaceable algorithms/backends inside those responsibilities are Part Swap Design parts.
+- Commander/orchestration code may select, order, replace, retry, or fall back between parts, but it must not absorb the part's actual algorithm.
+- Messenger carries the public contract across a layer boundary; it must not expose the internal structure of the selected part.
+- Shared contracts/value objects may cross part boundaries. Shared implementation should exist only when the responsibility is genuinely common rather than because several callers found the same internal helper.
+
+Natural replaceable parts in this repository include:
+
+- image-generation backends and workflow adapters
+- model-family evidence detectors
+- evaluators, rankers, and repair strategies
+- frame/image filters and OCR/text detectors
+- trainer and personalization adapters
+- video decode/analysis backends
+- storage, cache, artifact/export adapters
+- Post Process processors
+
+#### Part granularity: do not over-fragment
+
+Part Swap Design does **not** require an interface, package, or registry for every small function.
+
+- A part may contain several modules and complex internal dependencies when those dependencies stay inside the closed boundary.
+- Split a part further only when the smaller unit has meaningful independent replacement, testing, ownership, or reuse value.
+- If an internal algorithm is called only by one owner and replacing it independently has little value, keeping it inside the owner's part is acceptable.
+- Do not increase abstraction/registration overhead merely to claim that every helper is swappable.
+- Line count alone does not define a part boundary; responsibility and replacement cost do.
+
+#### Contract and swap testing
+
+For a deliberate extension point or replaceable part:
+
+- Test through the public part boundary, not only through internal helper functions.
+- Interchangeable implementations should run against a shared contract-test suite where practical.
+- Add a fake/minimal replacement implementation in tests when this proves that consumers remain unchanged.
+- Consumer tests must not depend on concrete implementation class names, private module paths, or internal state layout unless the concrete implementation itself is the subject of the test.
+- Keep implementation-specific tests inside the part in addition to boundary tests.
+- When the contract permits implementations to produce different results, test required invariants, result shape, failure semantics, and acceptance criteria rather than forcing identical internal behavior.
 
 ### Modules are the primary design unit
 

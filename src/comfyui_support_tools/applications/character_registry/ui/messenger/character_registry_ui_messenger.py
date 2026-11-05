@@ -1,0 +1,66 @@
+from pathlib import Path
+
+from src.comfyui_support_tools.applications.character_registry.api import (
+    preview_character_intake,
+    register_character_intake,
+    search_civitai_loras,
+)
+from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
+    CharacterTagIntakeConfirmation,
+)
+from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview import (
+    CharacterTagIntakePreview,
+)
+from src.comfyui_support_tools.shared.contracts.character_tag_intake_request import (
+    CharacterTagIntakeRequest,
+)
+from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
+    CivitaiLoraCandidate,
+)
+
+
+# {
+#   責務: [CharacterRegistryUiMessenger: Character Registry UIからpublic application APIへrequestを渡す]
+#   フィールド: [なし]
+# }
+class CharacterRegistryUiMessenger:
+    """Expose only public Character Registry API calls to the UI layer."""
+
+    # {
+    #   責務: [search_civitai_loras: UIの検索語でCivitai LoRA候補を取得する]
+    #   処理: [public APIを呼び, 候補とpagination cursorを返す]
+    #   引数: [query: Civitai検索語]
+    #   戻り値: [tuple[tuple[CivitaiLoraCandidate, ...], str | None]: 候補一覧と次cursor]
+    # }
+    def search_civitai_loras(
+        self, query: str
+    ) -> tuple[tuple[CivitaiLoraCandidate, ...], str | None]:
+        return search_civitai_loras(query, limit=30)
+
+    # {
+    #   責務: [preview_character_intake: UIのsourceと選択LoRAから分類previewを取得する]
+    #   処理: [public APIへrequestと任意のCivitai candidateを渡す]
+    #   引数: [request: intake条件, candidate: 選択LoRA version]
+    #   戻り値: [CharacterTagIntakePreview: 手動確認する分類候補]
+    # }
+    def preview_character_intake(
+        self,
+        request: CharacterTagIntakeRequest,
+        candidate: CivitaiLoraCandidate | None,
+    ) -> CharacterTagIntakePreview:
+        return preview_character_intake(request, candidate)
+
+    # {
+    #   責務: [register_character_intake: 手動確認内容をCharacterProfileとして登録する]
+    #   処理: [public APIへpreview, confirmation, profile rootを渡す]
+    #   引数: [preview: intake preview, confirmation: 手動確認内容, profile_directory: 設定済み保存root]
+    #   戻り値: [CharacterProfile: 登録したprofile]
+    # }
+    def register_character_intake(
+        self,
+        preview: CharacterTagIntakePreview,
+        confirmation: CharacterTagIntakeConfirmation,
+        profile_directory: Path,
+    ) -> CharacterProfile:
+        return register_character_intake(preview, confirmation, profile_directory)

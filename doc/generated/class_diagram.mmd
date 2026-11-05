@@ -277,6 +277,10 @@ classDiagram
         +process_safe()
     }
     ttk.Frame <|-- BodyPromptTab
+    class CharacterRegistryTab {
+        +__init__()
+    }
+    ttk.Frame <|-- CharacterRegistryTab
     class CheckBracesTab {
         +__init__()
         +_refresh_preset_choices()

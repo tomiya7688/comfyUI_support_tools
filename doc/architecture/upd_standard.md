@@ -24,7 +24,7 @@
 
 | 概念 | 責務 | 持ってよいもの | 持ってはいけないもの |
 |---|---|---|---|
-| UI | 外部input/output・表示 | widget/input formatting | domain decision / persistence |
+| UI | 外部input/output・interface | GUI/API/CLI/機器I/O固有処理 | domain decision / persistence |
 | Process | application rule・判断 | validation / domain flow | UI widget / storage detail |
 | Data | 保存・取得 | file/DB/API data access・normalization | domain decision / UI |
 | Part | 交換可能実装境界 | private internals / implementation-specific algorithm | consumerへのinternal公開 |
@@ -51,7 +51,7 @@
 新規コードは `src/comfyui_support_tools/applications/<application>/` を標準配置とする。
 既存の `scripts/` / `nuno/` は一括移行しない。変更対象になった責務から段階的に新構造へ移す。
 
-基本形:
+基本形（概念）:
 
 ~~~text
 Application
@@ -60,6 +60,10 @@ Application
 └─ Data
 ~~~
 
+UIはGUIだけを意味しない。HTTP endpoint、CLI、device/system interface等、外部との接点もUI責務として扱う。
+
+すべてのApplicationで3layerの物理folderを必須にしない。
+そのApplicationに責務が存在するlayerだけ実装し、空folder / empty classを形式のために作らない。
 必要になった場合だけ、各層の内部にCommander / Messenger / Processing等の役割を追加する。
 
 ## Application境界
@@ -518,15 +522,20 @@ internal helper testだけでboundary完成扱いにしない。
 
 ### Simple Application
 
+必要なlayerだけ配置する。
+
 ~~~text
 applications/example/
 ├ ui/
-│  └ view.py
+│  └ endpoint_or_view.py
 ├ process/
 │  └ service.py
 └ data/
    └ store.py
 ~~~
+
+pure compute等でData責務がないなら `data/` を作らなくてよい。
+GUIがなくてもAPI/CLI endpointが外部interfaceならUI責務として扱う。
 
 ### Complex Application
 

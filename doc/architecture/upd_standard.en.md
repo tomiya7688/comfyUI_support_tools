@@ -24,7 +24,7 @@ Do not conflate similarly named concepts.
 
 | Concept | Responsibility | May own | Must not own |
 |---|---|---|---|
-| UI | external input/output and presentation | widgets/input formatting | domain decisions / persistence |
+| UI | external input/output and interface | GUI/API/CLI/device-I/O-specific behavior | domain decisions / persistence |
 | Process | application rules and decisions | validation / domain flow | UI widgets / storage details |
 | Data | persistence and retrieval | file/DB/API data access and normalization | domain decisions / UI |
 | Part | replaceable implementation boundary | private internals / implementation-specific algorithms | leaked internals required by consumers |
@@ -51,7 +51,7 @@ Do not conflate similarly named concepts.
 New code normally lives under `src/comfyui_support_tools/applications/<application>/`.
 Do not bulk-migrate `scripts/` or `nuno/`; migrate responsibilities incrementally when they are touched.
 
-Default shape:
+Default conceptual shape:
 
 ~~~text
 Application
@@ -60,6 +60,10 @@ Application
 └─ Data
 ~~~
 
+UI does not mean GUI only. HTTP endpoints, CLI surfaces, device/system interfaces, and other external contact points are UI responsibilities.
+
+Do not require all three physical layer directories in every Application.
+Implement only layers that have a real responsibility; do not create empty directories/classes for symmetry.
 Add Commander / Messenger / Processing roles inside a layer only when they have a real responsibility.
 
 ## Application boundary
@@ -514,15 +518,20 @@ Physical directories support responsibility; they are not the goal.
 
 ### Simple Application
 
+Create only the layers that are actually needed.
+
 ~~~text
 applications/example/
 ├ ui/
-│  └ view.py
+│  └ endpoint_or_view.py
 ├ process/
 │  └ service.py
 └ data/
    └ store.py
 ~~~
+
+If a pure-compute Application has no Data responsibility, it does not need a `data/` directory.
+An API/CLI endpoint is a UI responsibility even when there is no GUI.
 
 ### Complex Application
 

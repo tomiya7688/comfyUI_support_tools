@@ -193,23 +193,55 @@ Training Application
 
 Character Registry does not call trainer internals or mutate training-session state directly.
 
+## When to use a Process Orchestrator / Workflow Processing
+
+When dynamic iteration or the workflow algorithm itself is real application processing, model it as a **Process-layer Orchestrator / Workflow Processing**.
+This is a different responsibility from Commander.
+
+Examples:
+- executing a variable number of sequence steps
+- Best-of-N / Top-K candidate evaluation loops
+- repeated work consuming a retry budget
+- repair -> re-evaluate loops
+- state-machine step progression
+- batch workflow iteration
+
+A Process Orchestrator may:
+- implement workflow algorithms / iteration / state transitions
+- call replaceable parts through public Part Contracts
+- remain independent from UI widget details and Data storage representations
+- delegate HTTP / subprocess / inference / persistence to the proper Part/Data/transport Contract
+
+A loop is not itself a violation here. The rule is to keep unrelated responsibilities out of the loop.
+
+A component such as `SequenceRunner`, which iterates declared steps under a failure policy, naturally fits this category.
+
 ## When to use Commander
 
-Commander / Orchestrator is **optional**, not a default requirement.
-Use it when sequencing itself becomes a meaningful responsibility, for example:
+Commander is **optional**, not a default requirement.
+Following UPD Commander semantics, use it when a control point is needed to choose the next Processing / Messenger from an incoming request or returned result.
 
-- multiple independent parts must run in sequence
-- routing / branching selects the next part
-- retry / fallback / Top-K / repair / re-evaluation changes the flow
-- long-job cancel / pause / resume / checkpoint state changes sequencing
-- the workflow itself needs focused tests independent of its parts
+Examples:
+- select Processing from a command type
+- select the next Processing / Messenger from a Processing result
+- manage the continuation target for an asynchronous response
+- dispatch requests/results at a layer boundary
 
 When used:
-- Commander coordinates order and flow decisions only.
-- Algorithms, I/O, HTTP, subprocesses, inference, and persistence stay in the appropriate Processing/part.
-- Commander uses public part Contracts and does not reach into part internals.
+- Commander selects call targets, dispatches, and chooses success/failure/continuation paths only
+- algorithms, I/O, HTTP, subprocesses, inference, and persistence stay outside Commander
+- complex loops / candidate iteration / retry algorithms belong in Process Orchestrator / Processing
+- Commander uses public Contracts and does not reach into part internals
+- only minimal continuation IDs/state may be retained
 
 Do not add a formal Commander to a simple input -> transform -> save flow merely for structure.
+
+### Commander vs Process Orchestrator
+
+- **Commander:** chooses *which processing to call next*.
+- **Process Orchestrator:** implements *how a workflow iterates and progresses*.
+
+When both are useful, Commander invokes the Orchestrator as a Processing responsibility and does not absorb its workflow algorithm.
 
 ## When to use Messenger
 

@@ -9,8 +9,9 @@ The project standard is **UPD + Part Swap Design**.
 - UPD defines where a responsibility belongs and how requests/results cross UI / Process / Data boundaries.
 - Part Swap Design defines where a replaceable part begins and ends, and keeps callers dependent on the part's stable input/output contract rather than its internals.
 - Message Orientated Design is an optional communication model for independent state-owning subjects. It is used when those subjects should coordinate through immutable Messages instead of direct internal calls/state access.
-- UPD Commander Base Design is an optional orchestration pattern for flows whose sequencing, branching, retry/fallback, cancellation, or cross-boundary coordination is itself a meaningful responsibility. Plain UPD is valid and preferred for simple flows.
-- Python classes, Protocols, adapters, registries, composition, Messages, Commander, and Messenger are implementation tools for these boundaries; they are not goals by themselves.
+- A Process Orchestrator / Workflow Processing component is optional when dynamic iteration, retry loops, candidate evaluation, or workflow state progression is itself application processing.
+- UPD Commander Base Design is optional when a thin control point is useful to dispatch requests/results to the next Processing or Messenger. Plain UPD is valid and preferred for simple flows.
+- Python classes, Protocols, adapters, registries, composition, Messages, Process Orchestrators, Commander, and Messenger are implementation tools for these boundaries; they are not goals by themselves.
 
 References:
 - https://github.com/tomiya7688/upd-design
@@ -170,7 +171,7 @@ A "part" may be one module, a package, an Application-internal subsystem, an ada
 - Code outside a part must not directly call or import its private/internal subordinate modules merely because doing so is convenient.
 - A part's internal helpers must not become accidental shared APIs used by unrelated features.
 - If multiple external consumers genuinely need the same responsibility, define an explicit shared contract or extract that responsibility as its own part instead of exposing another part's internals.
-- Sibling parts should not coordinate by reaching into each other's implementation. Return control to an upper Commander/orchestrator and let it select the next part.
+- Sibling parts should not coordinate by reaching into each other's implementation. Return control to the owning Process service / Process Orchestrator; if a Commander exists, it may dispatch the next Processing without absorbing the workflow algorithm.
 - `shared`, `common`, `utils`, and registries must not be used to create an "open call relationship" that bypasses the intended part boundary.
 
 #### Stable part boundaries
@@ -188,7 +189,8 @@ A "part" may be one module, a package, an Application-internal subsystem, an ada
 - The **Application** is the largest normal responsibility boundary. A complete Application should remain independently understandable and must not import another Application's internals.
 - Within an Application, UPD determines whether work belongs in UI, Process, or Data and whether Commander, Messenger, or Processing owns the action.
 - Replaceable algorithms/backends inside those responsibilities are Part Swap Design parts.
-- An upper orchestrator selects and orders parts. Use a Commander when orchestration itself has meaningful complexity; when a Commander exists, it may select, order, replace, retry, or fall back between parts, but it must not absorb the part's actual algorithm.
+- A Process Orchestrator / Workflow Processing owns dynamic sequencing, iteration, retry/fallback algorithms, and workflow state progression when those are real Process responsibilities.
+- A Commander, when used, is a thinner dispatch/continuation control point: it chooses which Processing/Messenger to call next from a request/result and must not absorb the Orchestrator's loop or algorithm.
 - Use a Messenger when communication/transport itself is a meaningful boundary concern, such as asynchronous delivery, IPC, HTTP/WebSocket, queues/events, or explicit cross-process/Application communication. A simple in-process UPD flow does not need pass-through Messenger objects merely for structure.
 - Do not create empty pass-through Commander or Messenger classes/files only to satisfy a naming pattern.
 - Shared contracts/value objects may cross part boundaries. Shared implementation should exist only when the responsibility is genuinely common rather than because several callers found the same internal helper.
@@ -287,7 +289,7 @@ When a Message Orientated boundary is selected:
 - UPD decides which responsibility/layer owns the state and meaning.
 - Part Swap Design keeps the receiver's internal implementation replaceable behind a stable boundary.
 - Message Orientated Design defines communication between independent stateful subjects.
-- Commander/Orchestrator, when needed, decides workflow sequencing. A Message Manager does not replace Commander, and Commander does not replace Message delivery.
+- Process Orchestrator, when needed, owns workflow iteration/progression. Commander, when needed, owns dispatch/continuation selection. Message Manager only delivers Messages; none of these responsibilities should be collapsed into one global manager.
 - UPD Messenger and Message Orientated Design's Sender/Receptor/Message Manager are related communication tools but are not automatically the same abstraction. Combine them only where their responsibilities genuinely coincide.
 
 #### Message contract tests
@@ -323,7 +325,7 @@ Do not require Message infrastructure tests for code that intentionally remains 
 - Keep dependencies explicit through imports, constructor/function parameters, or contracts.
 - Do not hide dependencies behind global registries, service locators, or giant singletons.
 
-When Module A finishes and Module B must run next, prefer returning to an upper Orchestrator/Commander and letting it choose the next step.
+When Module A finishes and Module B must run next, prefer returning to the owning Process service / Process Orchestrator. If a Commander is present, use it only as the dispatch/continuation control point.
 
 ### Depend on contracts, not internals
 
@@ -671,17 +673,29 @@ Plain UPD is the default for simple Application flows.
 - Do not directly depend on another Application's internal modules.
 - Adjacent layers may communicate through a small explicit in-process contract/function when that is sufficient. Do not create pass-through Commander/Messenger objects only to make the directory tree look complete.
 
-### Add Commander when orchestration becomes a responsibility
+### Add Process Orchestrator when workflow processing becomes dynamic
 
-Use a Commander/orchestrator when one or more of these are materially present:
+Use a Process Orchestrator / Workflow Processing when one or more of these are materially present:
 
-- multiple independent parts must be sequenced
-- routing/branching chooses the next part
-- retry, fallback, Top-K, repair, or repeated evaluation changes the flow
-- long-job state, cancellation, pause/resume, or checkpoints influence sequencing
-- the workflow itself needs focused tests independent of the parts
+- variable-length step execution
+- candidate iteration / Best-of-N / Top-K loops
+- retry/fallback budgets
+- repair -> re-evaluate loops
+- workflow state-machine progression
+- batch iteration where the loop itself is application processing
 
-When used, Commander coordinates calls and decisions only. Actual algorithms, I/O, inference, and persistence remain in the appropriate Processing/part.
+The Orchestrator may own workflow loops and state transitions, but external I/O/inference/persistence still belongs behind the appropriate Part/Data/transport Contract.
+
+### Add Commander when dispatch/continuation control becomes a responsibility
+
+Use Commander only when a thin control point is useful to:
+
+- select Processing from an incoming command/request
+- select the next Processing/Messenger from a returned result
+- hold minimal continuation identity for async responses
+- dispatch requests/results across a layer boundary
+
+Commander must not own complex loops, candidate iteration, retry algorithms, I/O, inference, or persistence.
 
 ### Add Messenger when communication becomes a responsibility
 
@@ -700,7 +714,7 @@ When used, Messenger transports contracts and does not perform domain work.
 - Replaceable backends/algorithms/adapters inside an Application use closed part contracts; consumers do not import their internals.
 - Swapping an implementation should normally affect only the composition root, registry/config binding, or the part itself—not unrelated consumers.
 - Deliberate extension points should have contract/swap tests when practical.
-- Do not over-fragment one-owner internals merely to create interfaces, Commander, or Messenger layers.
+- Do not over-fragment one-owner internals merely to create interfaces, Process Orchestrator, Commander, Message endpoints, or Messenger layers.
 - Migrate legacy `scripts/` progressively as responsibilities are touched.
 
 Architecture checks must enforce responsibility/boundary violations without requiring empty Commander/Messenger scaffolding for every simple flow. Where the current checker is stricter than this policy, the policy is canonical and the checker must be updated rather than forcing unnecessary structure.

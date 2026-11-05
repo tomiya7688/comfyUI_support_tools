@@ -194,23 +194,54 @@ Training Application
 
 Character Registryはtrainer内部関数やtraining session stateを直接操作しない。
 
+## Process Orchestrator / Workflow Processingを使う条件
+
+動的な反復やworkflow algorithm自体が実処理になる場合は、**Process層のOrchestrator / Workflow Processing** として扱う。
+Commanderとは別責務とする。
+
+対象例:
+- 可変step数のsequence実行
+- candidateごとのBest-of-N / Top-K評価loop
+- retry budgetを消費する反復
+- repair -> re-evaluate loop
+- state machineのstep進行
+- batch itemを順次処理するworkflow
+
+Process Orchestratorは:
+- workflow algorithm / iteration / state transitionを実装してよい。
+- public Part Contractを使って交換可能partを呼び出してよい。
+- UI widget操作やData保存方式を知らない。
+- HTTP / subprocess / inference等の外部I/Oそのものを抱えず、適切なPart/Data/transport Contractへ委譲する。
+- loopがあること自体は違反ではない。loop内へ別責務を混ぜないことを重視する。
+
+`SequenceRunner` のような「定義されたstep列をfailure policy付きで反復実行する処理」は、この分類が自然である。
+
 ## Commanderを使う条件
 
-Commander / Orchestratorは**標準必須ではない**。
-次のように、処理順序そのものが意味のある責務になった場合に導入する。
+Commanderは**標準必須ではない**。
+UPD Commanderの原則に従い、「受け取ったrequest/resultから次に呼ぶProcessing / Messengerを選ぶ制御点」が必要な場合だけ導入する。
 
-- 複数の独立パーツを順に実行する。
-- routing / branchingで次のパーツを選ぶ。
-- retry / fallback / Top-K / repair / re-evaluationでflowが変わる。
-- long jobのcancel / pause / resume / checkpointがflowに影響する。
-- workflow自体を個々のpartと独立して重点testする必要がある。
+導入例:
+- command typeに応じてProcessingを選択する。
+- Processing結果に応じて次のProcessing / Messengerを選択する。
+- async responseの継続先を管理する。
+- layer境界のrequest/resultを中央のcontrol pointでdispatchする。
 
 Commanderを使う場合:
-- 呼び出し順序・flow判断のみを担当する。
+- call targetの選択・dispatch・成功/失敗/継続先の選択だけを担当する。
 - algorithm、I/O、HTTP、subprocess、inference、保存処理を持たない。
+- 複雑なloop / candidate iteration / retry algorithmはProcess Orchestrator / Processingへ置く。
 - part内部へ入り込まず、公開Contractだけを使う。
+- 継続に必要な最小限のID/stateだけ保持してよい。
 
 単純な入力 -> 変換 -> 保存程度のflowに、形式だけのCommanderを置かない。
+
+### CommanderとProcess Orchestratorの違い
+
+- **Commander:** 次に「どの処理を呼ぶか」を選ぶ。
+- **Process Orchestrator:** workflowを「どう反復・進行させるか」を実装する。
+
+両方必要な場合、CommanderはOrchestratorを1つのProcessingとして呼び出し、Orchestrator内部のworkflow algorithmへ入り込まない。
 
 ## Messengerを使う条件
 

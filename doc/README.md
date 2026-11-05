@@ -20,6 +20,7 @@
 | 日本語 | English |
 | --- | --- |
 | [コーディング規約](コーディング規約.md) | [Coding Standards](coding-standards.md) |
+| [UPD + パーツ組み換え標準設計](architecture/upd_standard.md) | [UPD + Part Swap Standard Architecture](architecture/upd_standard.en.md) |
 | [1回分の開発ワークフロー](ワークフロー/ワークフロー.md) | [One-cycle development workflow](ワークフロー/workflow.md) |
 | [Character Registry タグ取り込み](character_registry/tag_intake.md) | [Character Registry Tag Intake](character_registry/tag-intake.en.md) |
 | [Character Registry Profile schema](character_registry/profile_schema.md) | [Character Registry Profile Schema](character_registry/profile-schema.en.md) |

@@ -6,7 +6,12 @@
 
 - UPD: UI / Process / Data の責務境界と依存方向を決める。
 - Part Swap Design: backend / algorithm / adapter 等を、外部から内部実装を知らずに交換できる閉じたパーツとして設計する。
-- UPD Commander Base Design: 複雑なオーケストレーションや通信責務が必要な場合に追加で使う。全Applicationへ強制しない。
+- Message Orientated Design: 独立したstate/lifecycle主体間で、direct internal call/state accessを避けたい場合に選択適用する。
+- Process Orchestrator / Workflow Processing: dynamic loop / retry / candidate iteration / workflow progression自体がProcess実処理の場合に選択適用する。
+- UPD Commander: request/resultから次のProcessing / Messengerを選ぶthin dispatch / continuation control pointが必要な場合に選択適用する。
+- Messenger / Message Manager: communication / delivery自体を独立責務として隔離する必要がある場合に選択適用する。
+
+いずれも全Applicationへ強制しない。
 
 参照元:
 - https://github.com/tomiya7688/upd-design

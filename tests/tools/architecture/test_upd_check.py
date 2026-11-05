@@ -13,6 +13,46 @@ class UpdCheckTests(unittest.TestCase):
         root = Path(__file__).parents[3]
         self.assertEqual(upd_check.scan_repository(root), [])
 
+    # {
+    # 責務: [test_allows_plain_ui_to_process_dependency: Commander/Messengerなしの普通のUPDでUI->Processを許可する]
+    # 処理: [1: roleなしUI moduleからroleなしProcess moduleをimportする, 2: findingがないことを確認する]
+    # 引数: [self: test instance]
+    # 戻り値: []
+    # }
+    def test_allows_plain_ui_to_process_dependency(self):
+        path = "src/comfyui_support_tools/applications/main/ui/view.py"
+        source = (
+            "from comfyui_support_tools.applications.main.process.service import run\n"
+        )
+        self.assertEqual(upd_check.scan_source(path, source), [])
+
+    # {
+    # 責務: [test_allows_plain_process_to_data_dependency: Commander/Messengerなしの普通のUPDでProcess->Dataを許可する]
+    # 処理: [1: roleなしProcess moduleからroleなしData moduleをimportする, 2: findingがないことを確認する]
+    # 引数: [self: test instance]
+    # 戻り値: []
+    # }
+    def test_allows_plain_process_to_data_dependency(self):
+        path = "src/comfyui_support_tools/applications/main/process/service.py"
+        source = (
+            "from comfyui_support_tools.applications.main.data.store import load\n"
+        )
+        self.assertEqual(upd_check.scan_source(path, source), [])
+
+    # {
+    # 責務: [test_plain_upd_still_rejects_reverse_dependency: 普通のUPDでもData->Process逆依存を拒否する]
+    # 処理: [1: roleなしData moduleからProcess moduleをimportする, 2: UPD101を確認する]
+    # 引数: [self: test instance]
+    # 戻り値: []
+    # }
+    def test_plain_upd_still_rejects_reverse_dependency(self):
+        path = "src/comfyui_support_tools/applications/main/data/store.py"
+        source = (
+            "from comfyui_support_tools.applications.main.process.service import run\n"
+        )
+        rules = [item.rule for item in upd_check.scan_source(path, source)]
+        self.assertIn("UPD101", rules)
+
     def test_detects_ui_to_data_direct_dependency(self):
         path = "src/comfyui_support_tools/applications/main/ui/processing/view.py"
         source = (
@@ -42,6 +82,25 @@ class UpdCheckTests(unittest.TestCase):
         source = "def run(path):\n    return open(path).read()\n"
         rules = [item.rule for item in upd_check.scan_source(path, source)]
         self.assertIn("UPD203", rules)
+
+    # {
+    # 責務: [test_allows_loop_in_process_processing: workflow loopをProcess Processingでは許可する]
+    # 処理: [1: Process Processingにstep loopを定義する, 2: UPD201/202が出ないことを確認する]
+    # 引数: [self: test instance]
+    # 戻り値: []
+    # }
+    def test_allows_loop_in_process_processing(self):
+        path = "src/comfyui_support_tools/applications/main/process/processing/workflow.py"
+        source = (
+            "def run(steps):\n"
+            "    results = []\n"
+            "    for step in steps:\n"
+            "        results.append(step)\n"
+            "    return results\n"
+        )
+        rules = [item.rule for item in upd_check.scan_source(path, source)]
+        self.assertNotIn("UPD201", rules)
+        self.assertNotIn("UPD202", rules)
 
     def test_detects_loop_and_calculation_in_commander(self):
         path = "src/comfyui_support_tools/applications/main/process/commander/work.py"

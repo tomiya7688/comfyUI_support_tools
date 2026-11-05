@@ -124,6 +124,25 @@ Message Orientated Designは**独立した状態主体間で選択適用**する
 
 ### Message Contract
 
+Message Orientated Designの正本に従い、Messageの意味上の最小構造は次とする。
+
+~~~text
+Message
+├ from
+├ to
+├ type
+└ content
+~~~
+
+- `from`: 送信主体
+- `to`: 受信主体
+- `type`: Messageの意味
+- `content`: そのMessageが運ぶ内容
+
+Python実装では、frozen dataclass等のtyped Message / envelopeを使ってよい。
+Message typeをclass型で表現する場合でも、routing/serialization時に上記4要素の意味を失わない。
+共通base classや継承階層は必須にしない。
+
 Message Orientated Designを採用した境界では:
 
 ~~~text
@@ -448,6 +467,42 @@ applications/example/
 
 既存の `messenger/` / `commander/` 配置は有効な責務がある限り維持してよい。
 新規コードで形式だけのfolderを作らない。
+
+## Architecture review checklist
+
+新規Application / major featureの設計レビューでは、必要な項目だけ確認する。
+
+### Responsibility
+- [ ] UI / Process / Dataのownerが説明できる
+- [ ] UI -> Data bypassがない
+- [ ] 別Application internal dependencyがない
+
+### Part boundary
+- [ ] 交換価値がある責務だけPart化している
+- [ ] consumerがprivate implementationを知らない
+- [ ] swap時の変更がcomposition root / binding / part内部へ閉じる
+- [ ] fake/minimal replacement testが有効なら用意する
+
+### State / Message
+- [ ] mutable state ownerが1つ
+- [ ] 独立state/lifecycle主体間だけMessageを検討している
+- [ ] Message境界ならfrom/to/type/content semanticsとimmutabilityを保つ
+- [ ] Receptor / Message Managerへdomain処理が漏れていない
+- [ ] global busを不要に導入していない
+
+### Orchestration
+- [ ] simple flowならCommanderなしで済ませている
+- [ ] Commander導入理由がsequence/branch/retry等として説明できる
+- [ ] Commanderへalgorithm/I/Oが入っていない
+
+### Runtime / quality
+- [ ] #435-#441のshared execution contractを再利用できる
+- [ ] quality-sensitiveならgenerator/evaluatorを分離している
+- [ ] cancellation / failure / artifact ownershipが明確
+
+### Complexity stop
+- [ ] interface / registry / Message / Commanderを「将来用」だけで追加していない
+- [ ] 1 owner内部を過分割していない
 
 ## Shared
 

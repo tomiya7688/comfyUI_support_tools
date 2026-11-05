@@ -133,10 +133,10 @@ Message
 └ content
 ~~~
 
-- `from`: sending subject
-- `to`: receiving subject
-- `type`: semantic meaning of the Message
-- `content`: data carried by the Message
+- `from`: sending subject; prefer a stable semantic subject ID over a class name/path.
+- `to`: receiving subject; prefer a stable semantic subject ID over a runtime object reference.
+- `type`: semantic meaning; use a protocol-stable semantic type.
+- `content`: typed payload; do not expose the receiver's owned internal state as message content.
 
 Python may represent this with frozen dataclasses or another typed Message/envelope.
 If a class type represents `type`, routing/serialization must still preserve the meaning of the four elements above.
@@ -384,6 +384,11 @@ Examples:
 - OCR detector
 - Trainer adapter
 
+Placement:
+- Keep a Contract inside its Application when only that Application uses it.
+- Promote it to `shared/contracts` only when it is a genuine cross-Application/public contract.
+- Do not use `shared/contracts` as a dumping ground for types with unclear ownership.
+
 ### Message Contract
 Immutable communication between independent stateful subjects.
 
@@ -392,6 +397,11 @@ Examples:
 - TrainingProgress
 - CancelRequested
 - TrainingCompleted
+
+Placement:
+- Keep Messages Application-local when the communicating subjects are internal to one Application.
+- Treat only cross-Application / cross-process Messages as shared/public protocol contracts.
+- The transport wire schema does not have to be identical to the internal typed Message; an adapter may translate between them.
 
 A generic `request/response` kind is not mandatory; the Message type itself may carry the meaning.
 
@@ -488,12 +498,15 @@ Add only roles with real responsibility.
 applications/example/
 ├ ui/
 ├ process/
-│  ├ commander/
+│  ├ commander/                         # only when dispatch control is needed
 │  ├ processing/
-│  └ messaging/        # only when a Message boundary exists
+│  │  ├ workflow_orchestrator.py        # when dynamic workflow logic is needed
+│  │  └ ...
+│  └ messenger/                         # only when transport is a responsibility
 └ data/
 ~~~
 
+Process Orchestrator is not a fourth UPD role; it is a **kind of Process Processing**.
 Existing `messenger/` / `commander/` layouts may remain while they have a real responsibility.
 Do not create empty role folders in new code merely for symmetry.
 

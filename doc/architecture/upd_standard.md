@@ -18,6 +18,34 @@
 - https://github.com/tomiya7688/part-swap-design
 - https://github.com/tomiya7688/upd-commander-base-design
 
+## 役割早見表
+
+似た名前の概念を混同しない。
+
+| 概念 | 責務 | 持ってよいもの | 持ってはいけないもの |
+|---|---|---|---|
+| UI | 外部input/output・表示 | widget/input formatting | domain decision / persistence |
+| Process | application rule・判断 | validation / domain flow | UI widget / storage detail |
+| Data | 保存・取得 | file/DB/API data access・normalization | domain decision / UI |
+| Part | 交換可能実装境界 | private internals / implementation-specific algorithm | consumerへのinternal公開 |
+| Subject | 独立state/lifecycle owner | owned mutable state | 他subject stateの直接所有 |
+| Message | Subject間のimmutable通信 | from/to/type/content | mutable shared state / behavior |
+| Process Orchestrator | workflow algorithm | loop / retry / candidate progression / state machine | UI/I/O implementation |
+| Commander | dispatch/continuation control | next Processing/Messenger selection / minimal continuation ID | complex loop / domain algorithm / I/O |
+| Messenger | layer/transport communication | delivery / protocol boundary | domain algorithm |
+| Message Manager | Message配送 | target lookup / delivery | workflow / retry policy / persistence / model selection |
+| Adapter | 外部/実装固有差の変換 | protocol/config/result translation | domain-wide orchestration |
+
+### 判断の基本
+
+- **状態を誰が持つか**はSubject / UPD ownerで決める。
+- **実装を交換するか**はPartで決める。
+- **独立Subject間をどう通信するか**はMessageで決める。
+- **workflowをどう反復するか**はProcess Orchestratorで決める。
+- **次にどのProcessingへ渡すか**は必要ならCommanderで決める。
+- **どこへ届けるか**はMessenger / Message Managerで扱う。
+- **外部実装差をどう吸収するか**はAdapterで扱う。
+
 ## 適用範囲
 
 新規コードは `src/comfyui_support_tools/applications/<application>/` を標準配置とする。

@@ -83,6 +83,25 @@ class UpdCheckTests(unittest.TestCase):
         rules = [item.rule for item in upd_check.scan_source(path, source)]
         self.assertIn("UPD203", rules)
 
+    # {
+    # 責務: [test_allows_loop_in_process_processing: workflow loopをProcess Processingでは許可する]
+    # 処理: [1: Process Processingにstep loopを定義する, 2: UPD201/202が出ないことを確認する]
+    # 引数: [self: test instance]
+    # 戻り値: []
+    # }
+    def test_allows_loop_in_process_processing(self):
+        path = "src/comfyui_support_tools/applications/main/process/processing/workflow.py"
+        source = (
+            "def run(steps):\n"
+            "    results = []\n"
+            "    for step in steps:\n"
+            "        results.append(step)\n"
+            "    return results\n"
+        )
+        rules = [item.rule for item in upd_check.scan_source(path, source)]
+        self.assertNotIn("UPD201", rules)
+        self.assertNotIn("UPD202", rules)
+
     def test_detects_loop_and_calculation_in_commander(self):
         path = "src/comfyui_support_tools/applications/main/process/commander/work.py"
         source = "def run(values):\n    total = 0\n    for value in values:\n        total = total + value\n"

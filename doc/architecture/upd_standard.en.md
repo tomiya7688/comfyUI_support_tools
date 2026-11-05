@@ -273,7 +273,8 @@ When adding a responsibility, decide in this order.
 | Is independent replacement valuable? | Define a Part Contract | Keep inside the owner |
 | Is the peer an independent state/lifecycle subject? | Consider Message | Consider function call |
 | Async/process/service boundary? | Prefer Message/transport | Sync Contract is fine |
-| Is multi-part flow control complex? | Consider Commander | Plain Process is enough |
+| Is there dynamic iteration / retry / candidate looping? | Consider Process Orchestrator | Plain Process is enough |
+| Is a request/result dispatch control point needed? | Consider Commander | Direct call is enough |
 | Is communication itself complex? | Consider Messenger/transport | Direct adjacent Contract is enough |
 
 ### Stop rule
@@ -332,7 +333,7 @@ Worker-internal algorithms remain normal function calls.
 ### Pattern D: quality orchestration
 
 ~~~text
-Process Commander
+Process Orchestrator
  -> Router Part
  -> Generator Part(s)
  -> Evaluator Part(s)
@@ -341,7 +342,8 @@ Process Commander
  -> Retry / Fallback
 ~~~
 
-UPD + Part Swap + Commander.
+UPD + Part Swap + Process Orchestrator.
+Add an outer Commander only if request/result dispatch needs a separate control point.
 Add Message only if a process/service boundary actually needs it.
 
 ### Pattern E: cross-Application training
@@ -455,7 +457,8 @@ Reuse #435 Run Manifest run_id or other existing identity when it already satisf
 | UPD | layer responsibility / UI->Data bypass / Application internal dependency |
 | Part Swap | public contract / fake replacement / consumer unchanged |
 | Message | immutability / type dispatch / response-failure-cancel / delivery-only manager / receiver replacement |
-| Commander | workflow transition / branching / retry-fallback / no direct work |
+| Process Orchestrator | workflow iteration / state transition / retry-repair loops / I/O separation |
+| Commander | dispatch / continuation selection / no direct work or complex loops |
 | External transport | serialization / timeout / protocol error / reconnect where applicable |
 
 Internal helper tests alone do not prove a boundary is complete.
@@ -517,9 +520,10 @@ For a new Application / major feature, review only the applicable items.
 - [ ] no unnecessary global event bus
 
 ### Orchestration
-- [ ] simple flows remain Commander-free
-- [ ] Commander has a clear sequencing/branch/retry reason
-- [ ] Commander contains no algorithm/I/O work
+- [ ] dynamic loops / retry / candidate iteration live in Process Orchestrator when needed
+- [ ] simple flows remain Orchestrator/Commander-free
+- [ ] Commander has a clear dispatch/continuation-control reason
+- [ ] Commander contains no algorithm / complex loop / I/O work
 
 ### Runtime / quality
 - [ ] reuse #435-#441 shared execution contracts where applicable

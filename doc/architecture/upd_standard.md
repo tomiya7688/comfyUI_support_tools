@@ -212,6 +212,243 @@ Messengerを使う場合:
 
 単純な同一process内の隣接UPD layer接続に、pass-through Messengerを強制しない。
 
+## 設計判断フロー
+
+新しい責務を追加するときは、次の順序で判断する。
+
+| 質問 | Yes | No |
+|---|---|---|
+| 外部との入力・表示・返却か | UIへ置く | 次へ |
+| application rule / decision / domain flowか | Processへ置く | 次へ |
+| persistence / retrieval / external data accessか | Dataへ置く | 次へ |
+| 実装を交換する価値があるか | Part Contractを定義 | owner内部へ保持 |
+| 相手が独立state/lifecycle主体か | Message候補 | function call候補 |
+| async / process / service境界か | Message / transportを優先 | sync Contract可 |
+| 複数partのflow制御が複雑か | Commander候補 | plain Processで十分 |
+| communication自体が複雑か | Messenger / transport候補 | direct adjacent Contractで十分 |
+
+### Stop rule
+
+以下がそろう場合は、抽象化を増やさない。
+
+- ownerが1つ
+- implementationが1つ
+- simple synchronous call
+- lifecycleを共有
+- 独立交換の必要性が低い
+- testabilityが改善しない
+
+「将来使うかもしれない」だけでMessage / Commander / registry / interfaceを追加しない。
+
+## 標準パターン
+
+### Pattern A: simple synchronous feature
+
+~~~text
+UI
+ -> Process
+ -> Data
+~~~
+
+Commanderなし。
+Messageなし。
+
+### Pattern B: swappable backend
+
+~~~text
+UI
+ -> Process
+ -> Backend Contract
+      ├─ Qwen Part
+      ├─ SDXL Part
+      └─ FLUX Part
+~~~
+
+UPD + Part Swap。
+consumerはconcrete backend内部を知らない。
+
+### Pattern C: long-running worker
+
+~~~text
+Application
+ -> StartRequested Message
+ -> Worker Subject
+ -> Progress Message
+ -> Completed / Failed Message
+~~~
+
+UPD + Message Orientated Design。
+worker内部algorithmは通常のfunction call。
+
+### Pattern D: quality orchestration
+
+~~~text
+Process Commander
+ -> Router Part
+ -> Generator Part(s)
+ -> Evaluator Part(s)
+ -> Ranker
+ -> Repair
+ -> Retry / Fallback
+~~~
+
+UPD + Part Swap + Commander。
+Messageはprocess/service境界が必要な場合だけ追加する。
+
+### Pattern E: cross-Application training
+
+~~~text
+Character Registry Subject
+ -> TrainCharacterRequested
+ -> Training Subject
+
+Training Subject
+ -> TrainingProgress
+ -> TrainingCompleted
+ -> Character Registry Subject
+~~~
+
+UPD + Part Swap + Message。
+Training内部のmethod selectionが複雑ならCommanderも追加する。
+
+## Contract taxonomy
+
+Contractは用途を混ぜず、意味ごとに分ける。
+
+### Value / DTO Contract
+stateを持たない境界data。
+
+例:
+- settings snapshot
+- generation request values
+- evaluation result
+- artifact reference
+
+### Part Contract
+交換可能実装のinput / output / capability。
+
+例:
+- GenerationBackend
+- Evaluator
+- OCR detector
+- Trainer adapter
+
+### Message Contract
+独立stateful subject間のimmutable communication。
+
+例:
+- TrainCharacterRequested
+- TrainingProgress
+- CancelRequested
+- TrainingCompleted
+
+generic `request/response` kindを必須にせず、message type自体で意味を表してよい。
+
+### Operation / Job Contract
+run / cancel / resume / progress / retry / artifact等のexecution semantics。
+
+#435-#441の共通contractを優先する。
+
+### External API Contract
+HTTP / WebSocket / IPC等のtransport boundary。
+
+内部modelをそのまま外部wire formatへ露出させず、必要に応じadapterで変換する。
+
+## State ownership
+
+mutable stateにはownerを1つ決める。
+
+- owner外から直接mutateしない。
+- subject境界ではMessageで変更要求を送る。
+- Part境界ではinputを渡しresultを返す。
+- shared mutable global stateをcommunication channelにしない。
+- cacheもowner / lifecycle / invalidationを明示する。
+- UI widget stateをProcess/Dataから直接操作しない。
+- worker/job stateを別Applicationから直接書き換えない。
+
+## Error / cancellation semantics
+
+### Plain function / Part boundary
+
+同期のlocal boundaryでは:
+- typed result
+- explicit exception
+- result object with failure detail
+
+等を使用してよい。
+
+### Message boundary
+
+Message境界では必要に応じsemantic Messageを使う。
+
+例:
+- RequestRejected
+- OperationFailed
+- CancelRequested
+- CancelAccepted
+- Cancelled
+- Completed
+
+Message Managerがfailureを解釈してretry/domain判断してはいけない。
+retry / fallback判断はProcess / Commanderの責務。
+
+### Correlation
+
+global Message IDは不要。
+次の場合だけcorrelation IDを持たせる:
+- requestとresponseを結びたい
+- multiple concurrent jobs
+- progress/cancel対象のrunを識別したい
+- distributed transportでtraceが必要
+
+#435 Run Manifestのrun_id等が既に意味を満たす場合は再発明しない。
+
+## Testing matrix
+
+| Design axis | 主なtest |
+|---|---|
+| UPD | layer responsibility / UI->Data bypass / Application internal dependency |
+| Part Swap | public contract / fake replacement / consumer unchanged |
+| Message | immutability / type dispatch / response-failure-cancel / delivery-only manager / receiver replacement |
+| Commander | workflow transition / branch / retry-fallback / direct workなし |
+| External transport | serialization / timeout / protocol error / reconnect等、必要なtransport semantics |
+
+internal helper testだけでboundary完成扱いにしない。
+逆に、Messageを使わないlocal functionへMessage infrastructure testを要求しない。
+
+## Directory patterns
+
+物理directoryは責務を補助するためのものとし、空構造を作ることを目的にしない。
+
+### Simple Application
+
+~~~text
+applications/example/
+├ ui/
+│  └ view.py
+├ process/
+│  └ service.py
+└ data/
+   └ store.py
+~~~
+
+### Complex Application
+
+必要な役割だけ追加する。
+
+~~~text
+applications/example/
+├ ui/
+├ process/
+│  ├ commander/
+│  ├ processing/
+│  └ messaging/        # Message boundaryが必要な場合のみ
+└ data/
+~~~
+
+既存の `messenger/` / `commander/` 配置は有効な責務がある限り維持してよい。
+新規コードで形式だけのfolderを作らない。
+
 ## Shared
 
 `src/comfyui_support_tools/shared/` に置いてよいもの:

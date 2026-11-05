@@ -44,6 +44,8 @@
 
 `preview_character_intake(request, civitai_candidate=...)` を使うと、明示選択した版の `trainedWords` をローカルcaptionと同じidentity/outfit/context/unclassified分類previewへ加えられます。Civitai情報には `civitai://` のstable source reference、元ページURL、作者、base model、APIの利用条件flagを保持します。ライセンス/学習許可は未確認として扱い、利用条件flagだけで許可を確定しません。画像が無いtrigger候補は見た目の証拠ではなく、必ず人が確認します。
 
+確認後は `CharacterTagIntakeConfirmation` に登録するidentity traitと `user_confirmed=True` のoutfit profileを明示し、`register_character_intake(preview, confirmation, profile_directory)` で保存します。未確認のoutfitは登録できず、既存 `character_id` は上書きせずエラーにします。`profile_directory` は呼び出し側が設定から渡します。Civitaiのsource metadataもprofile JSONへ保存・復元されます。
+
 API仕様: [Models](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/models.md)、[Model Versions](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/model-versions.md)、[Authentication](https://github.com/civitai/civitai-developer-docs/blob/main/site/guide/authentication.md)。公開情報の取得は匿名API接続で行います。
 
 候補には `allowNoCredit`、`allowCommercialUse`、`allowDerivatives`、`allowDifferentLicense` を保存します。これらは配布物・学習・生成物の全条件を保証するものではありません。実利用前に元ページと適用ライセンスを確認してください。

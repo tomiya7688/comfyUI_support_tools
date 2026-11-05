@@ -1,3 +1,8 @@
+from pathlib import Path
+
+from src.comfyui_support_tools.applications.character_registry.process.messenger.character_profile_requests import (
+    save_character_profile,
+)
 from src.comfyui_support_tools.applications.character_registry.process.messenger.character_source_requests import (
     load_character_sources,
 )
@@ -5,11 +10,18 @@ from src.comfyui_support_tools.applications.character_registry.process.messenger
     load_selected_civitai_lora_version,
     search_civitai_lora_candidates,
 )
+from src.comfyui_support_tools.applications.character_registry.process.processing.character_profile_registration_builder import (
+    build_confirmed_character_profile,
+)
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_tag_intake_processor import (
     build_character_tag_preview,
 )
 from src.comfyui_support_tools.applications.character_registry.process.processing.civitai_lora_tag_source_builder import (
     build_civitai_tag_source_asset,
+)
+from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
+    CharacterTagIntakeConfirmation,
 )
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview import (
     CharacterTagIntakePreview,
@@ -72,3 +84,22 @@ def preview_character_intake(
             "Civitai trainedWordsはモデル作成者のtrigger候補です。画像で確認できた特徴とは限らないため、分類を確認してください。",
         )
     return build_character_tag_preview(request, assets, warnings)
+
+
+# {
+#   責務: [register_character_intake: 手動確認済みintake結果をprofileとして保存する]
+#   処理: [確認済みprofileを構築し, process messenger経由で明示rootへ保存する]
+#   引数: [preview: intake preview, confirmation: 人の分類確認, profile_directory: 設定から解決した保存先]
+#   戻り値: [CharacterProfile: 保存済みprofile]
+#   エラー: [ValueError: preview/confirmation不正, OSError: 保存失敗]
+# }
+def register_character_intake(
+    preview: CharacterTagIntakePreview,
+    confirmation: CharacterTagIntakeConfirmation,
+    profile_directory: Path,
+) -> CharacterProfile:
+    if not isinstance(profile_directory, Path):
+        raise ValueError("profile_directoryはpathlib.Pathで指定してください")
+    profile = build_confirmed_character_profile(preview, confirmation)
+    save_character_profile(profile, profile_directory)
+    return profile

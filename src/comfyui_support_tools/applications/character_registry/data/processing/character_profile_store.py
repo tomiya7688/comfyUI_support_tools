@@ -104,6 +104,7 @@ def _source_asset_data(asset: CharacterSourceAsset) -> dict[str, Any]:
         "source_work_id": asset.source_work_id,
         "license_status": asset.license_status,
         "training_permission": asset.training_permission,
+        "source_metadata": dict(asset.source_metadata),
     }
 
 
@@ -122,6 +123,12 @@ def _source_asset_from_data(value: Any) -> CharacterSourceAsset:
         image_file = _require_string(image_file, "image_file")
     if outfit_id is not None:
         outfit_id = _require_string(outfit_id, "outfit_id")
+    source_metadata = _require_object(data.get("source_metadata", {}), "source_metadata")
+    if any(
+        not isinstance(metadata_value, (bool, str)) and metadata_value is not None
+        for metadata_value in source_metadata.values()
+    ):
+        raise ValueError("source_metadata valueはstr/bool/nullで指定してください")
     return CharacterSourceAsset(
         caption_file=_require_string(data.get("caption_file"), "caption_file"),
         image_file=image_file,
@@ -133,6 +140,7 @@ def _source_asset_from_data(value: Any) -> CharacterSourceAsset:
         ),
         license_status=_require_string(data.get("license_status"), "license_status"),
         training_permission=_require_string(data.get("training_permission"), "training_permission"),
+        source_metadata=tuple(source_metadata.items()),
     )
 
 

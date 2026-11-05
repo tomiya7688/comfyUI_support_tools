@@ -7,6 +7,9 @@ from src.comfyui_support_tools.applications.character_registry.process.commander
     preview_character_intake as _preview_character_intake,
 )
 from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
+    register_character_intake as _register_character_intake,
+)
+from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     search_civitai_loras as _search_civitai_loras,
 )
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_wildcard_exporter import (
@@ -14,6 +17,9 @@ from src.comfyui_support_tools.applications.character_registry.process.processin
 )
 from src.comfyui_support_tools.shared.contracts.character_id import is_valid_character_id
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
+    CharacterTagIntakeConfirmation,
+)
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview import (
     CharacterTagIntakePreview,
 )
@@ -79,6 +85,27 @@ def preview_character_intake(
     if civitai_candidate is not None and not isinstance(civitai_candidate, CivitaiLoraCandidate):
         raise ValueError("civitai_candidateはCivitaiLoraCandidateで指定してください")
     return _preview_character_intake(request, civitai_candidate)
+
+
+# {
+#   責務: [register_character_intake: 人が確認したintake結果を新規CharacterProfileとして登録する]
+#   処理: [preview/confirmation/storage rootを検証し, commanderへ保存を依頼する]
+#   引数: [preview: tag intake preview, confirmation: 明示的な手動確認内容, profile_directory: 設定済み保存root]
+#   戻り値: [CharacterProfile: 登録profile]
+#   エラー: [ValueError: 入力が不正, FileExistsError: character_id登録済み, OSError: 保存失敗]
+# }
+def register_character_intake(
+    preview: CharacterTagIntakePreview,
+    confirmation: CharacterTagIntakeConfirmation,
+    profile_directory: Path,
+) -> CharacterProfile:
+    if not isinstance(preview, CharacterTagIntakePreview):
+        raise ValueError("previewはCharacterTagIntakePreviewで指定してください")
+    if not isinstance(confirmation, CharacterTagIntakeConfirmation):
+        raise ValueError("confirmationはCharacterTagIntakeConfirmationで指定してください")
+    if not isinstance(profile_directory, Path):
+        raise ValueError("profile_directoryはpathlib.Pathで指定してください")
+    return _register_character_intake(preview, confirmation, profile_directory)
 
 
 # {

@@ -44,6 +44,8 @@ An optional `manifest.json` uses this shape:
 
 `preview_character_intake(request, civitai_candidate=...)` adds `trainedWords` from an explicitly selected version to the same identity/outfit/context/unclassified preview used for local captions. The Civitai source keeps a stable `civitai://` reference, source page URL, creator, base model, and API usage-permission flags. License and training permission remain unverified; the flags alone do not establish permission. Trigger words without images are suggestions, not visual evidence, and require manual review.
 
+After review, pass the identity traits to register and outfit profiles with `user_confirmed=True` through `CharacterTagIntakeConfirmation`, then call `register_character_intake(preview, confirmation, profile_directory)`. Unconfirmed outfits are rejected, and an existing `character_id` is never overwritten by registration. The caller supplies `profile_directory` from application settings. Civitai source metadata is persisted and restored with the profile JSON.
+
 API references: [Models](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/models.md), [Model Versions](https://github.com/civitai/civitai-developer-docs/blob/main/site/reference/model-versions.md), and [Authentication](https://github.com/civitai/civitai-developer-docs/blob/main/site/guide/authentication.md). Public metadata is accessed anonymously.
 
 Candidates retain `allowNoCredit`, `allowCommercialUse`, `allowDerivatives`, and `allowDifferentLicense`. These fields do not establish every condition for redistribution, training, or generated output. Check the source page and applicable license before use.

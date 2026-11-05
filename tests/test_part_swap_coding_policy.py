@@ -39,9 +39,11 @@ class PartSwapCodingPolicyTests(unittest.TestCase):
         self.assertIn("Part Swap Design", agents)
         self.assertIn("Message Orientated Design selectively", agents)
         self.assertIn("Plain UPD is valid for simple flows", agents)
-        self.assertIn("Commander / Orchestrator is **optional**", architecture_en)
-        self.assertIn("Commander / Orchestratorは**標準必須ではない**", architecture_ja)
-        self.assertIn("selectively applied between independent state-owning subjects", architecture_en)
+        self.assertIn("Commander is **optional**, not a default requirement", architecture_en)
+        self.assertIn("Commanderは**標準必須ではない**", architecture_ja)
+        self.assertIn(
+            "selectively applied between independent state-owning subjects", architecture_en
+        )
         self.assertIn("独立した状態主体間で選択適用", architecture_ja)
         self.assertIn("Message Manager performs delivery only", architecture_en)
         self.assertIn("Message Managerは配送だけ", architecture_ja)

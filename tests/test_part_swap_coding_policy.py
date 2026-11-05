@@ -51,7 +51,7 @@ class PartSwapCodingPolicyTests(unittest.TestCase):
         self.assertIn("Process Orchestrator is not a fourth UPD role", architecture_en)
         self.assertIn("Process Orchestratorは新しい第4roleではなく", architecture_ja)
         self.assertIn("pass-through Commander/Messenger", english)
-        self.assertIn("形式だけのCommander", japanese)
+        self.assertIn("directory構造を埋めるためだけの空のCommander", japanese)
 
 
 if __name__ == "__main__":

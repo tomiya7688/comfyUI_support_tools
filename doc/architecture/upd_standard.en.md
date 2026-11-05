@@ -6,7 +6,12 @@ New major Applications in this project use **UPD + Part Swap Design** as the sta
 
 - UPD defines the UI / Process / Data responsibility boundaries and dependency direction.
 - Part Swap Design defines closed replaceable parts whose internals are hidden from consumers.
-- UPD Commander Base Design is an optional pattern for cases where orchestration or communication is itself a meaningful responsibility. It is not mandatory for every Application.
+- Message Orientated Design is selectively applied between independent state/lifecycle subjects when direct internal calls/state access would create coupling.
+- Process Orchestrator / Workflow Processing is optional when dynamic loops, retry, candidate iteration, or workflow progression are themselves Process work.
+- UPD Commander is optional when a thin request/result dispatch or continuation control point is useful.
+- Messenger / Message Manager is optional when communication/delivery itself deserves an isolated responsibility.
+
+None of these optional mechanisms is mandatory for every Application.
 
 Canonical sources:
 - https://github.com/tomiya7688/upd-design

@@ -123,6 +123,25 @@ Keep direct calls for:
 
 ### Message Contract
 
+Following the canonical Message Orientated Design, the semantic minimum Message structure is:
+
+~~~text
+Message
+├ from
+├ to
+├ type
+└ content
+~~~
+
+- `from`: sending subject
+- `to`: receiving subject
+- `type`: semantic meaning of the Message
+- `content`: data carried by the Message
+
+Python may represent this with frozen dataclasses or another typed Message/envelope.
+If a class type represents `type`, routing/serialization must still preserve the meaning of the four elements above.
+A common base class or inheritance hierarchy is not required.
+
 When the Message Orientated boundary is selected:
 
 ~~~text
@@ -442,6 +461,42 @@ applications/example/
 
 Existing `messenger/` / `commander/` layouts may remain while they have a real responsibility.
 Do not create empty role folders in new code merely for symmetry.
+
+## Architecture review checklist
+
+For a new Application / major feature, review only the applicable items.
+
+### Responsibility
+- [ ] UI / Process / Data ownership is explainable
+- [ ] no UI -> Data bypass
+- [ ] no direct dependency on another Application's internals
+
+### Part boundary
+- [ ] only responsibilities with real replacement value become Parts
+- [ ] consumers do not know private implementations
+- [ ] swapping stays inside composition root / binding / part
+- [ ] add fake/minimal replacement tests when useful
+
+### State / Message
+- [ ] mutable state has one owner
+- [ ] Message is considered only across independent state/lifecycle subjects
+- [ ] Message boundary preserves from/to/type/content semantics and immutability
+- [ ] no domain work leaks into Receptor / Message Manager
+- [ ] no unnecessary global event bus
+
+### Orchestration
+- [ ] simple flows remain Commander-free
+- [ ] Commander has a clear sequencing/branch/retry reason
+- [ ] Commander contains no algorithm/I/O work
+
+### Runtime / quality
+- [ ] reuse #435-#441 shared execution contracts where applicable
+- [ ] separate generator/evaluator for quality-sensitive work
+- [ ] cancellation / failure / artifact ownership is clear
+
+### Complexity stop
+- [ ] no interface / registry / Message / Commander added only for hypothetical future use
+- [ ] one-owner internals are not over-fragmented
 
 ## Shared
 

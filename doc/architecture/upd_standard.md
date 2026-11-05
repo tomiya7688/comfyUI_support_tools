@@ -95,6 +95,86 @@ UPDを適用するためだけにCommander / Messenger classや空folderを作�
 
 Contractが許す範囲で実装ごとの結果差は許可し、必須invariant / failure semantics / Acceptanceを検証する。
 
+## Message Orientated Designを使う条件
+
+Message Orientated Designは**独立した状態主体間で選択適用**する。
+すべてのmodule/class間通信をMessage化しない。
+
+この文書での「主体」は、独立したstate/lifecycleを持つApplication、service、worker、job runtime、training session、plugin host等を指す。
+1主体 / 1part内部では通常のfunction callを使う。
+
+### Message境界を使う
+
+次のような場合:
+- async / event / queueで協調する
+- process / service / Application / plugin / worker境界を越える
+- progress / cancel / completion / failure / state changeを独立eventとして扱う
+- sender / receiverが別lifecycleを持つ
+- receiverが自分のstateに応じてrequestを解釈する
+- receiver / transportを交換可能にしたい
+
+### Message境界を使わない
+
+次のような場合:
+- pure helper
+- 1つのPart Swap part内部
+- 同一owner/lifecycleのlocal algorithm
+- 小さな同期validation / conversion
+- Message化しても依存関係が減らない
+
+### Message Contract
+
+Message Orientated Designを採用した境界では:
+
+~~~text
+Subject A
+  -> Sender
+  -> immutable Message
+  -> Message Manager / transport
+  -> Receptor
+  -> Subject B internal processing
+~~~
+
+- 主体間でprivate/internal functionを直接callしない。
+- 他主体のowned stateを直接read/writeしない。
+- Messageはimmutableとし、変更が必要なら新しいMessageを生成する。
+- responseも選択したMessage境界では新しいMessageとして返す。
+- typed/frozen contractを優先し、巨大なuntyped dictを共通protocolにしない。
+- Receptorはtype識別とdispatchに限定し、domain判断を持たない。
+- Senderは外部へMessageを出す境界とする。
+- Message Managerは配送だけを担当し、routing以外のdomain判断、retry policy、model選択、保存、workflow orchestrationを持たない。
+- global Message Managerを必須にせず、必要最小のmanager/domain scopeで配送する。
+- Message自体へglobal IDを必須にしない。correlationが必要なprotocolだけrequest/run/job IDを持つ。
+
+### 他設計との関係
+
+- UPD: state/meaningを所有するlayerを決める。
+- Part Swap: subject内部の実装を交換可能にする。
+- Message Orientated Design: independent subject間をMessageで通信させる。
+- Commander: 複雑なworkflow順序を指揮する。
+- Message Manager: Messageを配送するだけ。
+
+UPD MessengerとMessage Orientated DesignのSender/Receptor/Message Managerは自動的に同一視しない。
+責務が一致する場合に限り、同じtransport/boundary implementationとして統合してよい。
+
+### 代表例
+
+~~~text
+Character Registry
+  -> TrainCharacterRequested
+  -> Training Application
+
+Training Application
+  -> TrainingProgress
+  -> Character Registry / Job UI
+
+Training Application
+  -> TrainingCompleted
+  -> Character Registry
+~~~
+
+Character Registryはtrainer内部関数やtraining session stateを直接操作しない。
+
 ## Commanderを使う条件
 
 Commander / Orchestratorは**標準必須ではない**。

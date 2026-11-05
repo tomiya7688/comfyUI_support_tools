@@ -274,7 +274,8 @@ Messengerを使う場合:
 | 実装を交換する価値があるか | Part Contractを定義 | owner内部へ保持 |
 | 相手が独立state/lifecycle主体か | Message候補 | function call候補 |
 | async / process / service境界か | Message / transportを優先 | sync Contract可 |
-| 複数partのflow制御が複雑か | Commander候補 | plain Processで十分 |
+| dynamic iteration / retry / candidate loopがあるか | Process Orchestrator候補 | plain Processで十分 |
+| request/resultのdispatch control pointが必要か | Commander候補 | direct callで十分 |
 | communication自体が複雑か | Messenger / transport候補 | direct adjacent Contractで十分 |
 
 ### Stop rule
@@ -333,7 +334,7 @@ worker内部algorithmは通常のfunction call。
 ### Pattern D: quality orchestration
 
 ~~~text
-Process Commander
+Process Orchestrator
  -> Router Part
  -> Generator Part(s)
  -> Evaluator Part(s)
@@ -342,7 +343,8 @@ Process Commander
  -> Retry / Fallback
 ~~~
 
-UPD + Part Swap + Commander。
+UPD + Part Swap + Process Orchestrator。
+request/result dispatch pointが別に必要ならCommanderを外側へ追加する。
 Messageはprocess/service境界が必要な場合だけ追加する。
 
 ### Pattern E: cross-Application training
@@ -460,7 +462,8 @@ global Message IDは不要。
 | UPD | layer responsibility / UI->Data bypass / Application internal dependency |
 | Part Swap | public contract / fake replacement / consumer unchanged |
 | Message | immutability / type dispatch / response-failure-cancel / delivery-only manager / receiver replacement |
-| Commander | workflow transition / branch / retry-fallback / direct workなし |
+| Process Orchestrator | workflow iteration / state transition / retry-repair loop / I/O分離 |
+| Commander | dispatch / continuation selection / direct work・複雑loopなし |
 | External transport | serialization / timeout / protocol error / reconnect等、必要なtransport semantics |
 
 internal helper testだけでboundary完成扱いにしない。
@@ -522,9 +525,10 @@ applications/example/
 - [ ] global busを不要に導入していない
 
 ### Orchestration
-- [ ] simple flowならCommanderなしで済ませている
-- [ ] Commander導入理由がsequence/branch/retry等として説明できる
-- [ ] Commanderへalgorithm/I/Oが入っていない
+- [ ] dynamic loop / retry / candidate iterationが必要ならProcess Orchestratorへ置いている
+- [ ] simple flowならOrchestrator / Commanderなしで済ませている
+- [ ] Commander導入理由がdispatch / continuation controlとして説明できる
+- [ ] Commanderへalgorithm / complex loop / I/Oが入っていない
 
 ### Runtime / quality
 - [ ] #435-#441のshared execution contractを再利用できる

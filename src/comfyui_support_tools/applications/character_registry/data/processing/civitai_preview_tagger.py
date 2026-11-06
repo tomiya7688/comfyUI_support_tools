@@ -1,9 +1,9 @@
 """Fetch selected Civitai preview images and ask a loopback Tagger for suggestions."""
 
 import base64
-from io import BytesIO
 import json
 import math
+from io import BytesIO
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
@@ -30,6 +30,10 @@ _ALLOWED_IMAGE_HOSTS = {"image.civitai.com", "imagecache.civitai.com"}
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1"}
 
 
+# {
+#   責務: [_NoRedirect: preview/Tagger API通信でHTTP redirectを拒否する]
+#   フィールド: [HTTPRedirectHandlerのredirect policy]
+# }
 class _NoRedirect(HTTPRedirectHandler):
     # {
     #   責務: [redirect_request: 画像/Tagger通信のredirect追跡を拒否する]

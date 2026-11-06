@@ -66,8 +66,7 @@ class CivitaiTagIntakePreviewTest(unittest.TestCase):
         return CivitaiLoraVersionMetadata(
             candidate=cls._candidate(),
             trained_words=(
-                "blue_hair",
-                "school_uniform",
+                "blue_hair, school_uniform",
                 "sitting",
                 "custom_character_trigger",
             ),
@@ -129,6 +128,20 @@ class CivitaiTagIntakePreviewTest(unittest.TestCase):
             asset for asset in preview.source_assets if asset.source_work_id == "123:456"
         ]
         self.assertEqual(len(civitai_sources), 2)
+        trained_words_source = next(
+            asset for asset in civitai_sources if asset.caption_file.endswith("/trainedWords")
+        )
+        self.assertEqual(
+            trained_words_source.tags,
+            ("blue_hair", "school_uniform", "sitting", "custom_character_trigger"),
+        )
+        self.assertIn(
+            (
+                "trained_words_raw",
+                '["blue_hair, school_uniform","sitting","custom_character_trigger"]',
+            ),
+            trained_words_source.source_metadata,
+        )
         for civitai_source in civitai_sources:
             self.assertIsNone(civitai_source.image_file)
             self.assertEqual(civitai_source.license_status, "unknown")

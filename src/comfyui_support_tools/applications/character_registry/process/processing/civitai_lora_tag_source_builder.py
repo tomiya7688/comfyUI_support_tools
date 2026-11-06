@@ -1,3 +1,5 @@
+import json
+
 from src.comfyui_support_tools.shared.contracts.character_source_asset import CharacterSourceAsset
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
@@ -29,7 +31,12 @@ def _civitai_source_metadata(
         ("model_mode", candidate.model_mode),
         ("version_status", metadata.status),
         ("availability", metadata.availability),
-        ("trained_words_raw", metadata.raw_trained_words),
+        (
+            "trained_words_raw",
+            metadata.raw_trained_words
+            if metadata.raw_trained_words is not None
+            else json.dumps(metadata.trained_words, ensure_ascii=False, separators=(",", ":")),
+        ),
     )
 
 
@@ -51,7 +58,12 @@ def build_civitai_tag_source_asset(
     return CharacterSourceAsset(
         caption_file=f"{source_reference}/trainedWords",
         image_file=None,
-        tags=metadata.trained_words,
+        tags=tuple(
+            tag.strip()
+            for trained_word in metadata.trained_words
+            for tag in trained_word.split(",")
+            if tag.strip()
+        ),
         outfit_id=None,
         source_url=candidate.source_url,
         source_work_id=f"{candidate.model_id}:{candidate.version_id}",

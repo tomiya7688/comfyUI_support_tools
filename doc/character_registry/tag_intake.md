@@ -40,7 +40,7 @@
 
 ## Civitai候補API
 
-`search_civitai_loras(query, limit=20, cursor=None)` はLoRAの検索結果をversion単位で返し、続きがある場合はopaque cursorを返します。`fetch_civitai_lora_version(candidate)` は選択した版の `trainedWords`、公開状態、プレビュー画像の参照metadataを取得します。画像URLは `https://*.civitai.com/` 配下に限定し、重複画像IDを除きます。Civitai公式APIの利用制限に従い、429を含むHTTPエラーは呼び出し元へ返し、自動再試行しません。
+`search_civitai_loras(query, limit=20, cursor=None)` はLoRAの検索結果をversion単位で返し、続きがある場合はopaque cursorを返します。`fetch_civitai_lora_version(candidate)` は選択した版の `trainedWords`、公開状態、プレビュー画像の参照metadataを取得します。`trainedWords` が文字列または配列の場合は、各値のカンマ区切りを個別tagに分け、元の文字列またはJSON配列をprovenanceへ保存します。画像URLは `https://*.civitai.com/` 配下に限定し、重複画像IDを除きます。Civitai公式APIの利用制限に従い、429を含むHTTPエラーは呼び出し元へ返し、自動再試行しません。
 
 Character Registry UIで「選択版のpreview画像をTaggerで解析する」を選び、local Tagger API URLと任意modelを指定すると、閲覧可能な先頭8枚をTaggerへ送り、tag結果を画像ごとに出典付き候補として分類します。Tagger modelを空欄にするとAPIが返す先頭modelを使います。送信先はcredential/queryなしのloopback endpointに限定し、画像URLも `image.civitai.com` / `imagecache.civitai.com` HTTPS hostに限定します。APIの閲覧レベルは許可情報や学習許可として解釈せず、source権利状態は `unknown` を維持します。
 

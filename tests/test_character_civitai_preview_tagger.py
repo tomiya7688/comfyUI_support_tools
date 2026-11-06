@@ -1,7 +1,7 @@
 """Tests for transient Civitai preview analysis through a local Tagger API."""
 
-from email.message import Message
 import unittest
+from email.message import Message
 from io import BytesIO
 from unittest.mock import patch
 

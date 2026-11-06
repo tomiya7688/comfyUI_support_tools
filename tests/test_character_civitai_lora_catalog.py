@@ -156,7 +156,7 @@ class CivitaiLoraCatalogTest(unittest.TestCase):
         return_value={
             "id": 456,
             "modelId": 123,
-            "trainedWords": ["aoba_moca", "bang_dream"],
+            "trainedWords": ["aoba_moca, bang_dream"],
             "status": "Published",
             "availability": "Public",
         },
@@ -181,7 +181,7 @@ class CivitaiLoraCatalogTest(unittest.TestCase):
         metadata = fetch_civitai_lora_version(candidate)
 
         self.assertEqual(metadata.trained_words, ("aoba_moca", "bang_dream"))
-        self.assertIsNone(metadata.raw_trained_words)
+        self.assertEqual(metadata.raw_trained_words, '["aoba_moca, bang_dream"]')
         self.assertEqual(metadata.status, "Published")
         self.assertEqual(metadata.candidate.allow_commercial_use, "Image")
         self.assertEqual(metadata.preview_images, ())

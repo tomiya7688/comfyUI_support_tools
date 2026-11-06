@@ -2,8 +2,7 @@
 
 import json
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
@@ -178,12 +177,17 @@ def _string_tuple(payload: dict[str, object], field: str) -> tuple[str, ...]:
 #   エラー: [RuntimeError: trainedWordsの型またはlist要素が不正な場合]
 # }
 def _trained_words(payload: dict[str, object]) -> tuple[tuple[str, ...], str | None]:
-    """Normalize Civitai trainedWords while preserving string-form provenance."""
-    value = payload.get("trainedWords", [])
+    """Split comma-delimited tags and retain the original Civitai value as JSON or text."""
+    if "trainedWords" not in payload:
+        return (), None
+    value = payload["trainedWords"]
     if isinstance(value, str):
         tags = tuple(tag.strip() for tag in value.split(",") if tag.strip())
         return tags, value
-    return _string_tuple(payload, "trainedWords"), None
+    tag_values = _string_tuple(payload, "trainedWords")
+    tags = tuple(tag.strip() for value in tag_values for tag in value.split(",") if tag.strip())
+    raw_value = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return tags, raw_value
 
 
 # {

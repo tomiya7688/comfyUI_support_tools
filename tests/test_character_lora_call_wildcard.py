@@ -8,6 +8,11 @@ from src.comfyui_support_tools.applications.character_registry.api import (
 )
 
 
+# {
+#   責務: [CharacterLoraCallWildcardTests: Characterごとの重み付きLoRA呼び出しwildcard builder/APIを検証する]
+#   フィールド: [unittest assertion機能]
+#   処理: [候補形式の受入れ、誤入力拒否、指定rootへの保存を確認する]
+# }
 class CharacterLoraCallWildcardTests(unittest.TestCase):
     """Validate Character-scoped weighted local LoRA-call files."""
 

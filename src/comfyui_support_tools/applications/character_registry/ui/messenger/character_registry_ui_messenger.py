@@ -4,6 +4,7 @@ from src.comfyui_support_tools.applications.character_registry.api import (
     preview_character_intake,
     register_character_intake,
     search_civitai_loras,
+    write_character_wildcard_files,
 )
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
@@ -64,3 +65,16 @@ class CharacterRegistryUiMessenger:
         profile_directory: Path,
     ) -> CharacterProfile:
         return register_character_intake(preview, confirmation, profile_directory)
+
+    # {
+    #   責務: [write_character_wildcard_files: 登録済みprofileのwildcardを設定rootへ出力する]
+    #   処理: [public APIへprofileとwildcard rootを渡し, 保存path一覧を返す]
+    #   引数: [profile: 保存済みCharacterProfile, wildcard_root: configured wildcard root]
+    #   戻り値: [tuple[Path, ...]: 書き出したfile path]
+    # }
+    def write_character_wildcard_files(
+        self,
+        profile: CharacterProfile,
+        wildcard_root: Path,
+    ) -> tuple[Path, ...]:
+        return write_character_wildcard_files(profile, wildcard_root)

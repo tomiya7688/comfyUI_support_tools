@@ -8,6 +8,8 @@
 2. stable ID、表示名、必要なら別名を入力します。
 3. 必要な場合だけCivitaiを検索してLoRA versionを選びます。重みファイルや画像はダウンロードしません。
 4. previewで候補を確認し、採用するタグを選択して `identity` または `outfit` に手動で振り分けます。候補は自動で登録対象になりません。必要ならcustom tagを追加できます。
-5. identity tagを確認し、任意でoutfit ID/nameを入力して登録します。
+5. identity tagを確認し、任意でoutfit ID/nameを入力して登録します。登録後、設定済みwildcard rootへcharacter wildcardとLoRA wrapperを自動出力します。
+
+出力される `character_with_lora/<character_id>.txt` は `__character_lora/<character_id>__` と `__anime_character/<character_id>__` を参照します。保存先はアプリ共通設定の `wildcards` (`WILDCARDS_DIR`) を使います。書き込み失敗時もprofile登録済みであることと出力エラーを画面に表示します。
 
 Civitaiの利用条件や学習許諾は自動承認されません。登録内容とprovenanceを確認してから利用してください。

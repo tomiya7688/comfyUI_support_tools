@@ -36,6 +36,30 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 
 
 # {
+#   責務: [_write_wildcards_and_describe: 登録profileのwildcard bundleを出力し結果説明を返す]
+#   処理: [public messengerへ書き出しを依頼し, 成功/失敗とprofile登録済み状態を文面化する]
+#   引数: [messenger: Character Registry API boundary, profile: 登録profile, wildcard_root: configured wildcard root]
+#   戻り値: [str: UI status message]
+# }
+def _write_wildcards_and_describe(
+    messenger: CharacterRegistryUiMessenger,
+    profile: CharacterProfile,
+    wildcard_root: Path,
+) -> str:
+    try:
+        written_paths = messenger.write_character_wildcard_files(profile, wildcard_root)
+    except Exception as error:
+        return (
+            f"{profile.display_name}は登録済みですがwildcard出力に失敗しました: "
+            f"{type(error).__name__}: {error}"
+        )
+    return (
+        f"登録しました: {profile.display_name} ({profile.character_id})。"
+        f"wildcard {len(written_paths)}件を {wildcard_root} へ出力しました。"
+    )
+
+
+# {
 #   責務: [CharacterRegistryPanel: Civitai/local caption intakeの検索,分類確認,登録UIを表示する]
 #   フィールド: [UI widgets, selected candidates, preview, async request queue]
 # }
@@ -53,10 +77,12 @@ class CharacterRegistryPanel(ttk.Frame):
         master: tk.Misc,
         messenger: CharacterRegistryUiMessenger,
         settings_store: CharacterRegistryPathSettingsStore,
+        wildcard_root: Path,
     ) -> None:
         super().__init__(master, padding=12)
         self.messenger = messenger
         self.settings_store = settings_store
+        self.wildcard_root = Path(wildcard_root)
         self.candidates: tuple[CivitaiLoraCandidate, ...] = ()
         self.preview: CharacterTagIntakePreview | None = None
         self.identity_tags: list[str] = []
@@ -449,7 +475,15 @@ class CharacterRegistryPanel(ttk.Frame):
     #   戻り値: []
     # }
     def _show_registered_profile(self, profile: CharacterProfile) -> None:
-        self.status.set(f"登録しました: {profile.display_name} ({profile.character_id})")
+        self._start_task(
+            "Characterを保存しました。wildcard bundleを書き出しています...",
+            lambda: _write_wildcards_and_describe(
+                self.messenger,
+                profile,
+                self.wildcard_root,
+            ),
+            lambda message: self.status.set(str(message)),
+        )
 
     # {
     #   責務: [_start_task: blocking API/workをworker threadで実行する]

@@ -13,7 +13,7 @@ from src.comfyui_support_tools.applications.character_registry.ui.processing.cha
     CharacterRegistryPathSettingsStore,
 )
 
-from ..context import USER_INPUT_DIR
+from ..context import USER_INPUT_DIR, WILDCARDS_DIR
 
 
 # {
@@ -35,5 +35,6 @@ class CharacterRegistryTab(ttk.Frame):
             self,
             CharacterRegistryUiMessenger(),
             settings_store,
+            WILDCARDS_DIR,
         )
         self.panel.pack(fill="both", expand=True)

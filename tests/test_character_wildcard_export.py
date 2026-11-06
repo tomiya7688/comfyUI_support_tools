@@ -1,7 +1,13 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from src.comfyui_support_tools.applications.character_registry.api import (
     build_character_wildcard_files,
+    write_character_wildcard_files,
+)
+from src.comfyui_support_tools.applications.character_registry.data.processing.character_wildcard_file_store import (
+    CharacterWildcardFileStore,
 )
 from src.comfyui_support_tools.shared.contracts.character_outfit_profile import (
     CharacterOutfitProfile,
@@ -15,6 +21,53 @@ from src.comfyui_support_tools.shared.contracts.character_profile import Charact
 #   フィールド: []
 # }
 class CharacterWildcardExportTests(unittest.TestCase):
+    # {
+    #   責務: [test_registration_export_writes_character_and_lora_wrapper_files: public APIがwildcard rootへbundleを書き出すことを検証する]
+    #   処理: [temp rootへexportし, character wildcardとLoRA呼び出しwrapperの本文を確認する]
+    #   引数: [self: unittest test instance]
+    #   戻り値: []
+    # }
+    def test_registration_export_writes_character_and_lora_wrapper_files(self):
+        profile = CharacterProfile(
+            character_id="saved_character",
+            display_name="Saved Character",
+            confirmed_core_traits=("silver hair", "blue eyes"),
+        )
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+
+            written_paths = write_character_wildcard_files(profile, root)
+
+            self.assertEqual(len(written_paths), 3)
+            self.assertEqual(
+                (root / "anime_character/saved_character/identity.txt").read_text(encoding="utf-8"),
+                "silver hair, blue eyes\n",
+            )
+            self.assertEqual(
+                (root / "anime_character/saved_character.txt").read_text(encoding="utf-8"),
+                "__anime_character/saved_character/identity__\n",
+            )
+            self.assertEqual(
+                (root / "character_with_lora/saved_character.txt").read_text(encoding="utf-8"),
+                "__character_lora/saved_character__ __anime_character/saved_character__\n",
+            )
+
+    # {
+    #   責務: [test_file_store_rejects_parent_traversal: wildcard file storeがroot外の出力pathを拒否することを検証する]
+    #   処理: [parent traversal pathを渡し, ValueErrorと外部file未作成を確認する]
+    #   引数: [self: unittest test instance]
+    #   戻り値: []
+    # }
+    def test_file_store_rejects_parent_traversal(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory) / "wildcards"
+            outside_path = Path(directory) / "outside.txt"
+
+            with self.assertRaisesRegex(ValueError, "parent traversal"):
+                CharacterWildcardFileStore().write(root, {"../outside.txt": "unsafe\n"})
+
+            self.assertFalse(outside_path.exists())
+
     # {
     #   責務: [test_exports_confirmed_traits_and_separate_outfits: 確認済み特徴と衣装を別wildcardに出力する]
     #   処理: [default outfit, 未確認outfit, innerwearを含むprofileをbundleへ変換する]

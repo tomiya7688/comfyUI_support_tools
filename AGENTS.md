@@ -1,6 +1,7 @@
 # Agent entry
 
 Keep initial context small.
+For cross-project automation, reusable templates, design records, and AGENTS links, follow [PROJECT_PRACTICES](E:/projects/PROJECT_PRACTICES.md).
 
 Every work session starts with `git fetch origin`. Verify the repository and worktree, then inspect relevant open PRs before choosing an Issue or implementation step. If fetching fails, mark remote freshness unverified and do not make a stale-state decision. For the one-cycle procedure and shared/individual roles, follow [the development workflow](doc/ワークフロー/workflow.md) ([日本語](doc/ワークフロー/ワークフロー.md)). Codex can load the shared [development-workflow skill](.agents/skills/development-workflow/SKILL.md); Claude uses `CLAUDE.md` and its thin skill adapter.
 

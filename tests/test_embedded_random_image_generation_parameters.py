@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -50,6 +51,51 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
         self.assertIsNone(capabilities.require("txt2img"))
         with self.assertRaisesRegex(ValueError, "img2img"):
             capabilities.require("img2img")
+
+    # {
+    #   責務: [test_sequential_loop_reuses_wildcard_choices_for_the_entire_run: 無限順次生成の周回を越えてwildcard選択が固定されることを確認する]
+    #   処理: [同じwildcardを2周使い, 生成promptが全て同一であることを確認する]
+    #   引数: [self: unittest test case]
+    #   戻り値: []
+    # }
+    def test_sequential_loop_reuses_wildcard_choices_for_the_entire_run(self):
+        """Keep wildcard expansion stable across every cycle in one sequential run."""
+        generated_prompts = []
+        cache_ids = {}
+        generator = EmbeddedRandomImage()
+        generator.input_file = "unused.txt"
+        generator.root_dir = Path.cwd()
+        generator.sequential_loop = True
+        generator.sequential_reuse_wildcards = True
+        generator._log = lambda _message: None
+
+        def resolve_prompt(_request, wildcard_cache):
+            cache_id = id(wildcard_cache)
+            cache_ids.setdefault(cache_id, f"choice-{len(cache_ids) + 1}")
+            prompt = wildcard_cache.setdefault("choice", cache_ids[cache_id])
+            return SimpleNamespace(positive_prompt=prompt, warnings=())
+
+        def record_prompt(prompt, wildcard_cache=None):
+            generated_prompts.append(prompt)
+            if len(generated_prompts) == 4:
+                generator._stop_event.set()
+
+        generator._generate = record_prompt
+        with (
+            patch(
+                "scripts.backend.embedded_random_image.load_sequential_prompt_lines",
+                return_value=[("prompts.txt", 1, "__choice__"), ("prompts.txt", 2, "__choice__")],
+            ),
+            patch(
+                "scripts.backend.embedded_random_image.resolve_prompt",
+                side_effect=resolve_prompt,
+            ),
+        ):
+            generator._generate_sequential()
+
+        self.assertEqual(len(generated_prompts), 4)
+        self.assertEqual(len(set(generated_prompts)), 1)
+        self.assertEqual(len(cache_ids), 1)
 
     # {
     #   責務: [test_incompatible_lora_stops_before_backend_request: 非互換LoRAで生成APIを呼ばずに中止する]
@@ -107,7 +153,9 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
                             "scripts.backend.embedded_random_image.create_configured_image_generation_backend",
                             return_value=backend,
                         ),
-                        patch("scripts.backend.embedded_random_image.validate_prompt_loras") as validate_loras,
+                        patch(
+                            "scripts.backend.embedded_random_image.validate_prompt_loras"
+                        ) as validate_loras,
                     ):
                         generator._generate(prompt="a simple test prompt", negative="")
 
@@ -151,7 +199,9 @@ class EmbeddedRandomImageGenerationParameterTests(unittest.TestCase):
             self.assertEqual(backend.request.sampler, "DPM++ 2M Karras")
             images = list(Path(temporary_directory).glob("*.png"))
             self.assertEqual(len(images), 1)
-            metadata = json.loads(images[0].with_suffix(".generation.json").read_text(encoding="utf-8"))
+            metadata = json.loads(
+                images[0].with_suffix(".generation.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(metadata["cfg"], 5.5)
             self.assertEqual(metadata["backend"], generator.generation_profile.backend)
             self.assertEqual(metadata["steps"], 18)

@@ -76,7 +76,9 @@ class CharacterLoraCallWildcardTests(unittest.TestCase):
                 root,
             )
 
-            self.assertEqual(written, (root / "anime_character_lora" / "aoba_moca.txt",))
+            expected_path = root / "anime_character_lora" / "aoba_moca.txt"
+            self.assertEqual(len(written), 1)
+            self.assertEqual(written[0].resolve(), expected_path.resolve())
             self.assertEqual(written[0].read_text(encoding="utf-8"), "<lora:model_a:0.8>\n")
 
 

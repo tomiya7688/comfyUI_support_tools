@@ -23,7 +23,7 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata im
 
 
 # {
-#   責務: [CivitaiTagIntakePreviewTest: Civitai trainedWordsとlocal captionの統合previewを検証する]
+#   責務: [CivitaiTagIntakePreviewTest: Civitai model tags/trainedWordsとlocal captionの統合previewを検証する]
 #   フィールド: [unittest assertion機能]
 #   処理: [外部APIをpatchし, identity/outfit/context/unclassified分類とsource provenanceを検証する]
 # }
@@ -45,7 +45,7 @@ class CivitaiTagIntakePreviewTest(unittest.TestCase):
             version_name="v1",
             creator="artist",
             base_model="SDXL 1.0",
-            tags=("character",),
+            tags=("shirt",),
             source_url="https://civitai.com/models/123?modelVersionId=456",
             allow_no_credit=False,
             allow_commercial_use="Image",
@@ -114,20 +114,32 @@ class CivitaiTagIntakePreviewTest(unittest.TestCase):
         )
         outfit_group = next(group for group in preview.outfit_groups if group.is_unassigned)
         self.assertEqual({item.tag for item in outfit_group.tags}, {"school_uniform", "shirt"})
+        shirt = next(item for item in outfit_group.tags if item.tag == "shirt")
+        self.assertEqual(
+            set(shirt.source_files),
+            {"local/ref.txt", "civitai://models/123/versions/456/tags"},
+        )
         self.assertEqual([item.tag for item in preview.context_candidates], ["sitting"])
         self.assertEqual(
             [item.tag for item in preview.unclassified_candidates], ["custom_character_trigger"]
         )
 
-        civitai_source = next(
+        civitai_sources = [
             asset for asset in preview.source_assets if asset.source_work_id == "123:456"
+        ]
+        self.assertEqual(len(civitai_sources), 2)
+        for civitai_source in civitai_sources:
+            self.assertIsNone(civitai_source.image_file)
+            self.assertEqual(civitai_source.license_status, "unknown")
+            self.assertEqual(civitai_source.training_permission, "unknown")
+            self.assertEqual(civitai_source.source_url, self._candidate().source_url)
+            self.assertIn(("allow_no_credit", False), civitai_source.source_metadata)
+            self.assertIn(("allow_commercial_use", "Image"), civitai_source.source_metadata)
+        model_tag_source = next(
+            asset for asset in civitai_sources if asset.caption_file.endswith("/tags")
         )
-        self.assertIsNone(civitai_source.image_file)
-        self.assertEqual(civitai_source.license_status, "unknown")
-        self.assertEqual(civitai_source.training_permission, "unknown")
-        self.assertEqual(civitai_source.source_url, self._candidate().source_url)
-        self.assertIn(("allow_no_credit", False), civitai_source.source_metadata)
-        self.assertIn(("allow_commercial_use", "Image"), civitai_source.source_metadata)
+        self.assertEqual(model_tag_source.tags, ("shirt",))
+        self.assertIn(("tag_source", "model_tags"), model_tag_source.source_metadata)
         self.assertTrue(any("画像で確認" in warning for warning in preview.warnings))
         self.assertTrue(any("権利情報" in warning for warning in preview.warnings))
         load_civitai_version.assert_called_once_with(self._candidate())

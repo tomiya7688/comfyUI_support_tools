@@ -33,16 +33,16 @@ An optional `manifest.json` uses this shape:
 
 ## Current limitations
 
-- Civitai discovery uses its official anonymous REST API and reads LoRA model/version metadata, creator, base model, usage permissions, and trained words. Permission values are preserved as returned; missing values remain unknown.
+- Civitai discovery uses its official anonymous REST API and reads LoRA model/version metadata, creator, base model, usage permissions, model tags, and trained words. Permission values are preserved as returned; missing values remain unknown.
 - Civitai access is JSON API only. It does not crawl HTML, download images or LoRA weights, or register training assets automatically. A person must verify the usage conditions and provenance before registration.
-- Tag categories are suggestions. Manual correction UI and profile registration are follow-up work.
+- Tag categories remain suggestions; the Character Registry UI lets a person correct and confirm them before profile registration.
 - It does not scan managed training materials or user data automatically. It reads only the dataset root explicitly supplied by its caller.
 
 ## Civitai candidate API
 
 `search_civitai_loras(query, limit=20, cursor=None)` returns search results per version and an opaque cursor when another page is available. `fetch_civitai_lora_version(candidate)` retrieves `trainedWords` and publication state for the selected version. It follows the Civitai API's rate limits and returns HTTP errors, including 429, to the caller without automatic retries.
 
-`preview_character_intake(request, civitai_candidate=...)` adds `trainedWords` from an explicitly selected version to the same identity/outfit/context/unclassified preview used for local captions. The Civitai source keeps a stable `civitai://` reference, source page URL, creator, base model, and API usage-permission flags. License and training permission remain unverified; the flags alone do not establish permission. Trigger words without images are suggestions, not visual evidence, and require manual review.
+`preview_character_intake(request, civitai_candidate=...)` adds `model tags` and `trainedWords` from an explicitly selected version as separate sources to the same identity/outfit/context/unclassified preview used for local captions. The Civitai sources keep a stable `civitai://` reference, source page URL, creator, base model, and API usage-permission flags. License and training permission remain unverified; the flags alone do not establish permission. Tags without images are suggestions, not visual evidence, and require manual review.
 
 After review, pass the identity traits to register and outfit profiles with `user_confirmed=True` through `CharacterTagIntakeConfirmation`, then call `register_character_intake(preview, confirmation, profile_directory)`. Unconfirmed outfits are rejected, and an existing `character_id` is never overwritten by registration. The caller supplies `profile_directory` from application settings. Civitai source metadata is persisted and restored with the profile JSON.
 

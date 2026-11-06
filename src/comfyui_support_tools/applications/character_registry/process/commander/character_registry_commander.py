@@ -17,7 +17,7 @@ from src.comfyui_support_tools.applications.character_registry.process.processin
     build_character_tag_preview,
 )
 from src.comfyui_support_tools.applications.character_registry.process.processing.civitai_lora_tag_source_builder import (
-    build_civitai_tag_source_asset,
+    build_civitai_tag_source_assets,
 )
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
@@ -67,7 +67,7 @@ def fetch_civitai_lora_version(
 
 # {
 #   責務: [preview_character_intake: local/Civitai source取得とtag分類の処理順を調整する]
-#   処理: [local sourceを取得し, 選択時はCivitai trainedWordsを追加して, 共通preview builderへ渡す]
+#   処理: [local sourceを取得し, 選択時はCivitai model tagsとtrainedWordsを追加して共通previewへ渡す]
 #   引数: [request: Character Registry intake request, civitai_candidate: 任意のLoRA version候補]
 #   戻り値: [CharacterTagIntakePreview: provenance付き分類候補]
 # }
@@ -75,13 +75,14 @@ def preview_character_intake(
     request: CharacterTagIntakeRequest,
     civitai_candidate: CivitaiLoraCandidate | None = None,
 ) -> CharacterTagIntakePreview:
+    """Build a manual review preview from local captions and selected Civitai metadata."""
     assets, warnings = load_character_sources(request.dataset_root)
     if civitai_candidate is not None:
         metadata = load_selected_civitai_lora_version(civitai_candidate)
-        assets = (*assets, build_civitai_tag_source_asset(metadata))
+        assets = (*assets, *build_civitai_tag_source_assets(metadata))
         warnings = (
             *warnings,
-            "Civitai trainedWordsはモデル作成者のtrigger候補です。画像で確認できた特徴とは限らないため、分類を確認してください。",
+            "Civitai model tagsとtrainedWordsは投稿者由来の候補です。画像で確認できた特徴とは限らないため、分類を確認してください。",
         )
     return build_character_tag_preview(request, assets, warnings)
 

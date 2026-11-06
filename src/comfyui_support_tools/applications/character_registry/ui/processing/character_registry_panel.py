@@ -38,7 +38,7 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 # {
 #   責務: [_write_wildcards_and_describe: 登録profileのwildcard bundleを出力し結果説明を返す]
 #   処理: [public messengerへ書き出しを依頼し, 成功/失敗とprofile登録済み状態を文面化する]
-#   引数: [messenger: Character Registry API boundary, profile: 登録profile, wildcard_root: configured wildcard root]
+#   引数: [messenger: API, profile: 登録profile, wildcard_root: 出力root]
 #   戻り値: [str: UI status message]
 # }
 def _write_wildcards_and_describe(

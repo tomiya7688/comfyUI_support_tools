@@ -1,8 +1,6 @@
 from pathlib import Path
 
-from src.comfyui_support_tools.applications.character_registry.data.processing.character_wildcard_file_store import (
-    CharacterWildcardFileStore,
-)
+from .data.processing.character_wildcard_file_store import CharacterWildcardFileStore
 from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     fetch_civitai_lora_version as _fetch_civitai_lora_version,
 )
@@ -126,7 +124,7 @@ def build_character_wildcard_files(profile: CharacterProfile) -> dict[str, str]:
 
 
 # {
-#   責務: [write_character_wildcard_files: 確認済みCharacterProfileのwildcard bundleを設定rootへ保存する]
+#   責務: [write_character_wildcard_files: 確認済みprofileをwildcard rootへ保存する]
 #   処理: [public exporterでbundleを作り, UIから渡されたrootへfile store経由で書く]
 #   引数: [profile: 書き出すCharacterProfile, wildcard_root: paths.json由来のwildcard保存root]
 #   戻り値: [tuple[Path, ...]: 書き出したabsolute file path]

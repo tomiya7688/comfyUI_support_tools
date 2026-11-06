@@ -1,13 +1,12 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from src.comfyui_support_tools.applications.character_registry import api
 from src.comfyui_support_tools.applications.character_registry.api import (
     build_character_wildcard_files,
     write_character_wildcard_files,
-)
-from src.comfyui_support_tools.applications.character_registry.data.processing.character_wildcard_file_store import (
-    CharacterWildcardFileStore,
 )
 from src.comfyui_support_tools.shared.contracts.character_outfit_profile import (
     CharacterOutfitProfile,
@@ -22,7 +21,7 @@ from src.comfyui_support_tools.shared.contracts.character_profile import Charact
 # }
 class CharacterWildcardExportTests(unittest.TestCase):
     # {
-    #   責務: [test_registration_export_writes_character_and_lora_wrapper_files: public APIがwildcard rootへbundleを書き出すことを検証する]
+    #   責務: [test_registration_export: 登録APIが出力するbundleを検証する]
     #   処理: [temp rootへexportし, character wildcardとLoRA呼び出しwrapperの本文を確認する]
     #   引数: [self: unittest test instance]
     #   戻り値: []
@@ -53,18 +52,28 @@ class CharacterWildcardExportTests(unittest.TestCase):
             )
 
     # {
-    #   責務: [test_file_store_rejects_parent_traversal: wildcard file storeがroot外の出力pathを拒否することを検証する]
-    #   処理: [parent traversal pathを渡し, ValueErrorと外部file未作成を確認する]
+    #   責務: [test_writer_rejects_parent_traversal: 出力pathのtraversal拒否を検証する]
+    #   処理: [exporterの不正pathを模擬し, ValueErrorとoutside file未作成を確認する]
     #   引数: [self: unittest test instance]
     #   戻り値: []
     # }
-    def test_file_store_rejects_parent_traversal(self):
+    def test_writer_rejects_parent_traversal(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory) / "wildcards"
             outside_path = Path(directory) / "outside.txt"
+            profile = CharacterProfile(
+                character_id="safe_character",
+                display_name="Safe Character",
+                confirmed_core_traits=("silver hair",),
+            )
 
-            with self.assertRaisesRegex(ValueError, "parent traversal"):
-                CharacterWildcardFileStore().write(root, {"../outside.txt": "unsafe\n"})
+            with patch.object(
+                api,
+                "_build_character_wildcard_files",
+                return_value={"../outside.txt": "unsafe\n"},
+            ):
+                with self.assertRaisesRegex(ValueError, "parent traversal"):
+                    write_character_wildcard_files(profile, root)
 
             self.assertFalse(outside_path.exists())
 

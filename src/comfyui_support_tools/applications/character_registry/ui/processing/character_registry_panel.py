@@ -145,6 +145,7 @@ class CharacterRegistryPanel(ttk.Frame):
             "add_custom_tag": self._add_custom_tag,
             "register_profile": self.register_profile,
             "retry_wildcard_export": self.retry_wildcard_export,
+            "save_lora_call_wildcard": self.save_lora_call_wildcard,
         }
         self.view = CharacterRegistryPanelView(self, variables, actions)
         self.view.pack(fill="both", expand=True)
@@ -667,6 +668,33 @@ class CharacterRegistryPanel(ttk.Frame):
             ),
             self._show_wildcard_export_result,
         )
+
+    # {
+    #   責務: [save_lora_call_wildcard: 登録済みCharacterのLoRA呼び出し候補を保存する]
+    #   処理: [候補欄と設定済みwildcard rootをmessengerへ渡し, 結果をstatusへ表示する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def save_lora_call_wildcard(self) -> None:
+        """Save weighted local LoRA calls for the last successfully registered profile."""
+        profile = self._registered_profile
+        if profile is None:
+            self.status.set("先にCharacterを登録してください。")
+            return
+        content = self.view.lora_call_text.get("1.0", "end-1c")
+        if not content.strip():
+            self.status.set("LoRA候補を1行以上入力してください。")
+            return
+        try:
+            written = self.messenger.write_character_lora_call_wildcard(
+                profile.character_id,
+                content,
+                self.wildcard_root,
+            )
+        except (OSError, ValueError) as error:
+            self.status.set(f"LoRA候補を保存できません: {error}")
+            return
+        self.status.set(f"{profile.display_name}のLoRA候補wildcardを保存しました: {written[0]}")
 
     # {
     #   責務: [_start_task: blocking API/workをworker threadで実行する]

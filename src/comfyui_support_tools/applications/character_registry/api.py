@@ -15,6 +15,9 @@ from src.comfyui_support_tools.applications.character_registry.process.commander
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_wildcard_exporter import (
     build_character_wildcard_files as _build_character_wildcard_files,
 )
+from src.comfyui_support_tools.applications.character_registry.process.processing.character_lora_call_wildcard_builder import (
+    build_character_lora_call_wildcard as _build_character_lora_call_wildcard,
+)
 from src.comfyui_support_tools.shared.contracts.character_id import is_valid_character_id
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
@@ -142,3 +145,34 @@ def write_character_wildcard_files(
         raise ValueError("wildcard_rootはpathlib.Pathで指定してください")
     files = _build_character_wildcard_files(profile)
     return CharacterWildcardFileStore().write(wildcard_root, files)
+
+
+# {
+#   責務: [write_character_lora_call_wildcard: 手動確認したLoRA候補をCharacter用wildcardへ保存する]
+#   処理: [候補行を検証し, path traversal防止とatomic replaceを持つfile storeへ渡す]
+#   引数: [character_id: stable ID, content: 重み付きLoRA呼び出し候補, wildcard_root: 設定済み保存root]
+#   戻り値: [tuple[Path, ...]: 保存したwildcard file]
+#   エラー: [ValueError: IDや候補内容が不正, OSError: file保存失敗]
+# }
+def write_character_lora_call_wildcard(
+    character_id: str,
+    content: str,
+    wildcard_root: Path,
+) -> tuple[Path, ...]:
+    """Validate and atomically save one Character's weighted local LoRA-call choices."""
+    if not isinstance(wildcard_root, Path):
+        raise ValueError("wildcard_rootはpathlib.Pathで指定してください")
+    files = build_character_lora_call_wildcard(character_id, content)
+    return CharacterWildcardFileStore().write(wildcard_root, files)
+
+
+# {
+#   責務: [build_character_lora_call_wildcard: public APIでLoRA候補wildcardをfilesystem非依存生成する]
+#   処理: [stable ID, 重み行, LoRA呼び出し記法を検証してfile bundleを返す]
+#   引数: [character_id: stable ID, content: 重み付きLoRA候補]
+#   戻り値: [dict[str, str]: root相対pathとUTF-8本文]
+#   エラー: [ValueError: IDまたは候補が不正な場合]
+# }
+def build_character_lora_call_wildcard(character_id: str, content: str) -> dict[str, str]:
+    """Build a validated Character-specific LoRA-call wildcard without writing files."""
+    return _build_character_lora_call_wildcard(character_id, content)

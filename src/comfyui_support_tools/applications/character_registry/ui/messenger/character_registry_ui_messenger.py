@@ -4,6 +4,7 @@ from src.comfyui_support_tools.applications.character_registry.api import (
     preview_character_intake,
     register_character_intake,
     search_civitai_loras,
+    write_character_lora_call_wildcard,
     write_character_wildcard_files,
 )
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
@@ -79,3 +80,18 @@ class CharacterRegistryUiMessenger:
         wildcard_root: Path,
     ) -> tuple[Path, ...]:
         return write_character_wildcard_files(profile, wildcard_root)
+
+    # {
+    #   責務: [write_character_lora_call_wildcard: UIのLoRA候補をpublic API経由で保存する]
+    #   処理: [Character ID,候補本文,wildcard rootをAPIへ渡す]
+    #   引数: [character_id: stable ID, content: LoRA候補本文, wildcard_root: 設定済みroot]
+    #   戻り値: [tuple[Path, ...]: 保存path]
+    # }
+    def write_character_lora_call_wildcard(
+        self,
+        character_id: str,
+        content: str,
+        wildcard_root: Path,
+    ) -> tuple[Path, ...]:
+        """Persist weighted LoRA-call lines for a registered Character."""
+        return write_character_lora_call_wildcard(character_id, content, wildcard_root)

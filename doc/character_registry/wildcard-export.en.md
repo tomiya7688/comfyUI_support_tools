@@ -13,4 +13,6 @@ The output uses the stable `character_id` and separates these roles:
 
 Unconfirmed identity candidates and outfits are omitted. Innerwear traits and visibility rules are not injected into regular prompts. Export raises `ValueError` when there are no confirmed identity traits. Traits containing wildcard/inline-choice syntax or line breaks are also rejected.
 
-This exporter does not create `anime_character_lora/<id>.txt`. The LoRA registration flow owns that LoRA-call wildcard; the wrapper only references it. The UI reports when the mapping is missing.
+Create `anime_character_lora/<id>.txt` in the Character Registry's **Character LoRA choices** editor after registering the profile. Enter a local LoRA name and strength as `<lora:model_name:0.8>`. Add one candidate per line; relative weights such as `@weight=3::<lora:model_a:0.8>` are supported. Saving validates each wildcard weight and LoRA-call syntax and requires at least one positive-weight choice. The tool does not download model weights or Civitai images.
+
+The saved file is referenced by the existing wrapper. Wildcard caching reuses the selected choice within one prompt and throughout one sequential generation run. Before generation, verify that each referenced LoRA exists locally and is compatible with the active base model.

@@ -40,7 +40,34 @@ class CharacterRegistryPanelView(ttk.Frame):
         self._build_character_fields()
         self._build_civitai_search()
         self._build_review_columns()
+        self._build_lora_call_editor()
         self._build_actions()
+
+    # {
+    #   責務: [_build_lora_call_editor: Character用の重み付きLoRA呼び出し候補欄を配置する]
+    #   処理: [複数行入力欄と保存buttonを表示する]
+    #   引数: [self: view]
+    #   戻り値: []
+    # }
+    def _build_lora_call_editor(self) -> None:
+        """Build a multiline editor for weighted local LoRA-call choices."""
+        editor = ttk.LabelFrame(self, text="Character LoRA候補（ローカル名を指定）", padding=8)
+        editor.grid(row=4, column=0, sticky="ew", pady=(6, 0))
+        editor.columnconfigure(0, weight=1)
+        ttk.Label(
+            editor,
+            text="登録後に保存できます。例: @weight=3::<lora:local_model_a:0.8> / <lora:local_model_b:0.7>",
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        self.lora_call_text = tk.Text(editor, height=4, wrap="none", undo=True)
+        self.lora_call_text.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        scrollbar = ttk.Scrollbar(editor, orient="vertical", command=self.lora_call_text.yview)
+        scrollbar.grid(row=1, column=1, sticky="ns", pady=(4, 0))
+        self.lora_call_text.configure(yscrollcommand=scrollbar.set)
+        ttk.Button(
+            editor,
+            text="LoRA候補を保存",
+            command=self.actions["save_lora_call_wildcard"],
+        ).grid(row=2, column=0, sticky="w", pady=(4, 0))
 
     # {
     #   責務: [_build_paths: datasetとprofile保存pathの入力欄を配置する]
@@ -212,7 +239,7 @@ class CharacterRegistryPanelView(ttk.Frame):
     def _build_actions(self) -> None:
         """Build outfit details, registration, export retry, and status controls."""
         actions = ttk.LabelFrame(self, text="登録", padding=8)
-        actions.grid(row=4, column=0, sticky="ew", pady=(6, 0))
+        actions.grid(row=5, column=0, sticky="ew", pady=(6, 0))
         ttk.Label(actions, text="outfit ID").grid(row=0, column=0, sticky="w")
         ttk.Entry(actions, textvariable=self.variables["outfit_id"], width=18).grid(
             row=0, column=1, padx=4

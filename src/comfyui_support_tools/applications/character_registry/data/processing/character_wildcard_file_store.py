@@ -23,6 +23,7 @@ class CharacterWildcardFileStore:
         wildcard_root: Path,
         files: Mapping[str, str],
     ) -> tuple[Path, ...]:
+        """Validate a bundle and atomically replace each file beneath its root."""
         configured_root = Path(wildcard_root).expanduser()
         if not configured_root.is_absolute():
             raise ValueError("wildcard_rootはabsolute pathで指定してください")

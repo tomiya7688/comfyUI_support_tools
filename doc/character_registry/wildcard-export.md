@@ -9,8 +9,8 @@
 - `anime_character/<id>/identity.txt`: `confirmed_core_traits`のみ
 - `anime_character/<id>/outfit/<outfit_id>.txt`: 手動確認済み衣装の外衣・衣服・アクセサリーtrait
 - `anime_character/<id>.txt`: identityと確認済みdefault outfitへの参照
-- `character_with_lora/<id>.txt`: `character_lora/<id>`とキャラクターwildcardへのwrapper参照
+- `character_with_lora/<id>.txt`: `anime_character_lora/<id>`とキャラクターwildcardへのwrapper参照
 
 未確認のidentity候補と未確認衣装は出力しません。innerwear traitとvisibility ruleも通常promptへ自動挿入しません。identityに確認済みtraitがない場合は`ValueError`になります。wildcard/inline選択構文や改行を含むtraitも拒否します。
 
-`character_lora/<id>.txt`はこのexporterでは作成しません。スクレイピング/LoRA登録側が所有するLoRA呼び出しwildcardを、wrapperから参照するだけです。
+`anime_character_lora/<id>.txt`はこのexporterでは作成しません。LoRA登録側が所有するLoRA呼び出しwildcardをwrapperから参照します。ファイルが未登録の場合、UIはその不足を案内します。

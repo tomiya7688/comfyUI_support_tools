@@ -7,9 +7,11 @@
 1. caption dataset folderとprofileの保存先を選びます。選択したパスは設定済みの `USER_INPUT_DIR/config/common/character_registry.json` に保存されます（既定では `user_data/input/config/common/character_registry.json`）。
 2. stable ID、表示名、必要なら別名を入力します。
 3. 必要な場合だけCivitaiを検索してLoRA versionを選びます。重みファイルや画像はダウンロードしません。
-4. previewで候補を確認し、採用するタグを選択して `identity` または `outfit` に手動で振り分けます。候補は自動で登録対象になりません。必要ならcustom tagを追加できます。
+4. previewで候補を確認し、採用するタグを `identity`、`outfit`、`innerwear` に手動で振り分けます。候補は自動で登録対象になりません。innerwearは通常promptへ出力されません。必要ならcustom tagを追加できます。
 5. identity tagを確認し、任意でoutfit ID/nameを入力して登録します。登録後、設定済みwildcard rootへcharacter wildcardとLoRA wrapperを自動出力します。
 
-出力される `character_with_lora/<character_id>.txt` は `__character_lora/<character_id>__` と `__anime_character/<character_id>__` を参照します。保存先はアプリ共通設定の `wildcards` (`WILDCARDS_DIR`) を使います。書き込み失敗時もprofile登録済みであることと出力エラーを画面に表示します。
+出力される `character_with_lora/<character_id>.txt` は `__anime_character_lora/<character_id>__` と `__anime_character/<character_id>__` を参照します。LoRA呼び出し側の `anime_character_lora/<character_id>.txt` がない場合は画面に表示するため、生成前に手動登録してください。保存先はアプリ共通設定の `wildcards` (`WILDCARDS_DIR`) を使います。書き込み失敗時は登録済みprofileを維持し、画面からwildcard出力を再試行できます。
+
+Civitai候補はページ送りで追加取得できます。preview後にID・表示名・別名・dataset・選択LoRAを変更した場合は、登録前にpreviewを作り直してください。previewと登録に使うpathは設定へ保存されます。
 
 Civitaiの利用条件や学習許諾は自動承認されません。登録内容とprovenanceを確認してから利用してください。

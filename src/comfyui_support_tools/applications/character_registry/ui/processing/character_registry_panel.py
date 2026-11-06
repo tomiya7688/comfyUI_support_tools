@@ -39,24 +39,32 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 #   責務: [_write_wildcards_and_describe: 登録profileのwildcard bundleを出力し結果説明を返す]
 #   処理: [public messengerへ書き出しを依頼し, 成功/失敗とprofile登録済み状態を文面化する]
 #   引数: [messenger: API, profile: 登録profile, wildcard_root: 出力root]
-#   戻り値: [str: UI status message]
+#   戻り値: [tuple[bool, str]: export succeeded and UI status message]
 # }
 def _write_wildcards_and_describe(
     messenger: CharacterRegistryUiMessenger,
     profile: CharacterProfile,
     wildcard_root: Path,
-) -> str:
+) -> tuple[bool, str]:
+    """Write a saved profile's wildcard bundle and describe local LoRA mapping state."""
     try:
         written_paths = messenger.write_character_wildcard_files(profile, wildcard_root)
     except Exception as error:
-        return (
-            f"{profile.display_name}は登録済みですがwildcard出力に失敗しました: "
-            f"{type(error).__name__}: {error}"
+        return False, (
+            f"{profile.display_name}は登録済みですがwildcard出力に失敗しました。"
+            f"「wildcard出力を再試行」できます。{type(error).__name__}: {error}"
         )
-    return (
+    lora_call_file = wildcard_root / "anime_character_lora" / f"{profile.character_id}.txt"
+    status = (
         f"登録しました: {profile.display_name} ({profile.character_id})。"
         f"wildcard {len(written_paths)}件を {wildcard_root} へ出力しました。"
     )
+    if not lora_call_file.is_file():
+        status += (
+            f" 対応LoRAは未設定です。生成前に {lora_call_file} を作成し、"
+            "そこへLoRA呼び出しを記述してください。"
+        )
+    return True, status
 
 
 # {
@@ -85,8 +93,15 @@ class CharacterRegistryPanel(ttk.Frame):
         self.wildcard_root = Path(wildcard_root)
         self.candidates: tuple[CivitaiLoraCandidate, ...] = ()
         self.preview: CharacterTagIntakePreview | None = None
+        self._preview_request: CharacterTagIntakeRequest | None = None
+        self._preview_candidate: CivitaiLoraCandidate | None = None
         self.identity_tags: list[str] = []
         self.outfit_tags: list[str] = []
+        self.innerwear_tags: list[str] = []
+        self._candidate_query = ""
+        self._candidate_next_cursor: str | None = None
+        self._registered_profile: CharacterProfile | None = None
+        self._wildcard_retry_enabled = False
         self._task_results: Queue[tuple[bool, object]] = Queue()
         self._task_pending = False
         self.status = tk.StringVar(value="caption folderを選び、previewを作成してください。")
@@ -119,13 +134,17 @@ class CharacterRegistryPanel(ttk.Frame):
             "choose_profile_directory": self._choose_profile_directory,
             "regenerate_id": self._regenerate_character_id,
             "search_civitai": self.search_civitai,
+            "next_civitai_page": self.next_civitai_page,
             "preview_intake": self.preview_intake,
             "add_identity": self._add_identity,
             "add_outfit": self._add_outfit,
+            "add_innerwear": self._add_innerwear,
             "remove_identity": self._remove_identity,
             "remove_outfit": self._remove_outfit,
+            "remove_innerwear": self._remove_innerwear,
             "add_custom_tag": self._add_custom_tag,
             "register_profile": self.register_profile,
+            "retry_wildcard_export": self.retry_wildcard_export,
         }
         self.view = CharacterRegistryPanelView(self, variables, actions)
         self.view.pack(fill="both", expand=True)
@@ -133,9 +152,12 @@ class CharacterRegistryPanel(ttk.Frame):
         self.suggestion_list = self.view.suggestion_list
         self.identity_list = self.view.identity_list
         self.outfit_list = self.view.outfit_list
+        self.innerwear_list = self.view.innerwear_list
         self.search_button = self.view.search_button
+        self.next_page_button = self.view.next_page_button
         self.preview_button = self.view.preview_button
         self.register_button = self.view.register_button
+        self.wildcard_retry_button = self.view.wildcard_retry_button
 
     # {
     #   責務: [_choose_dataset: Tagger captionを含むdataset folderを選択する]
@@ -167,12 +189,17 @@ class CharacterRegistryPanel(ttk.Frame):
     #   引数: [self: panel]
     #   戻り値: []
     # }
-    def _save_paths(self) -> None:
+    def _save_paths(self) -> bool:
+        """Persist both editable path fields, reporting errors to the status line."""
         try:
-            self.settings_store.save(self.dataset_root.get(), self.profile_directory.get())
+            self.settings_store.save(
+                self.dataset_root.get().strip(), self.profile_directory.get().strip()
+            )
             self.status.set("path設定を保存しました。")
+            return True
         except (OSError, ValueError) as error:
             self.status.set(f"path設定の保存に失敗: {error}")
+            return False
 
     # {
     #   責務: [_regenerate_character_id: まだ登録していないCharacter IDを再生成する]
@@ -190,14 +217,38 @@ class CharacterRegistryPanel(ttk.Frame):
     #   戻り値: []
     # }
     def search_civitai(self) -> None:
+        """Start a fresh metadata-only Civitai search for the current query."""
         query = self.civitai_query.get().strip()
         if not query:
             self.status.set("Civitaiの検索語を入力してください。")
             return
+        self._candidate_query = query
+        self._candidate_next_cursor = None
+        self.next_page_button.configure(state="disabled")
         self._start_task(
             "Civitai候補を検索中...",
             lambda: self.messenger.search_civitai_loras(query),
             self._show_candidates,
+        )
+
+    # {
+    #   責務: [next_civitai_page: 現在のCivitai検索の次ページを追加取得する]
+    #   処理: [保持中のquery/cursorをAPIへ渡し, 検索候補へ追加する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def next_civitai_page(self) -> None:
+        """Append the next page of candidates for the current Civitai query."""
+        cursor = self._candidate_next_cursor
+        if not self._candidate_query or not cursor:
+            self.status.set("次のCivitai候補はありません。")
+            return
+        self._candidate_next_cursor = None
+        self.next_page_button.configure(state="disabled")
+        self._start_task(
+            "Civitaiの次ページを取得中...",
+            lambda: self.messenger.search_civitai_loras(self._candidate_query, cursor),
+            lambda result: self._show_candidates(result, append=True),
         )
 
     # {
@@ -209,17 +260,36 @@ class CharacterRegistryPanel(ttk.Frame):
     def _show_candidates(
         self,
         result: tuple[tuple[CivitaiLoraCandidate, ...], str | None],
+        *,
+        append: bool = False,
     ) -> None:
-        candidates, _cursor = result
-        self.candidates = tuple(candidates)
-        self.candidate_list.delete(0, "end")
-        for candidate in self.candidates:
+        """Display candidates and retain the opaque cursor for pagination."""
+        candidates, self._candidate_next_cursor = result
+        current_candidates = list(self.candidates) if append else []
+        known_versions = {(item.model_id, item.version_id) for item in current_candidates}
+        new_candidates = [
+            candidate
+            for candidate in candidates
+            if (candidate.model_id, candidate.version_id) not in known_versions
+        ]
+        current_candidates.extend(new_candidates)
+        self.candidates = tuple(current_candidates)
+        if not append:
+            self.candidate_list.delete(0, "end")
+        for candidate in new_candidates:
             creator = candidate.creator or "作者不明"
             self.candidate_list.insert(
                 "end",
                 f"{candidate.model_name} / {candidate.version_name} — {creator} / {candidate.base_model}",
             )
-        self.status.set(f"Civitai候補: {len(self.candidates)}件。選択は任意です。")
+        self.next_page_button.configure(
+            state="normal" if self._candidate_next_cursor else "disabled"
+        )
+        self.status.set(
+            f"Civitai候補: {len(self.candidates)}件。選択は任意です。"
+            if not self._candidate_next_cursor
+            else f"Civitai候補: {len(self.candidates)}件。次ページを取得できます。"
+        )
 
     # {
     #   責務: [_selected_candidate: candidate listboxの選択versionを返す]
@@ -238,17 +308,42 @@ class CharacterRegistryPanel(ttk.Frame):
     #   戻り値: []
     # }
     def preview_intake(self) -> None:
+        """Validate and persist the form before asynchronously creating a preview."""
         try:
             request = self._build_request()
         except ValueError as error:
             self.status.set(str(error))
             return
+        if not self._save_paths():
+            return
         candidate = self._selected_candidate()
         self._start_task(
             "captionとtag分類を確認中...",
-            lambda: self.messenger.preview_character_intake(request, candidate),
-            self._show_preview,
+            lambda: (
+                request,
+                candidate,
+                self.messenger.preview_character_intake(request, candidate),
+            ),
+            self._show_preview_result,
         )
+
+    # {
+    #   責務: [_show_preview_result: previewとその入力snapshotをcontroller stateへ保存する]
+    #   処理: [request/candidateを保持して, previewを画面へ描画する]
+    #   引数: [self: panel, result: request/candidate/previewのtuple]
+    #   戻り値: []
+    # }
+    def _show_preview_result(
+        self,
+        result: tuple[
+            CharacterTagIntakeRequest,
+            CivitaiLoraCandidate | None,
+            CharacterTagIntakePreview,
+        ],
+    ) -> None:
+        """Keep the exact request snapshot that produced the displayed preview."""
+        self._preview_request, self._preview_candidate, preview = result
+        self._show_preview(preview)
 
     # {
     #   責務: [_build_request: form inputからCharacterTagIntakeRequestを作る]
@@ -258,7 +353,11 @@ class CharacterRegistryPanel(ttk.Frame):
     #   エラー: [ValueError: 必須inputが空またはdatasetが存在しない場合]
     # }
     def _build_request(self) -> CharacterTagIntakeRequest:
-        dataset_root = Path(self.dataset_root.get().strip()).expanduser()
+        """Build a request after validating non-empty form values and dataset path."""
+        dataset_value = self.dataset_root.get().strip()
+        if not dataset_value:
+            raise ValueError("caption folderを選択してください。")
+        dataset_root = Path(dataset_value).expanduser()
         character_id = self.character_id.get().strip()
         display_name = self.display_name.get().strip()
         if not character_id or not display_name:
@@ -275,9 +374,11 @@ class CharacterRegistryPanel(ttk.Frame):
     #   戻り値: []
     # }
     def _show_preview(self, preview: CharacterTagIntakePreview) -> None:
+        """Render suggestions and reset all manual classification lists."""
         self.preview = preview
         self.identity_tags.clear()
         self.outfit_tags.clear()
+        self.innerwear_tags.clear()
         self._render_confirmed_tags()
         self.suggestion_list.delete(0, "end")
         self._suggestions: list[str] = []
@@ -317,6 +418,17 @@ class CharacterRegistryPanel(ttk.Frame):
         self._render_confirmed_tags()
 
     # {
+    #   責務: [_add_innerwear: 選択候補を通常promptへ出さないinnerwearへ追加する]
+    #   処理: [選択tagを重複除去してhidden innerwearへ移動する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def _add_innerwear(self) -> None:
+        """Move selected suggestions into the non-default innerwear category."""
+        self._add_selected_tags(self.innerwear_tags)
+        self._render_confirmed_tags()
+
+    # {
     #   責務: [_add_selected_tags: preview selectionを指定されたconfirmed tag listに追加する]
     #   処理: [選択行indexからtagを抽出し, 未登録tagだけをappendする]
     #   引数: [self: panel, destination: 手動確認済みtag list]
@@ -347,6 +459,16 @@ class CharacterRegistryPanel(ttk.Frame):
         self._remove_selected_tags(self.outfit_tags, self.outfit_list)
 
     # {
+    #   責務: [_remove_innerwear: 選択済みinnerwearを確認内容から外す]
+    #   処理: [selected innerwear rowsを逆順に削除する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def _remove_innerwear(self) -> None:
+        """Remove selected hidden innerwear traits from the confirmation."""
+        self._remove_selected_tags(self.innerwear_tags, self.innerwear_list)
+
+    # {
     #   責務: [_remove_selected_tags: selected tagをconfirmed listから削除する]
     #   処理: [選択indexを逆順に削除し, listboxを再描画する]
     #   引数: [self: panel, tags: 対象tag list, listing: 対象listbox]
@@ -358,8 +480,8 @@ class CharacterRegistryPanel(ttk.Frame):
         self._render_confirmed_tags()
 
     # {
-    #   責務: [_render_confirmed_tags: identity/outfitの確認済み候補をlistboxに反映する]
-    #   処理: [2 listsをtag順のまま再描画する]
+    #   責務: [_render_confirmed_tags: 確認済みidentity/outfit/innerwearをlistboxへ反映する]
+    #   処理: [3 listsをtag順のまま再描画する]
     #   引数: [self: panel]
     #   戻り値: []
     # }
@@ -367,29 +489,33 @@ class CharacterRegistryPanel(ttk.Frame):
         for listing, tags in (
             (self.identity_list, self.identity_tags),
             (self.outfit_list, self.outfit_tags),
+            (self.innerwear_list, self.innerwear_tags),
         ):
             listing.delete(0, "end")
             for tag in tags:
                 listing.insert("end", tag)
 
     # {
-    #   責務: [_add_custom_tag: previewに無い手動修正tagをidentity/outfitへ追加する]
+    #   責務: [_add_custom_tag: previewに無い手動修正tagをidentity/outfit/innerwearへ追加する]
     #   処理: [userのcategoryとcustom textを確認してtag listへ追加する]
     #   引数: [self: panel]
     #   戻り値: []
     # }
     def _add_custom_tag(self) -> None:
+        """Add a manually entered tag to the selected confirmation category."""
         value = simpledialog.askstring("Custom tag", "追加するtagを入力してください。", parent=self)
         if not value:
             return
         category = simpledialog.askstring(
-            "分類先", "identity または outfit を入力してください。", parent=self
+            "分類先", "identity / outfit / innerwear のいずれかを入力してください。", parent=self
         )
-        destination = {"identity": self.identity_tags, "outfit": self.outfit_tags}.get(
-            (category or "").strip().lower()
-        )
+        destination = {
+            "identity": self.identity_tags,
+            "outfit": self.outfit_tags,
+            "innerwear": self.innerwear_tags,
+        }.get((category or "").strip().lower())
         if destination is None:
-            self.status.set("分類先にはidentityまたはoutfitを指定してください。")
+            self.status.set("分類先にはidentity / outfit / innerwearを指定してください。")
             return
         self._append_tags(destination, value)
         self._render_confirmed_tags()
@@ -414,8 +540,22 @@ class CharacterRegistryPanel(ttk.Frame):
     #   戻り値: []
     # }
     def register_profile(self) -> None:
+        """Register only when the current form still matches the shown preview."""
         if self.preview is None:
             self.status.set("先にtag previewを作成してください。")
+            return
+        try:
+            current_request = self._build_request()
+        except ValueError as error:
+            self.status.set(str(error))
+            return
+        if (
+            current_request != self._preview_request
+            or self._selected_candidate() != self._preview_candidate
+        ):
+            self.status.set(
+                "ID・表示名・別名・caption folderまたはCivitai候補が変わりました。previewを作り直してください。"
+            )
             return
         if not self.identity_tags:
             self.status.set("登録するidentity tagを選択してください。")
@@ -423,6 +563,8 @@ class CharacterRegistryPanel(ttk.Frame):
         profile_directory = Path(self.profile_directory.get().strip()).expanduser()
         if not profile_directory.is_absolute():
             self.status.set("profile folderを選択してください。")
+            return
+        if not self._save_paths():
             return
         try:
             confirmation = self._build_confirmation()
@@ -446,9 +588,10 @@ class CharacterRegistryPanel(ttk.Frame):
     #   エラー: [ValueError: outfit tag有りでoutfit情報が不正な場合]
     # }
     def _build_confirmation(self) -> CharacterTagIntakeConfirmation:
+        """Convert the three visible tag categories into confirmed profile data."""
         outfits: tuple[CharacterOutfitProfile, ...] = ()
         default_outfit_id: str | None = None
-        if self.outfit_tags:
+        if self.outfit_tags or self.innerwear_tags:
             outfit_id = self.outfit_id.get().strip()
             outfit_name = self.outfit_name.get().strip()
             if not outfit_id or not outfit_name:
@@ -458,6 +601,7 @@ class CharacterRegistryPanel(ttk.Frame):
                     outfit_id=outfit_id,
                     name=outfit_name,
                     garment_traits=tuple(self.outfit_tags),
+                    innerwear_traits=tuple(self.innerwear_tags),
                     user_confirmed=True,
                 ),
             )
@@ -475,6 +619,9 @@ class CharacterRegistryPanel(ttk.Frame):
     #   戻り値: []
     # }
     def _show_registered_profile(self, profile: CharacterProfile) -> None:
+        """Keep the saved profile and begin exporting its wildcard bundle."""
+        self._registered_profile = profile
+        self._wildcard_retry_enabled = False
         self._start_task(
             "Characterを保存しました。wildcard bundleを書き出しています...",
             lambda: _write_wildcards_and_describe(
@@ -482,7 +629,43 @@ class CharacterRegistryPanel(ttk.Frame):
                 profile,
                 self.wildcard_root,
             ),
-            lambda message: self.status.set(str(message)),
+            self._show_wildcard_export_result,
+        )
+
+    # {
+    #   責務: [_show_wildcard_export_result: wildcard出力結果と再試行可否をUIへ反映する]
+    #   処理: [出力error時に保存済みprofileの再試行buttonを有効にする]
+    #   引数: [self: panel, result: success flagと表示message]
+    #   戻り値: []
+    # }
+    def _show_wildcard_export_result(self, result: tuple[bool, str]) -> None:
+        """Show export status and enable retry only after a file-write failure."""
+        succeeded, message = result
+        self.status.set(message)
+        self._wildcard_retry_enabled = not succeeded
+        self._set_action_state("normal")
+
+    # {
+    #   責務: [retry_wildcard_export: 保存済みprofileのwildcard書き出しだけを再実行する]
+    #   処理: [profileを再登録せず, exporterをworker threadへ依頼する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def retry_wildcard_export(self) -> None:
+        """Retry export for the saved profile without registering it again."""
+        profile = self._registered_profile
+        if profile is None:
+            self.status.set("再出力できる保存済みprofileがありません。")
+            return
+        self._wildcard_retry_enabled = False
+        self._start_task(
+            "保存済みprofileのwildcardを再出力中...",
+            lambda: _write_wildcards_and_describe(
+                self.messenger,
+                profile,
+                self.wildcard_root,
+            ),
+            self._show_wildcard_export_result,
         )
 
     # {
@@ -544,10 +727,20 @@ class CharacterRegistryPanel(ttk.Frame):
 
     # {
     #   責務: [_set_action_state: worker中に操作するbutton群を有効/無効化する]
-    #   処理: [Civitai search, preview, register buttonへ同じstateを設定する]
+    #   処理: [search, preview, register, retry buttonをworker状態に合わせて更新する]
     #   引数: [self: panel, state: Tk button state]
     #   戻り値: []
     # }
     def _set_action_state(self, state: str) -> None:
-        for button in (self.search_button, self.preview_button, self.register_button):
+        """Update action availability while preserving the wildcard retry condition."""
+        for button in (
+            self.search_button,
+            self.next_page_button,
+            self.preview_button,
+            self.register_button,
+        ):
             button.configure(state=state)
+        retry_state = (
+            "normal" if state != "disabled" and self._wildcard_retry_enabled else "disabled"
+        )
+        self.wildcard_retry_button.configure(state=retry_state)

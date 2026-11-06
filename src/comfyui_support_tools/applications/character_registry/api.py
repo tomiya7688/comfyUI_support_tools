@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from .data.processing.character_wildcard_file_store import CharacterWildcardFileStore
 from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     fetch_civitai_lora_version as _fetch_civitai_lora_version,
 )
@@ -33,6 +32,8 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
 )
+
+from .data.processing.character_wildcard_file_store import CharacterWildcardFileStore
 
 
 # {
@@ -134,6 +135,7 @@ def write_character_wildcard_files(
     profile: CharacterProfile,
     wildcard_root: Path,
 ) -> tuple[Path, ...]:
+    """Write the confirmed profile's wildcard files under the configured root."""
     if not isinstance(profile, CharacterProfile):
         raise ValueError("profileはCharacterProfileで指定してください")
     if not isinstance(wildcard_root, Path):

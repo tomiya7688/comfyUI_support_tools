@@ -48,7 +48,7 @@ class CharacterWildcardExportTests(unittest.TestCase):
             )
             self.assertEqual(
                 (root / "character_with_lora/saved_character.txt").read_text(encoding="utf-8"),
-                "__character_lora/saved_character__ __anime_character/saved_character__\n",
+                "__anime_character_lora/saved_character__ __anime_character/saved_character__\n",
             )
 
     # {
@@ -126,7 +126,7 @@ class CharacterWildcardExportTests(unittest.TestCase):
         )
         self.assertEqual(
             files["character_with_lora/character-123.txt"],
-            "__character_lora/character-123__ __anime_character/character-123__\n",
+            "__anime_character_lora/character-123__ __anime_character/character-123__\n",
         )
         self.assertNotIn("hidden camisole", "".join(files.values()))
         self.assertNotIn("unconfirmed blue eyes", "".join(files.values()))

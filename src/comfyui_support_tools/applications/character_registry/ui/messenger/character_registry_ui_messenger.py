@@ -35,9 +35,10 @@ class CharacterRegistryUiMessenger:
     #   戻り値: [tuple[tuple[CivitaiLoraCandidate, ...], str | None]: 候補一覧と次cursor]
     # }
     def search_civitai_loras(
-        self, query: str
+        self, query: str, cursor: str | None = None
     ) -> tuple[tuple[CivitaiLoraCandidate, ...], str | None]:
-        return search_civitai_loras(query, limit=30)
+        """Search one metadata-only Civitai page using the optional next cursor."""
+        return search_civitai_loras(query, limit=30, cursor=cursor)
 
     # {
     #   責務: [preview_character_intake: UIのsourceと選択LoRAから分類previewを取得する]

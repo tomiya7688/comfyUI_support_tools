@@ -5,11 +5,14 @@ from .civitai_lora_candidate import CivitaiLoraCandidate
 
 # {
 #   責務: [CivitaiLoraVersionMetadata: 選択済みLoRA版から取得したtagger登録前のmetadataを保持する]
-#   フィールド: [candidate: model-level利用条件を含むLoRA候補, trained_words: Civitai提供のtrigger word, status/availability: APIの公開状態]
+#   フィールド: [candidate: model-level利用条件を含むLoRA候補, trained_words: 分割済みtrigger word, raw_trained_words: API文字列の原文, status/availability: APIの公開状態]
 # }
 @dataclass(frozen=True)
 class CivitaiLoraVersionMetadata:
+    """Keep normalized trigger tags and original metadata from one selected version."""
+
     candidate: CivitaiLoraCandidate
     trained_words: tuple[str, ...]
     status: str
     availability: str
+    raw_trained_words: str | None = None

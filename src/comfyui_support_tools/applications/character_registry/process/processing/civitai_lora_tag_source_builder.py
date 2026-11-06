@@ -6,7 +6,7 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata im
 
 # {
 #   責務: [build_civitai_tag_source_asset: Civitai trainedWordsを共通source assetへ変換する]
-#   処理: [version metadata, 出典URL, 利用条件flagとtrigger wordsを保持し, 画像なしの候補assetを作る]
+#   処理: [version metadata, 出典URL, 利用条件flag, 分割tagとtrainedWords原文を保持して画像なしassetを作る]
 #   引数: [metadata: Civitaiから取得した選択version metadata]
 #   戻り値: [CharacterSourceAsset: Character tag previewへ渡すsource asset]
 #   エラー: [ValueError: metadataが正しいcontractでない場合]
@@ -14,6 +14,7 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata im
 def build_civitai_tag_source_asset(
     metadata: CivitaiLoraVersionMetadata,
 ) -> CharacterSourceAsset:
+    """Build a provenance-bearing tag asset without fetching model files or images."""
     if not isinstance(metadata, CivitaiLoraVersionMetadata):
         raise ValueError("metadataはCivitaiLoraVersionMetadataで指定してください")
     candidate = metadata.candidate
@@ -30,6 +31,7 @@ def build_civitai_tag_source_asset(
         ("model_mode", candidate.model_mode),
         ("version_status", metadata.status),
         ("availability", metadata.availability),
+        ("trained_words_raw", metadata.raw_trained_words),
     )
     return CharacterSourceAsset(
         caption_file=f"{source_reference}/trainedWords",

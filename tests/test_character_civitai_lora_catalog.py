@@ -11,6 +11,9 @@ from src.comfyui_support_tools.applications.character_registry.api import (
 from src.comfyui_support_tools.applications.character_registry.data.processing import (
     civitai_lora_catalog_client,
 )
+from src.comfyui_support_tools.applications.character_registry.process.processing.civitai_lora_tag_source_builder import (
+    build_civitai_tag_source_asset,
+)
 from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
     CivitaiLoraCandidate,
 )
@@ -178,8 +181,55 @@ class CivitaiLoraCatalogTest(unittest.TestCase):
         metadata = fetch_civitai_lora_version(candidate)
 
         self.assertEqual(metadata.trained_words, ("aoba_moca", "bang_dream"))
+        self.assertIsNone(metadata.raw_trained_words)
         self.assertEqual(metadata.status, "Published")
         self.assertEqual(metadata.candidate.allow_commercial_use, "Image")
+
+    # {
+    #   責務: [test_version_string_trained_words_are_split_and_preserved: comma区切りをtagへ分け原文をprovenanceに残す]
+    #   処理: [Civitai string responseからmetadataとsource assetを作り, 分割tagとraw metadataを確認する]
+    #   引数: [self: unittest.TestCase instance]
+    #   戻り値: []
+    # }
+    @patch.object(
+        civitai_lora_catalog_client,
+        "_read_json",
+        return_value={
+            "id": 456,
+            "modelId": 123,
+            "trainedWords": "  aoba_moca, bang_dream ,  ",
+            "status": "Published",
+            "availability": "Public",
+        },
+    )
+    def test_version_string_trained_words_are_split_and_preserved(self, _read_json) -> None:
+        """Split Civitai string tags and retain their exact source representation."""
+        candidate = CivitaiLoraCandidate(
+            123,
+            456,
+            "Character LoRA",
+            "v1",
+            "artist",
+            "SDXL 1.0",
+            (),
+            "https://civitai.com/models/123?modelVersionId=456",
+            False,
+            "Image",
+            True,
+            False,
+            None,
+        )
+
+        metadata = fetch_civitai_lora_version(candidate)
+        source = build_civitai_tag_source_asset(metadata)
+
+        self.assertEqual(metadata.trained_words, ("aoba_moca", "bang_dream"))
+        self.assertEqual(metadata.raw_trained_words, "  aoba_moca, bang_dream ,  ")
+        self.assertEqual(source.tags, ("aoba_moca", "bang_dream"))
+        self.assertIn(
+            ("trained_words_raw", "  aoba_moca, bang_dream ,  "),
+            source.source_metadata,
+        )
 
     # {
     #   責務: [test_version_rejects_mismatched_model_id: 別modelのversion metadataを拒否する]

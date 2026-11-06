@@ -118,6 +118,7 @@ class CharacterRegistryPanelView(ttk.Frame):
     #   戻り値: []
     # }
     def _build_civitai_search(self) -> None:
+        """Build query, metadata-only result list, and next-page control."""
         search = ttk.LabelFrame(self, text="Civitai LoRA候補（metadata only）", padding=8)
         search.grid(row=2, column=0, sticky="ew", pady=(6, 0))
         search.columnconfigure(0, weight=1)
@@ -129,6 +130,13 @@ class CharacterRegistryPanelView(ttk.Frame):
         )
         self.search_button = ttk.Button(row, text="検索", command=self.actions["search_civitai"])
         self.search_button.grid(row=0, column=1, padx=(6, 0))
+        self.next_page_button = ttk.Button(
+            row,
+            text="次の候補",
+            command=self.actions["next_civitai_page"],
+            state="disabled",
+        )
+        self.next_page_button.grid(row=0, column=2, padx=(6, 0))
         self.candidate_list = tk.Listbox(search, height=3, exportselection=False)
         self.candidate_list.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         ttk.Label(
@@ -138,21 +146,23 @@ class CharacterRegistryPanelView(ttk.Frame):
         ).grid(row=2, column=0, sticky="w", pady=(4, 0))
 
     # {
-    #   責務: [_build_review_columns: 候補と手動確認済みタグの3列を配置する]
-    #   処理: [source suggestions, identity, outfit listboxと操作buttonを表示する]
+    #   責務: [_build_review_columns: 候補と手動確認済みtagの4列を配置する]
+    #   処理: [候補, identity, outfit, hidden innerwear listboxと操作buttonを表示する]
     #   引数: [self: view]
     #   戻り値: []
     # }
     def _build_review_columns(self) -> None:
+        """Build candidate, identity, outfit, and hidden-innerwear lists."""
         review = ttk.LabelFrame(self, text="タグ分類の確認", padding=8)
         review.grid(row=3, column=0, sticky="nsew", pady=(6, 0))
-        for column in range(3):
+        for column in range(4):
             review.columnconfigure(column, weight=1)
         self.suggestion_list = self._add_listbox(review, 0, "候補（未確認）")
         self.identity_list = self._add_listbox(review, 1, "identity（登録対象）")
-        self.outfit_list = self._add_listbox(review, 2, "outfit（登録対象）")
+        self.outfit_list = self._add_listbox(review, 2, "outfit（通常prompt）")
+        self.innerwear_list = self._add_listbox(review, 3, "innerwear（通常promptには出さない）")
         controls = ttk.Frame(review)
-        controls.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(5, 0))
+        controls.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(5, 0))
         self.preview_button = ttk.Button(
             controls,
             text="タグpreviewを作成",
@@ -162,8 +172,10 @@ class CharacterRegistryPanelView(ttk.Frame):
         button_actions = (
             ("選択 → identity", "add_identity"),
             ("選択 → outfit", "add_outfit"),
+            ("選択 → innerwear", "add_innerwear"),
             ("identityから削除", "remove_identity"),
             ("outfitから削除", "remove_outfit"),
+            ("innerwearから削除", "remove_innerwear"),
             ("custom tag追加", "add_custom_tag"),
         )
         for label, action_name in button_actions:
@@ -198,6 +210,7 @@ class CharacterRegistryPanelView(ttk.Frame):
     #   戻り値: []
     # }
     def _build_actions(self) -> None:
+        """Build outfit details, registration, export retry, and status controls."""
         actions = ttk.LabelFrame(self, text="登録", padding=8)
         actions.grid(row=4, column=0, sticky="ew", pady=(6, 0))
         ttk.Label(actions, text="outfit ID").grid(row=0, column=0, sticky="w")
@@ -214,6 +227,13 @@ class CharacterRegistryPanelView(ttk.Frame):
             command=self.actions["register_profile"],
         )
         self.register_button.grid(row=0, column=4, padx=(8, 4))
+        self.wildcard_retry_button = ttk.Button(
+            actions,
+            text="wildcard出力を再試行",
+            command=self.actions["retry_wildcard_export"],
+            state="disabled",
+        )
+        self.wildcard_retry_button.grid(row=0, column=5, padx=(4, 4))
         ttk.Label(actions, textvariable=self.variables["status"]).grid(
-            row=1, column=0, columnspan=5, sticky="w", pady=(6, 0)
+            row=1, column=0, columnspan=6, sticky="w", pady=(6, 0)
         )

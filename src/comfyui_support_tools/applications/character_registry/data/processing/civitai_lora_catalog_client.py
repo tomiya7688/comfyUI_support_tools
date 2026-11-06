@@ -124,6 +124,22 @@ def _string_tuple(payload: dict[str, object], field: str) -> tuple[str, ...]:
 
 
 # {
+#   責務: [_trained_words: Civitai trainedWordsをタグtupleと原文へ変換する]
+#   処理: [comma区切り文字列はtrimして分割し, listは従来どおり検証する]
+#   引数: [payload: Civitai version response]
+#   戻り値: [tuple[tuple[str, ...], str | None]: trigger tagと元文字列]
+#   エラー: [RuntimeError: trainedWordsの型またはlist要素が不正な場合]
+# }
+def _trained_words(payload: dict[str, object]) -> tuple[tuple[str, ...], str | None]:
+    """Normalize Civitai trainedWords while preserving string-form provenance."""
+    value = payload.get("trainedWords", [])
+    if isinstance(value, str):
+        tags = tuple(tag.strip() for tag in value.split(",") if tag.strip())
+        return tags, value
+    return _string_tuple(payload, "trainedWords"), None
+
+
+# {
 #   責務: [_candidate_from_model_version: modelとversion summaryからLoRA候補を作る]
 #   処理: [LoRA種別, IDs, 作者, base model, tags, 利用条件とsource URLを検証してdomain contractへ写す]
 #   引数: [model: Civitai model response, version: modelVersions entry]
@@ -218,7 +234,7 @@ def search_civitai_loras(
 
 # {
 #   責務: [fetch_civitai_lora_version: 選択したCivitai LoRA versionのtrainedWordsを取得する]
-#   処理: [candidate IDでversion endpointを取得し, 返却IDとmodel IDを照合してmetadataを返す]
+#   処理: [candidate IDでversion endpointを取得し, identityを照合してtrainedWordsを分割し原文を保持する]
 #   引数: [candidate: search結果から選択したLoRA version]
 #   戻り値: [CivitaiLoraVersionMetadata: trained words, publication status, availability付きmetadata]
 #   エラー: [ValueError: candidateが不正, RuntimeError: API通信/schema/ID照合が失敗した場合]
@@ -226,6 +242,7 @@ def search_civitai_loras(
 def fetch_civitai_lora_version(
     candidate: CivitaiLoraCandidate,
 ) -> CivitaiLoraVersionMetadata:
+    """Fetch one version's normalized trainedWords and retain string provenance."""
     if not isinstance(candidate, CivitaiLoraCandidate):
         raise ValueError("candidateはCivitaiLoraCandidateで指定してください")
     payload = _read_json(f"{_API_ROOT}/model-versions/{candidate.version_id}")
@@ -233,9 +250,11 @@ def fetch_civitai_lora_version(
         raise RuntimeError("Civitai APIが要求したものと異なるversionを返しました")
     if _required_positive_integer(payload, "modelId") != candidate.model_id:
         raise RuntimeError("Civitai API versionがcandidateのmodel IDと一致しません")
+    trained_words, raw_trained_words = _trained_words(payload)
     return CivitaiLoraVersionMetadata(
         candidate=candidate,
-        trained_words=_string_tuple(payload, "trainedWords"),
+        trained_words=trained_words,
         status=_required_text(payload, "status"),
         availability=_required_text(payload, "availability"),
+        raw_trained_words=raw_trained_words,
     )

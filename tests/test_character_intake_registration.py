@@ -1,8 +1,11 @@
 """Tests for saving manually confirmed Character Registry intake results."""
 
+import multiprocessing
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from typing import Any
 
 from src.comfyui_support_tools.applications.character_registry.api import (
     register_character_intake,
@@ -16,6 +19,7 @@ from src.comfyui_support_tools.shared.contracts.character_outfit_profile import 
 from src.comfyui_support_tools.shared.contracts.character_outfit_tag_group import (
     CharacterOutfitTagGroup,
 )
+from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
 from src.comfyui_support_tools.shared.contracts.character_source_asset import CharacterSourceAsset
 from src.comfyui_support_tools.shared.contracts.character_tag_candidate import (
     CharacterTagCandidate,
@@ -26,6 +30,48 @@ from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmatio
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview import (
     CharacterTagIntakePreview,
 )
+
+
+# {
+#   責務: [_register_in_process: childからprofile登録結果をparentへ返す]
+#   処理: [saveを遅延させ, success/FileExistsErrorをresult queueへ送る]
+#   引数: [start_event/result_queue: process sync, preview/confirmation: intake contract, profile_directory: 保存root]
+#   戻り値: []
+# }
+def _register_in_process(
+    start_event: Any,
+    result_queue: Any,
+    preview: CharacterTagIntakePreview,
+    confirmation: CharacterTagIntakeConfirmation,
+    profile_directory: str,
+) -> None:
+    """Run one competing registration after both child processes are ready."""
+    original_save = CharacterProfileStore.save
+
+    # {
+    #   責務: [delayed_save: 保存を遅らせて同時登録のrace windowを広げる]
+    #   処理: [少し待ってから元のatomic saveを呼ぶ]
+    #   引数: [store: profile store, profile: 保存するCharacterProfile]
+    #   戻り値: [Path: 保存先]
+    # }
+    def delayed_save(store: CharacterProfileStore, profile: CharacterProfile) -> Path:
+        """Widen the save race window while preserving the original file operation."""
+        time.sleep(0.4)
+        return original_save(store, profile)
+
+    CharacterProfileStore.save = delayed_save
+    result_queue.put("ready")
+    if not start_event.wait(timeout=10):
+        result_queue.put("start-timeout")
+        return
+    try:
+        profile = register_character_intake(preview, confirmation, Path(profile_directory))
+    except FileExistsError:
+        result_queue.put("exists")
+    except Exception as error:
+        result_queue.put(f"error:{type(error).__name__}:{error}")
+    else:
+        result_queue.put(("saved", profile.confirmed_core_traits))
 
 
 # {
@@ -123,16 +169,71 @@ class CharacterIntakeRegistrationTest(unittest.TestCase):
     #   戻り値: []
     # }
     def test_registration_rejects_existing_character_id(self) -> None:
+        """Verify a rejected duplicate cannot replace the first stored profile."""
         preview = self._preview()
         confirmation = CharacterTagIntakeConfirmation(confirmed_identity_traits=("blue_hair",))
 
         with tempfile.TemporaryDirectory() as temporary_directory:
-            register_character_intake(preview, confirmation, Path(temporary_directory))
+            original = register_character_intake(preview, confirmation, Path(temporary_directory))
+            duplicate = CharacterTagIntakeConfirmation(confirmed_identity_traits=("red_hair",))
             with self.assertRaises(FileExistsError):
-                register_character_intake(preview, confirmation, Path(temporary_directory))
+                register_character_intake(preview, duplicate, Path(temporary_directory))
             restored = CharacterProfileStore(temporary_directory).load(preview.character_id)
 
-        self.assertEqual(restored.confirmed_core_traits, ("blue_hair",))
+        self.assertEqual(restored, original)
+
+    # {
+    #   責務: [test_concurrent_registration_allows_only_one_process: 同一IDのprocess競合で一件だけ保存する]
+    #   処理: [二つのspawn processを同時開始し, success一件とFileExistsError一件を確認する]
+    #   引数: [self: unittest.TestCase instance]
+    #   戻り値: []
+    # }
+    def test_concurrent_registration_allows_only_one_process(self) -> None:
+        """Verify process-level locking permits exactly one registration for an ID."""
+        preview = self._preview()
+        first_confirmation = CharacterTagIntakeConfirmation(
+            confirmed_identity_traits=("blue_hair",)
+        )
+        second_confirmation = CharacterTagIntakeConfirmation(
+            confirmed_identity_traits=("red_hair",)
+        )
+        context = multiprocessing.get_context("spawn")
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            start_event = context.Event()
+            result_queue = context.Queue()
+            processes = [
+                context.Process(
+                    target=_register_in_process,
+                    args=(start_event, result_queue, preview, confirmation, temporary_directory),
+                )
+                for confirmation in (first_confirmation, second_confirmation)
+            ]
+            for process in processes:
+                process.start()
+            try:
+                ready_states = [result_queue.get(timeout=15) for _ in processes]
+            finally:
+                start_event.set()
+            self.assertEqual(ready_states, ["ready", "ready"])
+            for process in processes:
+                process.join(timeout=15)
+                if process.is_alive():
+                    process.terminate()
+                    process.join(timeout=5)
+                    self.fail("registration child process did not finish")
+                self.assertEqual(process.exitcode, 0)
+
+            outcomes = [result_queue.get(timeout=3) for _ in processes]
+            result_queue.close()
+            result_queue.join_thread()
+            restored = CharacterProfileStore(temporary_directory).load(preview.character_id)
+
+        self.assertEqual(
+            sum(isinstance(outcome, tuple) and outcome[0] == "saved" for outcome in outcomes), 1
+        )
+        self.assertEqual(outcomes.count("exists"), 1)
+        self.assertIn(restored.confirmed_core_traits, (("blue_hair",), ("red_hair",)))
 
     # {
     #   責務: [test_confirmation_rejects_unconfirmed_outfit: 自動推定だけでoutfit登録させないことを検証する]

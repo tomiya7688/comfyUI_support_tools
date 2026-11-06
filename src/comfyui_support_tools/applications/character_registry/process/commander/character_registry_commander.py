@@ -9,6 +9,7 @@ from src.comfyui_support_tools.applications.character_registry.process.messenger
 from src.comfyui_support_tools.applications.character_registry.process.messenger.civitai_lora_catalog_requests import (
     load_selected_civitai_lora_version,
     search_civitai_lora_candidates,
+    tag_selected_civitai_preview_images,
 )
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_profile_registration_builder import (
     build_confirmed_character_profile,
@@ -34,6 +35,10 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 )
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
+)
+from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
+from src.comfyui_support_tools.shared.contracts.civitai_preview_image import (
+    MAX_TAGGER_ANALYSIS_IMAGES,
 )
 
 
@@ -67,23 +72,34 @@ def fetch_civitai_lora_version(
 
 # {
 #   責務: [preview_character_intake: local/Civitai source取得とtag分類の処理順を調整する]
-#   処理: [local sourceを取得し, 選択時はCivitai model tagsとtrainedWordsを追加して共通previewへ渡す]
-#   引数: [request: Character Registry intake request, civitai_candidate: 任意のLoRA version候補]
+#   処理: [local sourceとCivitai metadataを取得し, 明示時だけpreview imageをloopback Taggerへ送り共通previewへ渡す]
+#   引数: [request: intake request, civitai_candidate: 任意LoRA version, tagger_settings: 任意loopback設定]
 #   戻り値: [CharacterTagIntakePreview: provenance付き分類候補]
 # }
 def preview_character_intake(
     request: CharacterTagIntakeRequest,
     civitai_candidate: CivitaiLoraCandidate | None = None,
+    tagger_settings: TaggerSettings | None = None,
 ) -> CharacterTagIntakePreview:
     """Build a manual review preview from local captions and selected Civitai metadata."""
     assets, warnings = load_character_sources(request.dataset_root)
     if civitai_candidate is not None:
         metadata = load_selected_civitai_lora_version(civitai_candidate)
         assets = (*assets, *build_civitai_tag_source_assets(metadata))
+        if tagger_settings is not None:
+            assets = (*assets, *tag_selected_civitai_preview_images(metadata, tagger_settings))
         warnings = (
             *warnings,
             "Civitai model tagsとtrainedWordsは投稿者由来の候補です。画像で確認できた特徴とは限らないため、分類を確認してください。",
         )
+        if (
+            tagger_settings is not None
+            and len(metadata.preview_images) > MAX_TAGGER_ANALYSIS_IMAGES
+        ):
+            warnings = (
+                *warnings,
+                f"Tagger解析は先頭{MAX_TAGGER_ANALYSIS_IMAGES}枚だけを対象にしました。候補画像のうち残りは未解析です。",
+            )
     return build_character_tag_preview(request, assets, warnings)
 
 

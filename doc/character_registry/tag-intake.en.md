@@ -34,13 +34,15 @@ An optional `manifest.json` uses this shape:
 ## Current limitations
 
 - Civitai discovery uses its official anonymous REST API and reads LoRA model/version metadata, creator, base model, usage permissions, model tags, and trained words. Permission values are preserved as returned; missing values remain unknown.
-- Civitai access is JSON API only. It does not crawl HTML, download images or LoRA weights, or register training assets automatically. A person must verify the usage conditions and provenance before registration.
+- Civitai access is JSON API only. For a selected version, it retains preview CDN URL, image ID, and API browsing level as references. Only when the UI checkbox is explicitly selected, up to eight images are fetched transiently in memory and sent to a loopback Tagger API; image bytes are not saved. It never fetches LoRA weights, crawls HTML, or registers training assets automatically.
 - Tag categories remain suggestions; the Character Registry UI lets a person correct and confirm them before profile registration.
 - It does not scan managed training materials or user data automatically. It reads only the dataset root explicitly supplied by its caller.
 
 ## Civitai candidate API
 
-`search_civitai_loras(query, limit=20, cursor=None)` returns search results per version and an opaque cursor when another page is available. `fetch_civitai_lora_version(candidate)` retrieves `trainedWords` and publication state for the selected version. It follows the Civitai API's rate limits and returns HTTP errors, including 429, to the caller without automatic retries.
+`search_civitai_loras(query, limit=20, cursor=None)` returns search results per version and an opaque cursor when another page is available. `fetch_civitai_lora_version(candidate)` retrieves `trainedWords`, publication state, and preview image reference metadata for the selected version. Preview URLs are limited to `https://*.civitai.com/`, and duplicate image IDs are removed. It follows the Civitai API's rate limits and returns HTTP errors, including 429, to the caller without automatic retries.
+
+Select “Analyze selected version preview images with Tagger” in the Character Registry UI and provide a local Tagger API URL plus an optional model. The first eight API-visible images are sent to the Tagger and returned as per-image source-tag candidates. An empty model selects the first model reported by the API. The destination must be a credential-free loopback endpoint, and image URLs are restricted to HTTPS `image.civitai.com` or `imagecache.civitai.com`. API browsing level is not treated as permission to use an image or to train on it; source rights stay `unknown`.
 
 `preview_character_intake(request, civitai_candidate=...)` adds `model tags` and `trainedWords` from an explicitly selected version as separate sources to the same identity/outfit/context/unclassified preview used for local captions. The Civitai sources keep a stable `civitai://` reference, source page URL, creator, base model, and API usage-permission flags. License and training permission remain unverified; the flags alone do not establish permission. Tags without images are suggestions, not visual evidence, and require manual review.
 

@@ -184,6 +184,102 @@ class CivitaiLoraCatalogTest(unittest.TestCase):
         self.assertIsNone(metadata.raw_trained_words)
         self.assertEqual(metadata.status, "Published")
         self.assertEqual(metadata.candidate.allow_commercial_use, "Image")
+        self.assertEqual(metadata.preview_images, ())
+
+    # {
+    #   責務: [test_version_metadata_keeps_safe_preview_references_without_fetching_images: 安全な画像参照だけを保持する]
+    #   処理: [合成API responseから画像ID, CDN URL, 閲覧levelがmetadataへ写り, bytes取得が起きないことを確認する]
+    #   引数: [self: unittest.TestCase instance]
+    #   戻り値: []
+    # }
+    @patch.object(
+        civitai_lora_catalog_client,
+        "_read_json",
+        return_value={
+            "id": 456,
+            "modelId": 123,
+            "trainedWords": ["aoba_moca"],
+            "status": "Published",
+            "availability": "Public",
+            "images": [
+                {
+                    "id": 789,
+                    "url": "https://image.civitai.com/example/width=450/image.webp",
+                    "nsfwLevel": 1,
+                },
+                {
+                    "id": 789,
+                    "url": "https://image.civitai.com/example/width=450/image.webp",
+                    "nsfwLevel": 1,
+                },
+            ],
+        },
+    )
+    def test_version_metadata_keeps_safe_preview_references_without_fetching_images(
+        self, read_json
+    ) -> None:
+        candidate = CivitaiLoraCandidate(
+            123,
+            456,
+            "Character LoRA",
+            "v1",
+            "artist",
+            "SDXL 1.0",
+            (),
+            "https://civitai.com/models/123?modelVersionId=456",
+            False,
+            "Image",
+            True,
+            False,
+            None,
+        )
+
+        metadata = fetch_civitai_lora_version(candidate)
+
+        self.assertEqual(len(metadata.preview_images), 1)
+        self.assertEqual(metadata.preview_images[0].image_id, 789)
+        self.assertEqual(metadata.preview_images[0].nsfw_level, 1)
+        self.assertEqual(
+            metadata.preview_images[0].url, "https://image.civitai.com/example/width=450/image.webp"
+        )
+        read_json.assert_called_once()
+
+    # {
+    #   責務: [test_version_metadata_rejects_non_civitai_preview_urls: 任意host画像URLを拒否する]
+    #   処理: [悪意あるremote URLを含むAPI responseをRuntimeErrorにする]
+    #   引数: [self: unittest.TestCase instance]
+    #   戻り値: []
+    # }
+    @patch.object(
+        civitai_lora_catalog_client,
+        "_read_json",
+        return_value={
+            "id": 456,
+            "modelId": 123,
+            "trainedWords": [],
+            "status": "Published",
+            "availability": "Public",
+            "images": [{"id": 789, "url": "https://example.invalid/image.webp", "nsfwLevel": 1}],
+        },
+    )
+    def test_version_metadata_rejects_non_civitai_preview_urls(self, _read_json) -> None:
+        candidate = CivitaiLoraCandidate(
+            123,
+            456,
+            "Character LoRA",
+            "v1",
+            "artist",
+            "SDXL 1.0",
+            (),
+            "https://civitai.com/models/123?modelVersionId=456",
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        with self.assertRaisesRegex(RuntimeError, "civitai.com"):
+            fetch_civitai_lora_version(candidate)
 
     # {
     #   責務: [test_version_string_trained_words_are_split_and_preserved: comma区切りをtagへ分け原文をprovenanceに残す]

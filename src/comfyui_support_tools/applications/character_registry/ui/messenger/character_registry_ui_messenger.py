@@ -20,6 +20,7 @@ from src.comfyui_support_tools.shared.contracts.character_tag_intake_request imp
 from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
     CivitaiLoraCandidate,
 )
+from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
 
 
 # {
@@ -51,8 +52,9 @@ class CharacterRegistryUiMessenger:
         self,
         request: CharacterTagIntakeRequest,
         candidate: CivitaiLoraCandidate | None,
+        tagger_settings: TaggerSettings | None = None,
     ) -> CharacterTagIntakePreview:
-        return preview_character_intake(request, candidate)
+        return preview_character_intake(request, candidate, tagger_settings)
 
     # {
     #   責務: [register_character_intake: 手動確認内容をCharacterProfileとして登録する]

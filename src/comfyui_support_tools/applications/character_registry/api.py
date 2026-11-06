@@ -35,6 +35,7 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
 )
+from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
 
 from .data.processing.character_wildcard_file_store import CharacterWildcardFileStore
 
@@ -71,14 +72,15 @@ def fetch_civitai_lora_version(
 
 # {
 #   責務: [preview_character_intake: API入力を検証して登録候補previewを返す]
-#   処理: [character ID/display name/root/Civitai candidateを検証し, process commanderへ委譲する]
-#   引数: [request: Character Registry intake request, civitai_candidate: 任意のLoRA version候補]
+#   処理: [character ID/display name/root/Civitai candidate/任意Tagger設定を検証し, process commanderへ委譲する]
+#   引数: [request: Character Registry intake request, civitai_candidate: 任意LoRA version, tagger_settings: 任意loopback Tagger設定]
 #   戻り値: [CharacterTagIntakePreview: identity/outfit/context/unclassified候補とsource provenance]
 #   エラー: [ValueError: ID, name, root, candidateが不正な場合, RuntimeError: 選択版metadataの取得に失敗した場合]
 # }
 def preview_character_intake(
     request: CharacterTagIntakeRequest,
     civitai_candidate: CivitaiLoraCandidate | None = None,
+    tagger_settings: TaggerSettings | None = None,
 ) -> CharacterTagIntakePreview:
     """Return identity/outfit/unclassified tag suggestions for manual review."""
     if not is_valid_character_id(request.character_id):
@@ -89,7 +91,9 @@ def preview_character_intake(
         raise ValueError("dataset_root must be a pathlib.Path")
     if civitai_candidate is not None and not isinstance(civitai_candidate, CivitaiLoraCandidate):
         raise ValueError("civitai_candidateはCivitaiLoraCandidateで指定してください")
-    return _preview_character_intake(request, civitai_candidate)
+    if tagger_settings is not None and not isinstance(tagger_settings, TaggerSettings):
+        raise ValueError("tagger_settingsはTaggerSettingsで指定してください")
+    return _preview_character_intake(request, civitai_candidate, tagger_settings)
 
 
 # {

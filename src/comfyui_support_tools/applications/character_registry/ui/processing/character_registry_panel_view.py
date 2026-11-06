@@ -4,6 +4,10 @@ import tkinter as tk
 from collections.abc import Callable, Mapping
 from tkinter import ttk
 
+from src.comfyui_support_tools.shared.contracts.civitai_preview_image import (
+    MAX_TAGGER_ANALYSIS_IMAGES,
+)
+
 
 # {
 #   責務: [CharacterRegistryPanelView: Character Registry intake controllerのTk widgetsを構築する]
@@ -140,13 +144,13 @@ class CharacterRegistryPanelView(ttk.Frame):
 
     # {
     #   責務: [_build_civitai_search: Civitai queryとversion候補欄を配置する]
-    #   処理: [検索field, button,候補listboxとmetadata説明を配置する]
+    #   処理: [検索field, version候補, optional loopback Tagger設定を配置する]
     #   引数: [self: view]
     #   戻り値: []
     # }
     def _build_civitai_search(self) -> None:
-        """Build query, metadata-only result list, and next-page control."""
-        search = ttk.LabelFrame(self, text="Civitai LoRA候補（metadata only）", padding=8)
+        """Build query, version candidates, optional Tagger settings, and pagination."""
+        search = ttk.LabelFrame(self, text="Civitai LoRA候補とpreview画像", padding=8)
         search.grid(row=2, column=0, sticky="ew", pady=(6, 0))
         search.columnconfigure(0, weight=1)
         row = ttk.Frame(search)
@@ -168,9 +172,27 @@ class CharacterRegistryPanelView(ttk.Frame):
         self.candidate_list.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         ttk.Label(
             search,
-            text="重み・画像は取得しません。selected versionのtrainedWordsだけをpreviewに使います。",
+            text=f"LoRA重みは取得しません。画像Tagger解析はチェック時のみ、最大{MAX_TAGGER_ANALYSIS_IMAGES}枚をローカルAPIへ送ります。",
             wraplength=850,
         ).grid(row=2, column=0, sticky="w", pady=(4, 0))
+        tagger = ttk.Frame(search)
+        tagger.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        tagger.columnconfigure(1, weight=1)
+        ttk.Checkbutton(
+            tagger,
+            text="選択版のpreview画像をTaggerで解析する",
+            variable=self.variables["analyze_civitai_images"],
+            onvalue="1",
+            offvalue="0",
+        ).grid(row=0, column=0, columnspan=3, sticky="w")
+        ttk.Label(tagger, text="loopback Tagger API").grid(row=1, column=0, sticky="w")
+        ttk.Entry(tagger, textvariable=self.variables["tagger_url"]).grid(
+            row=1, column=1, sticky="ew", padx=(4, 8)
+        )
+        ttk.Label(tagger, text="model（空欄は先頭）").grid(row=1, column=2, sticky="w")
+        ttk.Entry(tagger, textvariable=self.variables["tagger_model"], width=24).grid(
+            row=1, column=3, sticky="ew", padx=(4, 0)
+        )
 
     # {
     #   責務: [_build_review_columns: 候補と手動確認済みtagの4列を配置する]

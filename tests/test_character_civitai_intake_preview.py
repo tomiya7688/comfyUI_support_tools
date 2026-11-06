@@ -20,6 +20,7 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
 )
+from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
 
 
 # {
@@ -167,3 +168,57 @@ class CivitaiTagIntakePreviewTest(unittest.TestCase):
         self.assertEqual(preview.source_assets, ())
         self.assertEqual(preview.identity_candidates, ())
         load_civitai_version.assert_not_called()
+
+    # {
+    #   責務: [test_preview_merges_local_tagger_image_tags_into_identity_and_outfit: local Tagger結果を分類previewへ加える]
+    #   処理: [Civitai per-image tag sourcesを注入し, hair/outfit/context候補とprovenanceを分類する]
+    #   引数: [self: unittest.TestCase]
+    #   戻り値: []
+    # }
+    def test_preview_merges_local_tagger_image_tags_into_identity_and_outfit(self) -> None:
+        request = CharacterTagIntakeRequest("sample_character", "Sample", (), Path("dataset"))
+        tagger_asset = CharacterSourceAsset(
+            "civitai://models/123/versions/456/images/789/tagger",
+            None,
+            ("blue_hair", "school_uniform", "sitting", "unknown_visual_tag"),
+            None,
+            self._candidate().source_url,
+            "123:456",
+            "unknown",
+            "unknown",
+            (("tag_source", "civitai_preview_tagger"), ("tagger_model", "fixture-model")),
+        )
+        settings = TaggerSettings("http://127.0.0.1:7861/pixai/v1/interrogate", "fixture-model")
+        with (
+            patch.object(
+                character_registry_commander,
+                "load_selected_civitai_lora_version",
+                return_value=self._metadata(),
+            ),
+            patch.object(
+                character_registry_commander,
+                "tag_selected_civitai_preview_images",
+                return_value=(tagger_asset,),
+            ) as tag_civitai_images,
+            patch.object(
+                character_registry_commander,
+                "load_character_sources",
+                return_value=((), ()),
+            ),
+        ):
+            preview = preview_character_intake(request, self._candidate(), settings)
+
+        self.assertEqual({item.tag for item in preview.identity_candidates}, {"blue_hair"})
+        outfit = next(group for group in preview.outfit_groups if group.is_unassigned)
+        self.assertEqual({item.tag for item in outfit.tags}, {"school_uniform", "shirt"})
+        self.assertEqual([item.tag for item in preview.context_candidates], ["sitting"])
+        self.assertEqual(
+            {item.tag for item in preview.unclassified_candidates},
+            {"custom_character_trigger", "unknown_visual_tag"},
+        )
+        source = next(
+            item for item in preview.source_assets if item.caption_file.endswith("/tagger")
+        )
+        self.assertEqual(source.license_status, "unknown")
+        self.assertIn(("tagger_model", "fixture-model"), source.source_metadata)
+        tag_civitai_images.assert_called_once_with(self._metadata(), settings)

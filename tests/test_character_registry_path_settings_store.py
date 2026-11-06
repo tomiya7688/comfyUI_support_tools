@@ -27,7 +27,12 @@ class CharacterRegistryPathSettingsStoreTest(unittest.TestCase):
 
             self.assertEqual(
                 store.load(),
-                {"dataset_root": "", "profile_directory": ""},
+                {
+                    "dataset_root": "",
+                    "profile_directory": "",
+                    "tagger_url": "http://127.0.0.1:7861/pixai/v1/interrogate",
+                    "tagger_model": "",
+                },
             )
 
     # {
@@ -43,6 +48,8 @@ class CharacterRegistryPathSettingsStoreTest(unittest.TestCase):
             expected = {
                 "dataset_root": str(Path(directory) / "dataset"),
                 "profile_directory": str(Path(directory) / "profiles"),
+                "tagger_url": "http://127.0.0.1:9000/tagger/v1/interrogate",
+                "tagger_model": "wd14-convnext",
             }
 
             store.save(**expected)

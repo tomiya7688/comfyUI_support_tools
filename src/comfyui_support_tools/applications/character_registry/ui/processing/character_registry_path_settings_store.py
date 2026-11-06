@@ -6,6 +6,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+DEFAULT_TAGGER_URL = "http://127.0.0.1:7861/pixai/v1/interrogate"
+
 
 # {
 #   責務: [CharacterRegistryPathSettingsStore: UIのdataset/profile pathを明示されたuser_data JSONへ保存する]
@@ -37,26 +39,44 @@ class CharacterRegistryPathSettingsStore:
             raise ValueError(f"Character Registry path設定を読めません: {error}") from error
         if not isinstance(value, dict):
             raise ValueError("Character Registry path設定はJSON objectである必要があります")
-        dataset_root = value.get("dataset_root", "")
-        profile_directory = value.get("profile_directory", "")
-        if not isinstance(dataset_root, str) or not isinstance(profile_directory, str):
-            raise ValueError("dataset_rootとprofile_directoryは文字列で指定してください")
-        return {"dataset_root": dataset_root, "profile_directory": profile_directory}
+        fields = {
+            "dataset_root": value.get("dataset_root", ""),
+            "profile_directory": value.get("profile_directory", ""),
+            "tagger_url": value.get("tagger_url", DEFAULT_TAGGER_URL),
+            "tagger_model": value.get("tagger_model", ""),
+        }
+        if any(not isinstance(field, str) for field in fields.values()):
+            raise ValueError("Character Registry pathとTagger設定は文字列で指定してください")
+        return fields
 
     # {
-    #   責務: [save: dataset/profile pathをatomicにuser_data JSONへ保存する]
+    #   責務: [save: dataset/profile/Tagger設定をatomicにuser_data JSONへ保存する]
     #   処理: [親directoryを作り, temporary fileからos.replaceで置換する]
-    #   引数: [self: settings store, dataset_root: caption dataset root, profile_directory: profile storage root]
+    #   引数: [self: settings store, dataset_root/profile_directory: path, tagger_url/model: loopback Tagger設定]
     #   戻り値: []
     #   エラー: [OSError: 設定fileを安全に保存できない場合, ValueError: 値が文字列でない場合]
     # }
-    def save(self, dataset_root: str, profile_directory: str) -> None:
-        if not isinstance(dataset_root, str) or not isinstance(profile_directory, str):
-            raise ValueError("dataset_rootとprofile_directoryは文字列で指定してください")
+    def save(
+        self,
+        dataset_root: str,
+        profile_directory: str,
+        tagger_url: str = DEFAULT_TAGGER_URL,
+        tagger_model: str = "",
+    ) -> None:
+        if any(
+            not isinstance(value, str)
+            for value in (dataset_root, profile_directory, tagger_url, tagger_model)
+        ):
+            raise ValueError("Character Registry pathとTagger設定は文字列で指定してください")
         parent = self._settings_path.parent
         parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(
-            {"dataset_root": dataset_root, "profile_directory": profile_directory},
+            {
+                "dataset_root": dataset_root,
+                "profile_directory": profile_directory,
+                "tagger_url": tagger_url,
+                "tagger_model": tagger_model,
+            },
             ensure_ascii=False,
             indent=2,
         )

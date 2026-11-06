@@ -2,6 +2,9 @@ from src.comfyui_support_tools.applications.character_registry.data.messenger.ci
     load_civitai_lora_version as _load_civitai_lora_version,
 )
 from src.comfyui_support_tools.applications.character_registry.data.messenger.civitai_lora_catalog_messenger import (
+    tag_civitai_preview_sources as _tag_civitai_preview_sources,
+)
+from src.comfyui_support_tools.applications.character_registry.data.messenger.civitai_lora_catalog_messenger import (
     search_civitai_lora_catalog as _search_civitai_lora_catalog,
 )
 from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
@@ -10,6 +13,8 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
 )
+from src.comfyui_support_tools.shared.contracts.character_source_asset import CharacterSourceAsset
+from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
 
 
 # {
@@ -38,3 +43,17 @@ def load_selected_civitai_lora_version(
     candidate: CivitaiLoraCandidate,
 ) -> CivitaiLoraVersionMetadata:
     return _load_civitai_lora_version(candidate)
+
+
+# {
+#   責務: [tag_selected_civitai_preview_images: Data境界へpreview画像のTagger処理を依頼する]
+#   処理: [選択version metadataとTagger設定をdata messengerへ渡す]
+#   引数: [metadata: 選択version metadata, settings: loopback Tagger settings]
+#   戻り値: [tuple[CharacterSourceAsset, ...]: tagger候補とprovenanceを持つsource]
+#   エラー: [ValueError: 設定またはsource不正, RuntimeError: 画像がない場合]
+# }
+def tag_selected_civitai_preview_images(
+    metadata: CivitaiLoraVersionMetadata,
+    settings: TaggerSettings,
+) -> tuple[CharacterSourceAsset, ...]:
+    return _tag_civitai_preview_sources(metadata, settings)

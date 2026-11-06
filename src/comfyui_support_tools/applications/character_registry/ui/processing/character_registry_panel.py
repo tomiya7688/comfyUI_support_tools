@@ -33,6 +33,7 @@ from src.comfyui_support_tools.shared.contracts.character_tag_intake_request imp
 from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
     CivitaiLoraCandidate,
 )
+from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
 
 
 # {
@@ -69,7 +70,7 @@ def _write_wildcards_and_describe(
 
 # {
 #   責務: [CharacterRegistryPanel: Civitai/local caption intakeの検索,分類確認,登録UIを表示する]
-#   フィールド: [UI widgets, selected candidates, preview, async request queue]
+#   フィールド: [UI widgets, path/Tagger settings, selected candidates, preview, async request queue]
 # }
 class CharacterRegistryPanel(ttk.Frame):
     """Manual Character intake view. Civitai weights and images are never downloaded."""
@@ -108,19 +109,30 @@ class CharacterRegistryPanel(ttk.Frame):
         try:
             settings = self.settings_store.load()
         except ValueError as error:
-            settings = {"dataset_root": "", "profile_directory": ""}
+            settings = {
+                "dataset_root": "",
+                "profile_directory": "",
+                "tagger_url": "http://127.0.0.1:7861/pixai/v1/interrogate",
+                "tagger_model": "",
+            }
             self.status.set(f"保存済みpath設定を読み込めません: {error}")
         self.character_id = tk.StringVar(value=create_character_id())
         self.display_name = tk.StringVar()
         self.aliases = tk.StringVar()
         self.dataset_root = tk.StringVar(value=settings["dataset_root"])
         self.profile_directory = tk.StringVar(value=settings["profile_directory"])
+        self.tagger_url = tk.StringVar(value=settings["tagger_url"])
+        self.tagger_model = tk.StringVar(value=settings["tagger_model"])
+        self.analyze_civitai_images = tk.StringVar(value="0")
         self.civitai_query = tk.StringVar()
         self.outfit_id = tk.StringVar(value="default")
         self.outfit_name = tk.StringVar(value="Default Outfit")
         variables = {
             "dataset_root": self.dataset_root,
             "profile_directory": self.profile_directory,
+            "tagger_url": self.tagger_url,
+            "tagger_model": self.tagger_model,
+            "analyze_civitai_images": self.analyze_civitai_images,
             "character_id": self.character_id,
             "display_name": self.display_name,
             "aliases": self.aliases,
@@ -194,7 +206,10 @@ class CharacterRegistryPanel(ttk.Frame):
         """Persist both editable path fields, reporting errors to the status line."""
         try:
             self.settings_store.save(
-                self.dataset_root.get().strip(), self.profile_directory.get().strip()
+                self.dataset_root.get().strip(),
+                self.profile_directory.get().strip(),
+                self.tagger_url.get().strip(),
+                self.tagger_model.get().strip(),
             )
             self.status.set("path設定を保存しました。")
             return True
@@ -218,7 +233,7 @@ class CharacterRegistryPanel(ttk.Frame):
     #   戻り値: []
     # }
     def search_civitai(self) -> None:
-        """Start a fresh metadata-only Civitai search for the current query."""
+        """Start a fresh Civitai model/version metadata search for the current query."""
         query = self.civitai_query.get().strip()
         if not query:
             self.status.set("Civitaiの検索語を入力してください。")
@@ -304,7 +319,7 @@ class CharacterRegistryPanel(ttk.Frame):
 
     # {
     #   責務: [preview_intake: local captionと任意Civitai metadataのtag previewを作る]
-    #   処理: [formをvalidateし, selected candidateを指定して非同期previewする]
+    #   処理: [formをvalidateし, selected candidateと任意Tagger設定を指定して非同期previewする]
     #   引数: [self: panel]
     #   戻り値: []
     # }
@@ -318,12 +333,22 @@ class CharacterRegistryPanel(ttk.Frame):
         if not self._save_paths():
             return
         candidate = self._selected_candidate()
+        tagger_settings = None
+        if candidate is not None and self.analyze_civitai_images.get() == "1":
+            tagger_settings = TaggerSettings(
+                url=self.tagger_url.get().strip(),
+                model=self.tagger_model.get().strip(),
+                threshold=0.35,
+                character_threshold=0.85,
+                timeout=30,
+                backend="auto_http",
+            )
         self._start_task(
-            "captionとtag分類を確認中...",
+            "captionとTagger候補を確認中...",
             lambda: (
                 request,
                 candidate,
-                self.messenger.preview_character_intake(request, candidate),
+                self.messenger.preview_character_intake(request, candidate, tagger_settings),
             ),
             self._show_preview_result,
         )

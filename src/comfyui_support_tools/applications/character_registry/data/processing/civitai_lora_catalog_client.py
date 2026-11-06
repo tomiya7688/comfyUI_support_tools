@@ -3,6 +3,7 @@
 import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
@@ -11,6 +12,7 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
 )
+from src.comfyui_support_tools.shared.contracts.civitai_preview_image import CivitaiPreviewImage
 
 _API_ROOT = "https://civitai.com/api/v1"
 _REQUEST_TIMEOUT_SECONDS = 15
@@ -18,6 +20,51 @@ _DEFAULT_PAGE_SIZE = 20
 _MAX_PAGE_SIZE = 100
 _MAX_QUERY_LENGTH = 200
 _MAX_CURSOR_LENGTH = 2048
+_MAX_PREVIEW_IMAGES = 100
+_ALLOWED_PREVIEW_HOSTS = {"image.civitai.com", "imagecache.civitai.com"}
+
+
+# {
+#   責務: [_preview_images: version responseから安全なCivitai画像参照を抽出する]
+#   処理: [画像数とID/URL/閲覧levelを検証し, HTTPSのcivitai.com配下だけを保持する]
+#   引数: [payload: model-version API response]
+#   戻り値: [tuple[CivitaiPreviewImage, ...]: image bytesを含まない参照一覧]
+#   エラー: [RuntimeError: image schema, ID,閲覧level, URLまたは個数が不正な場合]
+# }
+def _preview_images(payload: dict[str, object]) -> tuple[CivitaiPreviewImage, ...]:
+    value = payload.get("images", [])
+    if not isinstance(value, list) or len(value) > _MAX_PREVIEW_IMAGES:
+        raise RuntimeError("Civitai API images fieldは100件以下の配列である必要があります")
+    images: list[CivitaiPreviewImage] = []
+    seen_ids: set[int] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise RuntimeError("Civitai API image entryがobjectではありません")
+        image_id = _required_positive_integer(item, "id")
+        image_url = _required_text(item, "url")
+        parsed_url = urlsplit(image_url)
+        hostname = (parsed_url.hostname or "").casefold()
+        if (
+            parsed_url.scheme != "https"
+            or parsed_url.username is not None
+            or parsed_url.password is not None
+            or parsed_url.netloc.casefold() != hostname
+            or hostname not in _ALLOWED_PREVIEW_HOSTS
+            or parsed_url.fragment
+        ):
+            raise RuntimeError(
+                "Civitai API image URLはcivitai.com配下のHTTPS URLである必要があります"
+            )
+        nsfw_level = item.get("nsfwLevel")
+        if nsfw_level is not None and (
+            isinstance(nsfw_level, bool) or not isinstance(nsfw_level, int) or nsfw_level < 0
+        ):
+            raise RuntimeError("Civitai API image nsfwLevelが不正です")
+        if image_id in seen_ids:
+            continue
+        seen_ids.add(image_id)
+        images.append(CivitaiPreviewImage(image_id, image_url, nsfw_level))
+    return tuple(images)
 
 
 # {
@@ -257,4 +304,5 @@ def fetch_civitai_lora_version(
         status=_required_text(payload, "status"),
         availability=_required_text(payload, "availability"),
         raw_trained_words=raw_trained_words,
+        preview_images=_preview_images(payload),
     )

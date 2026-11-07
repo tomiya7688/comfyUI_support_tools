@@ -254,7 +254,7 @@ class CharacterRegistryPanelView(ttk.Frame):
 
     # {
     #   責務: [_build_actions: outfit fields,登録button,statusを配置する]
-    #   処理: [衣装profileの追加/削除, registration状態を表示する]
+    #   処理: [衣装profileの追加/削除, 既定衣装選択, registration状態を表示する]
     #   引数: [self: view]
     #   戻り値: []
     # }
@@ -275,9 +275,18 @@ class CharacterRegistryPanelView(ttk.Frame):
             text="この衣装を候補に追加",
             command=self.actions["save_outfit_profile"],
         ).grid(row=0, column=4, padx=(4, 8))
-        ttk.Label(actions, text="確認済み衣装候補（先頭が既定）").grid(
-            row=1, column=0, columnspan=5, sticky="w", pady=(5, 0)
+        ttk.Label(actions, text="確認済み衣装候補").grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(5, 0)
         )
+        ttk.Label(actions, text="既定衣装").grid(row=1, column=3, sticky="e", pady=(5, 0))
+        self.default_outfit_combo = ttk.Combobox(
+            actions,
+            textvariable=self.variables["default_outfit_id"],
+            values=(),
+            state="readonly",
+            width=18,
+        )
+        self.default_outfit_combo.grid(row=1, column=4, sticky="e", pady=(5, 0))
         self.saved_outfit_list = tk.Listbox(
             actions,
             height=3,

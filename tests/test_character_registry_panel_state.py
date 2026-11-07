@@ -81,6 +81,7 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
         panel.innerwear_tags = ["undershirt"]
         panel.outfit_id = SimpleNamespace(get=lambda: "default")
         panel.outfit_name = SimpleNamespace(get=lambda: "Default")
+        panel.default_outfit_id = SimpleNamespace(get=lambda: "")
 
         confirmation = CharacterRegistryPanel._build_confirmation(panel)
 
@@ -104,12 +105,19 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
                 name="School Uniform",
                 garment_traits=("school_uniform",),
                 user_confirmed=True,
-            )
+            ),
+            CharacterOutfitProfile(
+                outfit_id="casual",
+                name="Casual",
+                garment_traits=("casual_clothes",),
+                user_confirmed=True,
+            ),
         ]
-        panel.outfit_tags = ["casual_clothes"]
+        panel.outfit_tags = []
         panel.innerwear_tags = []
-        panel.outfit_id = SimpleNamespace(get=lambda: "casual")
-        panel.outfit_name = SimpleNamespace(get=lambda: "Casual")
+        panel.outfit_id = SimpleNamespace(get=lambda: "outfit-3")
+        panel.outfit_name = SimpleNamespace(get=lambda: "Outfit 3")
+        panel.default_outfit_id = SimpleNamespace(get=lambda: "casual")
 
         confirmation = CharacterRegistryPanel._build_confirmation(panel)
 
@@ -117,7 +125,7 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
             tuple(outfit.outfit_id for outfit in confirmation.outfit_profiles),
             ("school", "casual"),
         )
-        self.assertEqual(confirmation.default_outfit_id, "school")
+        self.assertEqual(confirmation.default_outfit_id, "casual")
         self.assertEqual(
             confirmation.outfit_profiles[1].garment_traits,
             ("casual_clothes",),
@@ -136,9 +144,15 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
         panel.innerwear_tags = []
         panel.outfit_id = SimpleNamespace(get=lambda: "school", set=lambda _value: None)
         panel.outfit_name = SimpleNamespace(get=lambda: "School Uniform", set=lambda _value: None)
+        default_value = {"value": ""}
+        panel.default_outfit_id = SimpleNamespace(
+            get=lambda: default_value["value"],
+            set=lambda value: default_value.update(value=value),
+        )
         panel.status = _StatusVariable()
         panel._render_confirmed_tags = lambda: None
         displayed: list[str] = []
+        panel.default_outfit_combo = SimpleNamespace(configure=lambda **_kwargs: None)
         panel.saved_outfit_list = SimpleNamespace(
             delete=lambda *_args: displayed.clear(),
             insert=lambda _index, value: displayed.append(value),
@@ -148,7 +162,8 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
 
         self.assertEqual(len(panel.confirmed_outfits), 1)
         self.assertEqual(panel.confirmed_outfits[0].outfit_id, "school")
-        self.assertEqual(displayed, ["[既定] School Uniform (school)"])
+        self.assertEqual(default_value["value"], "school")
+        self.assertEqual(displayed, ["School Uniform (school)"])
         self.assertEqual(panel.outfit_tags, [])
 
     # {

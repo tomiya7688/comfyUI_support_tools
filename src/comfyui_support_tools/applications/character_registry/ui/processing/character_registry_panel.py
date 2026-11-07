@@ -128,6 +128,7 @@ class CharacterRegistryPanel(ttk.Frame):
         self.civitai_query = tk.StringVar()
         self.outfit_id = tk.StringVar(value="default")
         self.outfit_name = tk.StringVar(value="Default Outfit")
+        self.default_outfit_id = tk.StringVar(value="")
         variables = {
             "dataset_root": self.dataset_root,
             "profile_directory": self.profile_directory,
@@ -140,6 +141,7 @@ class CharacterRegistryPanel(ttk.Frame):
             "civitai_query": self.civitai_query,
             "outfit_id": self.outfit_id,
             "outfit_name": self.outfit_name,
+            "default_outfit_id": self.default_outfit_id,
             "status": self.status,
         }
         actions = {
@@ -167,6 +169,7 @@ class CharacterRegistryPanel(ttk.Frame):
         self.candidate_list = self.view.candidate_list
         self.suggestion_list = self.view.suggestion_list
         self.saved_outfit_list = self.view.saved_outfit_list
+        self.default_outfit_combo = self.view.default_outfit_combo
         self.identity_list = self.view.identity_list
         self.outfit_list = self.view.outfit_list
         self.innerwear_list = self.view.innerwear_list
@@ -410,7 +413,7 @@ class CharacterRegistryPanel(ttk.Frame):
         self.outfit_tags.clear()
         self.innerwear_tags.clear()
         self.confirmed_outfits.clear()
-        self.saved_outfit_list.delete(0, "end")
+        self._render_saved_outfits()
         self.outfit_id.set("default")
         self.outfit_name.set("Default Outfit")
         self._render_confirmed_tags()
@@ -616,7 +619,7 @@ class CharacterRegistryPanel(ttk.Frame):
 
     # {
     #   責務: [_save_outfit_profile: 現在の衣装分類を確認済みoutfitとして積む]
-    #   処理: [衣装ID/名前/traitを検証し, profile listへ追加して入力欄を次衣装用にする]
+    #   処理: [衣装ID/名前/traitを検証し, profile listへ追加してdefault未選択なら既定にする]
     #   引数: [self: panel]
     #   戻り値: []
     #   状態: [status: 入力不足または重複IDの説明を表示する]
@@ -642,6 +645,8 @@ class CharacterRegistryPanel(ttk.Frame):
                 user_confirmed=True,
             )
         )
+        if not self.default_outfit_id.get().strip():
+            self.default_outfit_id.set(outfit_id)
         self._render_saved_outfits()
         next_number = len(self.confirmed_outfits) + 1
         existing_ids = {outfit.outfit_id for outfit in self.confirmed_outfits}
@@ -670,22 +675,25 @@ class CharacterRegistryPanel(ttk.Frame):
 
     # {
     #   責務: [_render_saved_outfits: 確認済みoutfit候補をUIへ表示する]
-    #   処理: [衣装名とIDを保存順にlistboxへ描画する]
+    #   処理: [衣装候補を表示し, 既定衣装selectorの候補と選択状態を更新する]
     #   引数: [self: panel]
     #   戻り値: []
     # }
     def _render_saved_outfits(self) -> None:
         self.saved_outfit_list.delete(0, "end")
-        for index, outfit in enumerate(self.confirmed_outfits):
-            default_label = "[既定] " if index == 0 else ""
+        outfit_ids = tuple(outfit.outfit_id for outfit in self.confirmed_outfits)
+        self.default_outfit_combo.configure(values=outfit_ids)
+        if self.default_outfit_id.get() not in outfit_ids:
+            self.default_outfit_id.set(outfit_ids[0] if outfit_ids else "")
+        for outfit in self.confirmed_outfits:
             self.saved_outfit_list.insert(
                 "end",
-                f"{default_label}{outfit.name} ({outfit.outfit_id})",
+                f"{outfit.name} ({outfit.outfit_id})",
             )
 
     # {
     #   責務: [_build_confirmation: UIの手動選択をregistration contractへ変換する]
-    #   処理: [選択されたidentityと複数のuser_confirmed outfitをconfirmationへ変換する]
+    #   処理: [選択されたidentity, 複数衣装, 明示された既定衣装をconfirmationへ変換する]
     #   引数: [self: panel]
     #   戻り値: [CharacterTagIntakeConfirmation: 登録に使うmanual confirmation]
     #   エラー: [ValueError: outfit tag有りでoutfit情報が不正な場合]
@@ -693,7 +701,7 @@ class CharacterRegistryPanel(ttk.Frame):
     def _build_confirmation(self) -> CharacterTagIntakeConfirmation:
         """Convert the three visible tag categories into confirmed profile data."""
         outfits = list(self.confirmed_outfits)
-        default_outfit_id = outfits[0].outfit_id if outfits else None
+        default_outfit_id = self.default_outfit_id.get().strip() or None
         if self.outfit_tags or self.innerwear_tags:
             outfit_id = self.outfit_id.get().strip()
             outfit_name = self.outfit_name.get().strip()

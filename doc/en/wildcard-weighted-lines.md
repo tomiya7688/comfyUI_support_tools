@@ -29,6 +29,6 @@ This keeps LoRA choices and character tags in separate files while the wrapper p
 
 Within one prompt-resolution request, each wildcard file is expanded on its first use and its result is reused. Repeating the same wrapper therefore cannot select different LoRA strengths or character tags at each occurrence. Callers can pass a shared cache to reuse the same choices across multiple prompts.
 
-In sequential input files, each line is a generation job. The `@weight=` prefix is removed and jobs with weight `0` are skipped. Positive relative weights control candidate selection inside wildcard files; sequential jobs remain in the given order and run once each.
+In sequential input files, each line is a generation job. The `@weight=` prefix is removed and jobs with weight `0` are skipped. Positive relative weights control candidate selection inside wildcard files; sequential jobs remain in the given order and run once each. When wildcard reuse is enabled, each wildcard file's expanded result remains cached across loop iterations for the entire run.
 
 The current `ResolvedPrompt` carries expanded text, detected LoRA names, wildcard provenance, and warnings. Automatic merging of trigger/recommended prompts from LoRA metadata and migration of every ComfyUI/A1111/Built-in route are separate steps.

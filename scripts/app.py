@@ -30,6 +30,7 @@ from .tabs.ffmpeg_repair import FfmpegRepairTab
 from .tabs.zipper import ZipperTab
 from .tabs.youtube_downloader import YouTubeDownloaderTab
 from .tabs.video_reencoder import VideoReencoderTab
+from .tabs.character_registry import CharacterRegistryTab
 from .tabs.static_spec import StaticSpecTab
 from .tabs.docstring_audit import DocstringAuditTab
 from .tabs.dependency_status import DependencyStatusTab
@@ -155,6 +156,7 @@ class TabbedToolsApp(tk.Tk):
             ("Ollama Prompt", OllamaPromptTab),
             ("半透明素材強調", ToukaEnhancerTab),
             ("Touka評価履歴", ToukaEvaluationReportTab),
+            ("Character Registry", CharacterRegistryTab),
         ]
 
         self.tab_frames = []

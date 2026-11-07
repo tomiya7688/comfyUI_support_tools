@@ -37,6 +37,7 @@ TAB_CATALOG = (
     ("OllamaPromptTab", "Ollama Prompt", "AI"),
     ("ToukaEnhancerTab", "半透明素材強調", "Image・Video"),
     ("ToukaEvaluationReportTab", "Touka評価履歴", "Image・Video"),
+    ("CharacterRegistryTab", "Character Registry", "Character"),
 )
 
 

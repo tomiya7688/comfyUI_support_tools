@@ -277,6 +277,10 @@ classDiagram
         +process_safe()
     }
     ttk.Frame <|-- BodyPromptTab
+    class CharacterRegistryTab {
+        +__init__()
+    }
+    ttk.Frame <|-- CharacterRegistryTab
     class CheckBracesTab {
         +__init__()
         +_refresh_preset_choices()
@@ -820,8 +824,12 @@ classDiagram
         +__post_init__()
     }
     class CharacterSourceAsset {
+        +__post_init__()
     }
     class CharacterTagCandidate {
+    }
+    class CharacterTagIntakeConfirmation {
+        +__post_init__()
     }
     class CharacterTagIntakePreview {
     }
@@ -830,6 +838,8 @@ classDiagram
     class CivitaiLoraCandidate {
     }
     class CivitaiLoraVersionMetadata {
+    }
+    class CivitaiPreviewImage {
     }
     class FeatureSettings {
         +__post_init__()

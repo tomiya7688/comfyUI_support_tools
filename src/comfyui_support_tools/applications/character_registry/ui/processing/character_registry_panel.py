@@ -99,6 +99,7 @@ class CharacterRegistryPanel(ttk.Frame):
         self.identity_tags: list[str] = []
         self.outfit_tags: list[str] = []
         self.innerwear_tags: list[str] = []
+        self.confirmed_outfits: list[CharacterOutfitProfile] = []
         self._candidate_query = ""
         self._candidate_next_cursor: str | None = None
         self._registered_profile: CharacterProfile | None = None
@@ -155,6 +156,8 @@ class CharacterRegistryPanel(ttk.Frame):
             "remove_outfit": self._remove_outfit,
             "remove_innerwear": self._remove_innerwear,
             "add_custom_tag": self._add_custom_tag,
+            "save_outfit_profile": self._save_outfit_profile,
+            "delete_outfit_profile": self._delete_outfit_profile,
             "register_profile": self.register_profile,
             "retry_wildcard_export": self.retry_wildcard_export,
             "save_lora_call_wildcard": self.save_lora_call_wildcard,
@@ -163,6 +166,7 @@ class CharacterRegistryPanel(ttk.Frame):
         self.view.pack(fill="both", expand=True)
         self.candidate_list = self.view.candidate_list
         self.suggestion_list = self.view.suggestion_list
+        self.saved_outfit_list = self.view.saved_outfit_list
         self.identity_list = self.view.identity_list
         self.outfit_list = self.view.outfit_list
         self.innerwear_list = self.view.innerwear_list
@@ -405,6 +409,10 @@ class CharacterRegistryPanel(ttk.Frame):
         self.identity_tags.clear()
         self.outfit_tags.clear()
         self.innerwear_tags.clear()
+        self.confirmed_outfits.clear()
+        self.saved_outfit_list.delete(0, "end")
+        self.outfit_id.set("default")
+        self.outfit_name.set("Default Outfit")
         self._render_confirmed_tags()
         self.suggestion_list.delete(0, "end")
         self._suggestions: list[str] = []
@@ -607,34 +615,105 @@ class CharacterRegistryPanel(ttk.Frame):
         )
 
     # {
+    #   責務: [_save_outfit_profile: 現在の衣装分類を確認済みoutfitとして積む]
+    #   処理: [衣装ID/名前/traitを検証し, profile listへ追加して入力欄を次衣装用にする]
+    #   引数: [self: panel]
+    #   戻り値: []
+    #   状態: [status: 入力不足または重複IDの説明を表示する]
+    # }
+    def _save_outfit_profile(self) -> None:
+        outfit_id = self.outfit_id.get().strip()
+        outfit_name = self.outfit_name.get().strip()
+        if not outfit_id or not outfit_name:
+            self.status.set("衣装IDと衣装名を入力してください。")
+            return
+        if not self.outfit_tags and not self.innerwear_tags:
+            self.status.set("衣装またはinnerwearのtagを追加してください。")
+            return
+        if any(outfit.outfit_id == outfit_id for outfit in self.confirmed_outfits):
+            self.status.set(f"衣装ID「{outfit_id}」はすでに登録候補にあります。")
+            return
+        self.confirmed_outfits.append(
+            CharacterOutfitProfile(
+                outfit_id=outfit_id,
+                name=outfit_name,
+                garment_traits=tuple(self.outfit_tags),
+                innerwear_traits=tuple(self.innerwear_tags),
+                user_confirmed=True,
+            )
+        )
+        self._render_saved_outfits()
+        next_number = len(self.confirmed_outfits) + 1
+        existing_ids = {outfit.outfit_id for outfit in self.confirmed_outfits}
+        while f"outfit-{next_number}" in existing_ids:
+            next_number += 1
+        self.outfit_id.set(f"outfit-{next_number}")
+        self.outfit_name.set(f"Outfit {next_number}")
+        self.outfit_tags.clear()
+        self.innerwear_tags.clear()
+        self._render_confirmed_tags()
+        self.status.set(f"衣装「{outfit_name}」を追加しました。続けて別の衣装を分類できます。")
+
+    # {
+    #   責務: [_delete_outfit_profile: 選択された確認済みoutfit候補を削除する]
+    #   処理: [saved outfit listの選択indexを使ってprofileを除去しlist表示を更新する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def _delete_outfit_profile(self) -> None:
+        selected = self.saved_outfit_list.curselection()
+        if not selected:
+            self.status.set("削除する衣装候補を選択してください。")
+            return
+        del self.confirmed_outfits[selected[0]]
+        self._render_saved_outfits()
+
+    # {
+    #   責務: [_render_saved_outfits: 確認済みoutfit候補をUIへ表示する]
+    #   処理: [衣装名とIDを保存順にlistboxへ描画する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def _render_saved_outfits(self) -> None:
+        self.saved_outfit_list.delete(0, "end")
+        for index, outfit in enumerate(self.confirmed_outfits):
+            default_label = "[既定] " if index == 0 else ""
+            self.saved_outfit_list.insert(
+                "end",
+                f"{default_label}{outfit.name} ({outfit.outfit_id})",
+            )
+
+    # {
     #   責務: [_build_confirmation: UIの手動選択をregistration contractへ変換する]
-    #   処理: [選択されたidentity/outfitをuser_confirmed profileへ変換する]
+    #   処理: [選択されたidentityと複数のuser_confirmed outfitをconfirmationへ変換する]
     #   引数: [self: panel]
     #   戻り値: [CharacterTagIntakeConfirmation: 登録に使うmanual confirmation]
     #   エラー: [ValueError: outfit tag有りでoutfit情報が不正な場合]
     # }
     def _build_confirmation(self) -> CharacterTagIntakeConfirmation:
         """Convert the three visible tag categories into confirmed profile data."""
-        outfits: tuple[CharacterOutfitProfile, ...] = ()
-        default_outfit_id: str | None = None
+        outfits = list(self.confirmed_outfits)
+        default_outfit_id = outfits[0].outfit_id if outfits else None
         if self.outfit_tags or self.innerwear_tags:
             outfit_id = self.outfit_id.get().strip()
             outfit_name = self.outfit_name.get().strip()
             if not outfit_id or not outfit_name:
                 raise ValueError("outfit IDとoutfit名を入力してください。")
-            outfits = (
-                CharacterOutfitProfile(
-                    outfit_id=outfit_id,
-                    name=outfit_name,
-                    garment_traits=tuple(self.outfit_tags),
-                    innerwear_traits=tuple(self.innerwear_tags),
-                    user_confirmed=True,
-                ),
+            current_outfit = CharacterOutfitProfile(
+                outfit_id=outfit_id,
+                name=outfit_name,
+                garment_traits=tuple(self.outfit_tags),
+                innerwear_traits=tuple(self.innerwear_tags),
+                user_confirmed=True,
             )
-            default_outfit_id = outfit_id
+            if any(outfit.outfit_id == outfit_id for outfit in outfits):
+                raise ValueError(f"衣装ID「{outfit_id}」は重複しています。")
+            outfits.append(current_outfit)
+            if default_outfit_id is None:
+                default_outfit_id = outfit_id
         return CharacterTagIntakeConfirmation(
             confirmed_identity_traits=tuple(self.identity_tags),
-            outfit_profiles=outfits,
+            outfit_profiles=tuple(outfits),
             default_outfit_id=default_outfit_id,
         )
 

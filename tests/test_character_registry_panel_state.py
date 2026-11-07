@@ -9,6 +9,9 @@ from src.comfyui_support_tools.applications.character_registry.ui.processing.cha
     CharacterRegistryPanel,
     _write_wildcards_and_describe,
 )
+from src.comfyui_support_tools.shared.contracts.character_outfit_profile import (
+    CharacterOutfitProfile,
+)
 
 
 # {
@@ -73,6 +76,7 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
     def test_confirmation_keeps_innerwear_separate(self) -> None:
         panel = object.__new__(CharacterRegistryPanel)
         panel.identity_tags = ["blue_hair"]
+        panel.confirmed_outfits = []
         panel.outfit_tags = ["school_uniform"]
         panel.innerwear_tags = ["undershirt"]
         panel.outfit_id = SimpleNamespace(get=lambda: "default")
@@ -84,6 +88,68 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
         self.assertEqual(confirmation.confirmed_identity_traits, ("blue_hair",))
         self.assertEqual(outfit.garment_traits, ("school_uniform",))
         self.assertEqual(outfit.innerwear_traits, ("undershirt",))
+
+    # {
+    #   責務: [test_confirmation_contains_multiple_outfits: confirmationに複数の衣装profileを保持する]
+    #   処理: [保存済み衣装と入力中衣装を渡し, 両方と既定衣装参照を検証する]
+    #   引数: [self: unittest.TestCase]
+    #   戻り値: []
+    # }
+    def test_confirmation_contains_multiple_outfits(self) -> None:
+        panel = object.__new__(CharacterRegistryPanel)
+        panel.identity_tags = ["blue_hair"]
+        panel.confirmed_outfits = [
+            CharacterOutfitProfile(
+                outfit_id="school",
+                name="School Uniform",
+                garment_traits=("school_uniform",),
+                user_confirmed=True,
+            )
+        ]
+        panel.outfit_tags = ["casual_clothes"]
+        panel.innerwear_tags = []
+        panel.outfit_id = SimpleNamespace(get=lambda: "casual")
+        panel.outfit_name = SimpleNamespace(get=lambda: "Casual")
+
+        confirmation = CharacterRegistryPanel._build_confirmation(panel)
+
+        self.assertEqual(
+            tuple(outfit.outfit_id for outfit in confirmation.outfit_profiles),
+            ("school", "casual"),
+        )
+        self.assertEqual(confirmation.default_outfit_id, "school")
+        self.assertEqual(
+            confirmation.outfit_profiles[1].garment_traits,
+            ("casual_clothes",),
+        )
+
+    # {
+    #   責務: [test_save_outfit_profile_marks_first_outfit_as_default: 追加した衣装を確認済み一覧へ積む]
+    #   処理: [衣装入力をsaveし, profileと既定表示を検証する]
+    #   引数: [self: unittest.TestCase]
+    #   戻り値: []
+    # }
+    def test_save_outfit_profile_marks_first_outfit_as_default(self) -> None:
+        panel = object.__new__(CharacterRegistryPanel)
+        panel.confirmed_outfits = []
+        panel.outfit_tags = ["school_uniform"]
+        panel.innerwear_tags = []
+        panel.outfit_id = SimpleNamespace(get=lambda: "school", set=lambda _value: None)
+        panel.outfit_name = SimpleNamespace(get=lambda: "School Uniform", set=lambda _value: None)
+        panel.status = _StatusVariable()
+        panel._render_confirmed_tags = lambda: None
+        displayed: list[str] = []
+        panel.saved_outfit_list = SimpleNamespace(
+            delete=lambda *_args: displayed.clear(),
+            insert=lambda _index, value: displayed.append(value),
+        )
+
+        CharacterRegistryPanel._save_outfit_profile(panel)
+
+        self.assertEqual(len(panel.confirmed_outfits), 1)
+        self.assertEqual(panel.confirmed_outfits[0].outfit_id, "school")
+        self.assertEqual(displayed, ["[既定] School Uniform (school)"])
+        self.assertEqual(panel.outfit_tags, [])
 
     # {
     #   責務: [test_missing_local_lora_mapping_is_explained: LoRA候補未登録時の手動設定案内を確認する]

@@ -254,7 +254,7 @@ class CharacterRegistryPanelView(ttk.Frame):
 
     # {
     #   責務: [_build_actions: outfit fields,登録button,statusを配置する]
-    #   処理: [default outfit設定とregistration状態を表示する]
+    #   処理: [衣装profileの追加/削除, registration状態を表示する]
     #   引数: [self: view]
     #   戻り値: []
     # }
@@ -270,19 +270,47 @@ class CharacterRegistryPanelView(ttk.Frame):
         ttk.Entry(actions, textvariable=self.variables["outfit_name"], width=24).grid(
             row=0, column=3, padx=4
         )
+        ttk.Button(
+            actions,
+            text="この衣装を候補に追加",
+            command=self.actions["save_outfit_profile"],
+        ).grid(row=0, column=4, padx=(4, 8))
+        ttk.Label(actions, text="確認済み衣装候補（先頭が既定）").grid(
+            row=1, column=0, columnspan=5, sticky="w", pady=(5, 0)
+        )
+        self.saved_outfit_list = tk.Listbox(
+            actions,
+            height=3,
+            exportselection=False,
+        )
+        self.saved_outfit_list.grid(row=2, column=0, columnspan=4, sticky="ew")
+        outfit_scrollbar = ttk.Scrollbar(
+            actions,
+            orient="vertical",
+            command=self.saved_outfit_list.yview,
+        )
+        outfit_scrollbar.grid(row=2, column=4, sticky="ns")
+        self.saved_outfit_list.configure(yscrollcommand=outfit_scrollbar.set)
+        ttk.Button(
+            actions,
+            text="選択した衣装を削除",
+            command=self.actions["delete_outfit_profile"],
+        ).grid(row=2, column=5, sticky="w", padx=(4, 8))
         self.register_button = ttk.Button(
             actions,
             text="確認内容でCharacterを登録",
             command=self.actions["register_profile"],
         )
-        self.register_button.grid(row=0, column=4, padx=(8, 4))
+        self.register_button.grid(
+            row=3, column=0, columnspan=2, sticky="w", padx=(0, 4), pady=(6, 0)
+        )
         self.wildcard_retry_button = ttk.Button(
             actions,
             text="wildcard出力を再試行",
             command=self.actions["retry_wildcard_export"],
             state="disabled",
         )
-        self.wildcard_retry_button.grid(row=0, column=5, padx=(4, 4))
+        self.wildcard_retry_button.grid(row=3, column=2, sticky="w", padx=(4, 4), pady=(6, 0))
         ttk.Label(actions, textvariable=self.variables["status"]).grid(
-            row=1, column=0, columnspan=6, sticky="w", pady=(6, 0)
+            row=4, column=0, columnspan=6, sticky="w", pady=(6, 0)
         )

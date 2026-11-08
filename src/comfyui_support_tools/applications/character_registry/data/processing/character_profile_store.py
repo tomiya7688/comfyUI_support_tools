@@ -12,6 +12,9 @@ from src.comfyui_support_tools.shared.contracts.character_outfit_profile import 
     CharacterOutfitProfile,
 )
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_reference_image import (
+    CharacterReferenceImage,
+)
 from src.comfyui_support_tools.shared.contracts.character_source_asset import (
     CharacterSourceAsset,
 )
@@ -104,6 +107,7 @@ def _source_asset_data(asset: CharacterSourceAsset) -> dict[str, Any]:
         "source_work_id": asset.source_work_id,
         "license_status": asset.license_status,
         "training_permission": asset.training_permission,
+        "source_metadata": dict(asset.source_metadata),
     }
 
 
@@ -122,6 +126,12 @@ def _source_asset_from_data(value: Any) -> CharacterSourceAsset:
         image_file = _require_string(image_file, "image_file")
     if outfit_id is not None:
         outfit_id = _require_string(outfit_id, "outfit_id")
+    source_metadata = _require_object(data.get("source_metadata", {}), "source_metadata")
+    if any(
+        not isinstance(metadata_value, (bool, str)) and metadata_value is not None
+        for metadata_value in source_metadata.values()
+    ):
+        raise ValueError("source_metadata valueはstr/bool/nullで指定してください")
     return CharacterSourceAsset(
         caption_file=_require_string(data.get("caption_file"), "caption_file"),
         image_file=image_file,
@@ -133,6 +143,7 @@ def _source_asset_from_data(value: Any) -> CharacterSourceAsset:
         ),
         license_status=_require_string(data.get("license_status"), "license_status"),
         training_permission=_require_string(data.get("training_permission"), "training_permission"),
+        source_metadata=tuple(source_metadata.items()),
     )
 
 
@@ -191,6 +202,50 @@ def _outfit_from_data(value: Any) -> CharacterOutfitProfile:
 
 
 # {
+#   責務: [_reference_image_data: CharacterReferenceImageをJSON objectへ変換する]
+#   処理: [stable ID,元path,digest,衣装割当,学習候補選択をJSON値へ写す]
+#   引数: [image: reference image]
+#   戻り値: [dict[str, str]: serialized reference]
+# }
+def _reference_image_data(image: CharacterReferenceImage) -> dict[str, str | bool | None]:
+    return {
+        "image_id": image.image_id,
+        "source_path": image.source_path,
+        "content_sha256": image.content_sha256,
+        "outfit_assignment": image.outfit_assignment,
+        "outfit_id": image.outfit_id,
+        "selected_for_training": image.selected_for_training,
+    }
+
+
+# {
+#   責務: [_reference_image_from_data: JSON objectをreference image contractへ変換する]
+#   処理: [旧JSONの未設定値を補い, 画像参照, 衣装割当, 学習候補選択を検証して復元する]
+#   引数: [value: JSON value]
+#   戻り値: [CharacterReferenceImage: 参照画像metadata]
+#   エラー: [ValueError: fieldが不正な場合]
+# }
+def _reference_image_from_data(value: Any) -> CharacterReferenceImage:
+    data = _require_object(value, "reference image")
+    outfit_id = data.get("outfit_id")
+    if outfit_id is not None:
+        outfit_id = _require_string(outfit_id, "outfit_id")
+    selected_for_training = data.get("selected_for_training", False)
+    if not isinstance(selected_for_training, bool):
+        raise ValueError("selected_for_trainingはJSON booleanである必要があります")
+    return CharacterReferenceImage(
+        image_id=_require_string(data.get("image_id"), "image_id"),
+        source_path=_require_string(data.get("source_path"), "source_path"),
+        content_sha256=_require_string(data.get("content_sha256"), "content_sha256"),
+        outfit_assignment=_require_string(
+            data.get("outfit_assignment", "unknown"), "outfit_assignment"
+        ),
+        outfit_id=outfit_id,
+        selected_for_training=selected_for_training,
+    )
+
+
+# {
 #   責務: [_profile_data: CharacterProfileをversion付きJSON objectへ変換する]
 #   処理: [tuple, nested contracts, UTC timestampをJSON互換値へ写す]
 #   引数: [profile: profile contract]
@@ -208,6 +263,7 @@ def _profile_data(profile: CharacterProfile) -> dict[str, Any]:
         "default_outfit_id": profile.default_outfit_id,
         "outfit_profiles": [_outfit_data(outfit) for outfit in profile.outfit_profiles],
         "reference_image_ids": list(profile.reference_image_ids),
+        "reference_images": [_reference_image_data(image) for image in profile.reference_images],
         "provenance": [_source_asset_data(asset) for asset in profile.provenance],
         "created_at": _timestamp_data(profile.created_at),
         "updated_at": _timestamp_data(profile.updated_at),
@@ -232,8 +288,15 @@ def _profile_from_data(value: Any) -> CharacterProfile:
         raise ValueError("未対応のCharacterProfile schema_versionです")
     outfits = data.get("outfit_profiles")
     provenance = data.get("provenance")
-    if not isinstance(outfits, list) or not isinstance(provenance, list):
-        raise ValueError("outfit_profilesとprovenanceはJSON arrayである必要があります")
+    reference_images = data.get("reference_images", [])
+    if (
+        not isinstance(outfits, list)
+        or not isinstance(provenance, list)
+        or not isinstance(reference_images, list)
+    ):
+        raise ValueError(
+            "outfit_profiles, reference_images, provenanceはJSON arrayである必要があります"
+        )
     default_outfit_id = data.get("default_outfit_id")
     if default_outfit_id is not None:
         default_outfit_id = _require_string(default_outfit_id, "default_outfit_id")
@@ -251,6 +314,7 @@ def _profile_from_data(value: Any) -> CharacterProfile:
         reference_image_ids=_require_string_tuple(
             data.get("reference_image_ids"), "reference_image_ids"
         ),
+        reference_images=tuple(_reference_image_from_data(image) for image in reference_images),
         provenance=tuple(_source_asset_from_data(asset) for asset in provenance),
         created_at=_parse_timestamp(data.get("created_at"), "created_at"),
         updated_at=_parse_timestamp(data.get("updated_at"), "updated_at"),

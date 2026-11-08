@@ -2,7 +2,7 @@
 
 import json
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
@@ -11,6 +11,7 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
 )
+from src.comfyui_support_tools.shared.contracts.civitai_preview_image import CivitaiPreviewImage
 
 _API_ROOT = "https://civitai.com/api/v1"
 _REQUEST_TIMEOUT_SECONDS = 15
@@ -18,6 +19,51 @@ _DEFAULT_PAGE_SIZE = 20
 _MAX_PAGE_SIZE = 100
 _MAX_QUERY_LENGTH = 200
 _MAX_CURSOR_LENGTH = 2048
+_MAX_PREVIEW_IMAGES = 100
+_ALLOWED_PREVIEW_HOSTS = {"image.civitai.com", "imagecache.civitai.com"}
+
+
+# {
+#   責務: [_preview_images: version responseから安全なCivitai画像参照を抽出する]
+#   処理: [画像数とID/URL/閲覧levelを検証し, HTTPSのcivitai.com配下だけを保持する]
+#   引数: [payload: model-version API response]
+#   戻り値: [tuple[CivitaiPreviewImage, ...]: image bytesを含まない参照一覧]
+#   エラー: [RuntimeError: image schema, ID,閲覧level, URLまたは個数が不正な場合]
+# }
+def _preview_images(payload: dict[str, object]) -> tuple[CivitaiPreviewImage, ...]:
+    value = payload.get("images", [])
+    if not isinstance(value, list) or len(value) > _MAX_PREVIEW_IMAGES:
+        raise RuntimeError("Civitai API images fieldは100件以下の配列である必要があります")
+    images: list[CivitaiPreviewImage] = []
+    seen_ids: set[int] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise RuntimeError("Civitai API image entryがobjectではありません")
+        image_id = _required_positive_integer(item, "id")
+        image_url = _required_text(item, "url")
+        parsed_url = urlsplit(image_url)
+        hostname = (parsed_url.hostname or "").casefold()
+        if (
+            parsed_url.scheme != "https"
+            or parsed_url.username is not None
+            or parsed_url.password is not None
+            or parsed_url.netloc.casefold() != hostname
+            or hostname not in _ALLOWED_PREVIEW_HOSTS
+            or parsed_url.fragment
+        ):
+            raise RuntimeError(
+                "Civitai API image URLはcivitai.com配下のHTTPS URLである必要があります"
+            )
+        nsfw_level = item.get("nsfwLevel")
+        if nsfw_level is not None and (
+            isinstance(nsfw_level, bool) or not isinstance(nsfw_level, int) or nsfw_level < 0
+        ):
+            raise RuntimeError("Civitai API image nsfwLevelが不正です")
+        if image_id in seen_ids:
+            continue
+        seen_ids.add(image_id)
+        images.append(CivitaiPreviewImage(image_id, image_url, nsfw_level))
+    return tuple(images)
 
 
 # {
@@ -124,6 +170,27 @@ def _string_tuple(payload: dict[str, object], field: str) -> tuple[str, ...]:
 
 
 # {
+#   責務: [_trained_words: Civitai trainedWordsをタグtupleと原文へ変換する]
+#   処理: [comma区切り文字列はtrimして分割し, listは従来どおり検証する]
+#   引数: [payload: Civitai version response]
+#   戻り値: [tuple[tuple[str, ...], str | None]: trigger tagと元文字列]
+#   エラー: [RuntimeError: trainedWordsの型またはlist要素が不正な場合]
+# }
+def _trained_words(payload: dict[str, object]) -> tuple[tuple[str, ...], str | None]:
+    """Split comma-delimited tags and retain the original Civitai value as JSON or text."""
+    if "trainedWords" not in payload:
+        return (), None
+    value = payload["trainedWords"]
+    if isinstance(value, str):
+        tags = tuple(tag.strip() for tag in value.split(",") if tag.strip())
+        return tags, value
+    tag_values = _string_tuple(payload, "trainedWords")
+    tags = tuple(tag.strip() for value in tag_values for tag in value.split(",") if tag.strip())
+    raw_value = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return tags, raw_value
+
+
+# {
 #   責務: [_candidate_from_model_version: modelとversion summaryからLoRA候補を作る]
 #   処理: [LoRA種別, IDs, 作者, base model, tags, 利用条件とsource URLを検証してdomain contractへ写す]
 #   引数: [model: Civitai model response, version: modelVersions entry]
@@ -218,7 +285,7 @@ def search_civitai_loras(
 
 # {
 #   責務: [fetch_civitai_lora_version: 選択したCivitai LoRA versionのtrainedWordsを取得する]
-#   処理: [candidate IDでversion endpointを取得し, 返却IDとmodel IDを照合してmetadataを返す]
+#   処理: [candidate IDでversion endpointを取得し, identityを照合してtrainedWordsを分割し原文を保持する]
 #   引数: [candidate: search結果から選択したLoRA version]
 #   戻り値: [CivitaiLoraVersionMetadata: trained words, publication status, availability付きmetadata]
 #   エラー: [ValueError: candidateが不正, RuntimeError: API通信/schema/ID照合が失敗した場合]
@@ -226,6 +293,7 @@ def search_civitai_loras(
 def fetch_civitai_lora_version(
     candidate: CivitaiLoraCandidate,
 ) -> CivitaiLoraVersionMetadata:
+    """Fetch one version's normalized trainedWords and retain string provenance."""
     if not isinstance(candidate, CivitaiLoraCandidate):
         raise ValueError("candidateはCivitaiLoraCandidateで指定してください")
     payload = _read_json(f"{_API_ROOT}/model-versions/{candidate.version_id}")
@@ -233,9 +301,12 @@ def fetch_civitai_lora_version(
         raise RuntimeError("Civitai APIが要求したものと異なるversionを返しました")
     if _required_positive_integer(payload, "modelId") != candidate.model_id:
         raise RuntimeError("Civitai API versionがcandidateのmodel IDと一致しません")
+    trained_words, raw_trained_words = _trained_words(payload)
     return CivitaiLoraVersionMetadata(
         candidate=candidate,
-        trained_words=_string_tuple(payload, "trainedWords"),
+        trained_words=trained_words,
         status=_required_text(payload, "status"),
         availability=_required_text(payload, "availability"),
+        raw_trained_words=raw_trained_words,
+        preview_images=_preview_images(payload),
     )

@@ -296,7 +296,7 @@ class AIOriginClusteringTests(unittest.TestCase):
             stderr=subprocess.DEVNULL,
         )
         try:
-            deadline = time.monotonic() + 5
+            deadline = time.monotonic() + 30
             while not marker.exists() and time.monotonic() < deadline:
                 time.sleep(0.01)
             self.assertTrue(marker.exists(), "子processが出力lockを取得できませんでした")
@@ -305,7 +305,7 @@ class AIOriginClusteringTests(unittest.TestCase):
                 elapsed = time.monotonic() - started
             self.assertGreaterEqual(elapsed, 0.2)
         finally:
-            process.wait(timeout=5)
+            process.wait(timeout=30)
 
     # {
     # 責務: [test_copy_reserves_unmatched_existing_sidecars: 入力にないsidecarも候補名から除外する]

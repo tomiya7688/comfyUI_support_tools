@@ -2,26 +2,64 @@ from pathlib import Path
 
 from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     fetch_civitai_lora_version as _fetch_civitai_lora_version,
+)
+from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     preview_character_intake as _preview_character_intake,
+)
+from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
+    register_character_intake as _register_character_intake,
+)
+from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     search_civitai_loras as _search_civitai_loras,
+)
+from src.comfyui_support_tools.applications.character_registry.data.processing.character_reference_image_loader import (
+    load_character_reference_image as _load_character_reference_image,
 )
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_wildcard_exporter import (
     build_character_wildcard_files as _build_character_wildcard_files,
 )
+from src.comfyui_support_tools.applications.character_registry.process.processing.character_lora_call_wildcard_builder import (
+    build_character_lora_call_wildcard as _build_character_lora_call_wildcard,
+)
+from src.comfyui_support_tools.shared.contracts.character_id import is_valid_character_id
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_reference_image import (
+    CharacterReferenceImage,
+)
+from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
+    CharacterTagIntakeConfirmation,
+)
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_preview import (
     CharacterTagIntakePreview,
 )
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_request import (
     CharacterTagIntakeRequest,
 )
-from src.comfyui_support_tools.shared.contracts.character_id import is_valid_character_id
 from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
     CivitaiLoraCandidate,
 )
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
 )
+from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
+
+from .data.processing.character_wildcard_file_store import CharacterWildcardFileStore
+
+
+# {
+#   責務: [load_character_reference_image: local参照画像をprofile用metadataへ変換する]
+#   処理: [Path入力を検証し, application APIからdata loaderへ委譲してstable ID, path, SHA-256を返す]
+#   引数: [image_path: ユーザーが選択した画像path]
+#   戻り値: [CharacterReferenceImage: コピーや画像解析を行わない参照metadata]
+#   エラー: [ValueError: path型が不正, FileNotFoundError/OSError: 読取失敗, ValueError: unsupported extension]
+# }
+def load_character_reference_image(
+    image_path: Path,
+) -> CharacterReferenceImage:
+    """Build reference-only metadata for a user-selected local image."""
+    if not isinstance(image_path, Path):
+        raise ValueError("image_pathはpathlib.Pathで指定してください")
+    return _load_character_reference_image(image_path)
 
 
 # {
@@ -56,12 +94,16 @@ def fetch_civitai_lora_version(
 
 # {
 #   責務: [preview_character_intake: API入力を検証して登録候補previewを返す]
-#   処理: [character ID/display name/rootを検証し, process messengerへ委譲する]
-#   引数: [request: Character Registry intake request]
+#   処理: [character ID/display name/root/Civitai candidate/任意Tagger設定を検証し, process commanderへ委譲する]
+#   引数: [request: Character Registry intake request, civitai_candidate: 任意LoRA version, tagger_settings: 任意loopback Tagger設定]
 #   戻り値: [CharacterTagIntakePreview: identity/outfit/context/unclassified候補とsource provenance]
-#   エラー: [ValueError: ID, name, rootが不正な場合]
+#   エラー: [ValueError: ID, name, root, candidateが不正な場合, RuntimeError: 選択版metadataの取得に失敗した場合]
 # }
-def preview_character_intake(request: CharacterTagIntakeRequest) -> CharacterTagIntakePreview:
+def preview_character_intake(
+    request: CharacterTagIntakeRequest,
+    civitai_candidate: CivitaiLoraCandidate | None = None,
+    tagger_settings: TaggerSettings | None = None,
+) -> CharacterTagIntakePreview:
     """Return identity/outfit/unclassified tag suggestions for manual review."""
     if not is_valid_character_id(request.character_id):
         raise ValueError("character_idは小文字英数字と-_を使う1〜64文字で指定してください")
@@ -69,7 +111,32 @@ def preview_character_intake(request: CharacterTagIntakeRequest) -> CharacterTag
         raise ValueError("display_nameを指定してください")
     if not isinstance(request.dataset_root, Path):
         raise ValueError("dataset_root must be a pathlib.Path")
-    return _preview_character_intake(request)
+    if civitai_candidate is not None and not isinstance(civitai_candidate, CivitaiLoraCandidate):
+        raise ValueError("civitai_candidateはCivitaiLoraCandidateで指定してください")
+    if tagger_settings is not None and not isinstance(tagger_settings, TaggerSettings):
+        raise ValueError("tagger_settingsはTaggerSettingsで指定してください")
+    return _preview_character_intake(request, civitai_candidate, tagger_settings)
+
+
+# {
+#   責務: [register_character_intake: 人が確認したintake結果を新規CharacterProfileとして登録する]
+#   処理: [preview/confirmation/storage rootを検証し, commanderへ保存を依頼する]
+#   引数: [preview: tag intake preview, confirmation: 明示的な手動確認内容, profile_directory: 設定済み保存root]
+#   戻り値: [CharacterProfile: 登録profile]
+#   エラー: [ValueError: 入力が不正, FileExistsError: character_id登録済み, OSError: 保存失敗]
+# }
+def register_character_intake(
+    preview: CharacterTagIntakePreview,
+    confirmation: CharacterTagIntakeConfirmation,
+    profile_directory: Path,
+) -> CharacterProfile:
+    if not isinstance(preview, CharacterTagIntakePreview):
+        raise ValueError("previewはCharacterTagIntakePreviewで指定してください")
+    if not isinstance(confirmation, CharacterTagIntakeConfirmation):
+        raise ValueError("confirmationはCharacterTagIntakeConfirmationで指定してください")
+    if not isinstance(profile_directory, Path):
+        raise ValueError("profile_directoryはpathlib.Pathで指定してください")
+    return _register_character_intake(preview, confirmation, profile_directory)
 
 
 # {
@@ -84,3 +151,54 @@ def build_character_wildcard_files(profile: CharacterProfile) -> dict[str, str]:
     if not isinstance(profile, CharacterProfile):
         raise ValueError("profileはCharacterProfileで指定してください")
     return _build_character_wildcard_files(profile)
+
+
+# {
+#   責務: [write_character_wildcard_files: 確認済みprofileをwildcard rootへ保存する]
+#   処理: [public exporterでbundleを作り, UIから渡されたrootへfile store経由で書く]
+#   引数: [profile: 書き出すCharacterProfile, wildcard_root: paths.json由来のwildcard保存root]
+#   戻り値: [tuple[Path, ...]: 書き出したabsolute file path]
+#   エラー: [ValueError: profileまたはrootが不正, OSError: filesystem保存に失敗]
+# }
+def write_character_wildcard_files(
+    profile: CharacterProfile,
+    wildcard_root: Path,
+) -> tuple[Path, ...]:
+    """Write the confirmed profile's wildcard files under the configured root."""
+    if not isinstance(profile, CharacterProfile):
+        raise ValueError("profileはCharacterProfileで指定してください")
+    if not isinstance(wildcard_root, Path):
+        raise ValueError("wildcard_rootはpathlib.Pathで指定してください")
+    files = _build_character_wildcard_files(profile)
+    return CharacterWildcardFileStore().write(wildcard_root, files)
+
+
+# {
+#   責務: [write_character_lora_call_wildcard: 手動確認したLoRA候補をCharacter用wildcardへ保存する]
+#   処理: [候補行を検証し, path traversal防止とatomic replaceを持つfile storeへ渡す]
+#   引数: [character_id: stable ID, content: 重み付きLoRA呼び出し候補, wildcard_root: 設定済み保存root]
+#   戻り値: [tuple[Path, ...]: 保存したwildcard file]
+#   エラー: [ValueError: IDや候補内容が不正, OSError: file保存失敗]
+# }
+def write_character_lora_call_wildcard(
+    character_id: str,
+    content: str,
+    wildcard_root: Path,
+) -> tuple[Path, ...]:
+    """Validate and atomically save one Character's weighted local LoRA-call choices."""
+    if not isinstance(wildcard_root, Path):
+        raise ValueError("wildcard_rootはpathlib.Pathで指定してください")
+    files = build_character_lora_call_wildcard(character_id, content)
+    return CharacterWildcardFileStore().write(wildcard_root, files)
+
+
+# {
+#   責務: [build_character_lora_call_wildcard: public APIでLoRA候補wildcardをfilesystem非依存生成する]
+#   処理: [stable ID, 重み行, LoRA呼び出し記法を検証してfile bundleを返す]
+#   引数: [character_id: stable ID, content: 重み付きLoRA候補]
+#   戻り値: [dict[str, str]: root相対pathとUTF-8本文]
+#   エラー: [ValueError: IDまたは候補が不正な場合]
+# }
+def build_character_lora_call_wildcard(character_id: str, content: str) -> dict[str, str]:
+    """Build a validated Character-specific LoRA-call wildcard without writing files."""
+    return _build_character_lora_call_wildcard(character_id, content)

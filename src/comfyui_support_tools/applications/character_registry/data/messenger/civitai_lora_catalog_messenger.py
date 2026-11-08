@@ -1,6 +1,9 @@
 from src.comfyui_support_tools.applications.character_registry.data.processing.civitai_lora_catalog_client import (
     fetch_civitai_lora_version as _fetch_civitai_lora_version,
 )
+from src.comfyui_support_tools.applications.character_registry.data.processing.civitai_preview_tagger import (
+    tag_civitai_preview_images as _tag_civitai_preview_images,
+)
 from src.comfyui_support_tools.applications.character_registry.data.processing.civitai_lora_catalog_client import (
     search_civitai_loras as _search_civitai_loras,
 )
@@ -10,6 +13,8 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_candidate import (
 from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata import (
     CivitaiLoraVersionMetadata,
 )
+from src.comfyui_support_tools.shared.contracts.character_source_asset import CharacterSourceAsset
+from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
 
 
 # {
@@ -38,3 +43,17 @@ def load_civitai_lora_version(
     candidate: CivitaiLoraCandidate,
 ) -> CivitaiLoraVersionMetadata:
     return _fetch_civitai_lora_version(candidate)
+
+
+# {
+#   責務: [tag_civitai_preview_sources: 選択版preview画像をローカルTaggerへ接続する]
+#   処理: [version metadataとTagger設定をData processingへ送り, source assetを返す]
+#   引数: [metadata: Civitai version, settings: loopback Tagger settings]
+#   戻り値: [tuple[CharacterSourceAsset, ...]: preview画像由来のtag source]
+#   エラー: [ValueError: endpoint/image/Tagger response不正, RuntimeError: 画像がない場合]
+# }
+def tag_civitai_preview_sources(
+    metadata: CivitaiLoraVersionMetadata,
+    settings: TaggerSettings,
+) -> tuple[CharacterSourceAsset, ...]:
+    return _tag_civitai_preview_images(metadata, settings)

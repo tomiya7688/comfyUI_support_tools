@@ -81,6 +81,6 @@ def build_character_wildcard_files(profile: CharacterProfile) -> dict[str, str]:
 
     files[main_character_path.as_posix()] = f"{' '.join(main_references)}\n"
     files[wrapper_path.as_posix()] = (
-        f"__character_lora/{character_id}__ __anime_character/{character_id}__\n"
+        f"__anime_character_lora/{character_id}__ __anime_character/{character_id}__\n"
     )
     return files

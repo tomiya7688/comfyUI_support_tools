@@ -24,7 +24,8 @@ class CharacterReferenceImageStatisticsTests(unittest.TestCase):
     def test_empty_images_show_zero_counts(self) -> None:
         self.assertEqual(
             format_reference_image_statistics(()),
-            "登録候補: 0件 / 元画像あり: 0件 / 衣装別: 0件 / 混在: 0件 / 未分類: 0件",
+            "登録候補: 0件 / 元画像あり: 0件 / 学習候補: 0件 / "
+            "衣装別: 0件 / 混在: 0件 / 未分類: 0件",
         )
 
     # {
@@ -44,6 +45,7 @@ class CharacterReferenceImageStatisticsTests(unittest.TestCase):
                     content_sha256="a" * 64,
                     outfit_assignment="outfit",
                     outfit_id="school",
+                    selected_for_training=True,
                 ),
                 CharacterReferenceImage(
                     image_id=f"sha256-{'b' * 64}",
@@ -62,7 +64,8 @@ class CharacterReferenceImageStatisticsTests(unittest.TestCase):
 
         self.assertEqual(
             statistics,
-            "登録候補: 3件 / 元画像あり: 2件 / 衣装別: 1件 / 混在: 1件 / 未分類: 1件",
+            "登録候補: 3件 / 元画像あり: 2件 / 学習候補: 1件 / "
+            "衣装別: 1件 / 混在: 1件 / 未分類: 1件",
         )
 
 

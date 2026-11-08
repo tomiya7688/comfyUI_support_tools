@@ -49,8 +49,8 @@ class CharacterRegistryPanelView(ttk.Frame):
         self._build_actions()
 
     # {
-    #   責務: [_build_reference_images: コピーしないCharacter参照画像の選択欄を配置する]
-    #   処理: [参照画像一覧, outfit assignment selector, 追加/除去buttonを表示する]
+    #   責務: [_build_reference_images: コピーしないCharacter参照画像と学習候補切替欄を配置する]
+    #   処理: [参照画像一覧, outfit assignment selector, 追加/除去/学習候補切替buttonを表示する]
     #   引数: [self: view]
     #   戻り値: []
     # }
@@ -95,6 +95,12 @@ class CharacterRegistryPanelView(ttk.Frame):
             command=self.actions["remove_reference_images"],
         )
         self.remove_reference_images_button.pack(side="left", padx=(6, 0))
+        self.toggle_reference_image_training_button = ttk.Button(
+            controls,
+            text="学習候補を切替",
+            command=self.actions["toggle_reference_image_training_selection"],
+        )
+        self.toggle_reference_image_training_button.pack(side="left", padx=(6, 0))
         assignment = ttk.Frame(section)
         assignment.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         ttk.Label(assignment, text="選択画像の分類").pack(side="left")

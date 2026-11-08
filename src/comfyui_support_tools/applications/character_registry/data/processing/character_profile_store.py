@@ -203,23 +203,24 @@ def _outfit_from_data(value: Any) -> CharacterOutfitProfile:
 
 # {
 #   責務: [_reference_image_data: CharacterReferenceImageをJSON objectへ変換する]
-#   処理: [stable ID,元path,digest,衣装割当を保存可能なJSON値へ写す]
+#   処理: [stable ID,元path,digest,衣装割当,学習候補選択をJSON値へ写す]
 #   引数: [image: reference image]
 #   戻り値: [dict[str, str]: serialized reference]
 # }
-def _reference_image_data(image: CharacterReferenceImage) -> dict[str, str | None]:
+def _reference_image_data(image: CharacterReferenceImage) -> dict[str, str | bool | None]:
     return {
         "image_id": image.image_id,
         "source_path": image.source_path,
         "content_sha256": image.content_sha256,
         "outfit_assignment": image.outfit_assignment,
         "outfit_id": image.outfit_id,
+        "selected_for_training": image.selected_for_training,
     }
 
 
 # {
 #   責務: [_reference_image_from_data: JSON objectをreference image contractへ変換する]
-#   処理: [旧JSONの未設定をunknownへ補い, 画像参照と衣装割当を検証して復元する]
+#   処理: [旧JSONの未設定値を補い, 画像参照, 衣装割当, 学習候補選択を検証して復元する]
 #   引数: [value: JSON value]
 #   戻り値: [CharacterReferenceImage: 参照画像metadata]
 #   エラー: [ValueError: fieldが不正な場合]
@@ -229,6 +230,9 @@ def _reference_image_from_data(value: Any) -> CharacterReferenceImage:
     outfit_id = data.get("outfit_id")
     if outfit_id is not None:
         outfit_id = _require_string(outfit_id, "outfit_id")
+    selected_for_training = data.get("selected_for_training", False)
+    if not isinstance(selected_for_training, bool):
+        raise ValueError("selected_for_trainingはJSON booleanである必要があります")
     return CharacterReferenceImage(
         image_id=_require_string(data.get("image_id"), "image_id"),
         source_path=_require_string(data.get("source_path"), "source_path"),
@@ -237,6 +241,7 @@ def _reference_image_from_data(value: Any) -> CharacterReferenceImage:
             data.get("outfit_assignment", "unknown"), "outfit_assignment"
         ),
         outfit_id=outfit_id,
+        selected_for_training=selected_for_training,
     )
 
 

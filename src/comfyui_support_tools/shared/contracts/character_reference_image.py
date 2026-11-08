@@ -7,7 +7,7 @@ from src.comfyui_support_tools.shared.contracts.character_id import is_valid_cha
 
 # {
 #   責務: [CharacterReferenceImage: コピーしない参照画像と内容ハッシュを保持する]
-#   フィールド: [image_id: sha256由来のstable ID, source_path: 元画像の絶対path, content_sha256: 画像内容のdigest, outfit_assignment: unknown/mixed_custom/outfit, outfit_id: outfit割当時のID]
+#   フィールド: [image_id: sha256由来のstable ID, source_path: 元画像の絶対path, content_sha256: 画像内容のdigest, outfit_assignment: unknown/mixed_custom/outfit, outfit_id: outfit割当時のID, selected_for_training: 明示的に学習候補へ含めるか]
 # }
 @dataclass(frozen=True)
 class CharacterReferenceImage:
@@ -16,10 +16,11 @@ class CharacterReferenceImage:
     content_sha256: str
     outfit_assignment: str = "unknown"
     outfit_id: str | None = None
+    selected_for_training: bool = False
 
     # {
     #   責務: [__post_init__: 参照画像のID/path/hash/outfit割当形式を検証する]
-    #   処理: [SHA-256形式, ID一致, 絶対path, unknown/mixed/outfit割当を検証する]
+    #   処理: [SHA-256形式, ID一致, 絶対path, unknown/mixed/outfit割当, 学習候補boolを検証する]
     #   引数: [self: reference image]
     #   戻り値: []
     #   エラー: [ValueError: 参照画像metadataが不正な場合]
@@ -46,3 +47,5 @@ class CharacterReferenceImage:
                 raise ValueError("outfit割当では有効なoutfit_idを指定してください")
         elif self.outfit_id is not None:
             raise ValueError("unknown/mixed_customの画像にoutfit_idは指定できません")
+        if not isinstance(self.selected_for_training, bool):
+            raise ValueError("selected_for_trainingはboolで指定してください")

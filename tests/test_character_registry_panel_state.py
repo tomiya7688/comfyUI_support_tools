@@ -207,6 +207,40 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
         self.assertIn(selected_label, panel.status.value)
 
     # {
+    #   責務: [test_selected_reference_images_toggle_training_candidate_state: 選択画像の学習候補状態をprofile入力へ反映する]
+    #   処理: [複数選択された画像の状態を一括変更し, statusへtrainer未接続を明示する]
+    #   引数: [self: unittest.TestCase]
+    #   戻り値: []
+    # }
+    def test_selected_reference_images_toggle_training_candidate_state(self) -> None:
+        panel = object.__new__(CharacterRegistryPanel)
+        panel.reference_image_list = SimpleNamespace(curselection=lambda: (0, 1))
+        panel.reference_images = [
+            CharacterReferenceImage(
+                image_id=f"sha256-{'a' * 64}",
+                source_path=str(Path.cwd() / "reference" / "a.png"),
+                content_sha256="a" * 64,
+            ),
+            CharacterReferenceImage(
+                image_id=f"sha256-{'b' * 64}",
+                source_path=str(Path.cwd() / "reference" / "b.png"),
+                content_sha256="b" * 64,
+            ),
+        ]
+        panel.status = _StatusVariable()
+        panel._render_reference_images = lambda: None
+
+        CharacterRegistryPanel._toggle_reference_image_training_selection(panel)
+
+        self.assertEqual(
+            tuple(image.selected_for_training for image in panel.reference_images),
+            (True, True),
+        )
+        self.assertIsInstance(panel.reference_images, list)
+        self.assertIn("学習候補に追加", panel.status.value)
+        self.assertIn("未実装", panel.status.value)
+
+    # {
     #   責務: [test_missing_local_lora_mapping_is_explained: LoRA候補未登録時の手動設定案内を確認する]
     #   処理: [character wildcard出力後, 対応LoRA fileがない場合に作成pathをstatusへ含める]
     #   引数: [self: unittest.TestCase]

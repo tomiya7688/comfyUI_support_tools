@@ -14,6 +14,9 @@ from src.comfyui_support_tools.applications.character_registry.ui.messenger.char
 from src.comfyui_support_tools.applications.character_registry.ui.processing.character_reference_image_statistics import (
     format_reference_image_statistics,
 )
+from src.comfyui_support_tools.applications.character_registry.ui.processing.character_reference_image_training_selection import (
+    toggle_reference_image_training_selection,
+)
 from src.comfyui_support_tools.applications.character_registry.ui.processing.character_registry_panel_view import (
     CharacterRegistryPanelView,
 )
@@ -180,6 +183,7 @@ class CharacterRegistryPanel(ttk.Frame):
             "remove_reference_images": self.remove_reference_images,
             "select_reference_image": self._select_reference_image,
             "assign_reference_image": self._assign_reference_image,
+            "toggle_reference_image_training_selection": self._toggle_reference_image_training_selection,
         }
         self.view = CharacterRegistryPanelView(self, variables, actions)
         self.view.pack(fill="both", expand=True)
@@ -191,6 +195,9 @@ class CharacterRegistryPanel(ttk.Frame):
         self.remove_reference_images_button = self.view.remove_reference_images_button
         self.reference_image_assignment_combo = self.view.reference_image_assignment_combo
         self.assign_reference_image_button = self.view.assign_reference_image_button
+        self.toggle_reference_image_training_button = (
+            self.view.toggle_reference_image_training_button
+        )
         self.default_outfit_combo = self.view.default_outfit_combo
         self.identity_list = self.view.identity_list
         self.outfit_list = self.view.outfit_list
@@ -801,6 +808,27 @@ class CharacterRegistryPanel(ttk.Frame):
         self.status.set(f"参照画像の割当を「{label}」に更新しました。")
 
     # {
+    #   責務: [_toggle_reference_image_training_selection: 選択参照画像の学習候補状態を切り替える]
+    #   処理: [選択行を一括で学習候補へ追加または対象外へ変更し一覧を更新する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    #   状態: [status: 選択結果または入力エラーを表示する]
+    # }
+    def _toggle_reference_image_training_selection(self) -> None:
+        try:
+            updated_images, selected_for_training = toggle_reference_image_training_selection(
+                self.reference_images,
+                self.reference_image_list.curselection(),
+            )
+        except ValueError as error:
+            self.status.set(str(error))
+            return
+        self.reference_images = list(updated_images)
+        self._render_reference_images()
+        state_label = "学習候補に追加" if selected_for_training else "学習候補から除外"
+        self.status.set(f"選択した参照画像を{state_label}しました。学習処理との接続は未実装です。")
+
+    # {
     #   責務: [_build_confirmation: UIの手動選択をregistration contractへ変換する]
     #   処理: [選択されたidentity, 複数衣装, 明示された既定衣装をconfirmationへ変換する]
     #   引数: [self: panel]
@@ -896,8 +924,8 @@ class CharacterRegistryPanel(ttk.Frame):
         self.status.set(f"参照画像を{len(selected_indices)}件、登録候補から外しました。")
 
     # {
-    #   責務: [_render_reference_images: 参照画像のpathとcontent IDを一覧表示する]
-    #   処理: [Listboxと登録候補/元画像の存在/割当件数を現在のstateから再構築する]
+    #   責務: [_render_reference_images: 参照画像path, content ID, 学習候補状態を一覧表示する]
+    #   処理: [Listboxと登録候補/元画像の存在/学習候補/割当件数を現在のstateから再構築する]
     #   引数: [self: panel]
     #   戻り値: []
     # }
@@ -908,7 +936,8 @@ class CharacterRegistryPanel(ttk.Frame):
             assignment_label = self._reference_image_assignment_label(image)
             self.reference_image_list.insert(
                 "end",
-                f"{path.name}  [{image.content_sha256[:12]}]  [{assignment_label}]  {image.source_path}",
+                f"{path.name}  [{image.content_sha256[:12]}]  [{assignment_label}]  "
+                f"[{'学習候補' if image.selected_for_training else '対象外'}]  {image.source_path}",
             )
         self._select_reference_image()
         self.reference_image_statistics.set(

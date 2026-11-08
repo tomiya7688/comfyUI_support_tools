@@ -111,6 +111,10 @@ class CharacterRegistryPanelView(ttk.Frame):
             command=self.actions["assign_reference_image"],
         )
         self.assign_reference_image_button.pack(side="left", padx=(6, 0))
+        ttk.Label(
+            section,
+            textvariable=self.variables["reference_image_statistics"],
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
     # {
     #   責務: [_build_lora_call_editor: Character用の重み付きLoRA呼び出し候補欄を配置する]

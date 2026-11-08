@@ -11,6 +11,9 @@ from tkinter import filedialog, simpledialog, ttk
 from src.comfyui_support_tools.applications.character_registry.ui.messenger.character_registry_ui_messenger import (
     CharacterRegistryUiMessenger,
 )
+from src.comfyui_support_tools.applications.character_registry.ui.processing.character_reference_image_statistics import (
+    format_reference_image_statistics,
+)
 from src.comfyui_support_tools.applications.character_registry.ui.processing.character_registry_panel_view import (
     CharacterRegistryPanelView,
 )
@@ -135,6 +138,7 @@ class CharacterRegistryPanel(ttk.Frame):
         self.outfit_name = tk.StringVar(value="Default Outfit")
         self.default_outfit_id = tk.StringVar(value="")
         self.reference_image_assignment = tk.StringVar(value="")
+        self.reference_image_statistics = tk.StringVar(value=format_reference_image_statistics(()))
         self._reference_image_assignment_choices: dict[str, tuple[str, str | None]] = {}
         variables = {
             "dataset_root": self.dataset_root,
@@ -150,6 +154,7 @@ class CharacterRegistryPanel(ttk.Frame):
             "outfit_name": self.outfit_name,
             "default_outfit_id": self.default_outfit_id,
             "reference_image_assignment": self.reference_image_assignment,
+            "reference_image_statistics": self.reference_image_statistics,
             "status": self.status,
         }
         actions = {
@@ -892,7 +897,7 @@ class CharacterRegistryPanel(ttk.Frame):
 
     # {
     #   責務: [_render_reference_images: 参照画像のpathとcontent IDを一覧表示する]
-    #   処理: [Listboxを現在の参照画像stateとoutfit assignmentから再構築する]
+    #   処理: [Listboxと登録候補/元画像の存在/割当件数を現在のstateから再構築する]
     #   引数: [self: panel]
     #   戻り値: []
     # }
@@ -906,6 +911,9 @@ class CharacterRegistryPanel(ttk.Frame):
                 f"{path.name}  [{image.content_sha256[:12]}]  [{assignment_label}]  {image.source_path}",
             )
         self._select_reference_image()
+        self.reference_image_statistics.set(
+            format_reference_image_statistics(self.reference_images)
+        )
 
     # {
     #   責務: [_reference_image_assignment_label: 画像割当metadataを一覧表示用の短い名前へ変換する]

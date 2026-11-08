@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import errno
 import os
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+
+_WINDOWS_LOCK_VIOLATION = 33
 
 
 # {
@@ -28,9 +32,7 @@ def character_profile_registration_lock(
             os.write(descriptor, b"\0")
         os.lseek(descriptor, 0, os.SEEK_SET)
         if os.name == "nt":
-            import msvcrt
-
-            msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
+            _acquire_windows_file_lock(descriptor)
         else:
             import fcntl
 
@@ -51,3 +53,27 @@ def character_profile_registration_lock(
                     fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
             os.close(descriptor)
+
+
+# {
+#   責務: [_acquire_windows_file_lock: Windowsのbyte-range lockを取得する]
+#   処理: [lock競合のEACCESだけを短い間隔で再試行し, その他のOSエラーは呼出元へ返す]
+#   引数: [descriptor: byte-range lock対象のfile descriptor]
+#   戻り値: []
+#   エラー: [OSError: lock競合以外の取得失敗]
+# }
+def _acquire_windows_file_lock(descriptor: int) -> None:
+    """Wait for the registration byte lock without msvcrt's ten-retry timeout."""
+    import msvcrt
+
+    while True:
+        try:
+            msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            return
+        except OSError as error:
+            if error.errno != errno.EACCES or error.winerror not in (
+                None,
+                _WINDOWS_LOCK_VIOLATION,
+            ):
+                raise
+            time.sleep(0.05)

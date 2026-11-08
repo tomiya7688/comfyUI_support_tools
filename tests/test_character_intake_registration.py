@@ -1,14 +1,20 @@
 """Tests for saving manually confirmed Character Registry intake results."""
 
+import errno
 import multiprocessing
+import os
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from src.comfyui_support_tools.applications.character_registry.api import (
     register_character_intake,
+)
+from src.comfyui_support_tools.applications.character_registry.data.processing.character_profile_registration_lock import (
+    _acquire_windows_file_lock,
 )
 from src.comfyui_support_tools.applications.character_registry.data.processing.character_profile_store import (
     CharacterProfileStore,
@@ -129,6 +135,25 @@ class CharacterIntakeRegistrationTest(unittest.TestCase):
         )
 
     # {
+    #   責務: [test_windows_lock_retries_transient_contention: Windows lockが競合を再試行することを検証する]
+    #   処理: [一時的なEACCESの後にlock取得へ成功し, 短い待機が挟まることを確認する]
+    #   引数: [self: unittest.TestCase instance]
+    #   戻り値: []
+    # }
+    @unittest.skipUnless(os.name == "nt", "Windows byte-range locking only")
+    def test_windows_lock_retries_transient_contention(self) -> None:
+        with (
+            patch("msvcrt.locking", side_effect=(OSError(errno.EACCES, "locked"), None)) as lock,
+            patch(
+                "src.comfyui_support_tools.applications.character_registry.data.processing.character_profile_registration_lock.time.sleep"
+            ) as sleep,
+        ):
+            _acquire_windows_file_lock(0)
+
+        self.assertEqual(lock.call_count, 2)
+        sleep.assert_called_once_with(0.05)
+
+    # {
     #   責務: [test_register_saves_only_confirmed_identity_and_outfits: 手動確認後の保存とmetadata round-tripを検証する]
     #   処理: [profileを登録し, 再読込してidentity/outfit/source metadataを比較する]
     #   引数: [self: unittest.TestCase instance]
@@ -226,30 +251,38 @@ class CharacterIntakeRegistrationTest(unittest.TestCase):
                 )
                 for confirmation in (first_confirmation, second_confirmation)
             ]
-            for process in processes:
-                process.start()
+            started_processes = []
             try:
-                ready_states = [result_queue.get(timeout=15) for _ in processes]
+                for process in processes:
+                    process.start()
+                    started_processes.append(process)
+                ready_states = [result_queue.get(timeout=60) for _ in started_processes]
+                start_event.set()
+                self.assertEqual(ready_states, ["ready", "ready"])
+                for process in started_processes:
+                    process.join(timeout=30)
+                    if process.is_alive():
+                        process.terminate()
+                        process.join(timeout=5)
+                        self.fail("registration child process did not finish")
+                    self.assertEqual(process.exitcode, 0)
+
+                outcomes = [result_queue.get(timeout=30) for _ in started_processes]
+                restored = CharacterProfileStore(temporary_directory).load(preview.character_id)
             finally:
                 start_event.set()
-            self.assertEqual(ready_states, ["ready", "ready"])
-            for process in processes:
-                process.join(timeout=15)
-                if process.is_alive():
-                    process.terminate()
-                    process.join(timeout=5)
-                    self.fail("registration child process did not finish")
-                self.assertEqual(process.exitcode, 0)
-
-            outcomes = [result_queue.get(timeout=3) for _ in processes]
-            result_queue.close()
-            result_queue.join_thread()
-            restored = CharacterProfileStore(temporary_directory).load(preview.character_id)
+                for process in started_processes:
+                    process.join(timeout=30)
+                    if process.is_alive():
+                        process.terminate()
+                        process.join(timeout=5)
+                result_queue.close()
+                result_queue.join_thread()
 
         self.assertEqual(
             sum(isinstance(outcome, tuple) and outcome[0] == "saved" for outcome in outcomes), 1
         )
-        self.assertEqual(outcomes.count("exists"), 1)
+        self.assertEqual(outcomes.count("exists"), 1, outcomes)
         self.assertIn(restored.confirmed_core_traits, (("blue_hair",), ("red_hair",)))
 
     # {

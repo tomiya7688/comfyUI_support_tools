@@ -21,7 +21,7 @@ def _utc_now() -> datetime:
 
 
 # {
-#   責務: [CharacterProfile: stable IDを主キーにidentity, outfits, images, provenanceを保持する]
+#   責務: [CharacterProfile: stable IDを主キーにidentity, outfit割当付きimages, provenanceを保持する]
 #   フィールド: [character_id: 表示名に依存しないstable ID, display_name: 表示名, aliases: 別名, core_traits: identity候補, confirmed_core_traits: 確認済みidentity, rejected_traits: 除外候補, default_outfit_id: 既定衣装ID, outfit_profiles: 衣装profile, reference_image_ids: 参照画像ID, reference_images: 元画像pathとSHA-256, provenance: source asset情報, created_at: 作成時刻, updated_at: 更新時刻]
 # }
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ class CharacterProfile:
 
     # {
     #   責務: [__post_init__: profileのstable ID, 衣装参照, trait, timestampを検証する]
-    #   処理: [display name変更時もIDを保ち, 重複IDや不正なdefault outfit参照を拒否する]
+    #   処理: [display name変更時もIDを保ち, 画像割当先/source_image_idsとdefault outfit参照を検証する]
     #   引数: [self: character profile]
     #   戻り値: []
     #   エラー: [ValueError: profile schemaが不正な場合]
@@ -78,6 +78,14 @@ class CharacterProfile:
         outfit_ids = tuple(outfit.outfit_id for outfit in self.outfit_profiles)
         if len(outfit_ids) != len(set(outfit_ids)):
             raise ValueError("outfit_profilesのoutfit_idは重複できません")
+        outfit_by_id = {outfit.outfit_id: outfit for outfit in self.outfit_profiles}
+        for image in self.reference_images:
+            if image.outfit_assignment == "outfit":
+                outfit = outfit_by_id.get(image.outfit_id or "")
+                if outfit is None:
+                    raise ValueError("画像のoutfit_idは登録済みoutfit_profilesを参照してください")
+                if image.image_id not in outfit.source_image_ids:
+                    raise ValueError("割当画像IDをoutfitのsource_image_idsへ含めてください")
         if self.default_outfit_id is not None and self.default_outfit_id not in outfit_ids:
             raise ValueError("default_outfit_idは登録済みoutfit profileを参照してください")
         if (

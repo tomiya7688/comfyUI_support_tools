@@ -147,6 +147,8 @@ class CharacterIntakeRegistrationTest(unittest.TestCase):
             image_id=f"sha256-{image_digest}",
             source_path=str(Path.cwd() / "reference" / "character.png"),
             content_sha256=image_digest,
+            outfit_assignment="outfit",
+            outfit_id="school-uniform",
         )
         confirmation = CharacterTagIntakeConfirmation(
             confirmed_identity_traits=("blue_hair",),
@@ -165,7 +167,10 @@ class CharacterIntakeRegistrationTest(unittest.TestCase):
             restored = CharacterProfileStore(temporary_directory).load(profile.character_id)
 
         self.assertEqual(profile.confirmed_core_traits, ("blue_hair",))
-        self.assertEqual(profile.outfit_profiles, (confirmed_outfit,))
+        self.assertEqual(
+            profile.outfit_profiles[0].source_image_ids,
+            (reference_image.image_id,),
+        )
         self.assertEqual(restored, profile)
         self.assertEqual(profile.reference_image_ids, (reference_image.image_id,))
         self.assertEqual(restored.reference_images, (reference_image,))

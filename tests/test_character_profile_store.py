@@ -39,13 +39,14 @@ class CharacterProfileStoreTest(unittest.TestCase):
     # }
     def _make_profile(self) -> CharacterProfile:
         timestamp = datetime(2026, 11, 4, 5, 0, tzinfo=timezone.utc)
+        image_id = f"sha256-{'a' * 64}"
         outfit = CharacterOutfitProfile(
             outfit_id="casual",
             name="普段着",
             garment_traits=("white shirt", "skirt"),
             innerwear_traits=("camisole",),
             visibility_rules=("only_when_visible",),
-            source_image_ids=("image-1",),
+            source_image_ids=(image_id,),
             confidence=0.75,
             user_confirmed=True,
         )
@@ -68,12 +69,14 @@ class CharacterProfileStoreTest(unittest.TestCase):
             rejected_traits=("red eyes",),
             default_outfit_id="casual",
             outfit_profiles=(outfit,),
-            reference_image_ids=(f"sha256-{'a' * 64}",),
+            reference_image_ids=(image_id,),
             reference_images=(
                 CharacterReferenceImage(
-                    image_id=f"sha256-{'a' * 64}",
+                    image_id=image_id,
                     source_path=str(Path.cwd() / "reference" / "yuki.png"),
                     content_sha256="a" * 64,
+                    outfit_assignment="outfit",
+                    outfit_id="casual",
                 ),
             ),
             provenance=(source,),
@@ -98,6 +101,53 @@ class CharacterProfileStoreTest(unittest.TestCase):
             self.assertEqual(document["schema_version"], 1)
             self.assertEqual(store.load(profile.character_id), profile)
             self.assertIn("ユキ", saved_path.read_text(encoding="utf-8"))
+
+    # {
+    #   責務: [test_legacy_reference_image_without_assignment_defaults_to_unknown: 旧profileの画像割当を安全に復元する]
+    #   処理: [新規割当fieldをJSONから除いて保存し, 読込時にunknownを補うことを確認する]
+    #   引数: [self: unittest.TestCase]
+    #   戻り値: []
+    # }
+    def test_legacy_reference_image_without_assignment_defaults_to_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            store = CharacterProfileStore(Path(temporary_directory) / "characters")
+            profile = self._make_profile()
+            saved_path = store.save(profile)
+            data = json.loads(saved_path.read_text(encoding="utf-8"))
+            data["reference_images"][0].pop("outfit_assignment")
+            data["reference_images"][0].pop("outfit_id")
+            saved_path.write_text(json.dumps(data), encoding="utf-8")
+
+            restored = store.load(profile.character_id)
+
+        self.assertEqual(restored.reference_images[0].outfit_assignment, "unknown")
+        self.assertIsNone(restored.reference_images[0].outfit_id)
+
+    # {
+    #   責務: [test_reference_image_rejects_invalid_outfit_assignment: 不正な画像衣装割当を拒否する]
+    #   処理: [不明な状態, IDなしのoutfit, unknownへのID混入をValueErrorとして検証する]
+    #   引数: [self: unittest.TestCase]
+    #   戻り値: []
+    # }
+    def test_reference_image_rejects_invalid_outfit_assignment(self) -> None:
+        image_values = {
+            "image_id": f"sha256-{'a' * 64}",
+            "source_path": str(Path.cwd() / "reference" / "image.png"),
+            "content_sha256": "a" * 64,
+        }
+        for assignment, outfit_id in (
+            ("invalid", None),
+            ("outfit", None),
+            ("unknown", "casual"),
+            ([], None),
+        ):
+            with self.subTest(assignment=assignment, outfit_id=outfit_id):
+                with self.assertRaises(ValueError):
+                    CharacterReferenceImage(
+                        **image_values,
+                        outfit_assignment=assignment,
+                        outfit_id=outfit_id,
+                    )
 
     # {
     #   責務: [test_save_replaces_existing_profile: 同一stable IDの更新保存を検証する]

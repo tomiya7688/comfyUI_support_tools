@@ -50,7 +50,7 @@ class CharacterRegistryPanelView(ttk.Frame):
 
     # {
     #   責務: [_build_reference_images: コピーしないCharacter参照画像の選択欄を配置する]
-    #   処理: [参照画像一覧と追加/除去buttonを表示する]
+    #   処理: [参照画像一覧, outfit assignment selector, 追加/除去buttonを表示する]
     #   引数: [self: view]
     #   戻り値: []
     # }
@@ -77,6 +77,10 @@ class CharacterRegistryPanelView(ttk.Frame):
         )
         scrollbar.grid(row=1, column=1, sticky="ns", pady=(4, 0))
         self.reference_image_list.configure(yscrollcommand=scrollbar.set)
+        self.reference_image_list.bind(
+            "<<ListboxSelect>>",
+            self.actions["select_reference_image"],
+        )
         controls = ttk.Frame(section)
         controls.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self.add_reference_images_button = ttk.Button(
@@ -91,6 +95,22 @@ class CharacterRegistryPanelView(ttk.Frame):
             command=self.actions["remove_reference_images"],
         )
         self.remove_reference_images_button.pack(side="left", padx=(6, 0))
+        assignment = ttk.Frame(section)
+        assignment.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ttk.Label(assignment, text="選択画像の分類").pack(side="left")
+        self.reference_image_assignment_combo = ttk.Combobox(
+            assignment,
+            textvariable=self.variables["reference_image_assignment"],
+            state="readonly",
+            width=30,
+        )
+        self.reference_image_assignment_combo.pack(side="left", padx=(6, 0))
+        self.assign_reference_image_button = ttk.Button(
+            assignment,
+            text="割当を反映",
+            command=self.actions["assign_reference_image"],
+        )
+        self.assign_reference_image_button.pack(side="left", padx=(6, 0))
 
     # {
     #   責務: [_build_lora_call_editor: Character用の重み付きLoRA呼び出し候補欄を配置する]

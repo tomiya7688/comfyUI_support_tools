@@ -2,20 +2,24 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.comfyui_support_tools.shared.contracts.character_id import is_valid_character_id
+
 
 # {
 #   責務: [CharacterReferenceImage: コピーしない参照画像と内容ハッシュを保持する]
-#   フィールド: [image_id: sha256由来のstable ID, source_path: 元画像の絶対path, content_sha256: 画像内容のdigest]
+#   フィールド: [image_id: sha256由来のstable ID, source_path: 元画像の絶対path, content_sha256: 画像内容のdigest, outfit_assignment: unknown/mixed_custom/outfit, outfit_id: outfit割当時のID]
 # }
 @dataclass(frozen=True)
 class CharacterReferenceImage:
     image_id: str
     source_path: str
     content_sha256: str
+    outfit_assignment: str = "unknown"
+    outfit_id: str | None = None
 
     # {
-    #   責務: [__post_init__: 参照画像のID/path/hash形式を検証する]
-    #   処理: [SHA-256形式, IDとの一致, 絶対pathを検証する]
+    #   責務: [__post_init__: 参照画像のID/path/hash/outfit割当形式を検証する]
+    #   処理: [SHA-256形式, ID一致, 絶対path, unknown/mixed/outfit割当を検証する]
     #   引数: [self: reference image]
     #   戻り値: []
     #   エラー: [ValueError: 参照画像metadataが不正な場合]
@@ -31,3 +35,14 @@ class CharacterReferenceImage:
             raise ValueError("source_pathを指定してください")
         if not Path(self.source_path).is_absolute():
             raise ValueError("source_pathは絶対pathで指定してください")
+        if not isinstance(self.outfit_assignment, str) or self.outfit_assignment not in {
+            "unknown",
+            "mixed_custom",
+            "outfit",
+        }:
+            raise ValueError("outfit_assignmentはunknown/mixed_custom/outfitで指定してください")
+        if self.outfit_assignment == "outfit":
+            if not isinstance(self.outfit_id, str) or not is_valid_character_id(self.outfit_id):
+                raise ValueError("outfit割当では有効なoutfit_idを指定してください")
+        elif self.outfit_id is not None:
+            raise ValueError("unknown/mixed_customの画像にoutfit_idは指定できません")

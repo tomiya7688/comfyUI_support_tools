@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from queue import Empty, Queue
 from tkinter import filedialog, simpledialog, ttk
@@ -133,6 +134,8 @@ class CharacterRegistryPanel(ttk.Frame):
         self.outfit_id = tk.StringVar(value="default")
         self.outfit_name = tk.StringVar(value="Default Outfit")
         self.default_outfit_id = tk.StringVar(value="")
+        self.reference_image_assignment = tk.StringVar(value="")
+        self._reference_image_assignment_choices: dict[str, tuple[str, str | None]] = {}
         variables = {
             "dataset_root": self.dataset_root,
             "profile_directory": self.profile_directory,
@@ -146,6 +149,7 @@ class CharacterRegistryPanel(ttk.Frame):
             "outfit_id": self.outfit_id,
             "outfit_name": self.outfit_name,
             "default_outfit_id": self.default_outfit_id,
+            "reference_image_assignment": self.reference_image_assignment,
             "status": self.status,
         }
         actions = {
@@ -169,6 +173,8 @@ class CharacterRegistryPanel(ttk.Frame):
             "save_lora_call_wildcard": self.save_lora_call_wildcard,
             "add_reference_images": self.add_reference_images,
             "remove_reference_images": self.remove_reference_images,
+            "select_reference_image": self._select_reference_image,
+            "assign_reference_image": self._assign_reference_image,
         }
         self.view = CharacterRegistryPanelView(self, variables, actions)
         self.view.pack(fill="both", expand=True)
@@ -178,6 +184,8 @@ class CharacterRegistryPanel(ttk.Frame):
         self.reference_image_list = self.view.reference_image_list
         self.add_reference_images_button = self.view.add_reference_images_button
         self.remove_reference_images_button = self.view.remove_reference_images_button
+        self.reference_image_assignment_combo = self.view.reference_image_assignment_combo
+        self.assign_reference_image_button = self.view.assign_reference_image_button
         self.default_outfit_combo = self.view.default_outfit_combo
         self.identity_list = self.view.identity_list
         self.outfit_list = self.view.outfit_list
@@ -187,6 +195,7 @@ class CharacterRegistryPanel(ttk.Frame):
         self.preview_button = self.view.preview_button
         self.register_button = self.view.register_button
         self.wildcard_retry_button = self.view.wildcard_retry_button
+        self._render_saved_outfits()
 
     # {
     #   責務: [_choose_dataset: Tagger captionを含むdataset folderを選択する]
@@ -669,8 +678,8 @@ class CharacterRegistryPanel(ttk.Frame):
         self.status.set(f"衣装「{outfit_name}」を追加しました。続けて別の衣装を分類できます。")
 
     # {
-    #   責務: [_delete_outfit_profile: 選択された確認済みoutfit候補を削除する]
-    #   処理: [saved outfit listの選択indexを使ってprofileを除去しlist表示を更新する]
+    #   責務: [_delete_outfit_profile: 選択された確認済みoutfitと画像割当を削除整合する]
+    #   処理: [outfitを除去し, その衣装に紐付く画像をunknownへ戻してlistを更新する]
     #   引数: [self: panel]
     #   戻り値: []
     # }
@@ -679,12 +688,26 @@ class CharacterRegistryPanel(ttk.Frame):
         if not selected:
             self.status.set("削除する衣装候補を選択してください。")
             return
-        del self.confirmed_outfits[selected[0]]
+        removed_outfit = self.confirmed_outfits.pop(selected[0])
+        cleared_assignments = 0
+        for index, image in enumerate(self.reference_images):
+            if image.outfit_id == removed_outfit.outfit_id:
+                self.reference_images[index] = replace(
+                    image,
+                    outfit_assignment="unknown",
+                    outfit_id=None,
+                )
+                cleared_assignments += 1
         self._render_saved_outfits()
+        self._render_reference_images()
+        if cleared_assignments:
+            self.status.set(
+                f"衣装「{removed_outfit.name}」を削除し、紐付く画像{cleared_assignments}件を未分類へ戻しました。"
+            )
 
     # {
     #   責務: [_render_saved_outfits: 確認済みoutfit候補をUIへ表示する]
-    #   処理: [衣装候補を表示し, 既定衣装selectorの候補と選択状態を更新する]
+    #   処理: [衣装候補, 既定衣装selector, 参照画像の割当候補を更新する]
     #   引数: [self: panel]
     #   戻り値: []
     # }
@@ -699,6 +722,78 @@ class CharacterRegistryPanel(ttk.Frame):
                 "end",
                 f"{outfit.name} ({outfit.outfit_id})",
             )
+        self._render_reference_image_assignment_choices()
+
+    # {
+    #   責務: [_render_reference_image_assignment_choices: 未分類/混在/登録衣装の割当候補を表示する]
+    #   処理: [表示名とassignment kind/outfit IDの対応表を更新し, 画像選択状態を反映する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def _render_reference_image_assignment_choices(self) -> None:
+        choices = {
+            "未分類 / 不明": ("unknown", None),
+            "混在 / カスタム": ("mixed_custom", None),
+        }
+        for outfit in self.confirmed_outfits:
+            choices[f"衣装: {outfit.name} ({outfit.outfit_id})"] = (
+                "outfit",
+                outfit.outfit_id,
+            )
+        self._reference_image_assignment_choices = choices
+        self.reference_image_assignment_combo.configure(values=tuple(choices))
+        self._select_reference_image()
+
+    # {
+    #   責務: [_select_reference_image: 選択画像の現在の衣装分類をcomboboxへ表示する]
+    #   処理: [単一選択時に画像metadataと割当候補を照合して表示値を設定する]
+    #   引数: [self: panel, event: Tk selection event]
+    #   戻り値: []
+    # }
+    def _select_reference_image(self, _event: object = None) -> None:
+        selected = self.reference_image_list.curselection()
+        if len(selected) != 1:
+            self.reference_image_assignment.set("")
+            return
+        image = self.reference_images[selected[0]]
+        assignment = (image.outfit_assignment, image.outfit_id)
+        label = next(
+            (
+                option
+                for option, value in self._reference_image_assignment_choices.items()
+                if value == assignment
+            ),
+            "未分類 / 不明",
+        )
+        self.reference_image_assignment.set(label)
+
+    # {
+    #   責務: [_assign_reference_image: 選択画像をunknown/mixed_custom/登録衣装へ割り当てる]
+    #   処理: [単一選択画像のimmutable metadataを更新し, 一覧とstatusを反映する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    #   状態: [status: 選択不足や不正な割当を説明する]
+    # }
+    def _assign_reference_image(self) -> None:
+        selected = self.reference_image_list.curselection()
+        if len(selected) != 1:
+            self.status.set("衣装を割り当てる参照画像を1件選択してください。")
+            return
+        label = self.reference_image_assignment.get()
+        assignment = self._reference_image_assignment_choices.get(label)
+        if assignment is None:
+            self.status.set("画像の割当先を選択してください。")
+            return
+        index = selected[0]
+        self.reference_images[index] = replace(
+            self.reference_images[index],
+            outfit_assignment=assignment[0],
+            outfit_id=assignment[1],
+        )
+        self._render_reference_images()
+        self.reference_image_list.selection_set(index)
+        self.reference_image_assignment.set(label)
+        self.status.set(f"参照画像の割当を「{label}」に更新しました。")
 
     # {
     #   責務: [_build_confirmation: UIの手動選択をregistration contractへ変換する]
@@ -797,7 +892,7 @@ class CharacterRegistryPanel(ttk.Frame):
 
     # {
     #   責務: [_render_reference_images: 参照画像のpathとcontent IDを一覧表示する]
-    #   処理: [Listboxを現在の参照画像stateから再構築する]
+    #   処理: [Listboxを現在の参照画像stateとoutfit assignmentから再構築する]
     #   引数: [self: panel]
     #   戻り値: []
     # }
@@ -805,10 +900,35 @@ class CharacterRegistryPanel(ttk.Frame):
         self.reference_image_list.delete(0, "end")
         for image in self.reference_images:
             path = Path(image.source_path)
+            assignment_label = self._reference_image_assignment_label(image)
             self.reference_image_list.insert(
                 "end",
-                f"{path.name}  [{image.content_sha256[:12]}]  {image.source_path}",
+                f"{path.name}  [{image.content_sha256[:12]}]  [{assignment_label}]  {image.source_path}",
             )
+        self._select_reference_image()
+
+    # {
+    #   責務: [_reference_image_assignment_label: 画像割当metadataを一覧表示用の短い名前へ変換する]
+    #   処理: [unknown/mixed/outfit stateから現在の表示名を返す]
+    #   引数: [self: panel, image: 参照画像metadata]
+    #   戻り値: [str: UI表示用の分類名]
+    # }
+    def _reference_image_assignment_label(self, image: CharacterReferenceImage) -> str:
+        if image.outfit_assignment == "unknown":
+            return "未分類 / 不明"
+        if image.outfit_assignment == "mixed_custom":
+            return "混在 / カスタム"
+        outfit = next(
+            (
+                candidate
+                for candidate in self.confirmed_outfits
+                if candidate.outfit_id == image.outfit_id
+            ),
+            None,
+        )
+        if outfit is None:
+            return f"衣装: {image.outfit_id}"
+        return f"衣装: {outfit.name} ({outfit.outfit_id})"
 
     # {
     #   責務: [_show_registered_profile: 保存成功したprofile IDをUIへ表示する]

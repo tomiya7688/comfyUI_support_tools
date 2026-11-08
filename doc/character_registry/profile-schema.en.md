@@ -4,12 +4,14 @@
 
 ## Types added in this slice
 
-- CharacterReferenceImage stores an ID derived from the content SHA-256 and the absolute path to the original image. Reference-only registration does not copy the image, and identical content receives the same ID.
+- CharacterReferenceImage stores an ID derived from the content SHA-256 and the absolute path to the original image. Reference-only registration does not copy the image, and identical content receives the same ID. Its assignment is `unknown`, `mixed_custom`, or `outfit`; only the outfit case has an outfit ID.
 - `CharacterProfile` stores an opaque stable `character_id`, identity candidates, confirmed/rejected traits, outfit profiles, reference image IDs, source provenance, and UTC timestamps.
-- `CharacterOutfitProfile` stores outerwear, garments, accessories, innerwear, visibility rules, image references, confidence, and manual confirmation state.
+- `CharacterOutfitProfile` stores outerwear, garments, accessories, innerwear, visibility rules, manually assigned image IDs, confidence, and manual confirmation state.
 - `create_character_id()` creates a random opaque ID once. Do not regenerate an existing ID when its display name changes.
 
 Both types are immutable dataclasses. They reject blank display names, invalid IDs, duplicate outfit IDs, missing default outfit references, and naive timestamps. Confidence must be a finite value from 0.0 through 1.0.
+
+Older JSON without image-assignment fields loads with `unknown` assignment. A profile validates that each assigned outfit exists and that its image ID appears in that outfit's `source_image_ids`.
 
 ## Storage format
 

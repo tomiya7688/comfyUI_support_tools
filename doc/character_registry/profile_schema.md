@@ -4,10 +4,12 @@
 
 ## この作業で追加した型
 
-- CharacterReferenceImage は内容SHA-256から作るIDと元画像の絶対pathを保持します。参照onlyのため画像をprofile保存先へコピーせず、同じ内容の画像は同じIDになります。
+- CharacterReferenceImage は内容SHA-256から作るIDと元画像の絶対pathを保持します。参照onlyのため画像をprofile保存先へコピーせず、同じ内容の画像は同じIDになります。画像分類は `unknown`、`mixed_custom`、`outfit` のいずれかで、`outfit` のときだけoutfit IDを持ちます。
 - `CharacterProfile` は表示名に依存しないstable `character_id`、identity候補、確認済み/除外trait、複数の衣装profile、参照画像ID、source provenance、UTC timestampsを保持します。
-- `CharacterOutfitProfile` は外衣、衣服、アクセサリー、innerwear、visibility rule、参照画像、推定confidence、手動確認状態を保持します。
+- `CharacterOutfitProfile` は外衣、衣服、アクセサリー、innerwear、visibility rule、手動で割り当てた参照画像ID、推定confidence、手動確認状態を保持します。
 - `create_character_id()` はランダムな不透明IDを一度だけ生成します。表示名を変えても、既存IDを再生成しないでください。
+
+既存JSONで画像分類fieldがない場合は `unknown` として読み込みます。Profileは衣装割当先が存在することと、割当画像IDが該当衣装の `source_image_ids` に含まれることを検証します。
 
 両型はimmutable dataclassです。空の表示名、無効なID、重複outfit ID、不存在のdefault outfit参照、timezoneのない時刻を拒否します。confidenceは有限の0.0〜1.0の値に限ります。
 

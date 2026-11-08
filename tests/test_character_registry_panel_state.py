@@ -12,6 +12,9 @@ from src.comfyui_support_tools.applications.character_registry.ui.processing.cha
 from src.comfyui_support_tools.shared.contracts.character_outfit_profile import (
     CharacterOutfitProfile,
 )
+from src.comfyui_support_tools.shared.contracts.character_reference_image import (
+    CharacterReferenceImage,
+)
 
 
 # {
@@ -153,6 +156,7 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
         )
         panel.status = _StatusVariable()
         panel._render_confirmed_tags = lambda: None
+        panel._render_reference_image_assignment_choices = lambda: None
         displayed: list[str] = []
         panel.default_outfit_combo = SimpleNamespace(configure=lambda **_kwargs: None)
         panel.saved_outfit_list = SimpleNamespace(
@@ -167,6 +171,40 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
         self.assertEqual(default_value["value"], "school")
         self.assertEqual(displayed, ["School Uniform (school)"])
         self.assertEqual(panel.outfit_tags, [])
+
+    # {
+    #   責務: [test_selected_reference_image_can_be_assigned_to_an_outfit: 画像の手動割当をoutfit IDとして保持する]
+    #   処理: [選択画像へ衣装optionを適用し, immutable metadataのassignmentを検証する]
+    #   引数: [self: unittest.TestCase]
+    #   戻り値: []
+    # }
+    def test_selected_reference_image_can_be_assigned_to_an_outfit(self) -> None:
+        image = CharacterReferenceImage(
+            image_id=f"sha256-{'a' * 64}",
+            source_path=str(Path.cwd() / "reference" / "image.png"),
+            content_sha256="a" * 64,
+        )
+        selected_label = "衣装: School (school)"
+        assignment_value = {"value": selected_label}
+        panel = object.__new__(CharacterRegistryPanel)
+        panel.reference_image_list = SimpleNamespace(
+            curselection=lambda: (0,),
+            selection_set=lambda _index: None,
+        )
+        panel.reference_images = [image]
+        panel._reference_image_assignment_choices = {selected_label: ("outfit", "school")}
+        panel.reference_image_assignment = SimpleNamespace(
+            get=lambda: assignment_value["value"],
+            set=lambda value: assignment_value.update(value=value),
+        )
+        panel.status = _StatusVariable()
+        panel._render_reference_images = lambda: None
+
+        panel._assign_reference_image()
+
+        self.assertEqual(panel.reference_images[0].outfit_assignment, "outfit")
+        self.assertEqual(panel.reference_images[0].outfit_id, "school")
+        self.assertIn(selected_label, panel.status.value)
 
     # {
     #   責務: [test_missing_local_lora_mapping_is_explained: LoRA候補未登録時の手動設定案内を確認する]

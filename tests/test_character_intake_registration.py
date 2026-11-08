@@ -20,6 +20,9 @@ from src.comfyui_support_tools.shared.contracts.character_outfit_tag_group impor
     CharacterOutfitTagGroup,
 )
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_reference_image import (
+    CharacterReferenceImage,
+)
 from src.comfyui_support_tools.shared.contracts.character_source_asset import CharacterSourceAsset
 from src.comfyui_support_tools.shared.contracts.character_tag_candidate import (
     CharacterTagCandidate,
@@ -139,11 +142,18 @@ class CharacterIntakeRegistrationTest(unittest.TestCase):
             garment_traits=("school_uniform",),
             user_confirmed=True,
         )
+        image_digest = "b" * 64
+        reference_image = CharacterReferenceImage(
+            image_id=f"sha256-{image_digest}",
+            source_path=str(Path.cwd() / "reference" / "character.png"),
+            content_sha256=image_digest,
+        )
         confirmation = CharacterTagIntakeConfirmation(
             confirmed_identity_traits=("blue_hair",),
             rejected_traits=("temporary_unknown_trait",),
             outfit_profiles=(confirmed_outfit,),
             default_outfit_id="school-uniform",
+            reference_images=(reference_image,),
         )
 
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -157,6 +167,8 @@ class CharacterIntakeRegistrationTest(unittest.TestCase):
         self.assertEqual(profile.confirmed_core_traits, ("blue_hair",))
         self.assertEqual(profile.outfit_profiles, (confirmed_outfit,))
         self.assertEqual(restored, profile)
+        self.assertEqual(profile.reference_image_ids, (reference_image.image_id,))
+        self.assertEqual(restored.reference_images, (reference_image,))
         self.assertEqual(
             restored.provenance[0].source_metadata,
             (("allow_commercial_use", "Image"), ("creator", "artist")),

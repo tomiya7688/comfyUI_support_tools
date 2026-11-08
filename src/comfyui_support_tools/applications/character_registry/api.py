@@ -12,6 +12,9 @@ from src.comfyui_support_tools.applications.character_registry.process.commander
 from src.comfyui_support_tools.applications.character_registry.process.commander.character_registry_commander import (
     search_civitai_loras as _search_civitai_loras,
 )
+from src.comfyui_support_tools.applications.character_registry.data.processing.character_reference_image_loader import (
+    load_character_reference_image as _load_character_reference_image,
+)
 from src.comfyui_support_tools.applications.character_registry.process.processing.character_wildcard_exporter import (
     build_character_wildcard_files as _build_character_wildcard_files,
 )
@@ -20,6 +23,9 @@ from src.comfyui_support_tools.applications.character_registry.process.processin
 )
 from src.comfyui_support_tools.shared.contracts.character_id import is_valid_character_id
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_reference_image import (
+    CharacterReferenceImage,
+)
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
     CharacterTagIntakeConfirmation,
 )
@@ -38,6 +44,22 @@ from src.comfyui_support_tools.shared.contracts.civitai_lora_version_metadata im
 from src.comfyui_support_tools.shared.contracts.inspector_contracts import TaggerSettings
 
 from .data.processing.character_wildcard_file_store import CharacterWildcardFileStore
+
+
+# {
+#   責務: [load_character_reference_image: local参照画像をprofile用metadataへ変換する]
+#   処理: [Path入力を検証し, application APIからdata loaderへ委譲してstable ID, path, SHA-256を返す]
+#   引数: [image_path: ユーザーが選択した画像path]
+#   戻り値: [CharacterReferenceImage: コピーや画像解析を行わない参照metadata]
+#   エラー: [ValueError: path型が不正, FileNotFoundError/OSError: 読取失敗, ValueError: unsupported extension]
+# }
+def load_character_reference_image(
+    image_path: Path,
+) -> CharacterReferenceImage:
+    """Build reference-only metadata for a user-selected local image."""
+    if not isinstance(image_path, Path):
+        raise ValueError("image_pathはpathlib.Pathで指定してください")
+    return _load_character_reference_image(image_path)
 
 
 # {

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from src.comfyui_support_tools.applications.character_registry.api import (
+    load_character_reference_image,
     preview_character_intake,
     register_character_intake,
     search_civitai_loras,
@@ -8,6 +9,9 @@ from src.comfyui_support_tools.applications.character_registry.api import (
     write_character_wildcard_files,
 )
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_reference_image import (
+    CharacterReferenceImage,
+)
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
     CharacterTagIntakeConfirmation,
 )
@@ -29,6 +33,15 @@ from src.comfyui_support_tools.shared.contracts.inspector_contracts import Tagge
 # }
 class CharacterRegistryUiMessenger:
     """Expose only public Character Registry API calls to the UI layer."""
+
+    # {
+    #   責務: [load_character_reference_image: 選択画像の参照metadataをapplication API経由で作る]
+    #   処理: [local pathをpublic APIへ渡し, SHA-256で識別する参照metadataを返す]
+    #   引数: [image_path: ユーザーが選択した画像path]
+    #   戻り値: [CharacterReferenceImage: copy/analysisなしの参照情報]
+    # }
+    def load_character_reference_image(self, image_path: Path) -> CharacterReferenceImage:
+        return load_character_reference_image(image_path)
 
     # {
     #   責務: [search_civitai_loras: UIの検索語でCivitai LoRA候補を取得する]

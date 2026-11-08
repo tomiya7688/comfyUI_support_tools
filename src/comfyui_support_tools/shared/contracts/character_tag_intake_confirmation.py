@@ -2,11 +2,12 @@ from dataclasses import dataclass
 
 from .character_outfit_profile import CharacterOutfitProfile
 from .character_profile_validation import validate_text_tuple
+from .character_reference_image import CharacterReferenceImage
 
 
 # {
 #   責務: [CharacterTagIntakeConfirmation: 手動確認済みのidentity/outfit分類を保持する]
-#   フィールド: [confirmed_identity_traits: 登録するidentity, rejected_traits: 明示的に除外した候補, outfit_profiles: 確認済み衣装, default_outfit_id: 既定衣装]
+#   フィールド: [confirmed_identity_traits: 登録するidentity, rejected_traits: 明示的に除外した候補, outfit_profiles: 確認済み衣装, default_outfit_id: 既定衣装, reference_images: 手動で選択した参照画像]
 # }
 @dataclass(frozen=True)
 class CharacterTagIntakeConfirmation:
@@ -16,10 +17,11 @@ class CharacterTagIntakeConfirmation:
     rejected_traits: tuple[str, ...] = ()
     outfit_profiles: tuple[CharacterOutfitProfile, ...] = ()
     default_outfit_id: str | None = None
+    reference_images: tuple[CharacterReferenceImage, ...] = ()
 
     # {
     #   責務: [__post_init__: confirmation内容が手動確認済みのprofile候補であることを検証する]
-    #   処理: [trait tuple, outfit type/confirmation, outfit ID重複, default outfit参照を検証する]
+    #   処理: [trait tuple, outfit type/confirmation, outfit ID重複, default outfit参照, image ID重複を検証する]
     #   引数: [self: intake confirmation]
     #   戻り値: []
     #   エラー: [ValueError: 未確認または不正なtrait/outfitが含まれる場合]
@@ -59,3 +61,10 @@ class CharacterTagIntakeConfirmation:
             raise ValueError("同じoutfit traitをconfirmedとrejectedの両方には指定できません")
         if self.default_outfit_id is not None and self.default_outfit_id not in outfit_ids:
             raise ValueError("default_outfit_idは確認済みoutfit_profiles内に指定してください")
+        if not isinstance(self.reference_images, tuple) or any(
+            not isinstance(image, CharacterReferenceImage) for image in self.reference_images
+        ):
+            raise ValueError("reference_imagesはCharacterReferenceImageのtupleで指定してください")
+        image_ids = tuple(image.image_id for image in self.reference_images)
+        if len(image_ids) != len(set(image_ids)):
+            raise ValueError("reference_imagesに同じ画像内容を重複登録できません")

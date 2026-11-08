@@ -15,6 +15,9 @@ from src.comfyui_support_tools.shared.contracts.character_outfit_profile import 
     CharacterOutfitProfile,
 )
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_reference_image import (
+    CharacterReferenceImage,
+)
 from src.comfyui_support_tools.shared.contracts.character_source_asset import (
     CharacterSourceAsset,
 )
@@ -65,7 +68,14 @@ class CharacterProfileStoreTest(unittest.TestCase):
             rejected_traits=("red eyes",),
             default_outfit_id="casual",
             outfit_profiles=(outfit,),
-            reference_image_ids=("image-1",),
+            reference_image_ids=(f"sha256-{'a' * 64}",),
+            reference_images=(
+                CharacterReferenceImage(
+                    image_id=f"sha256-{'a' * 64}",
+                    source_path=str(Path.cwd() / "reference" / "yuki.png"),
+                    content_sha256="a" * 64,
+                ),
+            ),
             provenance=(source,),
             created_at=timestamp,
             updated_at=timestamp,

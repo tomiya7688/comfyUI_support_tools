@@ -77,6 +77,7 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
         panel = object.__new__(CharacterRegistryPanel)
         panel.identity_tags = ["blue_hair"]
         panel.confirmed_outfits = []
+        panel.reference_images = []
         panel.outfit_tags = ["school_uniform"]
         panel.innerwear_tags = ["undershirt"]
         panel.outfit_id = SimpleNamespace(get=lambda: "default")
@@ -113,6 +114,7 @@ class CharacterRegistryPanelStateTests(unittest.TestCase):
                 user_confirmed=True,
             ),
         ]
+        panel.reference_images = []
         panel.outfit_tags = []
         panel.innerwear_tags = []
         panel.outfit_id = SimpleNamespace(get=lambda: "outfit-3")

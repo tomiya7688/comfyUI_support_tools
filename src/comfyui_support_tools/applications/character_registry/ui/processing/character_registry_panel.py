@@ -21,6 +21,9 @@ from src.comfyui_support_tools.shared.contracts.character_outfit_profile import 
     CharacterOutfitProfile,
 )
 from src.comfyui_support_tools.shared.contracts.character_profile import CharacterProfile
+from src.comfyui_support_tools.shared.contracts.character_reference_image import (
+    CharacterReferenceImage,
+)
 from src.comfyui_support_tools.shared.contracts.character_tag_intake_confirmation import (
     CharacterTagIntakeConfirmation,
 )
@@ -100,6 +103,7 @@ class CharacterRegistryPanel(ttk.Frame):
         self.outfit_tags: list[str] = []
         self.innerwear_tags: list[str] = []
         self.confirmed_outfits: list[CharacterOutfitProfile] = []
+        self.reference_images: list[CharacterReferenceImage] = []
         self._candidate_query = ""
         self._candidate_next_cursor: str | None = None
         self._registered_profile: CharacterProfile | None = None
@@ -163,12 +167,17 @@ class CharacterRegistryPanel(ttk.Frame):
             "register_profile": self.register_profile,
             "retry_wildcard_export": self.retry_wildcard_export,
             "save_lora_call_wildcard": self.save_lora_call_wildcard,
+            "add_reference_images": self.add_reference_images,
+            "remove_reference_images": self.remove_reference_images,
         }
         self.view = CharacterRegistryPanelView(self, variables, actions)
         self.view.pack(fill="both", expand=True)
         self.candidate_list = self.view.candidate_list
         self.suggestion_list = self.view.suggestion_list
         self.saved_outfit_list = self.view.saved_outfit_list
+        self.reference_image_list = self.view.reference_image_list
+        self.add_reference_images_button = self.view.add_reference_images_button
+        self.remove_reference_images_button = self.view.remove_reference_images_button
         self.default_outfit_combo = self.view.default_outfit_combo
         self.identity_list = self.view.identity_list
         self.outfit_list = self.view.outfit_list
@@ -723,7 +732,83 @@ class CharacterRegistryPanel(ttk.Frame):
             confirmed_identity_traits=tuple(self.identity_tags),
             outfit_profiles=tuple(outfits),
             default_outfit_id=default_outfit_id,
+            reference_images=tuple(self.reference_images),
         )
+
+    # {
+    #   責務: [add_reference_images: file pickerで手動選択された画像を参照一覧へ追加する]
+    #   処理: [画像をworkerでhashし, 同じ内容を除外して一覧へ描画する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def add_reference_images(self) -> None:
+        selected_paths = filedialog.askopenfilenames(
+            title="Characterの参照画像を選択",
+            filetypes=(
+                ("画像", "*.bmp *.gif *.jpeg *.jpg *.png *.webp"),
+                ("すべてのファイル", "*.*"),
+            ),
+        )
+        if not selected_paths:
+            return
+        self._start_task(
+            "参照画像を読み込み中（コピーは行いません）...",
+            lambda: tuple(
+                self.messenger.load_character_reference_image(Path(path)) for path in selected_paths
+            ),
+            self._show_reference_images,
+        )
+
+    # {
+    #   責務: [_show_reference_images: 読み込んだ参照画像を重複除外してUIへ反映する]
+    #   処理: [内容IDが未登録の画像だけ保持し, 表示名とhash末尾を描画する]
+    #   引数: [self: panel, result: 読み込んだreference image tuple]
+    #   戻り値: []
+    # }
+    def _show_reference_images(self, result: object) -> None:
+        images = tuple(result)
+        known_ids = {image.image_id for image in self.reference_images}
+        added = 0
+        for image in images:
+            if image.image_id not in known_ids:
+                self.reference_images.append(image)
+                known_ids.add(image.image_id)
+                added += 1
+        self._render_reference_images()
+        self.status.set(
+            f"参照画像を{added}件追加しました（重複を除外）。元画像はコピーしていません。"
+        )
+
+    # {
+    #   責務: [remove_reference_images: 選択された参照画像を登録候補から外す]
+    #   処理: [選択indexを逆順で除去して一覧を再描画する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def remove_reference_images(self) -> None:
+        selected_indices = self.reference_image_list.curselection()
+        if not selected_indices:
+            self.status.set("削除する参照画像を選択してください。")
+            return
+        for index in reversed(selected_indices):
+            del self.reference_images[index]
+        self._render_reference_images()
+        self.status.set(f"参照画像を{len(selected_indices)}件、登録候補から外しました。")
+
+    # {
+    #   責務: [_render_reference_images: 参照画像のpathとcontent IDを一覧表示する]
+    #   処理: [Listboxを現在の参照画像stateから再構築する]
+    #   引数: [self: panel]
+    #   戻り値: []
+    # }
+    def _render_reference_images(self) -> None:
+        self.reference_image_list.delete(0, "end")
+        for image in self.reference_images:
+            path = Path(image.source_path)
+            self.reference_image_list.insert(
+                "end",
+                f"{path.name}  [{image.content_sha256[:12]}]  {image.source_path}",
+            )
 
     # {
     #   責務: [_show_registered_profile: 保存成功したprofile IDをUIへ表示する]
@@ -867,7 +952,7 @@ class CharacterRegistryPanel(ttk.Frame):
 
     # {
     #   責務: [_set_action_state: worker中に操作するbutton群を有効/無効化する]
-    #   処理: [search, preview, register, retry buttonをworker状態に合わせて更新する]
+    #   処理: [search, preview, register, retry, image選択buttonをworker状態に合わせて更新する]
     #   引数: [self: panel, state: Tk button state]
     #   戻り値: []
     # }
@@ -878,6 +963,8 @@ class CharacterRegistryPanel(ttk.Frame):
             self.next_page_button,
             self.preview_button,
             self.register_button,
+            self.add_reference_images_button,
+            self.remove_reference_images_button,
         ):
             button.configure(state=state)
         retry_state = (

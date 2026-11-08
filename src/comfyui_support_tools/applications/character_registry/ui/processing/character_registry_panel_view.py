@@ -44,8 +44,53 @@ class CharacterRegistryPanelView(ttk.Frame):
         self._build_character_fields()
         self._build_civitai_search()
         self._build_review_columns()
+        self._build_reference_images()
         self._build_lora_call_editor()
         self._build_actions()
+
+    # {
+    #   責務: [_build_reference_images: コピーしないCharacter参照画像の選択欄を配置する]
+    #   処理: [参照画像一覧と追加/除去buttonを表示する]
+    #   引数: [self: view]
+    #   戻り値: []
+    # }
+    def _build_reference_images(self) -> None:
+        """Show explicitly selected reference-only images and their controls."""
+        section = ttk.LabelFrame(self, text="Character参照画像（参照のみ・コピーなし）", padding=8)
+        section.grid(row=4, column=0, sticky="ew", pady=(6, 0))
+        section.columnconfigure(0, weight=1)
+        ttk.Label(
+            section,
+            text="選択したローカル画像のpathと内容hashだけをprofileへ保存します。自動解析は行いません。",
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        self.reference_image_list = tk.Listbox(
+            section,
+            height=3,
+            selectmode="extended",
+            exportselection=False,
+        )
+        self.reference_image_list.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        scrollbar = ttk.Scrollbar(
+            section,
+            orient="vertical",
+            command=self.reference_image_list.yview,
+        )
+        scrollbar.grid(row=1, column=1, sticky="ns", pady=(4, 0))
+        self.reference_image_list.configure(yscrollcommand=scrollbar.set)
+        controls = ttk.Frame(section)
+        controls.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.add_reference_images_button = ttk.Button(
+            controls,
+            text="参照画像を追加",
+            command=self.actions["add_reference_images"],
+        )
+        self.add_reference_images_button.pack(side="left")
+        self.remove_reference_images_button = ttk.Button(
+            controls,
+            text="選択画像を外す",
+            command=self.actions["remove_reference_images"],
+        )
+        self.remove_reference_images_button.pack(side="left", padx=(6, 0))
 
     # {
     #   責務: [_build_lora_call_editor: Character用の重み付きLoRA呼び出し候補欄を配置する]
@@ -56,7 +101,7 @@ class CharacterRegistryPanelView(ttk.Frame):
     def _build_lora_call_editor(self) -> None:
         """Build a multiline editor for weighted local LoRA-call choices."""
         editor = ttk.LabelFrame(self, text="Character LoRA候補（ローカル名を指定）", padding=8)
-        editor.grid(row=4, column=0, sticky="ew", pady=(6, 0))
+        editor.grid(row=5, column=0, sticky="ew", pady=(6, 0))
         editor.columnconfigure(0, weight=1)
         ttk.Label(
             editor,
@@ -261,7 +306,7 @@ class CharacterRegistryPanelView(ttk.Frame):
     def _build_actions(self) -> None:
         """Build outfit details, registration, export retry, and status controls."""
         actions = ttk.LabelFrame(self, text="登録", padding=8)
-        actions.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+        actions.grid(row=6, column=0, sticky="ew", pady=(6, 0))
         ttk.Label(actions, text="outfit ID").grid(row=0, column=0, sticky="w")
         ttk.Entry(actions, textvariable=self.variables["outfit_id"], width=18).grid(
             row=0, column=1, padx=4

@@ -4,6 +4,7 @@
 
 ## この作業で追加した型
 
+- CharacterReferenceImage は内容SHA-256から作るIDと元画像の絶対pathを保持します。参照onlyのため画像をprofile保存先へコピーせず、同じ内容の画像は同じIDになります。
 - `CharacterProfile` は表示名に依存しないstable `character_id`、identity候補、確認済み/除外trait、複数の衣装profile、参照画像ID、source provenance、UTC timestampsを保持します。
 - `CharacterOutfitProfile` は外衣、衣服、アクセサリー、innerwear、visibility rule、参照画像、推定confidence、手動確認状態を保持します。
 - `create_character_id()` はランダムな不透明IDを一度だけ生成します。表示名を変えても、既存IDを再生成しないでください。
@@ -16,4 +17,4 @@
 
 ## 現在の境界
 
-Profileの契約とJSON保存/読込は利用できます。画像コピー、Character Library UIでの手動編集、prompt注入、学習処理はまだ行いません。タグ候補を確定traitへ自動昇格させず、確認状態を呼び出し側が明示する設計です。
+Profileの契約とJSON保存/読込、選択済み画像のreference-only保存は利用できます。画像のcopy/圧縮、画像内容の自動解析、Character Library UIでの保存済みprofile編集、prompt注入、学習処理はまだ行いません。タグ候補を確定traitへ自動昇格させず、確認状態を呼び出し側が明示する設計です。
